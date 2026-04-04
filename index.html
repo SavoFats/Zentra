@@ -671,6 +671,10 @@ async function pollStatus() {
     S.tradeCount = status.tradeCount;
     S.wins = status.winRate;
     S.remainingMs = status.remainingMs;
+    // If pnlHistory restarted from backend, reset chart
+    if (status.pnlHistory && status.pnlHistory.length < S.pnlHistory.length) {
+      lastLogCount = 0;
+    }
     S.pnlHistory = status.pnlHistory || [];
     S.market = marketData.market || [];
 
