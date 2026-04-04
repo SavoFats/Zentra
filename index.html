@@ -652,7 +652,6 @@ function setWsStatus(status) {
 let pollInterval = null;
 
 async function pollStatus() {
-  setWsStatus('connecting');
   try {
     const [statusRes, marketRes] = await Promise.all([
       fetch(API + '/status', { signal: AbortSignal.timeout(8000) }),
