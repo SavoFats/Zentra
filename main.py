@@ -242,7 +242,10 @@ async def startup():
 @app.get("/status")
 def get_status():
     unr = unrealized_pnl()
-    pnl = agent_state["currentCapital"] - agent_state["capital"] + unr
+    pos = agent_state["position"]
+    pos_value = pos["size"] if pos else 0
+    total_value = agent_state["currentCapital"] + pos_value + unr
+    pnl = total_value - agent_state["capital"]
     pct = pnl / agent_state["capital"] * 100 if agent_state["capital"] > 0 else 0
     wr = (agent_state["wins"] / agent_state["tradeCount"] * 100) if agent_state["tradeCount"] > 0 else 0
     remaining = 0
