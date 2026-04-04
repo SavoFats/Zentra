@@ -200,7 +200,10 @@ def scan_and_trade():
         return
     cfg = agent_state["config"]
     unr = unrealized_pnl()
-    pnl_val = agent_state["currentCapital"] - agent_state["capital"] + unr
+    pos = agent_state["position"]
+    pos_value = pos["size"] if pos else 0
+    total_value = agent_state["currentCapital"] + pos_value + unr
+    pnl_val = total_value - agent_state["capital"]
     agent_state["pnlHistory"].append({
         "t": (datetime.now().timestamp() - agent_state["sessionStart"]) / 60,
         "v": pnl_val
