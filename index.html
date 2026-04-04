@@ -33,7 +33,7 @@
 - { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 body {
-background: var(–bg);
+background: #080c10;
 color: var(–text);
 font-family: var(–sans);
 height: 100dvh;
@@ -1033,6 +1033,12 @@ function addChat(role, text) {
 function scrollChat() { const el = document.getElementById('chatMsgs'); el.scrollTop = el.scrollHeight; }
 
 // ===== INIT =====
+// Force correct initial state
+document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+document.getElementById('page-config').classList.add('active');
+document.getElementById('tab-config').classList.add('active');
+curPage = 'config';
 setTimeout(drawChart, 100);
 
 // Check backend health on load
