@@ -750,6 +750,32 @@ async function startAgent() {
   btn.textContent = '⏳ Connessione...';
   btn.disabled = true;
 
+  // Check if already running on backend
+  try {
+    const check = await fetch(API + '/status');
+    const st = await check.json();
+    if (st.running) {
+      // Sync with existing session instead of starting new one
+      S.running = true;
+      S.capital = st.capital;
+      S.currentCapital = st.currentCapital;
+      lastLogCount = 0;
+      document.getElementById('stopBtn').disabled = false;
+      document.getElementById('statusDot').className = 'status-dot running';
+      document.getElementById('statusText').textContent = 'ATTIVO';
+      document.getElementById('sessBanner').style.display = 'flex';
+      document.getElementById('sessBanner').className = 'sess-banner';
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(pollStatus, 3000);
+      pollStatus();
+      goTo('monitor');
+      btn.textContent = '▶ Avvia Agente';
+      btn.disabled = false;
+      return;
+    }
+  } catch(e) {}
+
+
   const capital = parseFloat(document.getElementById('capital').value);
   const config = {
     capital,
