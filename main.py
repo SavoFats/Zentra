@@ -199,17 +199,6 @@ def scan_and_trade():
     if not agent_state["running"]:
         return
     cfg = agent_state["config"]
-    unr = unrealized_pnl()
-    pos = agent_state["position"]
-    pos_value = pos["size"] if pos else 0
-    total_value = agent_state["currentCapital"] + pos_value + unr
-    pnl_val = total_value - agent_state["capital"]
-    agent_state["pnlHistory"].append({
-        "t": (datetime.now().timestamp() - agent_state["sessionStart"]) / 60,
-        "v": pnl_val
-    })
-    if len(agent_state["pnlHistory"]) > 500:
-        agent_state["pnlHistory"].pop(0)
     elapsed_ms = (datetime.now().timestamp() - agent_state["sessionStart"]) * 1000
     if elapsed_ms >= agent_state["sessionDuration"]:
         agent_state["running"] = False
@@ -221,7 +210,6 @@ def scan_and_trade():
         check_exit()
     else:
         market = get_sorted_market(cfg.get("volFilter", "high"), cfg.get("topN", 10))
-        # Log market scan for debugging
         top3 = [(c["symbol"], round(c["mom"], 2)) for c in market[:3]]
         add_log("info", "SCAN", f"Top3: {top3} | Cercando mom>0")
         candidate = next((c for c in market if not c["inCooldown"] and c["mom"] > 0), None)
@@ -229,6 +217,18 @@ def scan_and_trade():
             enter_position(candidate)
         else:
             add_log("info", "ATTESA", f"Nessuna crypto con momentum positivo trovata")
+    # Calculate P&L AFTER position logic so values are always accurate
+    unr = unrealized_pnl()
+    pos = agent_state["position"]
+    pos_value = pos["size"] if pos else 0
+    total_value = agent_state["currentCapital"] + pos_value + unr
+    pnl_val = total_value - agent_state["capital"]
+    agent_state["pnlHistory"].append({
+        "t": (datetime.now().timestamp() - agent_state["sessionStart"]) / 60,
+        "v": pnl_val
+    })
+    if len(agent_state["pnlHistory"]) > 500:
+        agent_state["pnlHistory"].pop(0)
 
 # ===== BACKGROUND LOOP =====
 async def background_loop():
