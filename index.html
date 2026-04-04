@@ -655,8 +655,8 @@ async function pollStatus() {
   setWsStatus('connecting');
   try {
     const [statusRes, marketRes] = await Promise.all([
-      fetch(API + '/status'),
-      fetch(API + '/market')
+      fetch(API + '/status', { signal: AbortSignal.timeout(8000) }),
+      fetch(API + '/market', { signal: AbortSignal.timeout(8000) })
     ]);
     const status = await statusRes.json();
     const marketData = await marketRes.json();
@@ -726,7 +726,7 @@ async function pollStatus() {
 
   } catch(e) {
     pollErrorCount = (pollErrorCount || 0) + 1;
-    if (pollErrorCount >= 3) setWsStatus('off');
+    if (pollErrorCount >= 5) setWsStatus('off');
     return;
   }
   pollErrorCount = 0;
