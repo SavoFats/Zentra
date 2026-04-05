@@ -461,6 +461,22 @@
       </div>
     </div>
 
+    <div class="card">
+      <div class="sec-lbl">⚡ Opzioni Avanzate</div>
+      <div class="field-group">
+        <div class="field" style="flex-direction:row;align-items:center;justify-content:space-between;">
+          <div>
+            <label style="font-weight:600;">Exit intelligente</label>
+            <div style="font-size:11px;color:#8b949e;margin-top:2px;">Chiudi se il momentum si inverte sotto -0.5%</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">
+            <input type="checkbox" id="smartExit" style="opacity:0;width:0;height:0;">
+            <span onclick="document.getElementById('smartExit').click()" style="position:absolute;cursor:pointer;inset:0;background:#21262d;border-radius:12px;transition:0.3s;" id="smartExitSlider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
     <button class="start-btn" id="startBtn" onclick="startAgent()">▶ Avvia Agente</button>
     <button class="reset-btn" onclick="resetAgent()">↺ Reset</button>
 
@@ -493,33 +509,14 @@
 
     <div class="card">
       <div class="card-hdr">
-        <span class="card-title">Posizione Corrente</span>
+        <span class="card-title">Posizioni Aperte</span>
         <span class="badge gray" id="posBadge">FLAT</span>
       </div>
       <div id="posEmpty" class="pos-empty">
         <div class="icon">📭</div>
         <span>Nessuna posizione aperta</span>
       </div>
-      <div id="posInfo" style="display:none">
-        <div class="pos-hdr">
-          <div class="pos-icon" id="posIcon">₿</div>
-          <div>
-            <div class="pos-sym" id="posSym">—</div>
-            <div class="pos-time-lbl" id="posTimeLbl">entrata: —</div>
-          </div>
-        </div>
-        <div class="pos-grid">
-          <div class="pos-cell"><div class="pos-cell-lbl">Entrata</div><div class="pos-cell-val" id="posEntry">—</div></div>
-          <div class="pos-cell"><div class="pos-cell-lbl">Corrente</div><div class="pos-cell-val" id="posCurr">—</div></div>
-          <div class="pos-cell"><div class="pos-cell-lbl">P&L non realizzato</div><div class="pos-cell-val" id="posUnreal">—</div></div>
-          <div class="pos-cell"><div class="pos-cell-lbl">Trailing stop</div><div class="pos-cell-val" id="posTrail">—</div></div>
-        </div>
-        <div class="trail-sec">
-          <div class="trail-lbls"><span>Stop</span><span id="trailPct">—</span><span>Take Profit</span></div>
-          <div class="trail-bar"><div class="trail-fill" id="trailFill" style="width:50%"></div></div>
-        </div>
-        <button id="closePosBtnCard" onclick="closePosManual()" style="margin-top:12px;width:100%;padding:10px;background:#f85149;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">⚡ Chiudi Posizione</button>
-      </div>
+      <div id="positionsContainer"></div>
     </div>
 
     <div class="card">
@@ -696,7 +693,7 @@ const API = 'https://crypto-agent-back-production.up.railway.app';
 
 // ===== STATE (mirror of backend) =====
 let S = {
-  running: false, capital: 0, currentCapital: 0, position: null,
+  running: false, capital: 0, currentCapital: 0, position: null, positions: [],
   pnlHistory: [], tradeCount: 0, wins: 0, remainingMs: 0,
   config: {}, log: [], market: []
 };
@@ -739,20 +736,8 @@ async function pollStatus() {
     S.pnlHistory = status.pnlHistory || [];
     S.market = marketData.market || [];
 
-    // Sync position
-    if (status.position) {
-      S.position = {
-        symbol: status.position.symbol,
-        icon: status.position.icon,
-        entryPrice: status.position.entryPrice,
-        currentPrice: status.position.currentPrice,
-        highPrice: status.position.highPrice,
-        size: status.position.size,
-        entryTime: status.position.entryTime,
-      };
-    } else {
-      S.position = null;
-    }
+    S.positions = status.positions || [];
+    S.position = S.positions[0] || null;  // backward compat
 
     // Sync log — add new entries to UI
     if (status.log && status.log.length > 0) {
@@ -766,7 +751,7 @@ async function pollStatus() {
 
     // Update UI
     updateKpis();
-    if (curPage === 'monitor') { renderPos(S.position); drawChart(); }
+    if (curPage === 'monitor') { renderPos(S.positions[0] || null); drawChart(); }
     if (curPage === 'market') renderMarket();
 
     // Timer handled by smooth 1s interval above
@@ -786,16 +771,15 @@ async function pollStatus() {
 }
 
 // ===== CLOSE POSITION MANUALLY =====
-async function closePosManual() {
-  if (!S.position) return;
-  const sym = S.position.symbol;
-  const pnl = S.pnl !== undefined ? S.pnl : 0;
-  const pnlStr = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+async function closeSinglePos(symbol) {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  const pos = (S.positions || []).find(p => p.symbol === symbol);
+  const pnl = pos ? (pos.currentPrice - pos.entryPrice) / pos.entryPrice * pos.size : 0;
+  const pnlStr = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
   overlay.innerHTML = `<div style="background:#111118;border:1px solid #21262d;border-radius:16px;padding:24px;max-width:300px;width:90%;text-align:center;">
     <div style="font-size:28px;margin-bottom:12px;">⚠️</div>
-    <div style="font-size:16px;font-weight:700;color:#e6edf3;margin-bottom:8px;">Chiudi posizione ${sym}?</div>
+    <div style="font-size:16px;font-weight:700;color:#e6edf3;margin-bottom:8px;">Chiudi ${symbol}?</div>
     <div style="font-size:13px;color:#8b949e;margin-bottom:20px;">P&L attuale: <span style="color:${pnl>=0?'#3fb950':'#f85149'};font-weight:600;">${pnlStr}</span></div>
     <div style="display:flex;gap:10px;">
       <button id="mCancel" style="flex:1;padding:12px;border-radius:10px;background:#1c2330;border:1px solid #21262d;color:#e6edf3;font-size:14px;font-weight:600;cursor:pointer;">Annulla</button>
@@ -806,12 +790,19 @@ async function closePosManual() {
   document.getElementById('mConfirm').onclick = async () => {
     overlay.remove();
     try {
-      const res = await fetch(API + '/close_position', { method: 'POST' });
-      const data = await res.json();
-      if (data.error) alert(data.error);
-      else pollStatus();
+      await fetch(API + '/close_position/' + symbol, { method: 'POST' });
+      pollStatus();
     } catch(e) { alert('Errore chiusura posizione'); }
   };
+}
+
+async function closePosManual() {
+  if (!S.positions || S.positions.length === 0) return;
+  if (S.positions.length === 1) {
+    closeSinglePos(S.positions[0].symbol);
+  } else {
+    S.positions.forEach(p => closeSinglePos(p.symbol));
+  }
 }
 
 // ===== SMOOTH TIMER =====
@@ -996,6 +987,7 @@ async function startAgent() {
 
 
   const capital = parseFloat(document.getElementById('capital').value);
+  const smartExitEl = document.getElementById('smartExit');
   const config = {
     capital,
     posSize: parseFloat(document.getElementById('posSize').value) / 100,
@@ -1006,6 +998,7 @@ async function startAgent() {
     takeProfit: parseFloat(document.getElementById('takeProfit').value) / 100,
     cooldown: parseInt(document.getElementById('cooldown').value),
     sessionDuration: parseInt(document.getElementById('sessionDuration').value),
+    smartExit: smartExitEl ? smartExitEl.checked : false,
   };
 
   try {
@@ -1071,7 +1064,7 @@ function onAgentStopped(reason) {
 function resetAgent() {
   if (S.running) stopAgent();
   if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-  S = { running:false, capital:0, currentCapital:0, position:null, pnlHistory:[], tradeCount:0, wins:0, remainingMs:0, config:{}, log:[], market:[] };
+  S = { running:false, capital:0, currentCapital:0, position:null, positions:[], pnlHistory:[], tradeCount:0, wins:0, remainingMs:0, config:{}, log:[], market:[] };
   lastLogCount = 0;
   document.getElementById('statusDot').className='status-dot';
   document.getElementById('statusText').textContent='INATTIVO';
@@ -1095,36 +1088,53 @@ function resetAgent() {
 
 // ===== RENDER =====
 function renderPos(pos) {
+  const positions = S.positions || (pos ? [pos] : []);
   const empty = document.getElementById('posEmpty');
-  const info = document.getElementById('posInfo');
+  const container = document.getElementById('positionsContainer');
   const badge = document.getElementById('posBadge');
-  if (!pos) {
-    empty.style.display = 'flex'; info.style.display = 'none';
-    badge.textContent = 'FLAT'; badge.className = 'badge gray'; return;
+
+  if (positions.length === 0) {
+    empty.style.display = 'flex';
+    container.innerHTML = '';
+    badge.textContent = 'FLAT'; badge.className = 'badge gray';
+    return;
   }
-  empty.style.display = 'none'; info.style.display = 'block';
-  badge.textContent = 'LONG'; badge.className = 'badge';
-  const logoUrl = COIN_LOGOS[pos.symbol];
-  const iconEl = document.getElementById('posIcon');
-  if (logoUrl) {
-    iconEl.innerHTML = `<img src="${logoUrl}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;" onerror="this.parentElement.textContent='${pos.icon}'">`;
-  } else {
-    iconEl.textContent = pos.icon;
-  }
-  document.getElementById('posSym').textContent = pos.symbol;
-  document.getElementById('posTimeLbl').textContent = 'entrata: ' + new Date(pos.entryTime).toTimeString().slice(0,8);
-  document.getElementById('posEntry').textContent = '$' + pos.entryPrice.toFixed(4);
-  document.getElementById('posCurr').textContent = '$' + pos.currentPrice.toFixed(4);
-  const pnl = (pos.currentPrice - pos.entryPrice) / pos.entryPrice * pos.size;
-  const pct = (pos.currentPrice - pos.entryPrice) / pos.entryPrice * 100;
-  const uel = document.getElementById('posUnreal');
-  uel.textContent = `${pnl>=0?'+':''}$${pnl.toFixed(2)} (${pct>=0?'+':''}${pct.toFixed(2)}%)`;
-  uel.style.color = pnl >= 0 ? '#3fb950' : '#f85149';
-  const trail = pos.highPrice * (1 - S.config.trailStop);
-  const tp = pos.entryPrice * (1 + S.config.takeProfit);
-  document.getElementById('posTrail').textContent = '$' + trail.toFixed(4);
-  document.getElementById('trailFill').style.width = Math.max(0, Math.min(100, (pos.currentPrice - trail) / (tp - trail) * 100)) + '%';
-  document.getElementById('trailPct').textContent = pct.toFixed(2) + '%';
+
+  empty.style.display = 'none';
+  badge.textContent = positions.length + ' LONG'; badge.className = 'badge';
+
+  container.innerHTML = positions.map(p => {
+    const pnl = (p.currentPrice - p.entryPrice) / p.entryPrice * p.size;
+    const pct = (p.currentPrice - p.entryPrice) / p.entryPrice * 100;
+    const trail = p.highPrice * (1 - (S.config.trailStop || 0.08));
+    const tp = p.entryPrice * (1 + (S.config.takeProfit || 0.15));
+    const barW = Math.max(0, Math.min(100, (p.currentPrice - trail) / (tp - trail) * 100));
+    const logo = COIN_LOGOS[p.symbol];
+    const iconHtml = logo
+      ? `<img src="${logo}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">`
+      : `<div style="width:36px;height:36px;border-radius:50%;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:16px;">${p.icon}</div>`;
+    const entryTime = new Date(p.entryTime).toTimeString().slice(0,8);
+    return `<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:0.5px solid #21262d;">
+      <div class="pos-hdr">
+        ${iconHtml}
+        <div style="flex:1;">
+          <div class="pos-sym">${p.symbol}</div>
+          <div class="pos-time-lbl">entrata: ${entryTime}</div>
+        </div>
+        <button onclick="closeSinglePos('${p.symbol}')" style="padding:6px 12px;background:rgba(248,81,73,0.15);border:1px solid rgba(248,81,73,0.3);color:#f85149;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">Chiudi</button>
+      </div>
+      <div class="pos-grid">
+        <div class="pos-cell"><div class="pos-cell-lbl">Entrata</div><div class="pos-cell-val">$${p.entryPrice.toFixed(4)}</div></div>
+        <div class="pos-cell"><div class="pos-cell-lbl">Corrente</div><div class="pos-cell-val">$${p.currentPrice.toFixed(4)}</div></div>
+        <div class="pos-cell"><div class="pos-cell-lbl">P&L</div><div class="pos-cell-val" style="color:${pnl>=0?'#3fb950':'#f85149'}">${pnl>=0?'+':''}$${pnl.toFixed(2)} (${pct>=0?'+':''}${pct.toFixed(2)}%)</div></div>
+        <div class="pos-cell"><div class="pos-cell-lbl">Trailing stop</div><div class="pos-cell-val" style="color:#f85149">$${trail.toFixed(4)}</div></div>
+      </div>
+      <div class="trail-sec">
+        <div class="trail-lbls"><span>Stop</span><span>${pct.toFixed(2)}%</span><span>Take Profit</span></div>
+        <div class="trail-bar"><div class="trail-fill" style="width:${barW}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 let geckoData = [];
@@ -1298,7 +1308,11 @@ function addChat(role, text) {
 
 function scrollChat() { const el = document.getElementById('chatMsgs'); el.scrollTop = el.scrollHeight; }
 
-// ===== INIT =====
+// ===== SMART EXIT TOGGLE =====
+document.getElementById('smartExit').addEventListener('change', function() {
+  const slider = document.getElementById('smartExitSlider');
+  slider.style.background = this.checked ? '#00d4aa' : '#21262d';
+});
 setTimeout(drawChart, 100);
 
 // Check backend health on load
