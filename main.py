@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 from datetime import datetime
 from fastapi import FastAPI
@@ -8,15 +7,8 @@ import httpx
 import uvicorn
 
 app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ===== CONFIG =====
 BINANCE_BASE = "https://api.binance.com"
 
 TRACKED_PAIRS = [
@@ -27,41 +19,34 @@ TRACKED_PAIRS = [
 ]
 
 SYM_META = {
-    "BTCUSDT":  {"symbol": "BTC",   "icon": "₿",  "vol": "high"},
-    "ETHUSDT":  {"symbol": "ETH",   "icon": "Ξ",  "vol": "high"},
-    "SOLUSDT":  {"symbol": "SOL",   "icon": "◎",  "vol": "high"},
-    "BNBUSDT":  {"symbol": "BNB",   "icon": "B",  "vol": "high"},
-    "XRPUSDT":  {"symbol": "XRP",   "icon": "✕",  "vol": "high"},
-    "ADAUSDT":  {"symbol": "ADA",   "icon": "₳",  "vol": "med"},
-    "AVAXUSDT": {"symbol": "AVAX",  "icon": "A",  "vol": "med"},
-    "DOTUSDT":  {"symbol": "DOT",   "icon": "●",  "vol": "med"},
-    "LINKUSDT": {"symbol": "LINK",  "icon": "⬡",  "vol": "med"},
-    "MATICUSDT":{"symbol": "MATIC", "icon": "M",  "vol": "med"},
-    "UNIUSDT":  {"symbol": "UNI",   "icon": "🦄", "vol": "med"},
-    "NEARUSDT": {"symbol": "NEAR",  "icon": "N",  "vol": "low"},
-    "INJUSDT":  {"symbol": "INJ",   "icon": "I",  "vol": "low"},
-    "APTUSDT":  {"symbol": "APT",   "icon": "A",  "vol": "med"},
-    "ARBUSDT":  {"symbol": "ARB",   "icon": "R",  "vol": "med"},
-    "OPUSDT":   {"symbol": "OP",    "icon": "O",  "vol": "med"},
-    "ATOMUSDT": {"symbol": "ATOM",  "icon": "⚛",  "vol": "med"},
+    "BTCUSDT":  {"symbol": "BTC",  "icon": "B", "vol": "high"},
+    "ETHUSDT":  {"symbol": "ETH",  "icon": "E", "vol": "high"},
+    "SOLUSDT":  {"symbol": "SOL",  "icon": "S", "vol": "high"},
+    "BNBUSDT":  {"symbol": "BNB",  "icon": "B", "vol": "high"},
+    "XRPUSDT":  {"symbol": "XRP",  "icon": "X", "vol": "high"},
+    "ADAUSDT":  {"symbol": "ADA",  "icon": "A", "vol": "med"},
+    "AVAXUSDT": {"symbol": "AVAX", "icon": "A", "vol": "med"},
+    "DOTUSDT":  {"symbol": "DOT",  "icon": "D", "vol": "med"},
+    "LINKUSDT": {"symbol": "LINK", "icon": "L", "vol": "med"},
+    "MATICUSDT":{"symbol": "MATIC","icon": "M", "vol": "med"},
+    "UNIUSDT":  {"symbol": "UNI",  "icon": "U", "vol": "med"},
+    "NEARUSDT": {"symbol": "NEAR", "icon": "N", "vol": "low"},
+    "INJUSDT":  {"symbol": "INJ",  "icon": "I", "vol": "low"},
+    "APTUSDT":  {"symbol": "APT",  "icon": "A", "vol": "med"},
+    "ARBUSDT":  {"symbol": "ARB",  "icon": "R", "vol": "med"},
+    "OPUSDT":   {"symbol": "OP",   "icon": "O", "vol": "med"},
+    "ATOMUSDT": {"symbol": "ATOM", "icon": "A", "vol": "med"},
 }
 
-# ===== IN-MEMORY STATE =====
 market_data = {}
 agent_state = {
-    "running": False,
-    "capital": 0.0,
-    "currentCapital": 0.0,
-    "positions": [],        # lista di posizioni aperte (max 2)
-    "pnlHistory": [],
-    "sessionStart": None,
-    "sessionDuration": 0,
-    "config": {},
-    "cooldowns": {},
-    "tradeCount": 0,
-    "wins": 0,
-    "trades": [],
-    "log": [],
+    "running": False, "capital": 0.0, "currentCapital": 0.0,
+    "position": None, "pnlHistory": [], "sessionStart": None,
+    "sessionDuration": 0, "config": {}, "cooldowns": {},
+    "tradeCount": 0, "wins": 0, "trades": [], "log": [],
+    "consecutiveLosses": 0,
+    "circuitBreakerUntil": None,
+    "circuitBreakerTripped": False,
 }
 
 for pair, meta in SYM_META.items():
@@ -70,15 +55,13 @@ for pair, meta in SYM_META.items():
         "priceHistory": [], "vol": meta["vol"], "icon": meta["icon"]
     }
 
-# ===== BINANCE FETCH =====
 async def fetch_binance_prices():
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             res = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
             tickers = res.json()
             for t in tickers:
-                pair = t["symbol"]
-                meta = SYM_META.get(pair)
+                meta = SYM_META.get(t["symbol"])
                 if not meta:
                     continue
                 sym = meta["symbol"]
@@ -89,16 +72,20 @@ async def fetch_binance_prices():
                 if len(hist) > 60:
                     hist.pop(0)
                 change1h = (
-                    (price - hist[max(0, len(hist) - 10)]) / hist[max(0, len(hist) - 10)] * 100
-                    if len(hist) > 2 else change24h * 0.08
+                    (price - hist[max(0, len(hist)-10)]) / hist[max(0, len(hist)-10)] * 100
+                    if len(hist) >= 5 else change24h * 0.08
                 )
                 market_data[sym]["price"] = price
                 market_data[sym]["change24h"] = change24h
                 market_data[sym]["change1h"] = change1h
+                pos = agent_state["position"]
+                if pos and pos["symbol"] == sym:
+                    pos["currentPrice"] = price
+                    if price > pos["highPrice"]:
+                        pos["highPrice"] = price
     except Exception as e:
         print(f"Binance fetch error: {e}")
 
-# ===== TRADING LOGIC =====
 def get_sorted_market(vol_filter="high", top_n=10):
     result = []
     for sym, d in market_data.items():
@@ -110,7 +97,6 @@ def get_sorted_market(vol_filter="high", top_n=10):
             continue
         cd = agent_state["cooldowns"].get(sym)
         in_cd = cd is not None and datetime.now().timestamp() * 1000 < cd
-        # Use change1h if history is long enough, otherwise use change24h as proxy
         hist = d.get("priceHistory", [])
         mom = d["change1h"] if len(hist) >= 5 else d["change24h"] * 0.1
         result.append({
@@ -121,91 +107,105 @@ def get_sorted_market(vol_filter="high", top_n=10):
     result.sort(key=lambda x: x["mom"], reverse=True)
     return result[:top_n]
 
+def calc_atr(symbol, periods=14):
+    """Calculate Average True Range from price history."""
+    hist = market_data.get(symbol, {}).get("priceHistory", [])
+    if len(hist) < periods + 1:
+        return None
+    ranges = [abs(hist[i] - hist[i-1]) for i in range(1, len(hist))]
+    atr = sum(ranges[-periods:]) / periods
+    return atr
+
+def calc_adx(symbol, periods=14):
+    """Simplified ADX from price history. Returns 0-100."""
+    hist = market_data.get(symbol, {}).get("priceHistory", [])
+    if len(hist) < periods + 2:
+        return 0
+    ups = [max(hist[i] - hist[i-1], 0) for i in range(1, len(hist))]
+    downs = [max(hist[i-1] - hist[i], 0) for i in range(1, len(hist))]
+    recent_ups = ups[-periods:]
+    recent_downs = downs[-periods:]
+    avg_up = sum(recent_ups) / periods
+    avg_down = sum(recent_downs) / periods
+    if avg_up + avg_down == 0:
+        return 0
+    dx = abs(avg_up - avg_down) / (avg_up + avg_down) * 100
+    return dx
+
 def add_log(type_, label, desc):
-    entry = {
-        "type": type_, "label": label, "desc": desc,
-        "time": datetime.now().strftime("%H:%M:%S")
-    }
-    agent_state["log"].insert(0, entry)
+    agent_state["log"].insert(0, {"type": type_, "label": label, "desc": desc, "time": datetime.now().strftime("%H:%M:%S")})
     if len(agent_state["log"]) > 100:
         agent_state["log"].pop()
 
 def unrealized_pnl():
-    total = 0.0
-    for pos in agent_state["positions"]:
-        total += (pos["currentPrice"] - pos["entryPrice"]) / pos["entryPrice"] * pos["size"]
-    return total
+    pos = agent_state["position"]
+    if not pos:
+        return 0.0
+    return (pos["currentPrice"] - pos["entryPrice"]) / pos["entryPrice"] * pos["size"]
 
-def btc_momentum():
-    btc = market_data.get("BTC", {})
-    hist = btc.get("priceHistory", [])
-    if len(hist) >= 5:
-        return btc.get("change1h", 0)
-    return btc.get("change24h", 0) * 0.1
+def enter_position(crypto):
+    cfg = agent_state["config"]
+    capital = agent_state["capital"]
 
-def enter_position(crypto, size):
+    # Money management: risk 2% of total capital per trade
+    risk_pct = cfg.get("riskPerTrade", 0.02)
+    risk_amount = capital * risk_pct
+
+    # Use ATR for stop distance, fallback to trailStop
+    atr = calc_atr(crypto["symbol"])
+    trail_stop = cfg.get("trailStop", 0.08)
+    if atr and crypto["price"] > 0:
+        stop_distance = (atr * 1.5) / crypto["price"]
+        stop_distance = max(stop_distance, 0.005)  # min 0.5%
+    else:
+        stop_distance = trail_stop
+
+    # Position size = risk_amount / stop_distance
+    size = min(risk_amount / stop_distance, agent_state["currentCapital"] * 0.95)
+    size = max(size, 1.0)  # min $1
+
     agent_state["currentCapital"] -= size
-    pos = {
-        "symbol": crypto["symbol"],
-        "icon": crypto["icon"],
-        "entryPrice": crypto["price"],
-        "currentPrice": crypto["price"],
-        "highPrice": crypto["price"],
-        "size": size,
+    atr_str = f"ATR: ${atr:.4f}" if atr else "ATR: n/a"
+    agent_state["position"] = {
+        "symbol": crypto["symbol"], "icon": crypto["icon"],
+        "entryPrice": crypto["price"], "currentPrice": crypto["price"],
+        "highPrice": crypto["price"], "size": size,
         "entryTime": datetime.now().isoformat(),
+        "stopDistance": stop_distance,
+        "atr": atr,
     }
-    agent_state["positions"].append(pos)
     add_log("buy", "ACQUISTO",
         f"{crypto['symbol']} @ ${crypto['price']:.4f} | "
-        f"Mom: {crypto['mom']:+.2f}% | 24h: {crypto['change24h']:+.2f}% | "
-        f"Size: ${size:.2f}"
+        f"Mom: {crypto['mom']:+.2f}% | Size: ${size:.2f} | {atr_str}"
     )
 
-def exit_position_by_symbol(symbol, reason):
-    pos = next((p for p in agent_state["positions"] if p["symbol"] == symbol), None)
-    if not pos:
-        return
-    cur_price = pos["currentPrice"]
+def exit_position(reason, cur_price):
+    pos = agent_state["position"]
+    cfg = agent_state["config"]
     pnl = (cur_price - pos["entryPrice"]) / pos["entryPrice"] * pos["size"]
     pct = (cur_price - pos["entryPrice"]) / pos["entryPrice"] * 100
     agent_state["currentCapital"] += pos["size"] + pnl
     agent_state["tradeCount"] += 1
+
     if pnl > 0:
         agent_state["wins"] += 1
+        agent_state["consecutiveLosses"] = 0
+    else:
+        agent_state["consecutiveLosses"] += 1
+        # Circuit breaker: 3 consecutive losses → pause 2h
+        if agent_state["consecutiveLosses"] >= 3:
+            pause_until = datetime.now().timestamp() * 1000 + 2 * 3600 * 1000
+            agent_state["circuitBreakerUntil"] = pause_until
+            add_log("info", "CIRCUIT BREAKER", "3 perdite consecutive — pausa 2h per rivalutare condizioni")
+
     agent_state["trades"].append({
         "symbol": pos["symbol"], "reason": reason,
         "entryPrice": pos["entryPrice"], "exitPrice": cur_price,
         "pnl": pnl, "pct": pct, "time": datetime.now().isoformat()
     })
-    cfg = agent_state["config"]
-    agent_state["cooldowns"][symbol] = (
-        datetime.now().timestamp() + cfg["cooldown"] * 3600
-    ) * 1000
-    add_log("sell", reason,
-        f"{pos['symbol']} @ ${cur_price:.4f} | "
-        f"{pnl:+.2f}$ ({pct:+.2f}%)"
-    )
-    agent_state["positions"] = [p for p in agent_state["positions"] if p["symbol"] != symbol]
-
-def check_exits():
-    cfg = agent_state["config"]
-    to_exit = []
-    for pos in agent_state["positions"]:
-        cur = pos["currentPrice"]
-        trail_price = pos["highPrice"] * (1 - cfg["trailStop"])
-        tp_price = pos["entryPrice"] * (1 + cfg["takeProfit"])
-        # Check momentum reversal
-        sym_data = market_data.get(pos["symbol"], {})
-        hist = sym_data.get("priceHistory", [])
-        mom = sym_data.get("change1h", 0) if len(hist) >= 5 else sym_data.get("change24h", 0) * 0.1
-        if cur <= trail_price:
-            to_exit.append((pos["symbol"], "TRAILING STOP"))
-        elif cur >= tp_price:
-            to_exit.append((pos["symbol"], "TAKE PROFIT"))
-        elif cfg.get("smartExit", False) and mom < -0.5:
-            to_exit.append((pos["symbol"], "INVERSIONE TREND"))
-    for symbol, reason in to_exit:
-        exit_position_by_symbol(symbol, reason)
+    agent_state["cooldowns"][pos["symbol"]] = (datetime.now().timestamp() + cfg.get("cooldown", 2) * 3600) * 1000
+    add_log("sell", reason, f"{pos['symbol']} @ ${cur_price:.4f} | {pnl:+.2f}$ ({pct:+.2f}%)")
+    agent_state["position"] = None
 
 def scan_and_trade():
     if not agent_state["running"]:
@@ -214,76 +214,110 @@ def scan_and_trade():
     elapsed_ms = (datetime.now().timestamp() - agent_state["sessionStart"]) * 1000
     if elapsed_ms >= agent_state["sessionDuration"]:
         agent_state["running"] = False
-        for pos in list(agent_state["positions"]):
-            exit_position_by_symbol(pos["symbol"], "SESSIONE SCADUTA")
+        if agent_state["position"]:
+            exit_position("SESSIONE SCADUTA", agent_state["position"]["currentPrice"])
         add_log("info", "FINE SESSIONE", "Durata massima raggiunta.")
         return
 
-    # Update current prices for all positions
-    for pos in agent_state["positions"]:
-        sym_data = market_data.get(pos["symbol"], {})
-        price = sym_data.get("price", pos["currentPrice"])
-        pos["currentPrice"] = price
-        if price > pos["highPrice"]:
-            pos["highPrice"] = price
+    # Circuit breaker: P&L < -5% → stop sessione
+    unr = unrealized_pnl()
+    pos = agent_state["position"]
+    pos_value = pos["size"] if pos else 0
+    total_value = agent_state["currentCapital"] + pos_value + unr
+    pnl_pct = (total_value - agent_state["capital"]) / agent_state["capital"] * 100 if agent_state["capital"] > 0 else 0
+    if pnl_pct <= -5.0 and not agent_state.get("circuitBreakerTripped"):
+        agent_state["circuitBreakerTripped"] = True
+        agent_state["running"] = False
+        if agent_state["position"]:
+            exit_position("CIRCUIT BREAKER -5%", agent_state["position"]["currentPrice"])
+        add_log("info", "CIRCUIT BREAKER", f"P&L sessione: {pnl_pct:.1f}% — agente fermato per protezione capitale")
+        return
 
-    check_exits()
+    # Circuit breaker: pausa temporanea per 3 perdite consecutive
+    cb_until = agent_state.get("circuitBreakerUntil")
+    if cb_until and datetime.now().timestamp() * 1000 < cb_until:
+        remaining_min = (cb_until - datetime.now().timestamp() * 1000) / 60000
+        add_log("info", "PAUSA CB", f"Rivalutazione in corso — riprendo tra {remaining_min:.0f} min")
+        return
+    elif cb_until and datetime.now().timestamp() * 1000 >= cb_until:
+        agent_state["circuitBreakerUntil"] = None
+        agent_state["consecutiveLosses"] = 0
+        add_log("info", "RIPRESA", "Pausa terminata — riprendo scansione mercato")
 
-    max_positions = 2
-    open_symbols = {p["symbol"] for p in agent_state["positions"]}
+    if agent_state["position"]:
+        pos = agent_state["position"]
+        cur = pos["currentPrice"]
+        # Use ATR-based stop if available
+        atr = pos.get("atr")
+        if atr:
+            trail_price = pos["highPrice"] - (atr * 1.5)
+            tp_price = pos["entryPrice"] + (atr * 3.0)
+        else:
+            trail_price = pos["highPrice"] * (1 - cfg.get("trailStop", 0.08))
+            tp_price = pos["entryPrice"] * (1 + cfg.get("takeProfit", 0.15))
 
-    if len(agent_state["positions"]) < max_positions:
-        # Check BTC not crashing
-        btc_mom = btc_momentum()
+        if cur <= trail_price:
+            exit_position("TRAILING STOP", cur)
+        elif cur >= tp_price:
+            exit_position("TAKE PROFIT", cur)
+        elif cfg.get("smartExit", False):
+            sym_data = market_data.get(pos["symbol"], {})
+            hist = sym_data.get("priceHistory", [])
+            mom = sym_data.get("change1h", 0) if len(hist) >= 5 else sym_data.get("change24h", 0) * 0.1
+            if mom < -0.5:
+                exit_position("INVERSIONE TREND", cur)
+    else:
+        btc = market_data.get("BTC", {})
+        btc_hist = btc.get("priceHistory", [])
+        btc_mom = btc.get("change1h", 0) if len(btc_hist) >= 5 else btc.get("change24h", 0) * 0.1
         if btc_mom < -1.5:
             add_log("info", "PAUSA", f"BTC in calo ({btc_mom:+.2f}%), sospendo ingressi")
         else:
             market = get_sorted_market(cfg.get("volFilter", "high"), cfg.get("topN", 10))
-            slots = max_positions - len(agent_state["positions"])
             top3 = [(c["symbol"], round(c["mom"], 2)) for c in market[:3]]
-            candidates = [
-                c for c in market
-                if not c["inCooldown"]
-                and c["mom"] > 0.05
-                and c["symbol"] not in open_symbols
-            ]
-            add_log("info", "SCAN", f"Mercato: {[(c['symbol'], round(c['mom'],2)) for c in market]} | BTC: {btc_mom:+.2f}% | Candidati: {len(candidates)}")
-            for candidate in candidates[:slots]:
-                # Size = currentCapital / remaining slots
-                size = agent_state["currentCapital"] / (slots - candidates.index(candidate))
-                size = min(size, agent_state["currentCapital"])
-                if size > 0:
-                    enter_position(candidate, size)
+
+            candidates = []
+            for c in market:
+                if c["inCooldown"] or c["mom"] <= 0.05:
+                    continue
+                adx = calc_adx(c["symbol"])
+                if adx < 20:
+                    continue  # mercato laterale, skip
+                candidates.append(c)
+
+            add_log("info", "SCAN", f"Top3: {top3} | BTC: {btc_mom:+.2f}% | Candidati validi: {len(candidates)}")
+
+            if candidates:
+                enter_position(candidates[0])
 
     # P&L history
     unr = unrealized_pnl()
-    pos_value = sum(p["size"] for p in agent_state["positions"])
+    pos = agent_state["position"]
+    pos_value = pos["size"] if pos else 0
     total_value = agent_state["currentCapital"] + pos_value + unr
     pnl_val = total_value - agent_state["capital"]
-    agent_state["pnlHistory"].append({
-        "t": (datetime.now().timestamp() - agent_state["sessionStart"]) / 60,
-        "v": pnl_val
-    })
+    agent_state["pnlHistory"].append({"t": (datetime.now().timestamp() - agent_state["sessionStart"]) / 60, "v": pnl_val})
     if len(agent_state["pnlHistory"]) > 500:
         agent_state["pnlHistory"].pop(0)
 
-# ===== BACKGROUND LOOP =====
 async def background_loop():
     while True:
-        await fetch_binance_prices()
-        scan_and_trade()
+        try:
+            await fetch_binance_prices()
+            scan_and_trade()
+        except Exception as e:
+            print(f"Loop error: {e}")
         await asyncio.sleep(8)
 
 @app.on_event("startup")
 async def startup():
     asyncio.create_task(background_loop())
 
-# ===== ENDPOINTS =====
 @app.get("/status")
 def get_status():
     unr = unrealized_pnl()
-    positions = agent_state["positions"]
-    pos_value = sum(p["size"] for p in positions)
+    pos = agent_state["position"]
+    pos_value = pos["size"] if pos else 0
     total_value = agent_state["currentCapital"] + pos_value + unr
     pnl = total_value - agent_state["capital"]
     pct = pnl / agent_state["capital"] * 100 if agent_state["capital"] > 0 else 0
@@ -293,25 +327,23 @@ def get_status():
         elapsed = (datetime.now().timestamp() - agent_state["sessionStart"]) * 1000
         remaining = max(0, agent_state["sessionDuration"] - elapsed)
     return {
-        "running": agent_state["running"],
-        "capital": agent_state["capital"],
-        "currentCapital": agent_state["currentCapital"],
-        "pnl": pnl,
-        "pct": pct,
-        "tradeCount": agent_state["tradeCount"],
-        "winRate": wr,
-        "positions": positions,
-        "position": positions[0] if positions else None,  # backward compat
+        "running": agent_state["running"], "capital": agent_state["capital"],
+        "currentCapital": agent_state["currentCapital"], "pnl": pnl, "pct": pct,
+        "tradeCount": agent_state["tradeCount"], "winRate": wr,
+        "position": pos,
+        "positions": [pos] if pos else [],
         "remainingMs": remaining,
         "pnlHistory": agent_state["pnlHistory"][-100:],
         "log": agent_state["log"][:30],
+        "consecutiveLosses": agent_state.get("consecutiveLosses", 0),
+        "circuitBreakerTripped": agent_state.get("circuitBreakerTripped", False),
+        "circuitBreakerUntil": agent_state.get("circuitBreakerUntil"),
     }
 
 @app.get("/market")
 def get_market():
     cfg = agent_state["config"]
-    market = get_sorted_market(cfg.get("volFilter", "high"), cfg.get("topN", 12))
-    return {"market": market}
+    return {"market": get_sorted_market(cfg.get("volFilter", "high"), cfg.get("topN", 12))}
 
 @app.get("/trades")
 def get_trades():
@@ -324,11 +356,8 @@ async def start_agent(body: dict):
     cfg = body.get("config", {})
     capital = float(cfg.get("capital", 1000))
     agent_state.update({
-        "running": True,
-        "capital": capital,
-        "currentCapital": capital,
-        "positions": [],
-        "pnlHistory": [{"t": 0, "v": 0}],
+        "running": True, "capital": capital, "currentCapital": capital,
+        "position": None, "pnlHistory": [{"t": 0, "v": 0}],
         "sessionStart": datetime.now().timestamp(),
         "sessionDuration": int(cfg.get("sessionDuration", 8)) * 3600 * 1000,
         "config": {
@@ -340,49 +369,52 @@ async def start_agent(body: dict):
             "takeProfit": float(cfg.get("takeProfit", 0.15)),
             "cooldown": int(cfg.get("cooldown", 2)),
             "sessionDuration": int(cfg.get("sessionDuration", 8)),
+            "smartExit": bool(cfg.get("smartExit", False)),
+            "riskPerTrade": float(cfg.get("riskPerTrade", 0.02)),
         },
-        "cooldowns": {},
-        "tradeCount": 0,
-        "wins": 0,
-        "trades": [],
-        "log": [],
+        "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
+        "consecutiveLosses": 0, "circuitBreakerUntil": None, "circuitBreakerTripped": False,
     })
-    add_log("info", "AVVIO",
-        f"${capital:.0f} USDT | Stop {float(cfg.get('trailStop',0.08))*100:.0f}% | "
-        f"TP {float(cfg.get('takeProfit',0.15))*100:.0f}% | CD {cfg.get('cooldown',2)}h"
-    )
+    add_log("info", "AVVIO", f"${capital:.0f} USDT | Stop {float(cfg.get('trailStop',0.08))*100:.0f}% | TP {float(cfg.get('takeProfit',0.15))*100:.0f}% | CD {cfg.get('cooldown',2)}h")
     return {"ok": True}
 
 @app.post("/close_position")
 def close_position():
-    positions = agent_state["positions"]
-    if not positions:
+    pos = agent_state["position"]
+    if not pos:
         return {"error": "No position open"}
-    for pos in list(positions):
-        exit_position_by_symbol(pos["symbol"], "CHIUSURA MANUALE")
+    exit_position("CHIUSURA MANUALE", pos["currentPrice"])
     return {"ok": True}
 
 @app.post("/close_position/{symbol}")
 def close_position_symbol(symbol: str):
-    pos = next((p for p in agent_state["positions"] if p["symbol"] == symbol), None)
-    if not pos:
+    pos = agent_state["position"]
+    if not pos or pos["symbol"] != symbol:
         return {"error": f"No position on {symbol}"}
-    exit_position_by_symbol(symbol, "CHIUSURA MANUALE")
+    exit_position("CHIUSURA MANUALE", pos["currentPrice"])
     return {"ok": True}
+
+@app.post("/stop")
+def stop_agent():
+    if not agent_state["running"]:
+        return {"error": "Not running"}
+    agent_state["running"] = False
+    if agent_state["position"]:
+        exit_position("STOP MANUALE", agent_state["position"]["currentPrice"])
+    pnl = agent_state["currentCapital"] - agent_state["capital"]
+    add_log("info", "STOP", f"P&L finale: {pnl:+.2f}$")
+    return {"ok": True, "pnl": pnl}
 
 @app.post("/chat")
 async def chat(body: dict):
-    import httpx
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return {"error": "API key non configurata"}
     messages = body.get("messages", [])
-    pos = agent_state.get("positions", [])
+    pos = agent_state.get("position")
     pnl = agent_state.get("currentCapital", 0) - agent_state.get("capital", 0)
-    pos_desc = ", ".join([f"{p['symbol']} @ ${p['entryPrice']}" for p in pos]) if pos else "Nessuna"
-    system = f"""Sei un agente di trading crypto. Stai monitorando il mercato in tempo reale con prezzi Binance.
-Posizioni aperte: {pos_desc}.
-P&L sessione: ${pnl:.2f}. Rispondi in italiano, in modo conciso e professionale."""
+    pos_desc = f"IN POSIZIONE su {pos['symbol']} @ ${pos['entryPrice']}" if pos else "Nessuna posizione aperta"
+    system = f"Sei un agente di trading crypto. Monitori il mercato in tempo reale con prezzi Binance. Stato: {pos_desc}. P&L sessione: ${pnl:.2f}. Rispondi in italiano, conciso e professionale."
     async with httpx.AsyncClient(timeout=30) as client:
         res = await client.post(
             "https://api.anthropic.com/v1/messages",
@@ -390,21 +422,9 @@ P&L sessione: ${pnl:.2f}. Rispondi in italiano, in modo conciso e professionale.
             json={"model": "claude-haiku-4-5-20251001", "max_tokens": 500, "system": system, "messages": messages}
         )
         data = res.json()
-        print(f"Anthropic response: {data}")
         if "content" in data:
             return {"reply": data["content"][0]["text"]}
         return {"error": f"Errore API: {data.get('error', {}).get('message', str(data))}"}
-
-@app.post("/stop")
-def stop_agent():
-    if not agent_state["running"]:
-        return {"error": "Not running"}
-    agent_state["running"] = False
-    for pos in list(agent_state["positions"]):
-        exit_position_by_symbol(pos["symbol"], "STOP MANUALE")
-    pnl = agent_state["currentCapital"] - agent_state["capital"]
-    add_log("info", "STOP", f"P&L finale: {pnl:+.2f}$")
-    return {"ok": True, "pnl": pnl}
 
 @app.get("/health")
 def health():
