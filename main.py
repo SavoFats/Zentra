@@ -154,10 +154,15 @@ def enter_position(crypto):
     # Use ATR for stop distance, fallback to trailStop
     atr = calc_atr(crypto["symbol"])
     trail_stop = cfg.get("trailStop", 0.08)
-    if atr and crypto["price"] > 0:
-        stop_distance_pct = (atr * 1.5) / crypto["price"]
-        stop_distance_pct = max(stop_distance_pct, 0.01)  # min 1%
-        stop_distance_pct = min(stop_distance_pct, trail_stop)  # max = trailStop config
+    price = crypto["price"]
+
+    # ATR floor: at least 0.5% of price to avoid microsecond stops
+    atr_floor = price * 0.005
+    if atr and atr > 0:
+        atr = max(atr, atr_floor)
+        stop_distance_pct = (atr * 2.0) / price
+        stop_distance_pct = max(stop_distance_pct, 0.02)   # min 2%
+        stop_distance_pct = min(stop_distance_pct, trail_stop)
     else:
         stop_distance_pct = trail_stop
 
@@ -252,7 +257,8 @@ def scan_and_trade():
         cur = pos["currentPrice"]
         atr = pos.get("atr")
         if atr and atr > 0:
-            # ATR-based: stop 2x ATR, TP 4x ATR
+            atr_floor = pos["entryPrice"] * 0.005
+            atr = max(atr, atr_floor)
             trail_price = pos["highPrice"] - (atr * 2.0)
             tp_price = pos["entryPrice"] + (atr * 4.0)
         else:
