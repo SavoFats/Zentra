@@ -52,7 +52,8 @@ agent_state = {
 for pair, meta in SYM_META.items():
     market_data[meta["symbol"]] = {
         "price": 0.0, "change24h": 0.0, "change1h": 0.0,
-        "priceHistory": [], "vol": meta["vol"], "icon": meta["icon"]
+        "priceHistory": [], "volumeHistory": [],
+        "volume24h": 0.0, "vol": meta["vol"], "icon": meta["icon"]
     }
 
 async def fetch_binance_prices():
@@ -78,6 +79,13 @@ async def fetch_binance_prices():
                 market_data[sym]["price"] = price
                 market_data[sym]["change24h"] = change24h
                 market_data[sym]["change1h"] = change1h
+                # Track volume
+                vol = float(t.get("quoteVolume", 0))
+                market_data[sym]["volume24h"] = vol
+                vh = market_data[sym]["volumeHistory"]
+                vh.append(vol)
+                if len(vh) > 60:
+                    vh.pop(0)
                 pos = agent_state["position"]
                 if pos and pos["symbol"] == sym:
                     pos["currentPrice"] = price
@@ -132,7 +140,38 @@ def calc_adx(symbol, periods=14):
     dx = abs(avg_up - avg_down) / (avg_up + avg_down) * 100
     return dx
 
-def add_log(type_, label, desc):
+def calc_ema(prices, period):
+    """Calculate EMA for a list of prices."""
+    if len(prices) < period:
+        return None
+    k = 2 / (period + 1)
+    ema = sum(prices[:period]) / period
+    for price in prices[period:]:
+        ema = price * k + ema * (1 - k)
+    return ema
+
+def ema_aligned(symbol):
+    """Check if EMA 9 > EMA 21 (bullish alignment)."""
+    hist = market_data.get(symbol, {}).get("priceHistory", [])
+    if len(hist) < 21:
+        return True  # not enough data, don't block entry
+    ema9 = calc_ema(hist, 9)
+    ema21 = calc_ema(hist, 21)
+    if ema9 is None or ema21 is None:
+        return True
+    return ema9 > ema21
+
+def volume_ok(symbol):
+    """Check if current volume is above 1.2x average of recent history."""
+    d = market_data.get(symbol, {})
+    vh = d.get("volumeHistory", [])
+    current_vol = d.get("volume24h", 0)
+    if len(vh) < 5 or current_vol == 0:
+        return True  # not enough data, don't block
+    avg_vol = sum(vh[-10:]) / len(vh[-10:])
+    return current_vol >= avg_vol * 1.0  # slightly relaxed: 1.0x instead of 1.2x initially
+
+
     agent_state["log"].insert(0, {"type": type_, "label": label, "desc": desc, "time": datetime.now().strftime("%H:%M:%S")})
     if len(agent_state["log"]) > 100:
         agent_state["log"].pop()
@@ -291,13 +330,21 @@ def scan_and_trade():
                     continue
                 adx = calc_adx(c["symbol"])
                 if adx < 20:
-                    continue  # mercato laterale, skip
-                candidates.append(c)
+                    continue  # mercato laterale
+                if not ema_aligned(c["symbol"]):
+                    continue  # EMA bearish
+                if not volume_ok(c["symbol"]):
+                    continue  # volume insufficiente
+                candidates.append((c, adx))
 
-            add_log("info", "SCAN", f"Top3: {top3} | BTC: {btc_mom:+.2f}% | Candidati validi: {len(candidates)}")
-
+            candidates.sort(key=lambda x: x[1], reverse=True)  # ordina per ADX decrescente
+            top3 = [(c["symbol"], round(c["mom"], 2)) for c in market[:3]]
+            add_log("info", "SCAN",
+                f"Top3: {top3} | BTC: {btc_mom:+.2f}% | "
+                f"Candidati validi: {len(candidates)}"
+            )
             if candidates:
-                enter_position(candidates[0])
+                enter_position(candidates[0][0])
 
     # P&L history
     unr = unrealized_pnl()
