@@ -155,23 +155,26 @@ def enter_position(crypto):
     atr = calc_atr(crypto["symbol"])
     trail_stop = cfg.get("trailStop", 0.08)
     if atr and crypto["price"] > 0:
-        stop_distance = (atr * 1.5) / crypto["price"]
-        stop_distance = max(stop_distance, 0.005)  # min 0.5%
+        stop_distance_pct = (atr * 1.5) / crypto["price"]
+        stop_distance_pct = max(stop_distance_pct, 0.01)  # min 1%
+        stop_distance_pct = min(stop_distance_pct, trail_stop)  # max = trailStop config
     else:
-        stop_distance = trail_stop
+        stop_distance_pct = trail_stop
 
     # Position size = risk_amount / stop_distance
-    size = min(risk_amount / stop_distance, agent_state["currentCapital"] * 0.95)
+    # Cap at 20% of current capital to avoid overexposure
+    size = risk_amount / stop_distance_pct
+    size = min(size, agent_state["currentCapital"] * 0.20)
     size = max(size, 1.0)  # min $1
 
     agent_state["currentCapital"] -= size
-    atr_str = f"ATR: ${atr:.4f}" if atr else "ATR: n/a"
+    atr_str = f"ATR: ${atr:.4f} | Stop: {stop_distance_pct*100:.2f}%" if atr else "ATR: n/a"
     agent_state["position"] = {
         "symbol": crypto["symbol"], "icon": crypto["icon"],
         "entryPrice": crypto["price"], "currentPrice": crypto["price"],
         "highPrice": crypto["price"], "size": size,
         "entryTime": datetime.now().isoformat(),
-        "stopDistance": stop_distance,
+        "stopDistance": stop_distance_pct,
         "atr": atr,
     }
     add_log("buy", "ACQUISTO",
@@ -247,11 +250,11 @@ def scan_and_trade():
     if agent_state["position"]:
         pos = agent_state["position"]
         cur = pos["currentPrice"]
-        # Use ATR-based stop if available
         atr = pos.get("atr")
-        if atr:
-            trail_price = pos["highPrice"] - (atr * 1.5)
-            tp_price = pos["entryPrice"] + (atr * 3.0)
+        if atr and atr > 0:
+            # ATR-based: stop 2x ATR, TP 4x ATR
+            trail_price = pos["highPrice"] - (atr * 2.0)
+            tp_price = pos["entryPrice"] + (atr * 4.0)
         else:
             trail_price = pos["highPrice"] * (1 - cfg.get("trailStop", 0.08))
             tp_price = pos["entryPrice"] * (1 + cfg.get("takeProfit", 0.15))
