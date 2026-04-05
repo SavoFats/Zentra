@@ -375,11 +375,12 @@
           <input type="number" id="capital" value="1000" min="100" inputmode="decimal">
         </div>
         <div class="field">
-          <label>% per posizione</label>
+          <label>Rischio per trade (%)</label>
           <div class="range-row">
-            <input type="range" id="posSize" min="10" max="100" value="80" oninput="document.getElementById('posSizeVal').textContent=this.value+'%'">
-            <span class="range-val" id="posSizeVal">80%</span>
+            <input type="range" id="riskPerTrade" min="1" max="10" value="2" step="0.5" oninput="document.getElementById('riskPerTradeVal').textContent=this.value+'%'">
+            <span class="range-val" id="riskPerTradeVal">2%</span>
           </div>
+          <div style="font-size:11px;color:#8b949e;margin-top:4px;">Max posizione: 20% del capitale</div>
         </div>
       </div>
     </div>
@@ -505,6 +506,17 @@
         <div class="kpi-label">Tempo rimasto</div>
         <div class="kpi-value" id="kpiTime" style="font-size:17px">—</div>
         <div class="kpi-sub">sessione</div>
+      </div>
+    </div>
+
+    <!-- Circuit Breaker Banner -->
+    <div id="cbBanner" style="display:none;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);border-radius:12px;padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">🛑</span>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#f85149;" id="cbTitle">Circuit Breaker attivo</div>
+          <div style="font-size:12px;color:#8b949e;margin-top:2px;" id="cbDesc">—</div>
+        </div>
       </div>
     </div>
 
@@ -728,6 +740,8 @@ async function pollStatus() {
     S.tradeCount = status.tradeCount;
     S.wins = status.winRate;
     S.remainingMs = status.remainingMs;
+    S.circuitBreakerTripped = status.circuitBreakerTripped || false;
+    S.circuitBreakerUntil = status.circuitBreakerUntil || null;
     localRemainingMs = status.remainingMs;
     lastPollTime = Date.now();
     // If pnlHistory restarted from backend, reset chart
@@ -991,7 +1005,8 @@ async function startAgent() {
   const smartExitEl = document.getElementById('smartExit');
   const config = {
     capital,
-    posSize: parseFloat(document.getElementById('posSize').value) / 100,
+    posSize: 0.2,
+    riskPerTrade: parseFloat(document.getElementById('riskPerTrade').value) / 100,
     momentumWindow: parseInt(document.getElementById('momentumWindow').value),
     topN: parseInt(document.getElementById('topN').value),
     volFilter: document.getElementById('volFilter').value,
@@ -1211,7 +1226,12 @@ function addLogEntry(type, label, desc, time) {
 function updateKpis() {
   const pnl = S.pnl !== undefined ? S.pnl : S.currentCapital - S.capital;
   const pct = S.capital > 0 ? pnl / S.capital * 100 : 0;
-  document.getElementById('kpiCapital').textContent = '$' + S.currentCapital.toFixed(2);
+
+  // Show total capital (cash + positions)
+  const posValue = (S.positions || []).reduce((sum, p) => sum + p.size, 0);
+  const totalCapital = S.currentCapital + posValue;
+  document.getElementById('kpiCapital').textContent = '$' + totalCapital.toFixed(2);
+
   const el = document.getElementById('kpiPnl');
   el.textContent = `${pnl>=0?'+':''}$${pnl.toFixed(2)}`;
   el.className = 'kpi-value ' + (pnl >= 0 ? 'positive' : 'negative');
@@ -1221,6 +1241,26 @@ function updateKpis() {
   const bp = document.getElementById('bannerPnl');
   bp.textContent = `${pnl>=0?'+':''}$${pnl.toFixed(2)}`;
   bp.className = 'sess-val ' + (pnl >= 0 ? 'pos' : 'neg');
+
+  // Circuit breaker banner
+  const cbBanner = document.getElementById('cbBanner');
+  if (S.circuitBreakerTripped) {
+    cbBanner.style.display = 'block';
+    document.getElementById('cbTitle').textContent = '🛑 Circuit Breaker — Sessione fermata';
+    document.getElementById('cbDesc').textContent = 'P&L sceso sotto -5%. Agente fermato per protezione capitale.';
+  } else if (S.circuitBreakerUntil) {
+    const remainMs = S.circuitBreakerUntil - Date.now();
+    if (remainMs > 0) {
+      cbBanner.style.display = 'block';
+      const remainMin = Math.ceil(remainMs / 60000);
+      document.getElementById('cbTitle').textContent = '⏸ Pausa Circuit Breaker';
+      document.getElementById('cbDesc').textContent = `3 perdite consecutive — riprendo tra ${remainMin} min`;
+    } else {
+      cbBanner.style.display = 'none';
+    }
+  } else {
+    cbBanner.style.display = 'none';
+  }
 }
 
 // ===== CHART =====
