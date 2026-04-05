@@ -324,6 +324,29 @@ def close_position():
     exit_position("CHIUSURA MANUALE", pos["currentPrice"])
     return {"ok": True}
 
+@app.post("/chat")
+async def chat(body: dict):
+    import httpx
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return {"error": "API key non configurata"}
+    messages = body.get("messages", [])
+    pos = agent_state.get("position")
+    pnl = agent_state.get("currentCapital", 0) - agent_state.get("capital", 0)
+    system = f"""Sei un agente di trading crypto. Stai monitorando il mercato in tempo reale con prezzi Binance.
+Stato attuale: {'IN POSIZIONE su ' + pos['symbol'] + ' @ $' + str(pos['entryPrice']) if pos else 'Nessuna posizione aperta'}.
+P&L sessione: ${pnl:.2f}. Rispondi in italiano, in modo conciso e professionale."""
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+            json={"model": "claude-haiku-4-5-20251001", "max_tokens": 500, "system": system, "messages": messages}
+        )
+        data = res.json()
+        if "content" in data:
+            return {"reply": data["content"][0]["text"]}
+        return {"error": "Errore API"}
+
 @app.post("/stop")
 def stop_agent():
     if not agent_state["running"]:
