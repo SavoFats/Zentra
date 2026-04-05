@@ -20,7 +20,7 @@ app.add_middleware(
 BINANCE_BASE = "https://api.binance.com"
 
 TRACKED_PAIRS = [
-    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
     "ADAUSDT", "AVAXUSDT", "DOTUSDT", "LINKUSDT",
     "MATICUSDT", "UNIUSDT", "NEARUSDT", "INJUSDT",
     "APTUSDT", "ARBUSDT", "OPUSDT", "ATOMUSDT",
@@ -31,6 +31,7 @@ SYM_META = {
     "ETHUSDT":  {"symbol": "ETH",   "icon": "Ξ",  "vol": "high"},
     "SOLUSDT":  {"symbol": "SOL",   "icon": "◎",  "vol": "high"},
     "BNBUSDT":  {"symbol": "BNB",   "icon": "B",  "vol": "high"},
+    "XRPUSDT":  {"symbol": "XRP",   "icon": "✕",  "vol": "high"},
     "ADAUSDT":  {"symbol": "ADA",   "icon": "₳",  "vol": "med"},
     "AVAXUSDT": {"symbol": "AVAX",  "icon": "A",  "vol": "med"},
     "DOTUSDT":  {"symbol": "DOT",   "icon": "●",  "vol": "med"},
