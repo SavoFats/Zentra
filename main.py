@@ -95,11 +95,6 @@ async def fetch_binance_prices():
                 market_data[sym]["price"] = price
                 market_data[sym]["change24h"] = change24h
                 market_data[sym]["change1h"] = change1h
-                pos = agent_state["position"]
-                if pos and pos["symbol"] == sym:
-                    pos["currentPrice"] = price
-                    if price > pos["highPrice"]:
-                        pos["highPrice"] = price
     except Exception as e:
         print(f"Binance fetch error: {e}")
 
