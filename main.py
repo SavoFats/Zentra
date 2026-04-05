@@ -245,14 +245,14 @@ def scan_and_trade():
         else:
             market = get_sorted_market(cfg.get("volFilter", "high"), cfg.get("topN", 10))
             slots = max_positions - len(agent_state["positions"])
+            top3 = [(c["symbol"], round(c["mom"], 2)) for c in market[:3]]
             candidates = [
                 c for c in market
                 if not c["inCooldown"]
                 and c["mom"] > 0.05
                 and c["symbol"] not in open_symbols
             ]
-            top3 = [(c["symbol"], round(c["mom"], 2)) for c in market[:3]]
-            add_log("info", "SCAN", f"Top3: {top3} | BTC: {btc_mom:+.2f}% | Slot: {slots}")
+            add_log("info", "SCAN", f"Mercato: {[(c['symbol'], round(c['mom'],2)) for c in market]} | BTC: {btc_mom:+.2f}% | Candidati: {len(candidates)}")
             for candidate in candidates[:slots]:
                 # Size = currentCapital / remaining slots
                 size = agent_state["currentCapital"] / (slots - candidates.index(candidate))
