@@ -275,6 +275,10 @@ def get_market():
     market = get_sorted_market(cfg.get("volFilter", "high"), cfg.get("topN", 12))
     return {"market": market}
 
+@app.get("/trades")
+def get_trades():
+    return {"trades": agent_state["trades"]}
+
 @app.post("/start")
 async def start_agent(body: dict):
     if agent_state["running"]:
@@ -309,6 +313,14 @@ async def start_agent(body: dict):
         f"${capital:.0f} USDT | Stop {float(cfg.get('trailStop',0.08))*100:.0f}% | "
         f"TP {float(cfg.get('takeProfit',0.15))*100:.0f}% | CD {cfg.get('cooldown',2)}h"
     )
+    return {"ok": True}
+
+@app.post("/close_position")
+def close_position():
+    pos = agent_state["position"]
+    if not pos:
+        return {"error": "No position open"}
+    exit_position("CHIUSURA MANUALE", pos["currentPrice"])
     return {"ok": True}
 
 @app.post("/stop")
