@@ -518,6 +518,7 @@
           <div class="trail-lbls"><span>Stop</span><span id="trailPct">—</span><span>Take Profit</span></div>
           <div class="trail-bar"><div class="trail-fill" id="trailFill" style="width:50%"></div></div>
         </div>
+        <button id="closePosBtnCard" onclick="closePosManual()" style="margin-top:12px;width:100%;padding:10px;background:#f85149;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">⚡ Chiudi Posizione</button>
       </div>
     </div>
 
@@ -554,6 +555,52 @@
       </div>
       <div id="logList">
         <div class="empty-state"><div class="icon">📋</div><span>Nessuna operazione ancora</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STORICO -->
+  <div class="page" id="page-trades">
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">Storico Trade</span>
+        <span class="badge gray" id="tradesBadge">0 trade</span>
+      </div>
+      <!-- Filtri -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <select id="filterCoin" onchange="renderTrades()" style="flex:1;min-width:100px;background:#161b22;color:#e6edf3;border:1px solid #21262d;border-radius:8px;padding:8px;font-size:13px;">
+          <option value="">Tutte le coin</option>
+        </select>
+        <select id="filterResult" onchange="renderTrades()" style="flex:1;min-width:100px;background:#161b22;color:#e6edf3;border:1px solid #21262d;border-radius:8px;padding:8px;font-size:13px;">
+          <option value="">Tutti i risultati</option>
+          <option value="win">Solo profitti</option>
+          <option value="loss">Solo perdite</option>
+        </select>
+        <select id="filterSort" onchange="renderTrades()" style="flex:1;min-width:100px;background:#161b22;color:#e6edf3;border:1px solid #21262d;border-radius:8px;padding:8px;font-size:13px;">
+          <option value="date_desc">Più recenti</option>
+          <option value="date_asc">Meno recenti</option>
+          <option value="pnl_desc">Maggior guadagno</option>
+          <option value="pnl_asc">Maggior perdita</option>
+        </select>
+      </div>
+      <!-- Sommario -->
+      <div id="tradesSummary" style="display:none;background:#0f1318;border-radius:10px;padding:12px;margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:11px;color:#8b949e;text-transform:uppercase;">Totale Trade</div>
+          <div style="font-size:18px;font-weight:700;color:#e6edf3;" id="sumTotal">0</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:11px;color:#8b949e;text-transform:uppercase;">Win Rate</div>
+          <div style="font-size:18px;font-weight:700;color:#3fb950;" id="sumWinRate">0%</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:11px;color:#8b949e;text-transform:uppercase;">P&L Totale</div>
+          <div style="font-size:18px;font-weight:700;" id="sumPnl">$0.00</div>
+        </div>
+      </div>
+      <!-- Lista trade -->
+      <div id="tradesList">
+        <div class="empty-state"><div class="icon">📈</div><span>Nessun trade ancora.<br>Avvia l'agente per iniziare.</span></div>
       </div>
     </div>
   </div>
@@ -598,7 +645,12 @@
     <div class="tab-label">Log</div>
     <div class="tab-notif" id="notif-log">0</div>
   </div>
-  <div class="tab-item" id="tab-chat" onclick="goTo('chat',4)">
+  <div class="tab-item" id="tab-trades" onclick="goTo('trades',4)">
+    <div class="tab-icon">📈</div>
+    <div class="tab-label">Storico</div>
+    <div class="tab-notif" id="notif-trades" style="display:none">0</div>
+  </div>
+  <div class="tab-item" id="tab-chat" onclick="goTo('chat',5)">
     <div class="tab-icon">💬</div>
     <div class="tab-label">Chat</div>
     <div class="tab-notif" id="notif-chat">0</div>
@@ -616,6 +668,7 @@ function goTo(page) {
   curPage = page;
   if (page === 'monitor') setTimeout(drawChart, 50);
   if (page === 'market') renderMarket();
+  if (page === 'trades') fetchTrades();
   if (page === 'log') { document.getElementById('notif-log').classList.remove('show'); logNotif = 0; }
   if (page === 'chat') { document.getElementById('notif-chat').classList.remove('show'); chatNotif = 0; }
 }
@@ -670,6 +723,8 @@ async function pollStatus() {
     S.tradeCount = status.tradeCount;
     S.wins = status.winRate;
     S.remainingMs = status.remainingMs;
+    localRemainingMs = status.remainingMs;
+    lastPollTime = Date.now();
     // If pnlHistory restarted from backend, reset chart
     if (status.pnlHistory && status.pnlHistory.length < S.pnlHistory.length) {
       lastLogCount = 0;
@@ -707,15 +762,7 @@ async function pollStatus() {
     if (curPage === 'monitor') { renderPos(S.position); drawChart(); }
     if (curPage === 'market') renderMarket();
 
-    // Timer
-    if (S.running && S.remainingMs > 0) {
-      const h = Math.floor(S.remainingMs/3600000);
-      const m = Math.floor((S.remainingMs%3600000)/60000);
-      const sec = Math.floor((S.remainingMs%60000)/1000);
-      const t = `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-      document.getElementById('kpiTime').textContent = t;
-      document.getElementById('bannerTime').textContent = t;
-    }
+    // Timer handled by smooth 1s interval above
 
     // Update header status
     if (S.running) {
@@ -731,7 +778,146 @@ async function pollStatus() {
   pollErrorCount = 0;
 }
 
-let lastLogCount = 0;
+// ===== CLOSE POSITION MANUALLY =====
+async function closePosManual() {
+  if (!S.position) return;
+  if (!confirm('Chiudi la posizione su ' + S.position.symbol + ' ora?')) return;
+  try {
+    await fetch(API + '/close_position', { method: 'POST' });
+    pollStatus();
+  } catch(e) { alert('Errore chiusura posizione'); }
+}
+
+// ===== SMOOTH TIMER =====
+let localRemainingMs = 0;
+let lastPollTime = Date.now();
+setInterval(() => {
+  if (!S.running || localRemainingMs <= 0) return;
+  const elapsed = Date.now() - lastPollTime;
+  const remaining = Math.max(0, localRemainingMs - elapsed);
+  const h = Math.floor(remaining/3600000);
+  const m = Math.floor((remaining%3600000)/60000);
+  const sec = Math.floor((remaining%60000)/1000);
+  const t = `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  document.getElementById('kpiTime').textContent = t;
+  document.getElementById('bannerTime').textContent = t;
+}, 1000);
+
+// ===== COIN LOGOS =====
+const COIN_LOGOS = {
+  'BTC': 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+  'ETH': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+  'SOL': 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
+  'BNB': 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+  'ADA': 'https://assets.coingecko.com/coins/images/975/small/cardano.png',
+  'AVAX': 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png',
+  'DOT': 'https://assets.coingecko.com/coins/images/12171/small/polkadot.png',
+  'LINK': 'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
+  'MATIC': 'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+  'UNI': 'https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png',
+  'NEAR': 'https://assets.coingecko.com/coins/images/10365/small/near.jpg',
+  'INJ': 'https://assets.coingecko.com/coins/images/12882/small/Secondary_Symbol.png',
+  'APT': 'https://assets.coingecko.com/coins/images/26455/small/aptos_round.png',
+  'ARB': 'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
+  'OP': 'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
+  'ATOM': 'https://assets.coingecko.com/coins/images/1481/small/cosmos_hub.png',
+};
+
+// ===== TRADES HISTORY =====
+let allTrades = [];
+
+async function fetchTrades() {
+  try {
+    const res = await fetch(API + '/trades');
+    const data = await res.json();
+    allTrades = data.trades || [];
+    renderTrades();
+  } catch(e) {}
+}
+
+function renderTrades() {
+  const coinFilter = document.getElementById('filterCoin') ? document.getElementById('filterCoin').value : '';
+  const resultFilter = document.getElementById('filterResult') ? document.getElementById('filterResult').value : '';
+  const sortFilter = document.getElementById('filterSort') ? document.getElementById('filterSort').value : 'date_desc';
+
+  const coins = [...new Set(allTrades.map(t => t.symbol))];
+  const coinSelect = document.getElementById('filterCoin');
+  if (coinSelect) {
+    const currentVal = coinSelect.value;
+    coinSelect.innerHTML = '<option value="">Tutte le coin</option>';
+    coins.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      if (c === currentVal) opt.selected = true;
+      coinSelect.appendChild(opt);
+    });
+  }
+
+  let filtered = [...allTrades];
+  if (coinFilter) filtered = filtered.filter(t => t.symbol === coinFilter);
+  if (resultFilter === 'win') filtered = filtered.filter(t => t.pnl >= 0);
+  if (resultFilter === 'loss') filtered = filtered.filter(t => t.pnl < 0);
+  if (sortFilter === 'date_desc') filtered.sort((a,b) => new Date(b.time) - new Date(a.time));
+  if (sortFilter === 'date_asc') filtered.sort((a,b) => new Date(a.time) - new Date(b.time));
+  if (sortFilter === 'pnl_desc') filtered.sort((a,b) => b.pnl - a.pnl);
+  if (sortFilter === 'pnl_asc') filtered.sort((a,b) => a.pnl - b.pnl);
+
+  const list = document.getElementById('tradesList');
+  const badge = document.getElementById('tradesBadge');
+  if (badge) badge.textContent = `${allTrades.length} trade`;
+
+  if (allTrades.length > 0) {
+    const wins = allTrades.filter(t => t.pnl >= 0).length;
+    const totalPnl = allTrades.reduce((s, t) => s + t.pnl, 0);
+    document.getElementById('sumTotal').textContent = allTrades.length;
+    document.getElementById('sumWinRate').textContent = Math.round(wins/allTrades.length*100) + '%';
+    const pnlEl = document.getElementById('sumPnl');
+    pnlEl.textContent = `${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}`;
+    pnlEl.style.color = totalPnl >= 0 ? '#3fb950' : '#f85149';
+    document.getElementById('tradesSummary').style.display = 'flex';
+  }
+
+  if (!list) return;
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><span>Nessun trade trovato</span></div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(t => {
+    const logo = COIN_LOGOS[t.symbol];
+    const icon = logo ? `<img src="${logo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">` : `<span style="font-size:20px">${t.symbol[0]}</span>`;
+    const isWin = t.pnl >= 0;
+    const date = new Date(t.time);
+    const dateStr = date.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'}) + ' ' + date.toTimeString().slice(0,5);
+    return `<div style="background:#0f1318;border-radius:12px;padding:14px;margin-bottom:10px;border-left:3px solid ${isWin?'#3fb950':'#f85149'};">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">${icon}
+          <div><div style="font-weight:700;font-size:15px;color:#e6edf3;">${t.symbol}</div>
+          <div style="font-size:11px;color:#8b949e;">${dateStr}</div></div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:700;font-size:16px;color:${isWin?'#3fb950':'#f85149'}">${isWin?'+':''}$${t.pnl.toFixed(2)}</div>
+          <div style="font-size:12px;color:${isWin?'#3fb950':'#f85149'}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div style="background:#161b22;border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8b949e;margin-bottom:2px;">ENTRATA</div>
+          <div style="font-size:13px;color:#e6edf3;font-weight:600;">$${t.entryPrice.toFixed(4)}</div>
+        </div>
+        <div style="background:#161b22;border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8b949e;margin-bottom:2px;">USCITA</div>
+          <div style="font-size:13px;color:#e6edf3;font-weight:600;">$${t.exitPrice.toFixed(4)}</div>
+        </div>
+        <div style="background:#161b22;border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#8b949e;margin-bottom:2px;">MOTIVO</div>
+          <div style="font-size:11px;color:${isWin?'#3fb950':'#f85149'};font-weight:600;">${t.reason}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function syncLog(logs) {
   if (logs.length <= lastLogCount) return;
   const newEntries = logs.slice(0, logs.length - lastLogCount);
@@ -891,7 +1077,13 @@ function renderPos(pos) {
   }
   empty.style.display = 'none'; info.style.display = 'block';
   badge.textContent = 'LONG'; badge.className = 'badge';
-  document.getElementById('posIcon').textContent = pos.icon;
+  const logoUrl = COIN_LOGOS[pos.symbol];
+  const iconEl = document.getElementById('posIcon');
+  if (logoUrl) {
+    iconEl.innerHTML = `<img src="${logoUrl}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;" onerror="this.parentElement.textContent='${pos.icon}'">`;
+  } else {
+    iconEl.textContent = pos.icon;
+  }
   document.getElementById('posSym').textContent = pos.symbol;
   document.getElementById('posTimeLbl').textContent = 'entrata: ' + new Date(pos.entryTime).toTimeString().slice(0,8);
   document.getElementById('posEntry').textContent = '$' + pos.entryPrice.toFixed(4);
