@@ -490,7 +490,7 @@
       <div class="kpi-card">
         <div class="kpi-label">Capitale</div>
         <div class="kpi-value accent" id="kpiCapital">$0.00</div>
-        <div class="kpi-sub">simulato</div>
+        <div class="kpi-sub" id="kpiCapitalSub">simulato</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">P&L Sessione</div>
@@ -1231,6 +1231,12 @@ function updateKpis() {
   const posValue = (S.positions || []).reduce((sum, p) => sum + p.size, 0);
   const totalCapital = S.currentCapital + posValue;
   document.getElementById('kpiCapital').textContent = '$' + totalCapital.toFixed(2);
+  const subEl = document.getElementById('kpiCapitalSub');
+  if (posValue > 0) {
+    subEl.textContent = `libero $${S.currentCapital.toFixed(0)} · investito $${posValue.toFixed(0)}`;
+  } else {
+    subEl.textContent = 'simulato';
+  }
 
   const el = document.getElementById('kpiPnl');
   el.textContent = `${pnl>=0?'+':''}$${pnl.toFixed(2)}`;
