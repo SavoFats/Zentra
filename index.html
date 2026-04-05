@@ -469,9 +469,10 @@
             <label style="font-weight:600;">Exit intelligente</label>
             <div style="font-size:11px;color:#8b949e;margin-top:2px;">Chiudi se il momentum si inverte sotto -0.5%</div>
           </div>
-          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">
-            <input type="checkbox" id="smartExit" style="opacity:0;width:0;height:0;">
-            <span onclick="document.getElementById('smartExit').click()" style="position:absolute;cursor:pointer;inset:0;background:#21262d;border-radius:12px;transition:0.3s;" id="smartExitSlider"></span>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
+            <input type="checkbox" id="smartExit" style="opacity:0;width:0;height:0;position:absolute;">
+            <span id="smartExitSlider" style="position:absolute;cursor:pointer;inset:0;background:#21262d;border-radius:12px;transition:0.3s;display:block;"></span>
+            <span id="smartExitThumb" style="position:absolute;left:3px;top:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:0.3s;"></span>
           </label>
         </div>
       </div>
@@ -1202,8 +1203,8 @@ function addLogEntry(type, label, desc, time) {
   const d = document.createElement('div'); d.className = 'log-item';
   d.innerHTML = `<span class="log-type ${type}">${label}</span><div class="log-body"><div class="log-desc">${desc}</div><div class="log-time">${time || new Date().toTimeString().slice(0,8)}</div></div>`;
   el.insertBefore(d, el.firstChild);
-  const count = el.querySelectorAll('.log-item').length;
-  document.getElementById('logBadge').textContent = count + ' trade';
+  const buyCount = el.querySelectorAll('.log-type.buy').length;
+  document.getElementById('logBadge').textContent = buyCount + ' trade';
   bumpNotif('log');
 }
 
@@ -1310,8 +1311,8 @@ function scrollChat() { const el = document.getElementById('chatMsgs'); el.scrol
 
 // ===== SMART EXIT TOGGLE =====
 document.getElementById('smartExit').addEventListener('change', function() {
-  const slider = document.getElementById('smartExitSlider');
-  slider.style.background = this.checked ? '#00d4aa' : '#21262d';
+  document.getElementById('smartExitSlider').style.background = this.checked ? '#00d4aa' : '#21262d';
+  document.getElementById('smartExitThumb').style.left = this.checked ? '23px' : '3px';
 });
 setTimeout(drawChart, 100);
 
