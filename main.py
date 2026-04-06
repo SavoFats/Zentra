@@ -362,7 +362,8 @@ async def background_loop():
             await fetch_binance_prices()
             scan_and_trade()
         except Exception as e:
-            print(f"Loop error: {e}")
+            import traceback
+            print(f"Loop error: {e}\n{traceback.format_exc()}")
         await asyncio.sleep(8)
 
 @app.on_event("startup")
