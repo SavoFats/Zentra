@@ -56,6 +56,31 @@ for pair, meta in SYM_META.items():
         "volume24h": 0.0, "vol": meta["vol"], "icon": meta["icon"]
     }
 
+async def fetch_atr_1h(symbol_usdt: str, periods: int = 14) -> float | None:
+    """Fetch real ATR from Binance 1h klines. Returns ATR in price units."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(
+                f"{BINANCE_BASE}/api/v3/klines",
+                params={"symbol": symbol_usdt, "interval": "1h", "limit": periods + 1}
+            )
+            klines = res.json()
+            if len(klines) < periods + 1:
+                return None
+            # True Range = max(high-low, abs(high-prev_close), abs(low-prev_close))
+            trs = []
+            for i in range(1, len(klines)):
+                high = float(klines[i][2])
+                low = float(klines[i][3])
+                prev_close = float(klines[i-1][4])
+                tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+                trs.append(tr)
+            atr = sum(trs[-periods:]) / periods
+            return atr
+    except Exception as e:
+        print(f"ATR fetch error: {e}")
+        return None
+
 async def fetch_binance_prices():
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -183,49 +208,51 @@ def unrealized_pnl():
         return 0.0
     return (pos["currentPrice"] - pos["entryPrice"]) / pos["entryPrice"] * pos["size"]
 
-def enter_position(crypto):
+async def enter_position_async(crypto):
+    """Async version of enter_position that fetches real 1h ATR."""
     cfg = agent_state["config"]
     capital = agent_state["capital"]
 
-    # Money management: risk 2% of total capital per trade
+    # Fetch real ATR from 1h klines
+    pair = crypto["symbol"] + "USDT"
+    atr = await fetch_atr_1h(pair)
+    price = crypto["price"]
+
+    # Fallback to tick ATR if klines fail
+    if not atr or atr <= 0:
+        atr = calc_atr(crypto["symbol"])
+
+    trail_stop = cfg.get("trailStop", 0.08)
     risk_pct = cfg.get("riskPerTrade", 0.02)
     risk_amount = capital * risk_pct
 
-    # Use ATR for stop distance, fallback to trailStop
-    atr = calc_atr(crypto["symbol"])
-    trail_stop = cfg.get("trailStop", 0.08)
-    price = crypto["price"]
-
-    # ATR floor: at least 0.5% of price to avoid microsecond stops
-    atr_floor = price * 0.005
     if atr and atr > 0:
-        atr = max(atr, atr_floor)
-        stop_distance_pct = (atr * 2.0) / price
-        stop_distance_pct = max(stop_distance_pct, 0.02)   # min 2%
+        # Stop = 1.5x ATR below entry
+        stop_distance_pct = (atr * 1.5) / price
+        stop_distance_pct = max(stop_distance_pct, 0.01)   # min 1%
         stop_distance_pct = min(stop_distance_pct, trail_stop)
     else:
         stop_distance_pct = trail_stop
 
-    # Position size = risk_amount / stop_distance
-    # Cap at 20% of current capital to avoid overexposure
+    # Size = risk / stop_distance, cap at 20%
     size = risk_amount / stop_distance_pct
     size = min(size, agent_state["currentCapital"] * 0.20)
-    size = max(size, 1.0)  # min $1
+    size = max(size, 1.0)
 
     agent_state["currentCapital"] -= size
-    atr_str = f"ATR: ${atr:.4f} | Stop: {stop_distance_pct*100:.2f}%" if atr else "ATR: n/a"
+    atr_str = f"ATR1h: ${atr:.4f} | Stop: {stop_distance_pct*100:.2f}%" if atr else "ATR: n/a"
     agent_state["position"] = {
         "symbol": crypto["symbol"], "icon": crypto["icon"],
-        "entryPrice": crypto["price"], "currentPrice": crypto["price"],
-        "highPrice": crypto["price"], "size": size,
+        "entryPrice": price, "currentPrice": price,
+        "highPrice": price, "size": size,
         "entryTime": datetime.now().isoformat(),
         "stopDistance": stop_distance_pct,
         "atr": atr,
         "partialTaken": False,
-        "stopPrice": crypto["price"] * (1 - stop_distance_pct),
+        "stopPrice": price * (1 - stop_distance_pct),
     }
     add_log("buy", "ACQUISTO",
-        f"{crypto['symbol']} @ ${crypto['price']:.4f} | "
+        f"{crypto['symbol']} @ ${price:.4f} | "
         f"Mom: {crypto['mom']:+.2f}% | Size: ${size:.2f} | {atr_str}"
     )
 
@@ -283,7 +310,7 @@ def exit_position(reason, cur_price):
     )
     agent_state["position"] = None
 
-def scan_and_trade():
+async def scan_and_trade():
     if not agent_state["running"]:
         return
     cfg = agent_state["config"]
@@ -400,7 +427,7 @@ def scan_and_trade():
                 f"Candidati validi: {len(candidates)}"
             )
             if candidates:
-                enter_position(candidates[0][0])
+                await enter_position_async(candidates[0][0])
 
     # P&L history
     unr = unrealized_pnl()
@@ -416,7 +443,7 @@ async def background_loop():
     while True:
         try:
             await fetch_binance_prices()
-            scan_and_trade()
+            await scan_and_trade()
         except Exception as e:
             import traceback
             print(f"Loop error: {e}\n{traceback.format_exc()}")
