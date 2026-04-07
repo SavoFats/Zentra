@@ -445,8 +445,8 @@ async def scan_and_trade():
         btc_mom = btc.get("change1h", 0) if len(btc_hist) >= 5 else btc.get("change24h", 0) * 0.1
 
         if cfg.get("specMode", False):
-            # SPECULATIVE MODE: hunt aggressive pumps only
-            market = get_sorted_market(cfg.get("volFilter", "high"), cfg.get("topN", 10))
+            # SPECULATIVE MODE: scan ALL coins, not just high volume
+            market = get_sorted_market("low", 17)  # all tracked coins
             candidates = []
             for c in market:
                 if c["inCooldown"]:
