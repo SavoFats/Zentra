@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CryptoAgent</title>
+
+<!-- PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CryptoAgent">
+<meta name="theme-color" content="#080c10">
+<link rel="apple-touch-icon" href="https://via.placeholder.com/180x180/00d4aa/080c10?text=⚡">
+<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;CryptoAgent&quot;,&quot;short_name&quot;:&quot;CryptoAgent&quot;,&quot;start_url&quot;:&quot;/crypto-agent-back/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23080c10&quot;,&quot;theme_color&quot;:&quot;%2300d4aa&quot;}">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -530,7 +538,7 @@
             <div style="font-size:11px;color:var(--text2);margin-top:2px;">Intercetta pump veloci — trailing stop 1%, time stop 15 min</div>
           </div>
           <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
-            <input type="checkbox" id="specMode" style="opacity:0;width:0;height:0;position:absolute;">
+            <input type="checkbox" id="specMode" checked style="opacity:0;width:0;height:0;position:absolute;">
             <span id="specModeSlider" style="position:absolute;cursor:pointer;inset:0;background:#21262d;border-radius:12px;transition:0.3s;display:block;"></span>
             <span id="specModeThumb" style="position:absolute;left:3px;top:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:0.3s;"></span>
           </label>
@@ -1465,6 +1473,14 @@ document.getElementById('specMode').addEventListener('change', function() {
   document.getElementById('specModeSlider').style.background = this.checked ? '#ff6b35' : '#21262d';
   document.getElementById('specModeThumb').style.left = this.checked ? '23px' : '3px';
 });
+// Initialize visual state
+(function() {
+  const el = document.getElementById('specMode');
+  if (el && el.checked) {
+    document.getElementById('specModeSlider').style.background = '#ff6b35';
+    document.getElementById('specModeThumb').style.left = '23px';
+  }
+})();
 setTimeout(drawChart, 100);
 
 // Check backend health on load
