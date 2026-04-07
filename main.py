@@ -464,11 +464,11 @@ async def scan_and_trade():
                     diffs = [hist[-i] - hist[-i-1] for i in range(1, 4)]
                     accelerating = all(d > 0 for d in diffs) and diffs[0] >= diffs[1]
 
-                vol_spike = vol >= avg_vol * 5.0 if avg_vol > 0 else False
+                vol_spike = vol >= avg_vol * 3.0 if avg_vol > 0 else False
 
-                # Strong filters: mom > 1.5%, 4+ consecutive ups, acceleration, volume 5x
-                if (c["mom"] > 1.5
-                        and consecutive_ups >= 4
+                # Strong filters: mom > 0.8%, 3+ consecutive ups, acceleration, volume 3x
+                if (c["mom"] > 0.8
+                        and consecutive_ups >= 3
                         and accelerating
                         and vol_spike):
                     candidates.append((c, c["mom"]))
