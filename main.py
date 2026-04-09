@@ -466,14 +466,21 @@ async def scan_and_trade():
 
                 vol_spike = vol >= avg_vol * 3.0 if avg_vol > 0 else False
 
-                # Filters: mom > 0.15%, 3+ consecutive ups
-                if (c["mom"] > 0.15 and consecutive_ups >= 3):
+                # Filters: mom > 0.15%, 2+ consecutive ups
+                if (c["mom"] > 0.15 and consecutive_ups >= 2):
                     candidates.append((c, c["mom"]))
 
             candidates.sort(key=lambda x: x[1], reverse=True)
             top3 = [(c["symbol"], round(c["mom"], 2)) for c in market[:3]]
+            # Debug: show best candidate's stats
+            best = max(market, key=lambda c: c["mom"]) if market else None
+            if best:
+                bd = market_data.get(best["symbol"], {})
+                debug = f" | {best['symbol']}: mom={best['mom']:.2f} ups={bd.get('consecutiveUps',0)}"
+            else:
+                debug = ""
             add_log("info", "PUMP SCAN",
-                f"Top3: {top3} | Pump: {len(candidates)}"
+                f"Top3: {top3} | Pump: {len(candidates)}{debug}"
             )
             if candidates:
                 await enter_position_spec(candidates[0][0])
