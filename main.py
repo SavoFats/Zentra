@@ -12,8 +12,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 BINANCE_BASE = "https://api.binance.com"
 
 # universe dinamico — popolato da fetch_prices()
-# filtro: coppie USDT con volume 24h > MIN_VOLUME_USDT
-MIN_VOLUME_USDT = 50_000_000   # $50M
+# filtro volume dinamico — letto dalla config ad ogni ciclo
 
 market_data = {}  # sym -> {price, change1h, change24h, priceHistory, icon}
 
@@ -67,7 +66,8 @@ async def fetch_prices():
                 vol_usdt = float(t["quoteVolume"])
             except:
                 continue
-            if vol_usdt < MIN_VOLUME_USDT:
+            min_vol = agent_state["config"].get("minVolume", 50_000_000)
+            if vol_usdt < min_vol:
                 continue
 
             sym = pair[:-4]  # es. BTCUSDT -> BTC
@@ -77,7 +77,7 @@ async def fetch_prices():
             if sym not in market_data:
                 market_data[sym] = {
                     "price": 0.0, "change1h": 0.0, "change24h": 0.0,
-                    "priceHistory": [], "icon": sym[0]
+                    "volume24h": 0.0, "priceHistory": [], "icon": sym[0]
                 }
 
             hist = market_data[sym]["priceHistory"]
@@ -91,6 +91,7 @@ async def fetch_prices():
             market_data[sym]["price"] = price
             market_data[sym]["change1h"] = change1h
             market_data[sym]["change24h"] = change24h
+            market_data[sym]["volume24h"] = vol_usdt
 
             # update open positions
             for pos in agent_state["positions"]:
@@ -325,7 +326,7 @@ def get_status():
 def get_market():
     result = sorted(
         [{"symbol": s, **d} for s, d in market_data.items() if d["price"] > 0],
-        key=lambda x: x["change1h"], reverse=True
+        key=lambda x: x["change24h"], reverse=True
     )
     return {"market": result}
 
@@ -360,8 +361,9 @@ async def start_agent(body: dict):
     alloc = float(cfg.get("allocPct", 0.20)) * 100
     sl    = float(cfg.get("stopLoss", 0.03)) * 100
 
+    vol   = float(cfg.get("minVolume", 50_000_000)) / 1_000_000
     add_log("info", "AVVIO",
-        f"${capital:.0f} | Alloc: {alloc:.0f}% | SL: {sl:.1f}% | Trailing ON"
+        f"${capital:.0f} | Alloc: {alloc:.0f}% | SL: {sl:.1f}% | Vol: ${vol:.0f}M | Trailing ON"
     )
     return {"ok": True}
 
