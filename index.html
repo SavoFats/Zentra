@@ -162,13 +162,28 @@ select { appearance:none; }
 .trade-card.loss { border-left-color:var(--red); }
 
 /* MARKET */
-.mkt-item { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
-.mkt-item:last-child { border-bottom:none; }
 .mkt-coin { display:flex; align-items:center; gap:10px; }
-.mkt-logo { width:28px; height:28px; border-radius:50%; }
-.mkt-sym { font-weight:600; font-size:14px; }
-.mkt-price { font-family:var(--mono); font-size:12px; color:var(--text2); }
-.mkt-chg { font-family:var(--mono); font-size:13px; font-weight:600; }
+.mkt-logo { width:32px; height:32px; border-radius:50%; }
+.mkt-icon-placeholder { width:32px; height:32px; border-radius:50%; background:var(--card2); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:var(--text2); flex-shrink:0; }
+.mkt-sym { font-weight:700; font-size:14px; display:flex; align-items:center; gap:6px; }
+.mkt-badge { font-size:9px; background:var(--accent); color:#000; border-radius:3px; padding:1px 4px; font-weight:700; }
+.mkt-vol { font-size:11px; color:var(--text2); font-family:var(--mono); margin-top:2px; }
+.mkt-row { padding:12px 0; border-bottom:1px solid var(--border); }
+.mkt-row:last-child { border-bottom:none; }
+.mkt-row-open { background:rgba(0,200,100,0.04); border-radius:8px; padding:10px 8px; margin:0 -8px; }
+.mkt-row-main { display:flex; align-items:center; justify-content:space-between; }
+.mkt-right { text-align:right; }
+.mkt-price-val { font-family:var(--mono); font-size:14px; font-weight:600; margin-bottom:4px; }
+.mkt-chg-pill { font-family:var(--mono); font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; }
+.mkt-bars { margin-top:6px; display:flex; flex-direction:column; gap:3px; }
+.mkt-bar-row { display:flex; align-items:center; gap:6px; }
+.mkt-bar-row span { font-size:10px; color:var(--text2); font-family:var(--mono); width:24px; }
+.mkt-bar-bg { flex:1; height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+.mkt-bar-fill { height:100%; border-radius:2px; transition:width 0.3s; }
+.mkt-sort-btn { font-size:12px; font-family:var(--mono); padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:var(--card2); color:var(--text2); cursor:pointer; }
+.mkt-sort-btn.active { border-color:var(--accent); color:var(--accent); background:var(--accent-dim); }
+.mkt-filter-btn { font-size:12px; font-family:var(--mono); padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--card2); color:var(--text2); cursor:pointer; }
+.mkt-filter-btn.active { border-color:var(--text); color:var(--text); }
 
 /* SESSION BANNER */
 .sess-banner {
@@ -248,6 +263,15 @@ select { appearance:none; }
         <div class="field-hint">Entra solo su coin che hanno già fatto +X% nelle ultime 24h</div>
       </div>
       <div class="field">
+        <label>Volume minimo universe ($M)</label>
+        <div class="range-row">
+          <input type="range" id="minVolume" min="10" max="500" value="50" step="10"
+            oninput="document.getElementById('volVal').textContent=this.value+'M'">
+          <span class="range-val" id="volVal">50M</span>
+        </div>
+        <div class="field-hint">Coin con volume 24h inferiore vengono escluse dall'universe</div>
+      </div>
+      <div class="field">
         <label>Cooldown post-uscita (ore)</label>
         <div class="range-row">
           <input type="range" id="cooldown" min="0" max="6" value="1" step="0.5"
@@ -302,8 +326,24 @@ select { appearance:none; }
 
   <!-- MERCATO -->
   <div class="page" id="page-market">
-    <div class="card">
-      <div class="card-title">Mercato — variazione 24h</div>
+    <div class="card" style="padding-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">Mercato</div>
+        <div style="font-size:11px;color:var(--text2);font-family:var(--mono)" id="universeCount"></div>
+      </div>
+      <!-- filtri sort -->
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="mkt-sort-btn active" onclick="setMktSort('change24h',this)">24h %</button>
+        <button class="mkt-sort-btn" onclick="setMktSort('change1h',this)">1h %</button>
+        <button class="mkt-sort-btn" onclick="setMktSort('volume24h',this)">Volume</button>
+        <button class="mkt-sort-btn" onclick="setMktSort('price',this)">Prezzo</button>
+      </div>
+      <!-- filtri gainers/losers -->
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button class="mkt-filter-btn active" onclick="setMktFilter('all',this)">Tutti</button>
+        <button class="mkt-filter-btn" onclick="setMktFilter('gainers',this)" style="color:var(--accent)">▲ Gainers</button>
+        <button class="mkt-filter-btn" onclick="setMktFilter('losers',this)" style="color:var(--red)">▼ Losers</button>
+      </div>
       <div id="marketList"><div class="empty"><div class="empty-icon">📡</div><div>Caricamento...</div></div></div>
     </div>
   </div>
@@ -407,6 +447,7 @@ async function startAgent() {
     allocPct:        parseInt(document.getElementById('allocPct').value) / 100,
     stopLoss:        parseFloat(document.getElementById('stopLoss').value) / 100,
     minMomentum:     parseFloat(document.getElementById('minMomentum').value),
+    minVolume:       parseFloat(document.getElementById('minVolume').value) * 1_000_000,
     cooldown:        parseFloat(document.getElementById('cooldown').value),
     sessionDuration: parseInt(document.getElementById('sessionDuration').value),
   };
@@ -450,6 +491,7 @@ async function poll() {
       fetch(API + '/trades'),
     ]);
     S = await sRes.json();
+    window._lastStatus = S;
     const td = await tRes.json();
     trades = td.trades || [];
 
@@ -690,21 +732,95 @@ function drawChart() {
 }
 
 // ── market ────────────────────────────────────────────────────────────────────
+let mktData = [];
+let mktSort = 'change24h';
+let mktFilter = 'all';
+
+function setMktSort(key, btn) {
+  mktSort = key;
+  document.querySelectorAll('.mkt-sort-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMarket();
+}
+
+function setMktFilter(key, btn) {
+  mktFilter = key;
+  document.querySelectorAll('.mkt-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMarket();
+}
+
+function fmtVol(v) {
+  if (v >= 1e9) return (v/1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return (v/1e6).toFixed(0) + 'M';
+  return (v/1e3).toFixed(0) + 'K';
+}
+
+function fmtPrice(p) {
+  if (p >= 1000) return '$' + p.toLocaleString('en-US', {maximumFractionDigits:0});
+  if (p >= 1) return '$' + p.toFixed(2);
+  if (p >= 0.01) return '$' + p.toFixed(4);
+  return '$' + p.toFixed(6);
+}
+
+function renderMarket() {
+  let data = [...mktData];
+  if (mktFilter === 'gainers') data = data.filter(c => c.change24h > 0);
+  if (mktFilter === 'losers') data = data.filter(c => c.change24h < 0);
+  data.sort((a,b) => {
+    if (mktSort === 'losers') return a.change24h - b.change24h;
+    return b[mktSort] - a[mktSort];
+  });
+
+  // calcola max volume per barra proporzionale
+  const maxVol = Math.max(...data.map(c => c.volume24h || 0), 1);
+  const maxAbsChg = Math.max(...data.map(c => Math.abs(c.change24h || 0)), 1);
+
+  const list = document.getElementById('marketList');
+  if (!data.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div>Nessuna coin</div></div>'; return; }
+
+  list.innerHTML = data.map(c => {
+    const chg24 = c.change24h || 0;
+    const chg1h = c.change1h || 0;
+    const vol = c.volume24h || 0;
+    const color24 = chg24 >= 0 ? 'var(--accent)' : 'var(--red)';
+    const color1h = chg1h >= 0 ? 'var(--accent)' : 'var(--red)';
+    const logo = LOGOS[c.symbol];
+    const img = logo ? `<img src="${logo}" class="mkt-logo" onerror="this.style.display='none'">` : `<div class="mkt-icon-placeholder">${c.symbol[0]}</div>`;
+    const volBar = Math.round((vol / maxVol) * 100);
+    const chgBar = Math.round((Math.abs(chg24) / maxAbsChg) * 100);
+    const isOpen = (window._lastStatus?.positions||[]).some(p => p.symbol === c.symbol);
+    return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
+      <div class="mkt-row-main">
+        <div class="mkt-coin">${img}
+          <div>
+            <div class="mkt-sym">${c.symbol}${isOpen?'<span class="mkt-badge">IN</span>':''}</div>
+            <div class="mkt-vol">Vol: $${fmtVol(vol)}</div>
+          </div>
+        </div>
+        <div class="mkt-right">
+          <div class="mkt-price-val">${fmtPrice(c.price)}</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <div class="mkt-chg-pill" style="background:${chg24>=0?'rgba(0,200,100,0.12)':'rgba(255,60,60,0.12)'};color:${color24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</div>
+            <div class="mkt-chg-pill" style="background:rgba(128,128,128,0.1);color:${color1h}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}% 1h</div>
+          </div>
+        </div>
+      </div>
+      <div class="mkt-bars">
+        <div class="mkt-bar-row"><span>Vol</span><div class="mkt-bar-bg"><div class="mkt-bar-fill" style="width:${volBar}%;background:var(--text2)"></div></div></div>
+        <div class="mkt-bar-row"><span>Mov</span><div class="mkt-bar-bg"><div class="mkt-bar-fill" style="width:${chgBar}%;background:${color24}"></div></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 async function refreshMarket() {
   try {
     const r = await fetch(API + '/market');
     const d = await r.json();
-    const list = document.getElementById('marketList');
-    list.innerHTML = (d.market||[]).map(c => {
-      const chg = c.change24h || 0;
-      const color = chg >= 0 ? 'var(--accent)' : 'var(--red)';
-      const logo = LOGOS[c.symbol];
-      const img = logo ? `<img src="${logo}" class="mkt-logo" onerror="this.style.display='none'">` : '';
-      return `<div class="mkt-item">
-        <div class="mkt-coin">${img}<div><div class="mkt-sym">${c.symbol}</div><div class="mkt-price">$${c.price.toFixed(4)}</div></div></div>
-        <div class="mkt-chg" style="color:${color}">${chg>=0?'+':''}${chg.toFixed(2)}%</div>
-      </div>`;
-    }).join('');
+    mktData = d.market || [];
+    document.getElementById('universeCount').textContent = mktData.length + ' coin';
+    renderMarket();
   } catch(e) {}
 }
 </script>
