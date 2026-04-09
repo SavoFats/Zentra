@@ -11,32 +11,11 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 BINANCE_BASE = "https://api.binance.com"
 
-SYM_META = {
-    "BTCUSDT":  {"symbol": "BTC",  "icon": "B"},
-    "ETHUSDT":  {"symbol": "ETH",  "icon": "E"},
-    "SOLUSDT":  {"symbol": "SOL",  "icon": "S"},
-    "BNBUSDT":  {"symbol": "BNB",  "icon": "B"},
-    "XRPUSDT":  {"symbol": "XRP",  "icon": "X"},
-    "ADAUSDT":  {"symbol": "ADA",  "icon": "A"},
-    "AVAXUSDT": {"symbol": "AVAX", "icon": "A"},
-    "DOTUSDT":  {"symbol": "DOT",  "icon": "D"},
-    "LINKUSDT": {"symbol": "LINK", "icon": "L"},
-    "MATICUSDT":{"symbol": "MATIC","icon": "M"},
-    "UNIUSDT":  {"symbol": "UNI",  "icon": "U"},
-    "NEARUSDT": {"symbol": "NEAR", "icon": "N"},
-    "INJUSDT":  {"symbol": "INJ",  "icon": "I"},
-    "APTUSDT":  {"symbol": "APT",  "icon": "A"},
-    "ARBUSDT":  {"symbol": "ARB",  "icon": "R"},
-    "OPUSDT":   {"symbol": "OP",   "icon": "O"},
-    "ATOMUSDT": {"symbol": "ATOM", "icon": "A"},
-}
+# universe dinamico — popolato da fetch_prices()
+# filtro: coppie USDT con volume 24h > MIN_VOLUME_USDT
+MIN_VOLUME_USDT = 200_000_000  # $200M
 
-market_data = {}
-for pair, meta in SYM_META.items():
-    market_data[meta["symbol"]] = {
-        "price": 0.0, "change1h": 0.0, "change24h": 0.0,
-        "priceHistory": [], "icon": meta["icon"]
-    }
+market_data = {}  # sym -> {price, change1h, change24h, priceHistory, icon}
 
 agent_state = {
     "running": False,
@@ -74,32 +53,52 @@ def unrealized_pnl():
 
 async def fetch_prices():
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             res = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
-            for t in res.json():
-                meta = SYM_META.get(t["symbol"])
-                if not meta:
-                    continue
-                sym = meta["symbol"]
-                price = float(t["lastPrice"])
-                change24h = float(t["priceChangePercent"])
-                hist = market_data[sym]["priceHistory"]
-                hist.append(price)
-                if len(hist) > 60:
-                    hist.pop(0)
-                change1h = (
-                    (price - hist[0]) / hist[0] * 100
-                    if len(hist) >= 10 else change24h * 0.08
-                )
-                market_data[sym]["price"] = price
-                market_data[sym]["change1h"] = change1h
-                market_data[sym]["change24h"] = change24h
-                # update open positions
-                for pos in agent_state["positions"]:
-                    if pos["symbol"] == sym:
-                        pos["currentPrice"] = price
-                        if price > pos["highPrice"]:
-                            pos["highPrice"] = price
+            tickers = res.json()
+
+        for t in tickers:
+            pair = t["symbol"]
+            # solo coppie USDT
+            if not pair.endswith("USDT"):
+                continue
+            # filtro volume
+            try:
+                vol_usdt = float(t["quoteVolume"])
+            except:
+                continue
+            if vol_usdt < MIN_VOLUME_USDT:
+                continue
+
+            sym = pair[:-4]  # es. BTCUSDT -> BTC
+            price = float(t["lastPrice"])
+            change24h = float(t["priceChangePercent"])
+
+            if sym not in market_data:
+                market_data[sym] = {
+                    "price": 0.0, "change1h": 0.0, "change24h": 0.0,
+                    "priceHistory": [], "icon": sym[0]
+                }
+
+            hist = market_data[sym]["priceHistory"]
+            hist.append(price)
+            if len(hist) > 60:
+                hist.pop(0)
+            change1h = (
+                (price - hist[0]) / hist[0] * 100
+                if len(hist) >= 10 else change24h * 0.08
+            )
+            market_data[sym]["price"] = price
+            market_data[sym]["change1h"] = change1h
+            market_data[sym]["change24h"] = change24h
+
+            # update open positions
+            for pos in agent_state["positions"]:
+                if pos["symbol"] == sym:
+                    pos["currentPrice"] = price
+                    if price > pos["highPrice"]:
+                        pos["highPrice"] = price
+
     except Exception as e:
         print(f"Fetch error: {e}")
 
@@ -261,7 +260,7 @@ async def scan_and_trade():
 
     add_log("info", "SCAN",
         f"Top3: {[(d['symbol'], round(d['change24h'],2)) for d in ranked[:3]]} | "
-        f"Candidati: {len(candidates)} | Slot: {slots} | Prezzi: {len(prices_ok)}"
+        f"Candidati: {len(candidates)} | Slot: {slots} | Universe: {len(prices_ok)}"
     )
 
     for d in candidates[:slots]:
