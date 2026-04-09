@@ -246,13 +246,13 @@ select { appearance:none; }
         </div>
       </div>
       <div class="field">
-        <label>Momentum minimo (%)</label>
+        <label>Variazione 24h minima (%)</label>
         <div class="range-row">
-          <input type="range" id="minMomentum" min="0.01" max="2" value="0.05" step="0.01"
-            oninput="document.getElementById('momVal').textContent=parseFloat(this.value).toFixed(2)+'%'">
-          <span class="range-val" id="momVal">0.05%</span>
+          <input type="range" id="minMomentum" min="0" max="30" value="1" step="0.5"
+            oninput="document.getElementById('momVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+          <span class="range-val" id="momVal">1.0%</span>
         </div>
-        <div class="field-hint">Variazione minima 1h per entrare</div>
+        <div class="field-hint">Entra solo su coin che hanno già fatto +X% nelle ultime 24h</div>
       </div>
       <div class="field">
         <label>Cooldown post-uscita (ore)</label>
@@ -310,7 +310,7 @@ select { appearance:none; }
   <!-- MERCATO -->
   <div class="page" id="page-market">
     <div class="card">
-      <div class="card-title">Mercato — variazione 1h</div>
+      <div class="card-title">Mercato — variazione 24h</div>
       <div id="marketList"><div class="empty"><div class="empty-icon">📡</div><div>Caricamento...</div></div></div>
     </div>
   </div>
@@ -703,7 +703,7 @@ async function refreshMarket() {
     const d = await r.json();
     const list = document.getElementById('marketList');
     list.innerHTML = (d.market||[]).map(c => {
-      const chg = c.change1h || 0;
+      const chg = c.change24h || 0;
       const color = chg >= 0 ? 'var(--accent)' : 'var(--red)';
       const logo = LOGOS[c.symbol];
       const img = logo ? `<img src="${logo}" class="mkt-logo" onerror="this.style.display='none'">` : '';
