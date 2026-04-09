@@ -225,6 +225,7 @@ async def scan_and_trade():
         return
 
     # rank coins by 1h momentum, skip cooldowns and already open
+    prices_ok = [sym for sym, d in market_data.items() if d["price"] > 0]
     ranked = sorted(
         [
             d for sym, d in market_data.items()
@@ -242,7 +243,7 @@ async def scan_and_trade():
 
     add_log("info", "SCAN",
         f"Top3: {[(d['symbol'], round(d['change1h'],2)) for d in ranked[:3]]} | "
-        f"Candidati: {len(candidates)} | Slot: {slots}"
+        f"Candidati: {len(candidates)} | Slot: {slots} | Prezzi: {len(prices_ok)}"
     )
 
     for d in candidates[:slots]:
