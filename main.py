@@ -224,7 +224,7 @@ async def scan_and_trade():
         _update_pnl()
         return
 
-    # rank coins by 1h momentum, skip cooldowns and already open
+    # rank coins by 24h change (real Binance data), skip cooldowns and already open
     prices_ok = [sym for sym, d in market_data.items() if d["price"] > 0]
     ranked = sorted(
         [
@@ -233,16 +233,15 @@ async def scan_and_trade():
             and sym not in open_syms
             and (agent_state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ],
-        key=lambda d: d["change1h"],
+        key=lambda d: d["change24h"],
         reverse=True
     )
 
-    # take top N with positive momentum
     min_mom = cfg.get("minMomentum", 0.05)
-    candidates = [d for d in ranked if d["change1h"] >= min_mom]
+    candidates = [d for d in ranked if d["change24h"] >= min_mom]
 
     add_log("info", "SCAN",
-        f"Top3: {[(d['symbol'], round(d['change1h'],2)) for d in ranked[:3]]} | "
+        f"Top3: {[(d['symbol'], round(d['change24h'],2)) for d in ranked[:3]]} | "
         f"Candidati: {len(candidates)} | Slot: {slots} | Prezzi: {len(prices_ok)}"
     )
 
