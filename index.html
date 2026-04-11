@@ -471,7 +471,7 @@ async function setMode(real) {
   if (real) {
     simBtn.classList.remove('active', 'sim');
     realBtn.classList.add('active', 'real');
-    hint.textContent = '⏳ Recupero saldo Coinbase...';
+    hint.textContent = 'Recupero saldo Coinbase...';
     hint.style.color = '#ffaa00';
     capitalInput.disabled = true;
 
@@ -482,15 +482,15 @@ async function setMode(real) {
         const usdc = d.balances.find(b => b.currency === 'USDC');
         const usdcBalance = usdc ? parseFloat(usdc.available) : 0;
         capitalInput.value = usdcBalance.toFixed(2);
-        hint.textContent = ;
+        hint.textContent = 'REALE - Saldo USDC: $' + usdcBalance.toFixed(2) + ' - ordini su Coinbase';
         hint.style.color = '#ff4444';
       } else {
-        hint.textContent = '❌ Errore connessione Coinbase: ' + (d.error || 'sconosciuto');
+        hint.textContent = 'ERRORE connessione Coinbase: ' + (d.error || 'sconosciuto');
         hint.style.color = '#ff4444';
         capitalInput.disabled = false;
       }
     } catch(e) {
-      hint.textContent = '❌ Errore: ' + e.message;
+      hint.textContent = 'ERRORE: ' + e.message;
       hint.style.color = '#ff4444';
       capitalInput.disabled = false;
     }
