@@ -530,6 +530,22 @@ async def chat(body: dict):
 def health():
     return {"status": "ok", "binance": any(d["price"] > 0 for d in market_data.values())}
 
+@app.get("/test_coinbase")
+async def test_coinbase():
+    if not COINBASE_API_KEY:
+        return {"ok": False, "error": "CB_KEY non configurata"}
+    try:
+        result = await coinbase_request("GET", "/api/v3/brokerage/accounts")
+        accounts = result.get("accounts", [])
+        balances = [
+            {"currency": a["currency"], "available": a["available_balance"]["value"]}
+            for a in accounts
+            if float(a["available_balance"]["value"]) > 0
+        ]
+        return {"ok": True, "balances": balances}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
