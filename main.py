@@ -481,7 +481,7 @@ async def start_agent(body: dict):
     return {"ok": True}
 
 @app.post("/stop")
-def stop_agent():
+async def stop_agent():
     if not agent_state["running"]:
         return {"error": "Not running"}
     agent_state["running"] = False
@@ -492,7 +492,7 @@ def stop_agent():
     return {"ok": True, "pnl": pnl}
 
 @app.post("/close_position/{symbol}")
-def close_symbol(symbol: str):
+async def close_symbol(symbol: str):
     pos = next((p for p in agent_state["positions"] if p["symbol"] == symbol), None)
     if not pos:
         return {"error": f"No position on {symbol}"}
