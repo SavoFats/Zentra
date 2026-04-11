@@ -66,7 +66,7 @@ async def fetch_prices():
                 vol_usdt = float(t["quoteVolume"])
             except:
                 continue
-            min_vol = agent_state["config"].get("minVolume", 50_000_000)
+            min_vol = agent_state["config"].get("minVolume", 10_000_000)
             if vol_usdt < min_vol:
                 continue
 
@@ -243,8 +243,24 @@ async def scan_and_trade():
         _update_pnl()
         return
 
-    # rank coins by 24h change (real Binance data), skip cooldowns and already open
     prices_ok = [sym for sym, d in market_data.items() if d["price"] > 0]
+
+    # ── FILTRO BTC ─────────────────────────────────────────────────────────────
+    btc = market_data.get("BTC", {})
+    btc_1h = btc.get("change1h", 0)
+    btc_ok = btc_1h >= -0.3  # blocca se BTC sta scendendo > 0.3% nell'ultima ora
+    if not btc_ok:
+        add_log("info", "PAUSA",
+            f"BTC {btc_1h:+.2f}% 1h — agente in attesa"
+        )
+        _update_pnl()
+        return
+
+    # volume medio universe per filtro relativo
+    vols = [d.get("volume24h", 0) for d in market_data.values() if d["price"] > 0]
+    avg_vol = sum(vols) / len(vols) if vols else 0
+
+    # rank coins — filtro cooldown, posizioni aperte
     ranked = sorted(
         [
             {**d, "symbol": sym} for sym, d in market_data.items()
@@ -257,11 +273,16 @@ async def scan_and_trade():
     )
 
     min_mom = cfg.get("minMomentum", 0.05)
-    candidates = [d for d in ranked if d["change24h"] >= min_mom]
+    candidates = [
+        d for d in ranked
+        if d["change24h"] >= min_mom          # momentum 24h
+        and d.get("change1h", 0) > 0          # sta salendo ADESSO (1h positivo)
+        and d.get("volume24h", 0) >= avg_vol  # volume sopra la media
+    ]
 
     add_log("info", "SCAN",
         f"Top3: {[(d['symbol'], round(d['change24h'],2)) for d in ranked[:3]]} | "
-        f"Candidati: {len(candidates)} | Slot: {slots} | Universe: {len(prices_ok)}"
+        f"Candidati: {len(candidates)} | Slot: {slots} | Universe: {len(prices_ok)} | BTC1h: {btc_1h:+.2f}%"
     )
 
     for d in candidates[:slots]:
@@ -361,7 +382,7 @@ async def start_agent(body: dict):
     alloc = float(cfg.get("allocPct", 0.20)) * 100
     sl    = float(cfg.get("stopLoss", 0.03)) * 100
 
-    vol   = float(cfg.get("minVolume", 50_000_000)) / 1_000_000
+    vol   = float(cfg.get("minVolume", 10_000_000)) / 1_000_000
     add_log("info", "AVVIO",
         f"${capital:.0f} | Alloc: {alloc:.0f}% | SL: {sl:.1f}% | Vol: ${vol:.0f}M | Trailing ON"
     )
