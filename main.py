@@ -256,16 +256,13 @@ async def scan_and_trade():
         _update_pnl()
         return
 
-    # volume medio universe per filtro relativo
-    vols = [d.get("volume24h", 0) for d in market_data.values() if d["price"] > 0]
-    avg_vol = sum(vols) / len(vols) if vols else 0
-
-    # rank coins — filtro cooldown, posizioni aperte
+    # rank coins — filtro cooldown, posizioni aperte, solo simboli ASCII
     ranked = sorted(
         [
             {**d, "symbol": sym} for sym, d in market_data.items()
             if d["price"] > 0
             and sym not in open_syms
+            and sym.isascii() and sym.isalnum()  # escludi coin con simboli strani
             and (agent_state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ],
         key=lambda d: d["change24h"],
@@ -275,9 +272,8 @@ async def scan_and_trade():
     min_mom = cfg.get("minMomentum", 0.05)
     candidates = [
         d for d in ranked
-        if d["change24h"] >= min_mom          # momentum 24h
-        and d.get("change1h", 0) > 0          # sta salendo ADESSO (1h positivo)
-        and d.get("volume24h", 0) >= avg_vol  # volume sopra la media
+        if d["change24h"] >= min_mom      # momentum 24h
+        and d.get("change1h", 0) > 0      # sta salendo ADESSO (1h positivo)
     ]
 
     add_log("info", "SCAN",
