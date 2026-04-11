@@ -1,5 +1,9 @@
 import asyncio
 import os
+import time
+import jwt
+import hashlib
+import json
 from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,11 +14,43 @@ app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 BINANCE_BASE = "https://api.binance.com"
+COINBASE_BASE = "https://api.coinbase.com"
+
+# Credenziali Coinbase da variabili d'ambiente
+COINBASE_API_KEY     = os.environ.get("COINBASE_API_KEY", "")
+COINBASE_PRIVATE_KEY = os.environ.get("COINBASE_PRIVATE_KEY", "")
+
+def make_coinbase_jwt(method: str, path: str) -> str:
+    """Genera JWT per autenticazione Coinbase Advanced API"""
+    import re
+    key = COINBASE_PRIVATE_KEY.replace("\\n", "\n")
+    payload = {
+        "sub": COINBASE_API_KEY,
+        "iss": "cdp",
+        "nbf": int(time.time()),
+        "exp": int(time.time()) + 120,
+        "uri": f"{method} api.coinbase.com{path}",
+    }
+    token = jwt.encode(payload, key, algorithm="ES256",
+                       headers={"kid": COINBASE_API_KEY, "nonce": hashlib.sha256(os.urandom(16)).hexdigest()[:16]})
+    return token
+
+async def coinbase_request(method: str, path: str, body: dict = None) -> dict:
+    """Esegue una richiesta autenticata all'API Coinbase Advanced"""
+    token = make_coinbase_jwt(method, path)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        if method == "GET":
+            r = await client.get(f"{COINBASE_BASE}{path}", headers=headers)
+        else:
+            r = await client.post(f"{COINBASE_BASE}{path}", headers=headers, json=body)
+    return r.json()
 
 # universe dinamico — popolato da fetch_prices()
-# filtro volume dinamico — letto dalla config ad ogni ciclo
-
-market_data = {}  # sym -> {price, change1h, change24h, priceHistory, icon}
+market_data = {}  # sym -> {price, change1h, change24h, volume24h, priceHistory, icon}
 
 agent_state = {
     "running": False,
@@ -127,41 +163,97 @@ async def fetch_atr_1h(symbol_usdt: str, periods: int = 14):
 # ── trading ───────────────────────────────────────────────────────────────────
 
 async def enter_position(sym_data: dict):
-    cfg   = agent_state["config"]
-    price = sym_data["price"]
-    sym   = sym_data["symbol"]
+    cfg      = agent_state["config"]
+    price    = sym_data["price"]
+    sym      = sym_data["symbol"]
+    is_real  = cfg.get("realMode", False)
 
-    alloc_pct = cfg.get("allocPct", 0.20)           # % capitale per trade
+    alloc_pct = cfg.get("allocPct", 0.20)
     size = agent_state["capital"] * alloc_pct
-    size = min(size, agent_state["currentCapital"])  # non superare il disponibile
+    size = min(size, agent_state["currentCapital"])
     if size < 1:
         return
 
     sl_pct = cfg.get("stopLoss", 0.03)
-    tp_pct = cfg.get("takeProfit", 0.06)
+
+    # ── MODALITA' REALE ────────────────────────────────────────────────────────
+    if is_real:
+        try:
+            # calcola quantita' coin da comprare
+            qty = round(size / price, 8)
+            product_id = f"{sym}-USD"
+            body = {
+                "client_order_id": f"ca-{sym}-{int(time.time())}",
+                "product_id": product_id,
+                "side": "BUY",
+                "order_configuration": {
+                    "market_market_ioc": {
+                        "quote_size": str(round(size, 2))  # spendi X USD
+                    }
+                }
+            }
+            result = await coinbase_request("POST", "/api/v3/brokerage/orders", body)
+            if result.get("success") != True:
+                add_log("info", "ERRORE", f"Ordine {sym} fallito: {result.get('error_response', {}).get('message', str(result))}")
+                return
+            # usa il prezzo reale dall'ordine se disponibile
+            filled = result.get("success_response", {})
+            actual_price = float(filled.get("average_filled_price", price)) or price
+            add_log("buy", "ACQUISTO REALE", f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | SL: {sl_pct*100:.1f}% | Trailing ON")
+        except Exception as e:
+            add_log("info", "ERRORE", f"Coinbase error: {e}")
+            return
+    else:
+        actual_price = price
+        add_log("buy", "ACQUISTO SIM", f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | SL: {sl_pct*100:.1f}% | Trailing ON")
 
     agent_state["currentCapital"] -= size
     pos = {
         "symbol": sym,
         "icon": sym_data["icon"],
-        "entryPrice": price,
-        "currentPrice": price,
-        "highPrice": price,
+        "entryPrice": actual_price,
+        "currentPrice": actual_price,
+        "highPrice": actual_price,
         "size": size,
         "entryTime": datetime.now().isoformat(),
-        "stopPrice": price * (1 - sl_pct),
+        "stopPrice": actual_price * (1 - sl_pct),
+        "realMode": is_real,
     }
     agent_state["positions"].append(pos)
-    add_log("buy", "ACQUISTO",
-        f"{sym} @ ${price:.4f} | Size: ${size:.0f} | "
-        f"SL: {sl_pct*100:.1f}% | Trailing ON"
-    )
 
-def exit_position(pos: dict, reason: str):
-    cur   = pos["currentPrice"]
-    pnl   = (cur - pos["entryPrice"]) / pos["entryPrice"] * pos["size"]
-    pct   = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
-    dur   = (datetime.now() - datetime.fromisoformat(pos["entryTime"])).total_seconds() / 60
+async def exit_position(pos: dict, reason: str):
+    cur  = pos["currentPrice"]
+    sym  = pos["symbol"]
+    pnl  = (cur - pos["entryPrice"]) / pos["entryPrice"] * pos["size"]
+    pct  = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
+    dur  = (datetime.now() - datetime.fromisoformat(pos["entryTime"])).total_seconds() / 60
+
+    # ── MODALITA' REALE ────────────────────────────────────────────────────────
+    if pos.get("realMode", False):
+        try:
+            qty_coin = pos["size"] / pos["entryPrice"]  # stima quantita'
+            body = {
+                "client_order_id": f"ca-exit-{sym}-{int(time.time())}",
+                "product_id": f"{sym}-USD",
+                "side": "SELL",
+                "order_configuration": {
+                    "market_market_ioc": {
+                        "base_size": str(round(qty_coin, 8))
+                    }
+                }
+            }
+            result = await coinbase_request("POST", "/api/v3/brokerage/orders", body)
+            if result.get("success") != True:
+                add_log("info", "ERRORE", f"Vendita {sym} fallita: {result.get('error_response', {}).get('message', str(result))}")
+            else:
+                filled = result.get("success_response", {})
+                cur = float(filled.get("average_filled_price", cur)) or cur
+        except Exception as e:
+            add_log("info", "ERRORE", f"Coinbase exit error: {e}")
+
+    # ricalcola pnl con prezzo reale
+    pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * pos["size"]
+    pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
 
     agent_state["currentCapital"] += pos["size"] + pnl
     agent_state["tradeCount"] += 1
@@ -169,23 +261,25 @@ def exit_position(pos: dict, reason: str):
         agent_state["wins"] += 1
 
     cfg = agent_state["config"]
-    agent_state["cooldowns"][pos["symbol"]] = (
+    agent_state["cooldowns"][sym] = (
         datetime.now().timestamp() + cfg.get("cooldown", 1) * 3600
     ) * 1000
 
     agent_state["trades"].append({
-        "symbol": pos["symbol"], "reason": reason,
+        "symbol": sym, "reason": reason,
         "entryPrice": pos["entryPrice"], "exitPrice": cur,
         "pnl": pnl, "pct": pct,
         "time": datetime.now().isoformat(),
         "entryTime": pos["entryTime"],
         "durationMin": round(dur, 1),
         "size": pos["size"],
+        "realMode": pos.get("realMode", False),
     })
 
     agent_state["positions"] = [p for p in agent_state["positions"] if p is not pos]
-    add_log("sell", reason,
-        f"{pos['symbol']} @ ${cur:.4f} | {pnl:+.2f}$ ({pct:+.2f}%) | {dur:.0f} min"
+    mode = "REALE" if pos.get("realMode") else "SIM"
+    add_log("sell", f"{reason} {mode}",
+        f"{sym} @ ${cur:.4f} | {pnl:+.2f}$ ({pct:+.2f}%) | {dur:.0f} min"
     )
 
 # ── main loop ─────────────────────────────────────────────────────────────────
@@ -200,7 +294,7 @@ async def scan_and_trade():
     if elapsed_ms >= agent_state["sessionDuration"]:
         agent_state["running"] = False
         for p in list(agent_state["positions"]):
-            exit_position(p, "SESSIONE SCADUTA")
+            await exit_position(p, "SESSIONE SCADUTA")
         add_log("info", "FINE SESSIONE", "Durata massima raggiunta.")
         return
 
@@ -230,7 +324,7 @@ async def scan_and_trade():
 
         # check uscita
         if cur <= pos["stopPrice"]:
-            exit_position(pos, "STOP LOSS")
+            await exit_position(pos, "STOP LOSS")
 
     # how many more positions can we open?
     alloc_pct   = cfg.get("allocPct", 0.20)
@@ -366,12 +460,13 @@ async def start_agent(body: dict):
         "sessionStart": datetime.now().timestamp(),
         "sessionDuration": int(cfg.get("sessionDuration", 8)) * 3600 * 1000,
         "config": {
-            "allocPct":     float(cfg.get("allocPct", 0.20)),
-            "stopLoss":     float(cfg.get("stopLoss", 0.03)),
-            "takeProfit":   float(cfg.get("takeProfit", 0.06)),
-            "cooldown":     float(cfg.get("cooldown", 1)),
-            "minMomentum":  float(cfg.get("minMomentum", 0.05)),
+            "allocPct":      float(cfg.get("allocPct", 0.20)),
+            "stopLoss":      float(cfg.get("stopLoss", 0.03)),
+            "cooldown":      float(cfg.get("cooldown", 1)),
+            "minMomentum":   float(cfg.get("minMomentum", 0.05)),
+            "minVolume":     float(cfg.get("minVolume", 10_000_000)),
             "sessionDuration": int(cfg.get("sessionDuration", 8)),
+            "realMode":      bool(cfg.get("realMode", False)),
         },
         "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
     })
@@ -379,8 +474,9 @@ async def start_agent(body: dict):
     sl    = float(cfg.get("stopLoss", 0.03)) * 100
 
     vol   = float(cfg.get("minVolume", 10_000_000)) / 1_000_000
+    mode  = "🔴 REALE" if cfg.get("realMode", False) else "⚪ SIMULAZIONE"
     add_log("info", "AVVIO",
-        f"${capital:.0f} | Alloc: {alloc:.0f}% | SL: {sl:.1f}% | Vol: ${vol:.0f}M | Trailing ON"
+        f"${capital:.0f} | {mode} | Alloc: {alloc:.0f}% | SL: {sl:.1f}% | Vol: ${vol:.0f}M"
     )
     return {"ok": True}
 
@@ -390,7 +486,7 @@ def stop_agent():
         return {"error": "Not running"}
     agent_state["running"] = False
     for p in list(agent_state["positions"]):
-        exit_position(p, "STOP MANUALE")
+        await exit_position(p, "STOP MANUALE")
     pnl = agent_state["currentCapital"] - agent_state["capital"]
     add_log("info", "STOP", f"P&L finale: {pnl:+.2f}$")
     return {"ok": True, "pnl": pnl}
@@ -400,7 +496,7 @@ def close_symbol(symbol: str):
     pos = next((p for p in agent_state["positions"] if p["symbol"] == symbol), None)
     if not pos:
         return {"error": f"No position on {symbol}"}
-    exit_position(pos, "CHIUSURA MANUALE")
+    await exit_position(pos, "CHIUSURA MANUALE")
     return {"ok": True}
 
 @app.post("/chat")
