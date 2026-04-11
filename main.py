@@ -4,6 +4,7 @@ import time
 import jwt
 import hashlib
 import json
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
 from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -51,6 +52,7 @@ async def coinbase_request(method: str, path: str, body: dict = None) -> dict:
 
 # universe dinamico — popolato da fetch_prices()
 market_data = {}  # sym -> {price, change1h, change24h, volume24h, priceHistory, icon}
+product_cache = {}  # product_id -> Coinbase product metadata
 
 agent_state = {
     "running": False,
@@ -83,6 +85,85 @@ def unrealized_pnl():
         (p["currentPrice"] - p["entryPrice"]) / p["entryPrice"] * p["size"]
         for p in agent_state["positions"]
     )
+
+def coinbase_error_message(result: dict) -> str:
+    err = result.get("error_response")
+    if isinstance(err, dict):
+        return err.get("message") or err.get("error_details") or str(err)
+    return result.get("message") or str(result)
+
+def quantize_str(value: float, increment: str | None, rounding) -> str:
+    if not increment:
+        return f"{value:.8f}".rstrip("0").rstrip(".")
+    step = Decimal(str(increment))
+    if step <= 0:
+        return f"{value:.8f}".rstrip("0").rstrip(".")
+    dec_value = Decimal(str(value))
+    quantized = (dec_value / step).to_integral_value(rounding=rounding) * step
+    return format(quantized.normalize(), "f")
+
+def symbol_cooldown_ms() -> int:
+    cfg = agent_state["config"]
+    minutes = cfg.get("orderErrorCooldownMin", 30)
+    return int(minutes * 60 * 1000)
+
+def cooldown_symbol(sym: str, reason: str):
+    until_ms = int(datetime.now().timestamp() * 1000) + symbol_cooldown_ms()
+    agent_state["cooldowns"][sym] = until_ms
+    add_log("info", "COOLDOWN", f"{sym} in pausa: {reason}")
+
+async def fetch_coinbase_product(product_id: str) -> dict:
+    cached = product_cache.get(product_id)
+    if cached:
+        return cached
+    product = await coinbase_request("GET", f"/api/v3/brokerage/products/{product_id}")
+    product_cache[product_id] = product
+    return product
+
+async def build_buy_order_config(product_id: str, size: float, price: float) -> tuple[dict | None, str | None]:
+    product = await fetch_coinbase_product(product_id)
+    if product.get("error") or product.get("trading_disabled") or product.get("is_disabled") or product.get("cancel_only"):
+        return None, "prodotto non tradabile su Coinbase"
+
+    if product.get("limit_only"):
+        limit_price = quantize_str(price * 1.005, product.get("price_increment"), ROUND_UP)
+        quote_size = quantize_str(size, product.get("quote_increment"), ROUND_DOWN)
+        return {
+            "limit_limit_gtc": {
+                "quote_size": quote_size,
+                "limit_price": limit_price,
+                "post_only": False,
+            }
+        }, f"{product_id} limit-only: uso ordine limit @ {limit_price}"
+
+    quote_size = quantize_str(size, product.get("quote_increment"), ROUND_DOWN)
+    return {
+        "market_market_ioc": {
+            "quote_size": quote_size
+        }
+    }, None
+
+async def build_sell_order_config(product_id: str, qty_coin: float, price: float) -> tuple[dict | None, str | None]:
+    product = await fetch_coinbase_product(product_id)
+    if product.get("error") or product.get("trading_disabled") or product.get("is_disabled") or product.get("cancel_only"):
+        return None, "prodotto non vendibile su Coinbase"
+
+    base_size = quantize_str(qty_coin, product.get("base_increment"), ROUND_DOWN)
+    if product.get("limit_only"):
+        limit_price = quantize_str(price * 0.995, product.get("price_increment"), ROUND_DOWN)
+        return {
+            "limit_limit_gtc": {
+                "base_size": base_size,
+                "limit_price": limit_price,
+                "post_only": False,
+            }
+        }, f"{product_id} limit-only: uso vendita limit @ {limit_price}"
+
+    return {
+        "market_market_ioc": {
+            "base_size": base_size
+        }
+    }, None
 
 # ── binance ───────────────────────────────────────────────────────────────────
 
@@ -179,22 +260,26 @@ async def enter_position(sym_data: dict):
     # ── MODALITA' REALE ────────────────────────────────────────────────────────
     if is_real:
         try:
-            # calcola quantita' coin da comprare
-            qty = round(size / price, 8)
             product_id = f"{sym}-USD"
+            order_configuration, note = await build_buy_order_config(product_id, size, price)
+            if not order_configuration:
+                cooldown_symbol(sym, f"{product_id} non disponibile per ordini reali")
+                return
             body = {
                 "client_order_id": f"ca-{sym}-{int(time.time())}",
                 "product_id": product_id,
                 "side": "BUY",
-                "order_configuration": {
-                    "market_market_ioc": {
-                        "quote_size": str(round(size, 2))  # spendi X USD
-                    }
-                }
+                "order_configuration": order_configuration
             }
+            if note:
+                add_log("info", "ORDINE", note)
             result = await coinbase_request("POST", "/api/v3/brokerage/orders", body)
             if result.get("success") != True:
-                add_log("info", "ERRORE", f"Ordine {sym} fallito: {result.get('error_response', {}).get('message', str(result))}")
+                err_msg = coinbase_error_message(result)
+                if "limit only mode" in err_msg.lower():
+                    product_cache.pop(product_id, None)
+                    cooldown_symbol(sym, f"{product_id} accetta solo limit order")
+                add_log("info", "ERRORE", f"Ordine {sym} fallito: {err_msg}")
                 return
             # usa il prezzo reale dall'ordine se disponibile
             filled = result.get("success_response", {})
@@ -232,19 +317,22 @@ async def exit_position(pos: dict, reason: str):
     if pos.get("realMode", False):
         try:
             qty_coin = pos["size"] / pos["entryPrice"]  # stima quantita'
+            product_id = f"{sym}-USD"
+            order_configuration, note = await build_sell_order_config(product_id, qty_coin, cur)
+            if not order_configuration:
+                add_log("info", "ERRORE", f"Vendita {sym} bloccata: {product_id} non disponibile")
+                return
             body = {
                 "client_order_id": f"ca-exit-{sym}-{int(time.time())}",
-                "product_id": f"{sym}-USD",
+                "product_id": product_id,
                 "side": "SELL",
-                "order_configuration": {
-                    "market_market_ioc": {
-                        "base_size": str(round(qty_coin, 8))
-                    }
-                }
+                "order_configuration": order_configuration
             }
+            if note:
+                add_log("info", "ORDINE", note)
             result = await coinbase_request("POST", "/api/v3/brokerage/orders", body)
             if result.get("success") != True:
-                add_log("info", "ERRORE", f"Vendita {sym} fallita: {result.get('error_response', {}).get('message', str(result))}")
+                add_log("info", "ERRORE", f"Vendita {sym} fallita: {coinbase_error_message(result)}")
             else:
                 filled = result.get("success_response", {})
                 cur = float(filled.get("average_filled_price", cur)) or cur
