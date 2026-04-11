@@ -17,8 +17,8 @@ BINANCE_BASE = "https://api.binance.com"
 COINBASE_BASE = "https://api.coinbase.com"
 
 # Credenziali Coinbase da variabili d'ambiente
-COINBASE_API_KEY     = os.environ.get("COINBASE_API_KEY", "")
-COINBASE_PRIVATE_KEY = os.environ.get("COINBASE_PRIVATE_KEY", "")
+COINBASE_API_KEY     = os.environ.get("CB_KEY", "")
+COINBASE_PRIVATE_KEY = os.environ.get("CB_SECRET", "")
 
 def make_coinbase_jwt(method: str, path: str) -> str:
     """Genera JWT per autenticazione Coinbase Advanced API"""
