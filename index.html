@@ -765,29 +765,22 @@ async function startAgent() {
     const r = await fetch(API + '/start', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({config:cfg}) });
     const d = await r.json();
     if (d.error) { alert(d.error); return; }
+    // salva stato sessione in localStorage per recovery dopo refresh
+    localStorage.setItem('ca_session', JSON.stringify({
+      realMode: cfg.realMode,
+      capital: cfg.capital,
+      ts: Date.now()
+    }));
     document.getElementById('startBtn').disabled = true;
     document.getElementById('stopBtn').disabled = false;
     showTab('monitor', document.querySelectorAll('.tab')[1]);
-    // all avvio controlla se c e una sessione attiva
-(async function() {
-  try {
-    const r = await fetch(API + '/status');
-    const d = await r.json();
-    if (d.running) {
-      S = d;
-      window._lastStatus = d;
-      document.getElementById('startBtn').disabled = true;
-      document.getElementById('stopBtn').disabled = false;
-      showTab('monitor', document.querySelectorAll('.tab')[1]);
-    }
-  } catch(e) {}
-  startPolling();
-})();
+    startPolling();
   } catch(e) { alert('Errore connessione: ' + e.message); }
 }
 
 async function stopAgent() {
   await fetch(API + '/stop', { method:'POST' });
+  localStorage.removeItem('ca_session');
   document.getElementById('startBtn').disabled = false;
   document.getElementById('stopBtn').disabled = true;
 }
@@ -824,7 +817,31 @@ async function poll() {
   } catch(e) { console.error(e); }
 }
 
-startPolling();
+// recovery sessione al caricamento pagina
+(async function() {
+  try {
+    const r = await fetch(API + '/status');
+    const d = await r.json();
+    if (d.running) {
+      S = d;
+      window._lastStatus = d;
+      // ripristina modalita da localStorage
+      const saved = JSON.parse(localStorage.getItem('ca_session') || '{}');
+      if (saved.realMode) {
+        _realMode = true;
+        window._realMode = true;
+        document.getElementById('modeRealBtn').classList.add('active-real');
+        document.getElementById('modeSimBtn').classList.remove('active-sim');
+        document.getElementById('modeHint').textContent = 'Sessione REALE in corso';
+        document.getElementById('modeHint').style.color = 'var(--red)';
+      }
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = false;
+      showTab('monitor', document.querySelectorAll('.tab')[1]);
+    }
+  } catch(e) {}
+  startPolling();
+})();
 
 function render() {
   const dot = document.getElementById('statusDot');
