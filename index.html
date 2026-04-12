@@ -424,10 +424,14 @@ input[type=number]:disabled {
 .auth-field input {
   width: 100%; background: var(--surface2);
   border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  padding: 13px 14px; color: var(--text); font-size: 15px;
+  padding: 13px 14px; padding-right: 44px; color: var(--text); font-size: 15px;
   font-family: var(--sans); outline: none; transition: border-color 0.15s;
 }
 .auth-field input:focus { border-color: var(--blue); }
+.auth-field input.error { border-color: var(--red); background: rgba(246,70,93,0.05); }
+.auth-field-wrap { position: relative; }
+.auth-eye { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text3); font-size: 16px; user-select: none; }
+.auth-field-error { font-size: 12px; color: var(--red); font-weight: 500; margin-top: 6px; display: none; }
 .auth-btn {
   width: 100%; padding: 15px; background: var(--blue);
   border: none; border-radius: var(--radius); color: #fff;
@@ -472,16 +476,22 @@ input[type=number]:disabled {
     <div class="auth-logo"><span class="auth-logo-dot"></span><span style="font-size:20px;font-weight:700">CryptoAgent</span></div>
     <div class="auth-title">Bentornato</div>
     <div class="auth-sub">Accedi al tuo account</div>
-    <div class="auth-error" id="loginError"></div>
     <div class="auth-field">
       <label>Username</label>
-      <input type="text" id="loginUser" placeholder="il tuo username" autocomplete="username">
+      <div class="auth-field-wrap">
+        <input type="text" id="loginUser" placeholder="il tuo username" autocomplete="username">
+      </div>
+      <div class="auth-field-error" id="loginUserErr"></div>
     </div>
     <div class="auth-field">
       <label>Password</label>
-      <input type="password" id="loginPass" placeholder="la tua password" autocomplete="current-password">
+      <div class="auth-field-wrap">
+        <input type="password" id="loginPass" placeholder="la tua password" autocomplete="current-password">
+        <span class="auth-eye" onclick="togglePwd('loginPass',this)">&#128065;</span>
+      </div>
+      <div class="auth-field-error" id="loginPassErr"></div>
     </div>
-    <button class="auth-btn" onclick="doLogin()">Accedi</button>
+    <button class="auth-btn" id="loginBtn" onclick="doLogin()">Accedi</button>
     <div class="auth-switch">Non hai un account? <a onclick="showRegister()">Registrati</a></div>
   </div>
 
@@ -490,16 +500,22 @@ input[type=number]:disabled {
     <div class="auth-logo"><span class="auth-logo-dot"></span><span style="font-size:20px;font-weight:700">CryptoAgent</span></div>
     <div class="auth-title">Crea account</div>
     <div class="auth-sub">Inizia a tradare con il tuo agente AI</div>
-    <div class="auth-error" id="registerError"></div>
     <div class="auth-field">
       <label>Username</label>
-      <input type="text" id="regUser" placeholder="scegli un username">
+      <div class="auth-field-wrap">
+        <input type="text" id="regUser" placeholder="scegli un username">
+      </div>
+      <div class="auth-field-error" id="regUserErr"></div>
     </div>
     <div class="auth-field">
       <label>Password</label>
-      <input type="password" id="regPass" placeholder="minimo 6 caratteri">
+      <div class="auth-field-wrap">
+        <input type="password" id="regPass" placeholder="minimo 6 caratteri">
+        <span class="auth-eye" onclick="togglePwd('regPass',this)">&#128065;</span>
+      </div>
+      <div class="auth-field-error" id="regPassErr"></div>
     </div>
-    <button class="auth-btn" onclick="doRegister()">Registrati</button>
+    <button class="auth-btn" id="regBtn" onclick="doRegister()">Registrati</button>
     <div class="auth-switch">Hai gia un account? <a onclick="showLogin()">Accedi</a></div>
   </div>
 
@@ -533,11 +549,11 @@ input[type=number]:disabled {
       <span id="statusLabel">INATTIVO</span>
     </div>
     <button class="stop-btn" id="stopBtn" onclick="stopAgent()" disabled>&#9632;</button>
-    <div id="userPill" style="display:none;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;cursor:pointer" onclick="logout()" title="Logout">
-      <span style="font-size:11px;font-weight:600;color:var(--text2)" id="userLabel"></span>
-      <span style="font-size:11px;color:var(--text3)">&#x2715;</span>
+    <div id="userPill" style="display:none;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;">
+      <span style="font-size:12px;font-weight:600;color:var(--text)" id="userLabel"></span>
     </div>
-    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">&#9728;</button>
+    <button id="themeBtn" onclick="toggleTheme()" style="background:none;border:1.5px solid var(--blue);border-radius:8px;cursor:pointer;font-size:16px;padding:5px 8px;color:var(--blue);line-height:1">&#9728;</button>
+    <button onclick="logout()" style="background:none;border:1.5px solid var(--blue);border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 10px;color:var(--blue);font-family:var(--sans);letter-spacing:0.02em">Logout</button>
   </div>
 </div>
 
@@ -725,6 +741,38 @@ function authHeaders() {
   return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _authToken };
 }
 
+function togglePwd(inputId, eye) {
+  const inp = document.getElementById(inputId);
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    eye.style.color = 'var(--blue)';
+  } else {
+    inp.type = 'password';
+    eye.style.color = '';
+  }
+}
+
+function clearAuthErrors(...ids) {
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.style.display = 'none'; el.textContent = ''; }
+  });
+}
+
+function showFieldError(inputId, errId, msg) {
+  const inp = document.getElementById(inputId);
+  const err = document.getElementById(errId);
+  if (inp) inp.classList.add('error');
+  if (err) { err.textContent = msg; err.style.display = 'block'; }
+}
+
+function clearFieldError(inputId, errId) {
+  const inp = document.getElementById(inputId);
+  const err = document.getElementById(errId);
+  if (inp) inp.classList.remove('error');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+}
+
 function showLogin() {
   document.getElementById('loginCard').style.display = '';
   document.getElementById('registerCard').style.display = 'none';
@@ -754,41 +802,66 @@ function showAuthError(id, msg) {
 }
 
 async function doLogin() {
+  clearFieldError('loginUser','loginUserErr');
+  clearFieldError('loginPass','loginPassErr');
   const username = document.getElementById('loginUser').value.trim();
   const password = document.getElementById('loginPass').value;
-  if (!username || !password) return showAuthError('loginError', 'Inserisci username e password');
+  if (!username) return showFieldError('loginUser','loginUserErr','Inserisci il tuo username');
+  if (!password) return showFieldError('loginPass','loginPassErr','Inserisci la tua password');
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Accesso in corso...';
   try {
     const r = await fetch(API + '/auth/login', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({username, password})
     });
     const d = await r.json();
-    if (!r.ok) return showAuthError('loginError', d.detail || 'Errore login');
+    if (!r.ok) {
+      showFieldError('loginUser','loginUserErr','');
+      showFieldError('loginPass','loginPassErr', d.detail || 'Username o password errati');
+      btn.disabled = false; btn.textContent = 'Accedi'; return;
+    }
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
     if (!d.has_api_keys) { showApiKeys(); return; }
-    hideAuthScreen();
-    initApp();
-  } catch(e) { showAuthError('loginError', 'Errore di connessione'); }
+    hideAuthScreen(); initApp();
+  } catch(e) {
+    showFieldError('loginPass','loginPassErr','Errore di connessione');
+    btn.disabled = false; btn.textContent = 'Accedi';
+  }
 }
 
 async function doRegister() {
+  clearFieldError('regUser','regUserErr');
+  clearFieldError('regPass','regPassErr');
   const username = document.getElementById('regUser').value.trim();
   const password = document.getElementById('regPass').value;
-  if (!username || !password) return showAuthError('registerError', 'Compila tutti i campi');
+  if (!username) return showFieldError('regUser','regUserErr','Scegli un username');
+  if (username.length < 3) return showFieldError('regUser','regUserErr','Username troppo corto (min 3 caratteri)');
+  if (!password) return showFieldError('regPass','regPassErr','Scegli una password');
+  if (password.length < 6) return showFieldError('regPass','regPassErr','Password troppo corta (min 6 caratteri)');
+  const btn = document.getElementById('regBtn');
+  btn.disabled = true; btn.textContent = 'Registrazione in corso...';
   try {
     const r = await fetch(API + '/auth/register', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({username, password})
     });
     const d = await r.json();
-    if (!r.ok) return showAuthError('registerError', d.detail || 'Errore registrazione');
+    if (!r.ok) {
+      if (d.detail && d.detail.includes('Username')) showFieldError('regUser','regUserErr', d.detail);
+      else showFieldError('regPass','regPassErr', d.detail || 'Errore registrazione');
+      btn.disabled = false; btn.textContent = 'Registrati'; return;
+    }
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
     showApiKeys();
-  } catch(e) { showAuthError('registerError', 'Errore di connessione'); }
+  } catch(e) {
+    showFieldError('regPass','regPassErr','Errore di connessione');
+    btn.disabled = false; btn.textContent = 'Registrati';
+  }
 }
 
 async function saveKeys() {
