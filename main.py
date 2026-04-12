@@ -134,8 +134,10 @@ async def refresh_coinbase_products():
             if price <= 0:
                 continue
             # debug: stampa struttura primo prodotto
-            if not _coinbase_products and sym == "BTC":
-                print(f"DEBUG BTC keys: {list(p.keys())}")
+            if sym == "BTC":
+                btc_details = p.get("base_currency_details", {})
+                print(f"DEBUG BTC all keys: {list(p.keys())}")
+                print(f"DEBUG BTC base_currency_details: {btc_details}")
             if not logo_url:
                 continue
             new_products[sym] = {"price": price, "change24h": change24h, "volume24h": vol, "logo_url": logo_url}
