@@ -303,7 +303,13 @@ async def enter_position(sym_data: dict):
             }
             result = await coinbase_request("POST", "/api/v3/brokerage/orders", body)
             if result.get("success") != True:
-                add_log("info", "ERRORE", f"Ordine {sym} fallito: {result.get('error_response', {}).get('message', str(result))}")
+                err = result.get("error_response", {})
+                err_msg = err.get("message", str(result))
+                add_log("info", "ERRORE", f"Ordine {sym} fallito: {err_msg}")
+                # se account non disponibile, metti cooldown lungo su questa coin
+                if "account is not available" in str(result) or "not available" in err_msg:
+                    agent_state["cooldowns"][sym] = (datetime.now().timestamp() + 3600) * 1000
+                    add_log("info", "ESCLUSA", f"{sym} non disponibile su questo account — esclusa per 1h")
                 return
             # usa il prezzo reale dall'ordine se disponibile
             filled = result.get("success_response", {})
@@ -674,6 +680,25 @@ async def test_coinbase():
         return {"ok": True, "balances": balances}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+@app.get("/test_order_ton")
+async def test_order_ton():
+    """Testa un ordine minimo su TON-USD e mostra risposta completa"""
+    try:
+        body = {
+            "client_order_id": f"ca-test-{int(time.time())}",
+            "product_id": "TON-USD",
+            "side": "BUY",
+            "order_configuration": {
+                "market_market_ioc": {
+                    "quote_size": "1.00"
+                }
+            }
+        }
+        result = await coinbase_request("POST", "/api/v3/brokerage/orders", body)
+        return result
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/debug_product")
 async def debug_product():
