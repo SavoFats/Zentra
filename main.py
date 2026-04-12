@@ -91,37 +91,77 @@ def unrealized_pnl():
 STABLES = {'USDT','USDC','BUSD','DAI','FDUSD','TUSD','USDP','GUSD','FRAX',
            'LUSD','SUSD','EUR','GBP','USD','USDD','USTC','PAX','CBBTC','WBTC'}
 
-async def fetch_prices():
+# Coin con logo verificato — l agente entra solo su queste
+LOGO_APPROVED = {
+    'BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOT','LINK','MATIC','UNI','NEAR',
+    'INJ','APT','ARB','OP','ATOM','DOGE','SHIB','LTC','TON','TRX','HBAR','VET',
+    'FIL','ALGO','ETC','AAVE','GRT','MKR','SNX','CRV','LDO','RUNE','FTM','ENJ',
+    'ENA','RENDER','RNDR','JUP','PYTH','SUI','SEI','TAO','WLD','PEPE','FLOKI',
+    'BONK','WIF','RAVE','CTSI','IOTX','NKN','DRIFT','XLM','SAND','MANA','AXS',
+    'CHZ','EGLD','THETA','ZEC','BAT','ZRX','COMP','YFI','SUSHI','SKL','ANKR',
+    'STORJ','RLC','OGN','LOOM','1INCH','ICP','FET','OCEAN','AGIX','GALA','IMX',
+    'LRC','DYDX','ENS','BLUR','TIA','MANTA','ALT','JTO','ZETA','W','TNSR',
+}
+
+# Whitelist Coinbase — aggiornata ogni ora, usata per filtrare l universe
+_coinbase_whitelist: set = set()
+_whitelist_last_update: float = 0
+
+async def refresh_coinbase_whitelist():
+    """Scarica la lista coin da Coinbase Exchange API pubblica (no auth)"""
+    global _coinbase_whitelist, _whitelist_last_update
     try:
-        min_vol = agent_state["config"].get("minVolume", 10_000_000)
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get("https://api.exchange.coinbase.com/currencies")
+            currencies = r.json()
+        new_wl = set()
+        for c in currencies:
+            if isinstance(c, dict) and c.get("type") == "crypto" and c.get("status") == "online":
+                sym = c.get("id", "")
+                if sym and sym.isascii() and sym.isalpha() and sym not in STABLES:
+                    new_wl.add(sym)
+        if new_wl:
+            _coinbase_whitelist = new_wl
+            _whitelist_last_update = time.time()
+            print(f"Coinbase whitelist aggiornata: {len(_coinbase_whitelist)} coin")
+    except Exception as e:
+        print(f"Whitelist error: {e}")
 
-        # Usa Coinbase Advanced API autenticata — lista prodotti con prezzi
-        result = await coinbase_request("GET", "/api/v3/brokerage/market/products?product_type=SPOT&limit=500")
-        products = result.get("products", [])
+async def fetch_prices():
+    global _whitelist_last_update
+    try:
+        # Aggiorna whitelist ogni ora
+        if time.time() - _whitelist_last_update > 3600:
+            await refresh_coinbase_whitelist()
 
-        for p in products:
-            # solo coppie USD
-            if p.get("quote_currency_id") != "USD":
+        # Prezzi da Binance — affidabile, una sola chiamata
+        async with httpx.AsyncClient(timeout=15) as client:
+            res = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
+            tickers = res.json()
+
+        for t in tickers:
+            pair = t["symbol"]
+            if not pair.endswith("USDT"):
                 continue
-            if p.get("status") != "online":
-                continue
-
-            sym = p.get("base_currency_id", "")
-            if not sym or not sym.isascii() or not sym.isalpha():
+            sym = pair[:-4]
+            if not sym.isascii() or not sym.isalpha():
                 continue
             if sym in STABLES:
                 continue
+            # Solo coin disponibili su Coinbase e con logo approvato
+            if _coinbase_whitelist and sym not in _coinbase_whitelist:
+                continue
+            if sym not in LOGO_APPROVED:
+                continue
 
             try:
-                price = float(p.get("price", 0) or 0)
-                change24h = float(p.get("price_percentage_change_24h", 0) or 0)
-                vol_usd = float(p.get("volume_24h", 0) or 0) * price  # volume in USD
+                price = float(t["lastPrice"])
+                change24h = float(t["priceChangePercent"])
+                vol_usdt = float(t["quoteVolume"])
             except:
                 continue
 
             if price <= 0:
-                continue
-            if vol_usd < min_vol:
                 continue
 
             if sym not in market_data:
@@ -140,7 +180,7 @@ async def fetch_prices():
             market_data[sym]["price"] = price
             market_data[sym]["change1h"] = change1h
             market_data[sym]["change24h"] = change24h
-            market_data[sym]["volume24h"] = vol_usd
+            market_data[sym]["volume24h"] = vol_usdt
 
             for pos in agent_state["positions"]:
                 if pos["symbol"] == sym:
@@ -373,13 +413,16 @@ async def scan_and_trade():
         _update_pnl()
         return
 
-    # rank coins — filtro cooldown, posizioni aperte, solo simboli ASCII
+    min_vol = cfg.get("minVolume", 10_000_000)
+
+    # rank coins — filtro cooldown, posizioni aperte, volume, solo coin con logo approvato
     ranked = sorted(
         [
             {**d, "symbol": sym} for sym, d in market_data.items()
             if d["price"] > 0
+            and d.get("volume24h", 0) >= min_vol   # filtro volume solo qui
             and sym not in open_syms
-            and sym.isascii() and sym.isalpha()  # escludi coin con simboli strani
+            and sym in LOGO_APPROVED  # solo coin con logo verificato
             and (agent_state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ],
         key=lambda d: d["change24h"],
