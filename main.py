@@ -141,6 +141,12 @@ async def fetch_prices():
         if not products or time.time() - _products_last_update > 3600:
             _products_last_update = time.time()
 
+        # Recupera candles 1h per calcolare change1h reale
+        # Un candle per ogni prodotto: prezzo apertura 1h fa vs prezzo attuale
+        import time as _time
+        now_ts = int(_time.time())
+        one_hour_ago = now_ts - 3600
+
         for p in products:
             if p.get("quote_currency_id") != "USD":
                 continue
@@ -168,14 +174,21 @@ async def fetch_prices():
                     "price": 0.0, "change1h": 0.0, "change24h": 0.0,
                     "volume24h": 0.0, "priceHistory": [], "icon": sym[0]
                 }
+
+            # change1h: usa priceHistory se ha >= 10 campioni (80+ secondi)
+            # altrimenti stima proporzionale dal 24h
             hist = market_data[sym]["priceHistory"]
             hist.append(price)
-            if len(hist) > 60:
+            if len(hist) > 450:  # 450 * 8s = 1 ora esatta
                 hist.pop(0)
-            change1h = (
-                (price - hist[0]) / hist[0] * 100
-                if len(hist) >= 3 else change24h * 0.04
-            )
+
+            if len(hist) >= 10:
+                # prezzo di ~1 ora fa (o il piu vecchio disponibile)
+                price_1h_ago = hist[0]
+                change1h = (price - price_1h_ago) / price_1h_ago * 100
+            else:
+                change1h = change24h * 0.04  # stima conservativa
+
             market_data[sym]["price"] = price
             market_data[sym]["change1h"] = change1h
             market_data[sym]["change24h"] = change24h
