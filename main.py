@@ -17,6 +17,21 @@ BINANCE_BASE = "https://api.binance.com"
 COINBASE_BASE = "https://api.coinbase.com"
 
 # Credenziali Coinbase da variabili d'ambiente
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+async def send_telegram(msg: str):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
+            )
+    except Exception as e:
+        print(f"Telegram error: {e}")
+
 COINBASE_API_KEY     = os.environ.get("CB_KEY", "")
 COINBASE_PRIVATE_KEY = os.environ.get("CB_SECRET", "")
 
@@ -315,6 +330,7 @@ async def enter_position(sym_data: dict):
             filled = result.get("success_response", {})
             actual_price = float(filled.get("average_filled_price", price)) or price
             add_log("buy", "ACQUISTO REALE", f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | SL: {sl_pct*100:.1f}% | Trailing ON")
+            await send_telegram("ACQUISTO REALE\n" + sym + " @ $" + f"{actual_price:.4f}" + "\nSize: $" + f"{size:.2f}" + " | SL: " + f"{sl_pct*100:.1f}" + "%")
         except Exception as e:
             add_log("info", "ERRORE", f"Coinbase error: {e}")
             return
@@ -407,6 +423,10 @@ async def exit_position(pos: dict, reason: str):
     add_log("sell", f"{reason} {mode}",
         f"{sym} @ ${cur:.4f} | {pnl:+.2f}$ ({pct:+.2f}%) | {dur:.0f} min"
     )
+    if pos.get("realMode"):
+        esito = "PROFITTO" if pnl >= 0 else "PERDITA"
+        msg = "VENDITA REALE - " + esito + "\n" + sym + " @ $" + f"{cur:.4f}" + "\nP&L: " + f"{pnl:+.2f}" + "$ (" + f"{pct:+.2f}" + "%)\nDurata: " + f"{dur:.0f}" + " min | " + reason
+        await send_telegram(msg)
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 
@@ -524,6 +544,48 @@ def _update_pnl():
     if len(agent_state["pnlHistory"]) > 500:
         agent_state["pnlHistory"].pop(0)
 
+# Telegram polling
+_tg_last_update: int = 0
+
+async def poll_telegram():
+    global _tg_last_update
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
+                params={"offset": _tg_last_update + 1, "timeout": 0}
+            )
+            data = r.json()
+        for update in data.get("result", []):
+            _tg_last_update = update["update_id"]
+            msg = update.get("message", {})
+            chat_id = str(msg.get("chat", {}).get("id", ""))
+            text = msg.get("text", "").strip()
+            # solo comandi dal tuo chat
+            if chat_id != str(TELEGRAM_CHAT_ID):
+                continue
+            if text.upper().startswith("/CLOSE"):
+                parts = text.split()
+                if len(parts) >= 2:
+                    sym = parts[1].upper()
+                    pos = next((p for p in agent_state["positions"] if p["symbol"] == sym), None)
+                    if pos:
+                        await exit_position(pos, "TELEGRAM")
+                        await send_telegram("Posizione " + sym + " chiusa manualmente via Telegram")
+                    else:
+                        await send_telegram("Nessuna posizione aperta su " + sym)
+            elif text.upper() == "/STATUS":
+                pos_list = ", ".join([p["symbol"] for p in agent_state["positions"]]) or "nessuna"
+                pnl = agent_state.get("pnl", 0)
+                await send_telegram("Stato agente\nRunning: " + str(agent_state["running"]) + "\nPosizioni: " + pos_list + "\nP&L: $" + f"{pnl:.2f}")
+            elif text.upper() == "/STOP":
+                agent_state["running"] = False
+                await send_telegram("Agente fermato via Telegram")
+    except Exception as e:
+        print(f"Telegram poll error: {e}")
+
 async def background_loop():
     while True:
         try:
@@ -531,6 +593,7 @@ async def background_loop():
             await scan_and_trade()
             if agent_state["running"]:
                 _update_pnl()
+            await poll_telegram()
         except Exception as e:
             import traceback
             print(f"Loop error: {e}\n{traceback.format_exc()}")
