@@ -486,7 +486,6 @@ async def scan_and_trade():
             and d.get("volume24h", 0) >= min_vol   # filtro volume solo qui
             and sym not in open_syms
             and sym in _coinbase_products  # solo coin disponibili su Coinbase
-            and sym in LOGO_APPROVED  # solo coin con logo verificato
             and (agent_state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ],
         key=lambda d: d["change24h"],
