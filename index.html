@@ -625,82 +625,15 @@ function getCoinName(sym) {
 }
 
 // Mappa simbolo -> URL logo da CoinGecko (affidabile e completa)
-const LOGO_URLS = {
-  BTC:'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
-  ETH:'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
-  SOL:'https://assets.coingecko.com/coins/images/4128/small/solana.png',
-  BNB:'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
-  XRP:'https://assets.coingecko.com/coins/images/44/small/xrp-symbol-white-128.png',
-  ADA:'https://assets.coingecko.com/coins/images/975/small/cardano.png',
-  AVAX:'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png',
-  DOT:'https://assets.coingecko.com/coins/images/12171/small/polkadot.png',
-  LINK:'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
-  MATIC:'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
-  UNI:'https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png',
-  NEAR:'https://assets.coingecko.com/coins/images/10365/small/near_icon.png',
-  INJ:'https://assets.coingecko.com/coins/images/12882/small/Secondary_Symbol.png',
-  APT:'https://assets.coingecko.com/coins/images/26455/small/aptos_round.png',
-  ARB:'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
-  OP:'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
-  ATOM:'https://assets.coingecko.com/coins/images/1481/small/cosmos_hub.png',
-  DOGE:'https://assets.coingecko.com/coins/images/5/small/dogecoin.png',
-  SHIB:'https://assets.coingecko.com/coins/images/11939/small/shiba.png',
-  LTC:'https://assets.coingecko.com/coins/images/2/small/litecoin.png',
-  TON:'https://assets.coingecko.com/coins/images/17980/small/ton_symbol.png',
-  TRX:'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
-  HBAR:'https://assets.coingecko.com/coins/images/3688/small/hbar.png',
-  VET:'https://assets.coingecko.com/coins/images/1167/small/VET_Token_Icon.png',
-  FIL:'https://assets.coingecko.com/coins/images/12817/small/filecoin.png',
-  ALGO:'https://assets.coingecko.com/coins/images/4380/small/download.png',
-  ETC:'https://assets.coingecko.com/coins/images/453/small/ethereum-classic-logo.png',
-  AAVE:'https://assets.coingecko.com/coins/images/12645/small/AAVE.png',
-  GRT:'https://assets.coingecko.com/coins/images/13397/small/Graph_Token.png',
-  MKR:'https://assets.coingecko.com/coins/images/1364/small/Mark_Maker.png',
-  SNX:'https://assets.coingecko.com/coins/images/3406/small/SNX.png',
-  CRV:'https://assets.coingecko.com/coins/images/12124/small/Curve.png',
-  LDO:'https://assets.coingecko.com/coins/images/13573/small/Lido_DAO.png',
-  RUNE:'https://assets.coingecko.com/coins/images/6595/small/Rune200x200.png',
-  FTM:'https://assets.coingecko.com/coins/images/4001/small/Fantom_round.png',
-  ENJ:'https://assets.coingecko.com/coins/images/1102/small/enjin-coin-logo.png',
-  ENA:'https://assets.coingecko.com/coins/images/36530/small/ethena.png',
-  RENDER:'https://assets.coingecko.com/coins/images/11636/small/rndr.png',
-  RNDR:'https://assets.coingecko.com/coins/images/11636/small/rndr.png',
-  JUP:'https://assets.coingecko.com/coins/images/34188/small/jup.png',
-  PYTH:'https://assets.coingecko.com/coins/images/31924/small/pyth.png',
-  SUI:'https://assets.coingecko.com/coins/images/26375/small/sui_asset.jpeg',
-  SEI:'https://assets.coingecko.com/coins/images/28205/small/Sei_Logo_-_Transparent.png',
-  TAO:'https://assets.coingecko.com/coins/images/28452/small/ARUsPeNQ_400x400.jpeg',
-  WLD:'https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg',
-  PEPE:'https://assets.coingecko.com/coins/images/29850/small/pepe-token.jpeg',
-  FLOKI:'https://assets.coingecko.com/coins/images/16746/small/PNG_image.png',
-  BONK:'https://assets.coingecko.com/coins/images/28600/small/bonk.jpg',
-  WIF:'https://assets.coingecko.com/coins/images/33566/small/wif.png',
-  RAVE:'https://assets.coingecko.com/coins/images/25686/small/rave.png',
-  CTSI:'https://assets.coingecko.com/coins/images/11038/small/cartesi.png',
-  IOTX:'https://assets.coingecko.com/coins/images/3334/small/iotex-logo.png',
-  NKN:'https://assets.coingecko.com/coins/images/3375/small/nkn.png',
-  DRIFT:'https://assets.coingecko.com/coins/images/35254/small/drift.png',
-  XLM:'https://assets.coingecko.com/coins/images/100/small/Stellar_symbol_black_RGB.png',
-  SAND:'https://assets.coingecko.com/coins/images/12129/small/sandbox_logo.jpg',
-  MANA:'https://assets.coingecko.com/coins/images/878/small/decentraland-mana.png',
-  AXS:'https://assets.coingecko.com/coins/images/13029/small/axie_infinity_logo.png',
-  CHZ:'https://assets.coingecko.com/coins/images/8834/small/Chiliz.png',
-  EGLD:'https://assets.coingecko.com/coins/images/12335/small/egld-token-logo.png',
-  THETA:'https://assets.coingecko.com/coins/images/2538/small/theta-token-logo.png',
-  ZEC:'https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png',
-  BAT:'https://assets.coingecko.com/coins/images/677/small/basic-attention-token.png',
-  ZRX:'https://assets.coingecko.com/coins/images/863/small/0x.png',
-  COMP:'https://assets.coingecko.com/coins/images/10775/small/COMP.png',
-  YFI:'https://assets.coingecko.com/coins/images/11849/small/yfi-192x192.png',
-  SUSHI:'https://assets.coingecko.com/coins/images/12271/small/512x512_Logo_no_chop.png',
-  '1INCH':'https://assets.coingecko.com/coins/images/13469/small/1inch-token.png',
-  SKL:'https://assets.coingecko.com/coins/images/13245/small/SKALE_token_300x300.png',
-  ANKR:'https://assets.coingecko.com/coins/images/8710/small/Ankr.png',
-  STORJ:'https://assets.coingecko.com/coins/images/949/small/storj.png',
-  OGN:'https://assets.coingecko.com/coins/images/3296/small/op.jpg',
-  RLC:'https://assets.coingecko.com/coins/images/821/small/iExec_RLC_icon_Hex_Black.png',
-  LOOM:'https://assets.coingecko.com/coins/images/3387/small/1_QGdkBrYnqEADO-8Qavqxvg.png',
-};
+// Loghi caricati dinamicamente da Coinbase via backend
+let LOGO_URLS = {};
+async function loadLogos() {
+  try {
+    const r = await fetch(API + '/logos');
+    LOGO_URLS = await r.json();
+  } catch(e) { console.warn('Logo fetch failed', e); }
+}
+loadLogos();
 
 function getLogo(sym) {
   return LOGO_URLS[sym] || null;
