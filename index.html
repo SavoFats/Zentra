@@ -549,6 +549,12 @@ input[type=number]:disabled {
         <div class="card-label" style="margin:0">Mercato</div>
         <div style="font-size:11px;font-weight:600;color:var(--text3)" id="universeCount"></div>
       </div>
+      <div style="position:relative;margin-bottom:12px">
+        <input type="text" id="mktSearch" placeholder="Cerca coin..." oninput="renderMarket()"
+          style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px 11px 36px;color:var(--text);font-size:14px;font-family:var(--sans);outline:none"
+          onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px">&#128269;</span>
+      </div>
       <div class="filter-row">
         <button class="filter-btn active" onclick="setMktSort('change24h',this)">24h %</button>
         <button class="filter-btn" onclick="setMktSort('change1h',this)">1h %</button>
@@ -1281,6 +1287,8 @@ function renderMarket() {
   let data = [...mktData];
   if (mktFilter === 'gainers') data = data.filter(c => c.change24h > 0);
   if (mktFilter === 'losers') data = data.filter(c => c.change24h < 0);
+  const q = (document.getElementById('mktSearch')?.value || '').trim().toUpperCase();
+  if (q) data = data.filter(c => c.symbol.includes(q) || (getCoinName(c.symbol)||'').toUpperCase().includes(q));
   data.sort((a,b) => b[mktSort] - a[mktSort]);
   const maxVol = Math.max(...data.map(c => c.volume24h || 0), 1);
   const maxAbsChg = Math.max(...data.map(c => Math.abs(c.change24h || 0)), 1);
