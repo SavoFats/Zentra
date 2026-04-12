@@ -4,14 +4,68 @@ import time
 import jwt
 import hashlib
 import json
+import secrets
 from datetime import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
 import httpx
 import uvicorn
+import asyncpg
+import bcrypt
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+SECRET_KEY = os.environ.get("SECRET_KEY", "crypto-agent-secret-key-change-in-prod")
+
+# Database pool
+db_pool = None
+
+async def get_db():
+    return db_pool
+
+# Auth
+security = HTTPBearer()
+
+def create_token(user_id: int) -> str:
+    import base64
+    payload = f"{user_id}:{int(time.time()) + 86400 * 30}"  # 30 giorni
+    return base64.urlsafe_b64encode(f"{payload}:{hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:16]}".encode()).decode()
+
+def verify_token(token: str) -> int:
+    import base64
+    try:
+        decoded = base64.urlsafe_b64decode(token.encode()).decode()
+        parts = decoded.split(":")
+        user_id, expires, sig = int(parts[0]), int(parts[1]), parts[2]
+        if int(time.time()) > expires:
+            raise HTTPException(status_code=401, detail="Token scaduto")
+        payload = f"{user_id}:{expires}"
+        expected = hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:16]
+        if sig != expected:
+            raise HTTPException(status_code=401, detail="Token non valido")
+        return user_id
+    except (HTTPException, ValueError, IndexError, AttributeError):
+        raise HTTPException(status_code=401, detail="Token non valido")
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    return verify_token(credentials.credentials)
+
+# Pydantic models
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ApiKeyRequest(BaseModel):
+    cb_key: str
+    cb_secret: str
 
 BINANCE_BASE = "https://api.binance.com"
 COINBASE_BASE = "https://api.coinbase.com"
@@ -603,7 +657,86 @@ async def background_loop():
 
 @app.on_event("startup")
 async def startup():
+    global db_pool
+    if DATABASE_URL:
+        try:
+            db_pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
+            async with db_pool.acquire() as conn:
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id SERIAL PRIMARY KEY,
+                        username TEXT UNIQUE NOT NULL,
+                        password_hash TEXT NOT NULL,
+                        cb_key TEXT DEFAULT '',
+                        cb_secret TEXT DEFAULT '',
+                        telegram_chat_id TEXT DEFAULT '',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+            print("Database connesso e schema creato")
+        except Exception as e:
+            print(f"Database error: {e}")
     asyncio.create_task(background_loop())
+
+# ── AUTH ENDPOINTS ─────────────────────────────────────────────────────────────
+
+@app.post("/auth/register")
+async def register(req: RegisterRequest):
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database non disponibile")
+    if len(req.username) < 3:
+        raise HTTPException(status_code=400, detail="Username troppo corto")
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password troppo corta (min 6 caratteri)")
+    pw_hash = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt()).decode()
+    try:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id",
+                req.username.lower(), pw_hash
+            )
+        token = create_token(row["id"])
+        return {"token": token, "username": req.username.lower(), "has_api_keys": False}
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(status_code=400, detail="Username già in uso")
+
+@app.post("/auth/login")
+async def login(req: LoginRequest):
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, password_hash, cb_key FROM users WHERE username = $1",
+            req.username.lower()
+        )
+    if not row:
+        raise HTTPException(status_code=401, detail="Username o password errati")
+    if not bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="Username o password errati")
+    token = create_token(row["id"])
+    has_keys = bool(row["cb_key"])
+    return {"token": token, "username": req.username.lower(), "has_api_keys": has_keys}
+
+@app.post("/auth/save_keys")
+async def save_keys(req: ApiKeyRequest, user_id: int = Depends(get_current_user)):
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database non disponibile")
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET cb_key = $1, cb_secret = $2 WHERE id = $3",
+            req.cb_key, req.cb_secret, user_id
+        )
+    return {"ok": True}
+
+@app.get("/auth/me")
+async def get_me(user_id: int = Depends(get_current_user)):
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT username, cb_key FROM users WHERE id = $1", user_id
+        )
+    return {"username": row["username"], "has_api_keys": bool(row["cb_key"])}
 
 @app.get("/status")
 def get_status():
