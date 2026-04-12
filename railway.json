@@ -1,10 +1,1 @@
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "RAILPACK"
-  },
-  "deploy": {
-    "startCommand": "pip install fastapi uvicorn httpx pyjwt cryptography && python -c \"import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/SavoFats/crypto-agent-back/main/main.py', 'app.py')\" && uvicorn app:app --host 0.0.0.0 --port $PORT",
-    "restartPolicyType": "ON_FAILURE"
-  }
-}
+pip install fastapi uvicorn httpx pyjwt cryptography asyncpg bcrypt && python -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/SavoFats/crypto-agent-back/main/main.py', 'app.py')" && uvicorn app:app --host 0.0.0.0 --port $PORT
