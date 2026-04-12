@@ -533,8 +533,11 @@ input[type=number]:disabled {
       <span id="statusLabel">INATTIVO</span>
     </div>
     <button class="stop-btn" id="stopBtn" onclick="stopAgent()" disabled>&#9632;</button>
+    <div id="userPill" style="display:none;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;cursor:pointer" onclick="logout()" title="Logout">
+      <span style="font-size:11px;font-weight:600;color:var(--text2)" id="userLabel"></span>
+      <span style="font-size:11px;color:var(--text3)">&#x2715;</span>
+    </div>
     <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">&#9728;</button>
-    <button class="theme-btn" onclick="logout()" title="Logout" style="font-size:14px">&#x2197;</button>
   </div>
 </div>
 
@@ -829,8 +832,12 @@ async function checkAuth() {
 }
 
 function initApp() {
-  // aggiorna header con username
-  document.getElementById('statusLabel').textContent = _username.toUpperCase();
+  // mostra username pill
+  if (_username) {
+    const pill = document.getElementById('userPill');
+    document.getElementById('userLabel').textContent = _username;
+    if (pill) pill.style.display = 'flex';
+  }
   startupSession();
 }
 // mappa nomi completi
