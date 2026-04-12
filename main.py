@@ -415,8 +415,8 @@ async def scan_and_trade():
     min_mom = cfg.get("minMomentum", 0.05)
     candidates = [
         d for d in ranked
-        if d["change24h"] >= min_mom      # momentum 24h
-        and d.get("change1h", 0) > 0      # sta salendo ADESSO (1h positivo)
+        if d.get("change1h", 0) >= min_mom   # momentum ultima ora (configurabile)
+        and d["change24h"] > 0               # trend 24h positivo
     ]
 
     add_log("info", "SCAN",
