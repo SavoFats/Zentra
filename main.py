@@ -420,7 +420,7 @@ def add_log(state: dict, type_: str, label: str, desc: str):
 
 def unrealized_pnl(state: dict) -> float:
     return sum(
-        (p["currentPrice"] - p["entryPrice"]) / p["entryPrice"] * p["size"]
+        (p["currentPrice"] - p["entryPrice"]) / p["entryPrice"] * p.get("size_remaining", p["size"])
         for p in state["positions"]
     )
 
@@ -735,7 +735,8 @@ def _update_pnl(state: dict):
     if not state["sessionStart"]:
         return
     unr     = unrealized_pnl(state)
-    pos_val = sum(p["size"] for p in state["positions"])
+    # Usa size_remaining (non size) per evitare doppio conteggio dopo TP1 parziale
+    pos_val = sum(p.get("size_remaining", p["size"]) for p in state["positions"])
     total   = state["currentCapital"] + pos_val + unr
     pnl_val = total - state["capital"]
     t       = (datetime.now().timestamp() - state["sessionStart"]) / 60
@@ -908,7 +909,7 @@ async def get_me(user_id: int = Depends(get_current_user)):
 async def get_status(user_id: int = Depends(get_current_user)):
     state = get_session(user_id)
     unr     = unrealized_pnl(state)
-    pos_val = sum(p["size"] for p in state["positions"])
+    pos_val = sum(p.get("size_remaining", p["size"]) for p in state["positions"])
     total   = state["currentCapital"] + pos_val + unr
     pnl     = total - state["capital"]
     pct     = pnl / state["capital"] * 100 if state["capital"] > 0 else 0
@@ -932,10 +933,25 @@ async def get_status(user_id: int = Depends(get_current_user)):
 
 @app.get("/market")
 def get_market():
-    result = sorted(
-        [{"symbol": s, **d} for s, d in market_data.items() if d["price"] > 0],
-        key=lambda x: x["change24h"], reverse=True
-    )
+    items = []
+    for s, d in market_data.items():
+        if d["price"] <= 0:
+            continue
+        item = {"symbol": s, **d}
+        cd = candle_data.get(s)
+        if cd:
+            sig = get_ema_signal(s, d["price"])
+            item["ema"] = {
+                "trend":    sig["trend_ok"],
+                "pullback": sig["pullback_ok"],
+                "volume":   sig["vol_ok"],
+                "stop":     sig["stop_ok"],
+                "signal":   sig["signal"],
+            }
+        else:
+            item["ema"] = None
+        items.append(item)
+    result = sorted(items, key=lambda x: x["change24h"], reverse=True)
     return {"market": result}
 
 @app.get("/trades")
