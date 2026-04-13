@@ -599,7 +599,7 @@ input[type=number]:disabled {
     </div>
     <div class="field">
       <div class="field-label">Volume minimo universe <span id="volVal">$0M</span></div>
-      <input type="range" id="minVolume" min="0" max="500" value="0" step="10"
+      <input type="range" id="minVolume" min="0" max="500" value="0" step="1"
         oninput="document.getElementById('volVal').textContent='$'+this.value+'M'">
       <div class="field-hint">Coin con volume inferiore vengono escluse</div>
     </div>
