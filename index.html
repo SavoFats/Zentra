@@ -56,81 +56,68 @@ body {
   position: fixed; top: 0; left: 0; right: 0;
   height: calc(var(--hdr-h) + var(--safe-t));
   padding-top: var(--safe-t);
-  background: rgba(10,11,13,0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
   padding-left: 20px; padding-right: 16px; z-index: 100;
 }
 .hdr-logo {
-  font-family: var(--sans);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text);
-  display: flex; align-items: center; gap: 8px;
+  font-size: 18px; font-weight: 700; letter-spacing: -0.03em;
+  color: var(--text); display: flex; align-items: center; gap: 8px;
 }
 .hdr-logo-dot {
   width: 8px; height: 8px; border-radius: 50%;
-  background: var(--blue);
-  box-shadow: 0 0 12px var(--blue-glow);
+  background: var(--blue); box-shadow: 0 0 12px var(--blue-glow);
 }
 .hdr-right { display: flex; align-items: center; gap: 8px; }
 .status-pill {
   display: flex; align-items: center; gap: 6px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 5px 10px;
-  font-size: 11px; font-weight: 500; color: var(--text2);
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 5px 10px;
+  font-size: 11px; font-weight: 600; color: var(--text2);
 }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
 .status-dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
 .status-dot.real { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 .stop-btn {
-  width: 36px; height: 36px;
-  background: rgba(246,70,93,0.1);
-  border: 1px solid rgba(246,70,93,0.3);
-  border-radius: 10px;
-  color: var(--red); font-size: 14px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
+  width: 34px; height: 34px;
+  background: rgba(246,70,93,0.08); border: 1px solid rgba(246,70,93,0.25);
+  border-radius: 50%; color: var(--red); font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
 }
-.stop-btn:not(:disabled):hover { background: rgba(246,70,93,0.2); }
-.stop-btn:disabled { opacity: 0.25; cursor: not-allowed; }
-.theme-btn { background: none; border: none; cursor: pointer; font-size: 18px; padding: 4px; opacity: 0.6; }
+.stop-btn:not(:disabled):active { background: rgba(246,70,93,0.18); }
+.stop-btn:disabled { opacity: 0.2; cursor: not-allowed; }
 
 /* ── TABBAR ── */
 .tabbar {
   position: fixed; bottom: 0; left: 0; right: 0;
   height: calc(var(--tab-h) + var(--safe-b));
   padding-bottom: var(--safe-b);
-  background: rgba(10,11,13,0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--bg);
   border-top: 1px solid var(--border);
   display: flex; z-index: 100;
 }
 .tab {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px;
+  align-items: center; justify-content: center; gap: 4px;
   cursor: pointer; border: none; background: none;
-  color: var(--text3); font-size: 10px; font-weight: 500;
-  font-family: var(--sans); transition: color 0.2s;
-  position: relative;
+  color: var(--text3); font-size: 10px; font-weight: 600;
+  font-family: var(--sans); transition: color 0.15s;
+  position: relative; letter-spacing: 0.01em;
 }
 .tab.active { color: var(--blue); }
-.tab-icon { font-size: 22px; line-height: 1; }
-.tab::before {
+.tab-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+.tab-icon svg { width: 22px; height: 22px; stroke-width: 1.8; }
+.tab.active .tab-icon svg { stroke-width: 2.2; }
+.tab::after {
   content: '';
-  position: absolute; top: 0; left: 20%; right: 20%;
-  height: 2px; border-radius: 0 0 2px 2px;
+  position: absolute; bottom: 4px;
+  width: 4px; height: 4px; border-radius: 50%;
   background: var(--blue);
   opacity: 0; transition: opacity 0.2s;
 }
-.tab.active::before { opacity: 1; }
+.tab.active::after { opacity: 1; }
 
 /* ── PAGES ── */
 .pages {
@@ -455,15 +442,15 @@ input[type=number]:disabled {
 
 /* ── LIGHT THEME ── */
 [data-theme="light"] {
-  --bg: #f7f8fa;
-  --surface: #ffffff;
+  --bg: #ffffff;
+  --surface: #f7f8fa;
   --surface2: #f0f2f5;
   --surface3: #e8eaef;
-  --border: #e2e5ee;
+  --border: #ebebeb;
   --border2: #d0d4e0;
   --text: #0a0b0d;
   --text2: #5a6480;
-  --text3: #8a93ae;
+  --text3: #9aa0b2;
 }
 </style>
 </head>
@@ -548,12 +535,18 @@ input[type=number]:disabled {
       <div class="status-dot" id="statusDot"></div>
       <span id="statusLabel">INATTIVO</span>
     </div>
-    <button class="stop-btn" id="stopBtn" onclick="stopAgent()" disabled>&#9632;</button>
+    <button class="stop-btn" id="stopBtn" onclick="stopAgent()" disabled>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="1" y="1" width="10" height="10" rx="2"/></svg>
+    </button>
+    <button id="themeBtn" onclick="toggleTheme()" style="width:34px;height:34px;background:var(--surface2);border:1px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2)">
+      <svg id="themeSvg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
     <div id="userPill" style="display:none;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;">
       <span style="font-size:12px;font-weight:600;color:var(--text)" id="userLabel"></span>
+      <span onclick="logout()" style="cursor:pointer;color:var(--text3);display:flex;align-items:center">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </span>
     </div>
-    <button id="themeBtn" onclick="toggleTheme()" style="background:none;border:1.5px solid var(--blue);border-radius:8px;cursor:pointer;font-size:16px;padding:5px 8px;color:var(--blue);line-height:1">&#9728;</button>
-    <button onclick="logout()" style="background:none;border:1.5px solid var(--blue);border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;padding:5px 10px;color:var(--blue);font-family:var(--sans);letter-spacing:0.02em">Logout</button>
   </div>
 </div>
 
@@ -599,7 +592,7 @@ input[type=number]:disabled {
     </div>
     <div class="field">
       <div class="field-label">Volume minimo universe <span id="volVal">$0M</span></div>
-      <input type="range" id="minVolume" min="0" max="500" value="0" step="10"
+      <input type="range" id="minVolume" min="0" max="500" value="0" step="1"
         oninput="document.getElementById('volVal').textContent='$'+this.value+'M'">
       <div class="field-hint">Coin con volume inferiore vengono escluse</div>
     </div>
@@ -714,19 +707,24 @@ input[type=number]:disabled {
 
 <div class="tabbar">
   <button class="tab active" onclick="showTab('config',this)">
-    <span class="tab-icon">&#9881;</span><span>Config</span>
+    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></span>
+    <span>Config</span>
   </button>
   <button class="tab" onclick="showTab('monitor',this)">
-    <span class="tab-icon">&#128200;</span><span>Monitor</span>
+    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+    <span>Monitor</span>
   </button>
   <button class="tab" onclick="showTab('market',this)">
-    <span class="tab-icon">&#127758;</span><span>Mercato</span>
+    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+    <span>Mercato</span>
   </button>
-  <button class="tab" id="tabLog" onclick="showTab('log',this)" style="position:relative">
-    <span class="tab-icon">&#128203;</span><span>Log</span>
+  <button class="tab" id="tabLog" onclick="showTab('log',this)">
+    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></span>
+    <span>Log</span>
   </button>
-  <button class="tab" id="tabStorico" onclick="showTab('storico',this)" style="position:relative">
-    <span class="tab-icon">&#128202;</span><span>Storico</span>
+  <button class="tab" id="tabStorico" onclick="showTab('storico',this)">
+    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+    <span>Storico</span>
   </button>
 </div>
 
@@ -1035,10 +1033,13 @@ function toggleTheme() {
   const html = document.documentElement;
   const light = html.getAttribute('data-theme') !== 'light';
   html.setAttribute('data-theme', light ? 'light' : '');
-  document.getElementById('themeBtn').innerHTML = light ? '&#9790;' : '&#9728;';
+  const svg = document.getElementById('themeSvg');
+  if (svg) svg.innerHTML = light
+    ? '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
+    : '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
   localStorage.setItem('theme', light ? 'light' : 'dark');
 }
-(function(){ const t=localStorage.getItem('theme'); if(t==='light'){document.documentElement.setAttribute('data-theme','light'); setTimeout(()=>{ const b=document.getElementById('themeBtn'); if(b) b.innerHTML='&#9790;'; },0);} })();
+(function(){ const t=localStorage.getItem('theme'); if(t==='light'){document.documentElement.setAttribute('data-theme','light'); setTimeout(()=>{ const svg=document.getElementById('themeSvg'); if(svg) svg.innerHTML='<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'; },0);} })();
 
 // Default values per reset
 const DEFAULTS = {
@@ -1193,7 +1194,7 @@ async function setMode(real) {
     hint.style.color = 'var(--yellow)';
     capitalInput.disabled = false;
     try {
-      const r = await fetch(API + '/test_coinbase');
+      const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
       const d = await r.json();
       if (d.ok) {
         const usdc = d.balances.find(b => b.currency === 'USDC');
@@ -1258,7 +1259,7 @@ async function startAgent() {
     if (!ok) return;
   }
   try {
-    const r = await fetch(API + '/start', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({config:cfg}) });
+    const r = await fetch(API + '/start', { method:'POST', headers: authHeaders(), body:JSON.stringify({config:cfg}) });
     const d = await r.json();
     if (d.error) { alert(d.error); return; }
     // salva config completa in localStorage per recovery dopo refresh
@@ -1277,7 +1278,7 @@ async function startAgent() {
 }
 
 async function stopAgent() {
-  await fetch(API + '/stop', { method:'POST' });
+  await fetch(API + '/stop', { method:'POST', headers: authHeaders() });
   localStorage.removeItem('ca_session');
   document.getElementById('startBtn').disabled = false;
   document.getElementById('stopBtn').disabled = true;
@@ -1302,7 +1303,7 @@ function startPolling() {
 
 async function poll() {
   try {
-    const [sRes, tRes] = await Promise.all([fetch(API + '/status'), fetch(API + '/trades')]);
+    const [sRes, tRes] = await Promise.all([fetch(API + '/status', { headers: authHeaders() }), fetch(API + '/trades', { headers: authHeaders() })]);
     S = await sRes.json();
     window._lastStatus = S;
     const td = await tRes.json();
@@ -1323,7 +1324,7 @@ async function poll() {
 async function startupSession() {
   restoreConfigFromStorage();
   try {
-    const r = await fetch(API + '/status');
+    const r = await fetch(API + '/status', { headers: authHeaders() });
     const d = await r.json();
     if (d.running) {
       S = d;
@@ -1466,7 +1467,7 @@ function renderPositions() {
 
 async function closePosition(symbol) {
   if (!confirm('Chiudere la posizione su ' + symbol + '?')) return;
-  await fetch(API + '/close_position/' + symbol, { method:'POST' });
+  await fetch(API + '/close_position/' + symbol, { method:'POST', headers: authHeaders() });
 }
 
 function renderStorico() {
