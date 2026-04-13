@@ -832,6 +832,10 @@ async def chat(body: dict):
 def health():
     return {"status": "ok", "coinbase": any(d["price"] > 0 for d in market_data.values())}
 
+@app.get("/debug_token")
+async def debug_token(user_id: int = Depends(get_current_user)):
+    return {"user_id": user_id, "secret_preview": SECRET_KEY[:10], "sessions": list(user_sessions.keys())}
+
 @app.get("/test_coinbase")
 async def test_coinbase(user_id: int = Depends(get_current_user)):
     cb_key, cb_secret = _ENV_CB_KEY, _ENV_CB_SECRET
