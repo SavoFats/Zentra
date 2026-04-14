@@ -501,10 +501,20 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <!-- Avvia sessione -->
-    <button class="home-start-btn" onclick="openDrawer()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:8px;vertical-align:middle"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      Avvia sessione
-    </button>
+    <div style="display:flex;justify-content:center;margin-top:16px">
+      <button onclick="openDrawer()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,82,255,0.25);transition:all 0.15s;letter-spacing:-0.01em">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Avvia sessione
+      </button>
+    </div>
+    <!-- Widget sessione in corso -->
+    <div class="card" id="homeSessionWidget" style="margin-top:12px">
+      <div class="card-label" style="margin-bottom:10px">Sessione in corso</div>
+      <div id="homeSessionContent">
+        <div class="empty" style="padding:16px 0"><div class="empty-text" style="color:var(--text3)">Nessuna sessione attiva</div></div>
+      </div>
+    </div>
+
     <div style="height:8px"></div>
   </div>
 
@@ -1631,6 +1641,40 @@ function render() {
   }
 
   if (document.getElementById('page-transazioni').classList.contains('active')) renderStorico();
+  renderHomeSession();
+}
+
+function renderHomeSession() {
+  const widget = document.getElementById('homeSessionWidget');
+  const cnt = document.getElementById('homeSessionContent');
+  if (!widget || !cnt) return;
+  if (!S.running) { widget.style.display = 'none'; return; }
+  widget.style.display = 'block';
+  const pos = S.positions || [];
+  if (pos.length === 0) {
+    cnt.innerHTML = '<div style="text-align:center;padding:16px 0;font-size:13px;color:var(--text3);font-weight:500">Scan mercato in corso</div>';
+    return;
+  }
+  cnt.innerHTML = pos.map(p => {
+    const pnl = (p.currentPrice - p.entryPrice) / p.entryPrice * (p.size_remaining || p.size);
+    const pct = (p.currentPrice - p.entryPrice) / p.entryPrice * 100;
+    const isPos = pnl >= 0;
+    const color = isPos ? 'var(--green)' : 'var(--red)';
+    const logo = getLogo(p.symbol);
+    const img = logo ? `<img src="${logo}" style="width:30px;height:30px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${p.symbol[0]}</div>`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">${img}
+        <div>
+          <div style="font-size:14px;font-weight:700">${p.symbol}</div>
+          <div style="font-size:11px;color:var(--text3)">$${p.currentPrice.toFixed(4)}</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}$${pnl.toFixed(2)}</div>
+        <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderPositions() {
@@ -2208,32 +2252,37 @@ function renderMarketStars() {
 
 // ── DRAWER CONFIG ─────────────────────────────────────────────────────────────
 function openDrawer() {
-  // Popola il drawer con il contenuto della config
-  const cfg = document.getElementById('page-config');
-  const drawer = document.getElementById('drawerContent');
-  // Clona il contenuto della config page nel drawer
-  drawer.innerHTML = cfg.innerHTML;
-  // Fix IDs duplicati - prefissa con 'd_'
-  drawer.querySelectorAll('[id]').forEach(el => {
-    const oldId = el.id;
-    el.id = 'd_' + oldId;
-    // Aggiorna riferimenti oninput
-    ['oninput', 'onclick', 'onchange'].forEach(ev => {
-      if (el.getAttribute(ev)) {
-        el.setAttribute(ev, el.getAttribute(ev).replace(/getElementById\('([^']+)'\)/g, (m, id) => `getElementById('d_${id}')`));
-      }
-    });
-  });
-  // Rimuovi ptr-indicator se copiato
-  drawer.querySelectorAll('.ptr-indicator').forEach(e => e.remove());
+  const drawerContent = document.getElementById('drawerConfigContent');
+  const configPage = document.getElementById('page-config');
+  // Sposta page-config nel drawer se non è già lì
+  if (configPage && configPage.parentNode !== drawerContent) {
+    drawerContent.appendChild(configPage);
+    configPage.style.position = 'relative';
+    configPage.style.inset = 'auto';
+    configPage.style.overflow = 'visible';
+    configPage.style.padding = '0';
+  }
   document.getElementById('drawerOverlay').classList.add('open');
   document.getElementById('configDrawer').classList.add('open');
+  loadHomeBalance();
 }
 
 function closeDrawer() {
   document.getElementById('drawerOverlay').classList.remove('open');
   document.getElementById('configDrawer').classList.remove('open');
+  // Rimetti page-config nelle pages
+  const configPage = document.getElementById('page-config');
+  const pages = document.querySelector('.pages');
+  if (configPage && pages && configPage.parentNode !== pages) {
+    pages.appendChild(configPage);
+    configPage.style.position = '';
+    configPage.style.inset = '';
+    configPage.style.overflow = '';
+    configPage.style.padding = '';
+  }
 }
+
+
 
 async function refreshMarket() {
   try {
