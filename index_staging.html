@@ -1477,7 +1477,7 @@ function renderMarket() {
   list.innerHTML = data.map(c => {
     const chg24=c.change24h||0, chg1h=c.change1h||0, vol=c.volume24h||0;
     const c24=chg24>=0?'var(--green)':'var(--red)'; const c1h=chg1h>=0?'var(--green)':'var(--red)';
-    const isOpen=(window._lastStatus?.positions||[]).some(p=>p.symbol===c.symbol);
+    const isOpen = S.running && (S.positions||[]).some(p=>p.symbol===c.symbol);
     const bg24=chg24>=0?'rgba(5,193,104,0.12)':'rgba(246,70,93,0.12)';
     const fullName=getCoinName(c.symbol);
     const ema = c.ema;
