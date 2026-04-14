@@ -21,18 +21,16 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 SECRET_KEY = os.environ.get("SECRET_KEY", "crypto-agent-secret-key-change-in-prod")
 
-# Database pool
 db_pool = None
 
 async def get_db():
     return db_pool
 
-# Auth
 security = HTTPBearer()
 
 def create_token(user_id: int) -> str:
     import base64
-    payload = f"{user_id}:{int(time.time()) + 86400 * 30}"  # 30 giorni
+    payload = f"{user_id}:{int(time.time()) + 86400 * 30}"
     return base64.urlsafe_b64encode(f"{payload}:{hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:16]}".encode()).decode()
 
 def verify_token(token: str) -> int:
@@ -54,7 +52,6 @@ def verify_token(token: str) -> int:
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     return verify_token(credentials.credentials)
 
-# Pydantic models
 class RegisterRequest(BaseModel):
     username: str
     password: str
@@ -70,7 +67,6 @@ class ApiKeyRequest(BaseModel):
 BINANCE_BASE = "https://api.binance.com"
 COINBASE_BASE = "https://api.coinbase.com"
 
-# Credenziali Coinbase da variabili d'ambiente
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
@@ -86,7 +82,6 @@ async def send_telegram(msg: str):
     except Exception as e:
         print(f"Telegram error: {e}")
 
-# Fallback env vars (compatibilita con setup precedente)
 _ENV_CB_KEY    = os.environ.get("CB_KEY", "")
 _ENV_CB_SECRET = os.environ.get("CB_SECRET", "")
 
@@ -122,119 +117,213 @@ async def coinbase_request(method: str, path: str, body: dict = None,
             r = await client.post(f"{COINBASE_BASE}{path}", headers=headers, json=body)
     return r.json()
 
-# universe dinamico — popolato da fetch_prices()
-market_data = {}  # sym -> {price, change1h, change24h, volume24h, priceHistory, icon}
+# ── market data ───────────────────────────────────────────────────────────────
 
-# Sessioni multi-utente: user_id -> state dict
+market_data = {}  # sym -> {price, change1h, change24h, volume24h, priceHistory, icon}
 user_sessions: dict = {}
 
-def make_session() -> dict:
+# ── CANDLE DATA (nuovo) ───────────────────────────────────────────────────────
+# sym -> {
+#   "ema20_5m": float, "ema50_5m": float,
+#   "ema20_15m": float, "ema50_15m": float,
+#   "last_close_5m": float,
+#   "updated_at": float (timestamp)
+# }
+candle_data: dict = {}
+_candles_last_update: float = 0
+CANDLE_UPDATE_INTERVAL = 300  # secondi (5 minuti)
+CANDLE_UNIVERSE_SIZE   = 40   # top N coin per volume
+
+def calc_ema(prices: list, period: int) -> float:
+    """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
+    if len(prices) < period:
+        return 0.0
+    k = 2 / (period + 1)
+    ema = sum(prices[:period]) / period  # SMA iniziale
+    for price in prices[period:]:
+        ema = price * k + ema * (1 - k)
+    return ema
+
+async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict | None:
+    """Scarica candele 5min e 15min da Binance e calcola EMA20/50."""
+    pair = f"{sym}USDT"
+    try:
+        r5 = await client.get(
+            f"{BINANCE_BASE}/api/v3/klines",
+            params={"symbol": pair, "interval": "5m", "limit": 60}
+        )
+        r15 = await client.get(
+            f"{BINANCE_BASE}/api/v3/klines",
+            params={"symbol": pair, "interval": "15m", "limit": 60}
+        )
+        if r5.status_code != 200 or r15.status_code != 200:
+            return None
+
+        klines5  = r5.json()
+        klines15 = r15.json()
+
+        if not isinstance(klines5, list) or not isinstance(klines15, list):
+            return None
+        if len(klines5) < 50 or len(klines15) < 50:
+            return None
+
+        closes5  = [float(k[4]) for k in klines5]
+        closes15 = [float(k[4]) for k in klines15]
+        volumes5 = [float(k[5]) for k in klines5]
+        lows5    = [float(k[3]) for k in klines5]
+
+        # ATR 5m: media True Range sugli ultimi 14 periodi
+        trs = []
+        for i in range(1, len(klines5)):
+            h = float(klines5[i][2])
+            l = float(klines5[i][3])
+            pc = float(klines5[i-1][4])
+            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        atr_5m = sum(trs[-14:]) / 14 if len(trs) >= 14 else 0.0
+
+        # Minimo delle ultime 3 candele 5m (per stop contestuale)
+        pullback_low_5m = min(lows5[-3:]) if len(lows5) >= 3 else lows5[-1]
+
+        # Volume medio ultime 20 candele 5m
+        vol_avg_20 = sum(volumes5[-20:]) / 20 if len(volumes5) >= 20 else 0.0
+        vol_last   = volumes5[-1]
+
+        return {
+            "ema20_5m":         calc_ema(closes5,  20),
+            "ema50_5m":         calc_ema(closes5,  50),
+            "ema20_15m":        calc_ema(closes15, 20),
+            "ema50_15m":        calc_ema(closes15, 50),
+            "last_close_5m":    closes5[-1],
+            "atr_5m":           atr_5m,
+            "pullback_low_5m":  pullback_low_5m,
+            "vol_avg_20":       vol_avg_20,
+            "vol_last":         vol_last,
+            "updated_at":       time.time(),
+        }
+    except Exception as e:
+        print(f"Candle error {sym}: {e}")
+        return None
+
+async def fetch_all_candles():
+    """Aggiorna candle_data per le top CANDLE_UNIVERSE_SIZE coin per volume."""
+    global _candles_last_update
+
+    # Seleziona top coin per volume tra quelle con prezzo noto
+    universe = sorted(
+        [(sym, d) for sym, d in market_data.items() if d["price"] > 0],
+        key=lambda x: x[1].get("volume24h", 0),
+        reverse=True
+    )[:CANDLE_UNIVERSE_SIZE]
+
+    if not universe:
+        return
+
+    syms = [sym for sym, _ in universe]
+    print(f"Aggiornamento candele per {len(syms)} coin...")
+
+    # Fetch parallelo con un unico client (rispetta rate limit Binance)
+    async with httpx.AsyncClient(timeout=15) as client:
+        tasks = [fetch_candles_for_symbol(sym, client) for sym in syms]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    updated = 0
+    for sym, result in zip(syms, results):
+        if result and not isinstance(result, Exception):
+            candle_data[sym] = result
+            updated += 1
+
+    _candles_last_update = time.time()
+    print(f"Candele aggiornate: {updated}/{len(syms)}")
+
+def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0.015,
+                   vol_multiplier: float = 1.2, max_stop_pct: float = 0.025) -> dict:
+    """
+    Analizza il segnale EMA + volume per una coin.
+    Restituisce segnale, stop price contestuale e R (rischio per unità).
+    """
+    cd = candle_data.get(sym)
+    if not cd:
+        return {"signal": False, "reason": "no candle data", "stop_price": 0.0, "R": 0.0}
+
+    ema20_15m       = cd["ema20_15m"]
+    ema50_15m       = cd["ema50_15m"]
+    ema20_5m        = cd["ema20_5m"]
+    last_close_5m   = cd["last_close_5m"]
+    atr_5m          = cd["atr_5m"]
+    pullback_low_5m = cd["pullback_low_5m"]
+    vol_avg_20      = cd["vol_avg_20"]
+    vol_last        = cd["vol_last"]
+
+    # 1. Trend rialzista su 15min
+    trend_ok = ema20_15m > ema50_15m
+
+    # 2. Prezzo vicino a EMA20 su 5min (pullback)
+    dist_from_ema20 = abs(current_price - ema20_5m) / ema20_5m
+    pullback_ok = dist_from_ema20 <= pullback_tolerance
+
+    # 3. Ultima candela 5min chiusa sopra EMA20 (rimbalzo)
+    bounce_ok = last_close_5m > ema20_5m
+
+    # 4. Volume candela corrente >= media * coefficiente
+    vol_ok = (vol_avg_20 > 0) and (vol_last >= vol_avg_20 * vol_multiplier)
+
+    # Stop contestuale: il più basso tra minimo pullback e entry - 1xATR
+    # (calcolato su current_price come proxy entry)
+    stop_from_low = pullback_low_5m
+    stop_from_atr = current_price - atr_5m if atr_5m > 0 else 0.0
+    stop_price    = min(stop_from_low, stop_from_atr) if stop_from_atr > 0 else stop_from_low
+
+    # R = distanza percentuale entry → stop
+    R = (current_price - stop_price) / current_price if stop_price > 0 else 0.0
+
+    # Se stop troppo largo rispetto al limite configurato → no trade
+    stop_ok = 0 < R <= max_stop_pct
+
+    signal = trend_ok and pullback_ok and bounce_ok and vol_ok and stop_ok
+
+    if not trend_ok:
+        reason = f"no trend (EMA20 15m {ema20_15m:.4f} < EMA50 15m {ema50_15m:.4f})"
+    elif not pullback_ok:
+        reason = f"no pullback (dist EMA20: {dist_from_ema20*100:.1f}% > {pullback_tolerance*100:.1f}%)"
+    elif not bounce_ok:
+        reason = f"no rimbalzo (close 5m {last_close_5m:.4f} < EMA20 {ema20_5m:.4f})"
+    elif not vol_ok:
+        ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
+        reason = f"volume basso ({ratio:.1f}x media, richiesto {vol_multiplier}x)"
+    elif not stop_ok:
+        reason = f"stop troppo largo ({R*100:.1f}% > {max_stop_pct*100:.1f}%)" if R > 0 else "stop non calcolabile"
+    else:
+        reason = (f"OK | EMA20/50 15m: {ema20_15m:.4f}/{ema50_15m:.4f} | "
+                  f"dist EMA20: {dist_from_ema20*100:.2f}% | "
+                  f"vol: {vol_last/vol_avg_20:.1f}x | R: {R*100:.2f}%")
+
     return {
-        "running": False, "capital": 0.0, "currentCapital": 0.0,
-        "positions": [], "pnlHistory": [], "sessionStart": None,
-        "sessionDuration": 0, "config": {}, "cooldowns": {},
-        "tradeCount": 0, "wins": 0, "trades": [], "log": [],
-        "cb_key": "", "cb_secret": "",
+        "signal":      signal,
+        "reason":      reason,
+        "stop_price":  round(stop_price, 8),
+        "R":           round(R, 6),
+        "trend_ok":    trend_ok,
+        "pullback_ok": pullback_ok,
+        "bounce_ok":   bounce_ok,
+        "vol_ok":      vol_ok,
+        "stop_ok":     stop_ok,
     }
 
-def get_session(user_id: int) -> dict:
-    if user_id not in user_sessions:
-        user_sessions[user_id] = make_session()
-    return user_sessions[user_id]
-
-# ── helpers ──────────────────────────────────────────────────────────────────
-
-def add_log(state: dict, type_: str, label: str, desc: str):
-    state["log"].insert(0, {
-        "type": type_, "label": label, "desc": desc,
-        "time": datetime.now().strftime("%H:%M:%S")
-    })
-    if len(state["log"]) > 200:
-        state["log"].pop()
-
-def unrealized_pnl(state: dict) -> float:
-    return sum(
-        (p["currentPrice"] - p["entryPrice"]) / p["entryPrice"] * p["size"]
-        for p in state["positions"]
-    )
-
-# ── coinbase ─────────────────────────────────────────────────────────────────
+# ── rest of market data ───────────────────────────────────────────────────────
 
 STABLES = {'USDT','USDC','BUSD','DAI','FDUSD','TUSD','USDP','GUSD','FRAX',
            'LUSD','SUSD','EUR','GBP','USD','USDD','USTC','PAX','CBBTC','WBTC'}
 
-# Coin con logo verificato — fallback finche non troviamo campo logo Coinbase
-LOGO_APPROVED = {
-    'BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOT','LINK','MATIC','UNI','NEAR',
-    'INJ','APT','ARB','OP','ATOM','DOGE','SHIB','LTC','TON','TRX','HBAR','VET',
-    'FIL','ALGO','ETC','AAVE','GRT','MKR','SNX','CRV','LDO','RUNE','FTM','ENJ',
-    'ENA','RENDER','RNDR','JUP','PYTH','SUI','SEI','TAO','WLD','PEPE','FLOKI',
-    'BONK','WIF','RAVE','CTSI','IOTX','NKN','DRIFT','XLM','SAND','MANA','AXS',
-    'CHZ','EGLD','THETA','ZEC','BAT','ZRX','COMP','YFI','SUSHI','SKL','ANKR',
-    'STORJ','OGN','RLC','LOOM','1INCH','ICP','FET','OCEAN','IMX','GRT','BLUR',
-    'ENS','TIA','DYDX','LRC','FLOW','MINA','APE','GALA','YFI','QNT','EGLD',
-}
-
-# Cache prodotti Coinbase — aggiornata ogni ora
-# sym -> {price, change24h, volume24h, logo_url}
 _coinbase_products: dict = {}
 _products_last_update: float = 0
-
-async def refresh_coinbase_products():
-    """Scarica lista prodotti, prezzi e loghi da Coinbase Advanced API"""
-    global _coinbase_products, _products_last_update
-    try:
-        result = await coinbase_request("GET", "/api/v3/brokerage/market/products?product_type=SPOT&limit=500")
-        products = result.get("products", [])
-        new_products = {}
-        for p in products:
-            if p.get("quote_currency_id") not in ("USD", "USDC"):
-                continue
-            if p.get("status") != "online":
-                continue
-            sym = p.get("base_currency_id", "")
-            if not sym or not sym.isascii() or not sym.isalpha():
-                continue
-            if sym in STABLES:
-                continue
-            try:
-                price = float(p.get("price", 0) or 0)
-                change24h = float(p.get("price_percentage_change_24h", 0) or 0)
-                vol = float(p.get("volume_24h", 0) or 0) * price
-                # logo direttamente da Coinbase
-                logo_url = p.get("base_currency_details", {}).get("image_url", "") or ""
-                # fallback: prova altri campi dove Coinbase potrebbe mettere il logo
-                if not logo_url:
-                    logo_url = p.get("base_asset_image", "") or p.get("image_url", "") or ""
-            except:
-                continue
-            if price <= 0:
-                continue
-            # debug: stampa struttura primo prodotto
-            if sym == "BTC":
-                btc_details = p.get("base_currency_details", {})
-                print(f"DEBUG BTC all keys: {list(p.keys())}")
-                print(f"DEBUG BTC base_currency_details: {btc_details}")
-            if not logo_url:
-                continue
-            new_products[sym] = {"price": price, "change24h": change24h, "volume24h": vol, "logo_url": logo_url}
-        if new_products:
-            _coinbase_products = new_products
-            _products_last_update = time.time()
-            print(f"Coinbase products aggiornati: {len(_coinbase_products)} coin")
-    except Exception as e:
-        print(f"Products refresh error: {e}")
 
 async def fetch_prices():
     global _products_last_update
     try:
-        # API pubblica Coinbase Exchange — no autenticazione necessaria
         async with httpx.AsyncClient(timeout=15) as client:
-            # Ticker 24h per tutti i prodotti USD
             r = await client.get("https://api.exchange.coinbase.com/products")
             all_products = r.json()
 
-        # Filtra solo prodotti USD online
         usd_syms = {}
         for p in all_products:
             if not isinstance(p, dict): continue
@@ -243,17 +332,12 @@ async def fetch_prices():
             sym = p.get("base_currency", "")
             if not sym or not sym.isascii() or not sym.isalpha(): continue
             if sym in STABLES: continue
-            usd_syms[p["id"]] = sym  # es. "BTC-USD" -> "BTC"
+            usd_syms[p["id"]] = sym
 
-        # Fetch stats 24h per tutti i prodotti in una chiamata
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get("https://api.exchange.coinbase.com/products/stats")
-            # questo endpoint non esiste — usiamo ticker individuale via batch
-            # invece usiamo Binance per i dati 24h ma filtriamo per coin Coinbase
             r2 = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
             tickers = r2.json()
 
-        # Mappa Binance ticker filtrato per coin Coinbase
         binance_map = {}
         for t in tickers:
             pair = t.get("symbol","")
@@ -275,7 +359,6 @@ async def fetch_prices():
                 continue
             if price <= 0: continue
 
-            # aggiorna cache prodotti (logo vuoto per ora, gestito dal frontend)
             _coinbase_products[sym] = {"price": price, "change24h": change24h, "volume24h": vol_usd, "logo_url": ""}
 
             if sym not in market_data:
@@ -284,19 +367,16 @@ async def fetch_prices():
                     "volume24h": 0.0, "priceHistory": [], "icon": sym[0]
                 }
 
-            # change1h: usa priceHistory se ha >= 10 campioni (80+ secondi)
-            # altrimenti stima proporzionale dal 24h
             hist = market_data[sym]["priceHistory"]
             hist.append(price)
-            if len(hist) > 450:  # 450 * 8s = 1 ora esatta
+            if len(hist) > 450:
                 hist.pop(0)
 
             if len(hist) >= 10:
-                # prezzo di ~1 ora fa (o il piu vecchio disponibile)
                 price_1h_ago = hist[0]
                 change1h = (price - price_1h_ago) / price_1h_ago * 100
             else:
-                change1h = change24h * 0.04  # stima conservativa
+                change1h = change24h * 0.04
 
             market_data[sym]["price"] = price
             market_data[sym]["change1h"] = change1h
@@ -313,27 +393,36 @@ async def fetch_prices():
     except Exception as e:
         print(f"Fetch error: {e}")
 
+# ── session ───────────────────────────────────────────────────────────────────
 
-async def fetch_atr_1h(symbol_usdt: str, periods: int = 14):
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            res = await client.get(
-                f"{BINANCE_BASE}/api/v3/klines",
-                params={"symbol": symbol_usdt, "interval": "1h", "limit": periods + 1}
-            )
-            klines = res.json()
-            if len(klines) < periods + 1:
-                return None
-            trs = []
-            for i in range(1, len(klines)):
-                high = float(klines[i][2])
-                low  = float(klines[i][3])
-                prev = float(klines[i-1][4])
-                trs.append(max(high - low, abs(high - prev), abs(low - prev)))
-            return sum(trs[-periods:]) / periods
-    except Exception as e:
-        print(f"ATR error: {e}")
-        return None
+def make_session() -> dict:
+    return {
+        "running": False, "capital": 0.0, "currentCapital": 0.0,
+        "positions": [], "pnlHistory": [], "sessionStart": None,
+        "sessionDuration": 0, "config": {}, "cooldowns": {},
+        "tradeCount": 0, "wins": 0, "trades": [], "log": [],
+        "cb_key": "", "cb_secret": "",
+        "consecutiveLosses": 0,
+    }
+
+def get_session(user_id: int) -> dict:
+    if user_id not in user_sessions:
+        user_sessions[user_id] = make_session()
+    return user_sessions[user_id]
+
+def add_log(state: dict, type_: str, label: str, desc: str):
+    state["log"].insert(0, {
+        "type": type_, "label": label, "desc": desc,
+        "ts": int(time.time() * 1000)
+    })
+    if len(state["log"]) > 200:
+        state["log"].pop()
+
+def unrealized_pnl(state: dict) -> float:
+    return sum(
+        (p["currentPrice"] - p["entryPrice"]) / p["entryPrice"] * p.get("size_remaining", p["size"])
+        for p in state["positions"]
+    )
 
 # ── trading ───────────────────────────────────────────────────────────────────
 
@@ -349,7 +438,18 @@ async def enter_position(state: dict, sym_data: dict):
     if size < 1:
         return
 
-    sl_pct = cfg.get("stopLoss", 0.03)
+    # Stop price: dalla funzione EMA signal (contestuale ATR/low)
+    # Fallback: stop fisso da config
+    stop_price = sym_data.get("stop_price", 0.0)
+    if stop_price <= 0 or stop_price >= price:
+        fallback_sl = cfg.get("stopLoss", 0.01)
+        stop_price  = price * (1 - fallback_sl)
+
+    R_pct = (price - stop_price) / price  # rischio in % per questa posizione
+
+    # TP1 = entry + 1R, TP2 = entry + 1.5R
+    tp1_price = price * (1 + R_pct)
+    tp2_price = price * (1 + R_pct * 1.5)
 
     if is_real:
         cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
@@ -365,37 +465,67 @@ async def enter_position(state: dict, sym_data: dict):
             if result.get("success") != True:
                 err = result.get("error_response", {})
                 err_msg = err.get("message", str(result))
+                err_str = str(result).lower()
                 add_log(state, "info", "ERRORE", f"Ordine {sym} fallito: {err_msg}")
-                if "account is not available" in str(result) or "not available" in err_msg:
+                # Cooldown automatico per errori che indicano coin non tradabile temporaneamente
+                if any(x in err_str for x in ["not available", "cancel only", "permission_denied", "orderbook", "suspended"]):
                     state["cooldowns"][sym] = (datetime.now().timestamp() + 3600) * 1000
-                    add_log(state, "info", "ESCLUSA", f"{sym} non disponibile — esclusa per 1h")
+                    add_log(state, "info", "ESCLUSA", f"{sym} esclusa per 1h — {err_msg[:60]}")
                 return
-            filled = result.get("success_response", {})
+            filled      = result.get("success_response", {})
             actual_price = float(filled.get("average_filled_price", price)) or price
-            add_log(state, "buy", "ACQUISTO REALE", f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | SL: {sl_pct*100:.1f}% | Trailing ON")
-            await send_telegram("ACQUISTO REALE\n" + sym + " @ $" + f"{actual_price:.4f}" + "\nSize: $" + f"{size:.2f}")
+            # Ricalcola stop e TP sull'actual price
+            stop_price  = actual_price * (1 - R_pct)
+            tp1_price   = actual_price * (1 + R_pct)
+            tp2_price   = actual_price * (1 + R_pct * 1.5)
+            add_log(state, "buy", "ACQUISTO REALE",
+                f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | "
+                f"SL: ${stop_price:.4f} | TP1: ${tp1_price:.4f} | TP2: ${tp2_price:.4f} | R: {R_pct*100:.2f}%")
+            await send_telegram(
+                "ACQUISTO REALE\n" + sym + " @ $" + f"{actual_price:.4f}" +
+                "\nSize: $" + f"{size:.2f}" +
+                "\nSL: $" + f"{stop_price:.4f}" +
+                "\nTP1: $" + f"{tp1_price:.4f}" + " | TP2: $" + f"{tp2_price:.4f}"
+            )
         except Exception as e:
             add_log(state, "info", "ERRORE", f"Coinbase error: {e}")
             return
     else:
         actual_price = price
-        add_log(state, "buy", "ACQUISTO SIM", f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | SL: {sl_pct*100:.1f}% | Trailing ON")
+        add_log(state, "buy", "ACQUISTO SIM",
+            f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | "
+            f"SL: ${stop_price:.4f} | TP1: ${tp1_price:.4f} | TP2: ${tp2_price:.4f} | R: {R_pct*100:.2f}%")
 
     state["currentCapital"] -= size
     pos = {
-        "symbol": sym, "icon": sym_data["icon"],
-        "entryPrice": actual_price, "currentPrice": actual_price,
-        "highPrice": actual_price, "size": size,
-        "entryTime": datetime.now().isoformat(),
-        "stopPrice": actual_price * (1 - sl_pct),
-        "realMode": is_real,
+        "symbol":      sym,
+        "icon":        sym_data["icon"],
+        "entryPrice":  actual_price,
+        "currentPrice": actual_price,
+        "highPrice":   actual_price,
+        "size":        size,
+        "size_remaining": size,        # per TP parziale
+        "tp1_hit":     False,          # TP1 già raggiunto?
+        "entryTime":   datetime.now().isoformat(),
+        "stopPrice":   stop_price,
+        "tp1Price":    tp1_price,
+        "tp2Price":    tp2_price,
+        "R_pct":       R_pct,
+        "realMode":    is_real,
     }
     state["positions"].append(pos)
 
-async def exit_position(state: dict, pos: dict, reason: str):
+async def exit_position(state: dict, pos: dict, reason: str, partial: bool = False):
+    """
+    Se partial=True: chiude il 50% della posizione (TP1).
+    Se partial=False: chiude tutto.
+    """
     cur  = pos["currentPrice"]
     sym  = pos["symbol"]
     dur  = (datetime.now() - datetime.fromisoformat(pos["entryTime"])).total_seconds() / 60
+
+    # Dimensione effettiva da chiudere
+    close_size = pos["size_remaining"] * 0.5 if partial else pos["size_remaining"]
 
     if pos.get("realMode", False):
         cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
@@ -407,13 +537,15 @@ async def exit_position(state: dict, pos: dict, reason: str):
                 if acc["currency"] == sym:
                     real_qty = float(acc["available_balance"]["value"])
                     break
-            if real_qty <= 0:
+            # In caso parziale vendiamo metà qty, arrotondata
+            qty_to_sell = round(real_qty * 0.5, 8) if partial else round(real_qty, 8)
+            if qty_to_sell <= 0:
                 add_log(state, "info", "ERRORE", f"Saldo {sym}: {real_qty} — vendita annullata")
             else:
                 body = {
                     "client_order_id": f"ca-exit-{sym}-{int(time.time())}",
                     "product_id": f"{sym}-USDC", "side": "SELL",
-                    "order_configuration": {"market_market_ioc": {"base_size": str(round(real_qty, 8))}}
+                    "order_configuration": {"market_market_ioc": {"base_size": str(qty_to_sell)}}
                 }
                 result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
                 if result.get("success") != True:
@@ -421,17 +553,38 @@ async def exit_position(state: dict, pos: dict, reason: str):
                 else:
                     filled = result.get("success_response", {})
                     cur = float(filled.get("average_filled_price", cur)) or cur
-                    add_log(state, "info", "VENDUTO", f"{sym} qty: {real_qty:.6f} @ ${cur:.4f}")
+                    add_log(state, "info", "VENDUTO", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f}")
         except Exception as e:
             add_log(state, "info", "ERRORE", f"Coinbase exit error: {e}")
 
-    pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * pos["size"]
+    pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
 
-    state["currentCapital"] += pos["size"] + pnl
+    if partial:
+        # TP1: restituisce metà capitale, aggiorna size_remaining, sposta stop a breakeven
+        state["currentCapital"] += close_size + pnl
+        pos["size_remaining"] -= close_size
+        pos["stopPrice"]       = pos["entryPrice"]  # breakeven
+        pos["tp1_hit"]         = True
+        mode = "REALE" if pos.get("realMode") else "SIM"
+        add_log(state, "sell", f"TP1 {mode}",
+            f"{sym} 50% @ ${cur:.4f} | +{pnl:.2f}$ ({pct:+.2f}%) | stop → breakeven")
+        if pos.get("realMode"):
+            await send_telegram(
+                "TP1 REALE\n" + sym + " 50% @ $" + f"{cur:.4f}" +
+                "\nP&L parziale: +" + f"{pnl:.2f}" + "$\nStop spostato a breakeven"
+            )
+        return  # posizione resta aperta per TP2
+
+    # Chiusura totale
+    # Usa size originale per il PnL finale (già parte è stata realizzata a TP1)
+    state["currentCapital"] += pos["size_remaining"] + pnl
     state["tradeCount"] += 1
     if pnl > 0:
         state["wins"] += 1
+        state["consecutiveLosses"] = 0
+    else:
+        state["consecutiveLosses"] = state.get("consecutiveLosses", 0) + 1
 
     cfg = state["config"]
     state["cooldowns"][sym] = (datetime.now().timestamp() + cfg.get("cooldown", 1) * 3600) * 1000
@@ -441,14 +594,25 @@ async def exit_position(state: dict, pos: dict, reason: str):
         "pnl": pnl, "pct": pct, "time": datetime.now().isoformat(),
         "entryTime": pos["entryTime"], "durationMin": round(dur, 1),
         "size": pos["size"], "realMode": pos.get("realMode", False),
+        "tp1_hit": pos.get("tp1_hit", False),
     })
     state["positions"] = [p for p in state["positions"] if p is not pos]
     mode = "REALE" if pos.get("realMode") else "SIM"
-    add_log(state, "sell", f"{reason} {mode}", f"{sym} @ ${cur:.4f} | {pnl:+.2f}$ ({pct:+.2f}%) | {dur:.0f} min")
+    add_log(state, "sell", f"{reason} {mode}",
+        f"{sym} @ ${cur:.4f} | {pnl:+.2f}$ ({pct:+.2f}%) | {dur:.0f} min")
     if pos.get("realMode"):
         esito = "PROFITTO" if pnl >= 0 else "PERDITA"
-        msg = "VENDITA REALE - " + esito + "\n" + sym + " @ $" + f"{cur:.4f}" + "\nP&L: " + f"{pnl:+.2f}" + "$"
+        msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ $" + f"{cur:.4f}" +
+               "\nP&L: " + f"{pnl:+.2f}" + "$")
         await send_telegram(msg)
+
+    # Controllo stop automatico per perdite consecutive
+    max_losses = cfg.get("maxConsecutiveLosses", 0)
+    if max_losses > 0 and state.get("consecutiveLosses", 0) >= max_losses:
+        state["running"] = False
+        add_log(state, "info", "STOP AUTO",
+            f"{max_losses} perdite consecutive — sessione fermata automaticamente")
+        await send_telegram(f"STOP AUTO: {max_losses} perdite consecutive")
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 
@@ -465,72 +629,116 @@ async def scan_and_trade(state: dict):
         add_log(state, "info", "FINE SESSIONE", "Durata massima raggiunta.")
         return
 
+    # Controllo maxTrades
+    max_trades = cfg.get("maxTrades", 0)
+    if max_trades > 0 and state["tradeCount"] >= max_trades:
+        if state["positions"]:
+            pass  # aspetta che le posizioni aperte si chiudano
+        else:
+            state["running"] = False
+            add_log(state, "info", "STOP AUTO", f"Raggiunto limite di {max_trades} trade — sessione fermata")
+            return
+
+    # Gestione posizioni aperte: TP1, TP2, stop loss
     for pos in list(state["positions"]):
-        cur = pos["currentPrice"]
+        cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
-        profit_pct = (cur - entry) / entry * 100
+
         if cur > pos.get("highPrice", cur):
             pos["highPrice"] = cur
-        high = pos["highPrice"]
-        if profit_pct >= 5.0:
-            new_stop = high * 0.99
-        elif profit_pct >= 3.0:
-            new_stop = high * 0.985
-        elif profit_pct >= 1.5:
-            new_stop = entry
-        else:
-            new_stop = pos["stopPrice"]
-        if new_stop > pos["stopPrice"]:
-            pos["stopPrice"] = new_stop
+
+        # TP1: prima volta che tocca +1R
+        if not pos.get("tp1_hit", False) and cur >= pos["tp1Price"]:
+            await exit_position(state, pos, "TP1", partial=True)
+            continue
+
+        # TP2: tocca +1.5R → chiude tutto il rimanente
+        if pos.get("tp1_hit", False) and cur >= pos["tp2Price"]:
+            await exit_position(state, pos, "TP2")
+            continue
+
+        # Stop loss (include breakeven dopo TP1)
         if cur <= pos["stopPrice"]:
-            await exit_position(state, pos, "STOP LOSS")
+            reason = "STOP BREAKEVEN" if pos.get("tp1_hit") else "STOP LOSS"
+            await exit_position(state, pos, reason)
 
     alloc_pct = cfg.get("allocPct", 0.20)
     max_pos   = max(1, int(round(1 / alloc_pct)))
     open_syms = {p["symbol"] for p in state["positions"]}
     slots     = max_pos - len(state["positions"])
 
+    # Non aprire nuove posizioni se maxTrades raggiunto
+    if max_trades > 0 and state["tradeCount"] >= max_trades:
+        _update_pnl(state)
+        return
+
     if slots <= 0 or state["currentCapital"] < state["capital"] * alloc_pct * 0.5:
         _update_pnl(state)
         return
 
     prices_ok = [sym for sym, d in market_data.items() if d["price"] > 0]
-    btc = market_data.get("BTC", {})
+
+    # Filtro BTC trend
+    btc    = market_data.get("BTC", {})
     btc_1h = btc.get("change1h", 0)
     if btc_1h < -0.3:
         add_log(state, "info", "PAUSA", f"BTC {btc_1h:+.2f}% 1h — agente in attesa")
         _update_pnl(state)
         return
 
-    min_vol = cfg.get("minVolume", 0)
-    ranked = sorted(
-        [{**d, "symbol": sym} for sym, d in market_data.items()
-         if d["price"] > 0
-         and d.get("volume24h", 0) >= min_vol
-         and sym not in open_syms
-         and sym in _coinbase_products
-         and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)],
-        key=lambda d: d["change24h"], reverse=True
-    )
+    min_vol      = cfg.get("minVolume", 0)
+    ema_filter   = cfg.get("emaFilter", True)
+    pullback_tol = cfg.get("pullbackTolerance", 0.015)
+    vol_mult     = cfg.get("volMultiplier", 1.2)
+    max_stop_pct = cfg.get("maxStopPct", 0.025)
 
-    min_mom = cfg.get("minMomentum", 0.0)
-    candidates = [d for d in ranked if d.get("change1h", 0) >= min_mom]
+    universe = [
+        {**d, "symbol": sym}
+        for sym, d in market_data.items()
+        if d["price"] > 0
+        and d.get("volume24h", 0) >= min_vol
+        and sym not in open_syms
+        and sym in _coinbase_products
+        and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
+    ]
+    universe_sorted = sorted(universe, key=lambda d: d.get("volume24h", 0), reverse=True)
 
-    top3 = [(d["symbol"], round(d["change24h"],2), round(d.get("change1h",0),2)) for d in ranked[:3]]
+    candidates  = []
+    ema_skipped = 0
+
+    for d in universe_sorted:
+        sym = d["symbol"]
+        if ema_filter:
+            signal = get_ema_signal(sym, d["price"], pullback_tol, vol_mult, max_stop_pct)
+            if not signal["signal"]:
+                ema_skipped += 1
+                continue
+            d["ema_reason"]  = signal["reason"]
+            d["stop_price"]  = signal["stop_price"]
+            d["R_pct"]       = signal["R"]
+        candidates.append(d)
+        if len(candidates) >= slots:
+            break
+
+    top3 = [(d["symbol"], round(d.get("volume24h", 0) / 1e6, 0)) for d in universe_sorted[:3]]
     add_log(state, "info", "SCAN",
-        f"Top3 (24h,1h): {top3} | Candidati: {len(candidates)} | Slot: {slots} | Universe: {len(prices_ok)} | BTC1h: {btc_1h:+.2f}%"
+        f"Universe: {len(prices_ok)} | Top3 vol (M$): {top3} | "
+        f"Candidati: {len(candidates)} | Saltati EMA: {ema_skipped} | "
+        f"Candele: {len(candle_data)} | BTC1h: {btc_1h:+.2f}% | Trade: {state['tradeCount']}/{max_trades or 'inf'}"
     )
 
-    for d in candidates[:slots]:
+    for d in candidates:
+        add_log(state, "info", "SEGNALE", f"{d['symbol']} | {d.get('ema_reason', 'EMA off')}")
         await enter_position(state, d)
-    
+
     _update_pnl(state)
 
 def _update_pnl(state: dict):
     if not state["sessionStart"]:
         return
     unr     = unrealized_pnl(state)
-    pos_val = sum(p["size"] for p in state["positions"])
+    # Usa size_remaining (non size) per evitare doppio conteggio dopo TP1 parziale
+    pos_val = sum(p.get("size_remaining", p["size"]) for p in state["positions"])
     total   = state["currentCapital"] + pos_val + unr
     pnl_val = total - state["capital"]
     t       = (datetime.now().timestamp() - state["sessionStart"]) / 60
@@ -538,7 +746,8 @@ def _update_pnl(state: dict):
     if len(state["pnlHistory"]) > 500:
         state["pnlHistory"].pop(0)
 
-# Telegram polling
+# ── Telegram polling ──────────────────────────────────────────────────────────
+
 _tg_last_update: int = 0
 
 async def poll_telegram():
@@ -557,10 +766,8 @@ async def poll_telegram():
             msg = update.get("message", {})
             chat_id = str(msg.get("chat", {}).get("id", ""))
             text = msg.get("text", "").strip()
-            # solo comandi dal tuo chat
             if chat_id != str(TELEGRAM_CHAT_ID):
                 continue
-            # trova la sessione dell'utente Telegram (prima sessione attiva o prima disponibile)
             tg_state = None
             for s in user_sessions.values():
                 if s["running"]:
@@ -568,7 +775,7 @@ async def poll_telegram():
                     break
             if tg_state is None and user_sessions:
                 tg_state = next(iter(user_sessions.values()))
-            
+
             if text.upper().startswith("/CLOSE") and tg_state:
                 parts = text.split()
                 if len(parts) >= 2:
@@ -593,10 +800,17 @@ async def poll_telegram():
     except Exception as e:
         print(f"Telegram poll error: {e}")
 
+# ── background loop ───────────────────────────────────────────────────────────
+
 async def background_loop():
     while True:
         try:
             await fetch_prices()
+
+            # Aggiorna candele ogni 5 minuti
+            if time.time() - _candles_last_update >= CANDLE_UPDATE_INTERVAL:
+                await fetch_all_candles()
+
             for state in list(user_sessions.values()):
                 if state["running"]:
                     await scan_and_trade(state)
@@ -606,7 +820,7 @@ async def background_loop():
             print(f"Loop error: {e}\n{traceback.format_exc()}")
         await asyncio.sleep(8)
 
-# ── endpoints ─────────────────────────────────────────────────────────────────
+# ── startup ───────────────────────────────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup():
@@ -691,11 +905,13 @@ async def get_me(user_id: int = Depends(get_current_user)):
         )
     return {"username": row["username"], "has_api_keys": bool(row["cb_key"])}
 
+# ── TRADING ENDPOINTS ──────────────────────────────────────────────────────────
+
 @app.get("/status")
 async def get_status(user_id: int = Depends(get_current_user)):
     state = get_session(user_id)
     unr     = unrealized_pnl(state)
-    pos_val = sum(p["size"] for p in state["positions"])
+    pos_val = sum(p.get("size_remaining", p["size"]) for p in state["positions"])
     total   = state["currentCapital"] + pos_val + unr
     pnl     = total - state["capital"]
     pct     = pnl / state["capital"] * 100 if state["capital"] > 0 else 0
@@ -719,10 +935,25 @@ async def get_status(user_id: int = Depends(get_current_user)):
 
 @app.get("/market")
 def get_market():
-    result = sorted(
-        [{"symbol": s, **d} for s, d in market_data.items() if d["price"] > 0],
-        key=lambda x: x["change24h"], reverse=True
-    )
+    items = []
+    for s, d in market_data.items():
+        if d["price"] <= 0:
+            continue
+        item = {"symbol": s, **d}
+        cd = candle_data.get(s)
+        if cd:
+            sig = get_ema_signal(s, d["price"])
+            item["ema"] = {
+                "trend":    sig["trend_ok"],
+                "pullback": sig["pullback_ok"],
+                "volume":   sig["vol_ok"],
+                "stop":     sig["stop_ok"],
+                "signal":   sig["signal"],
+            }
+        else:
+            item["ema"] = None
+        items.append(item)
+    result = sorted(items, key=lambda x: x["change24h"], reverse=True)
     return {"market": result}
 
 @app.get("/trades")
@@ -737,8 +968,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         return {"error": "Already running"}
     cfg     = body.get("config", {})
     capital = float(cfg.get("capital", 1000))
-    
-    # Carica API keys dal DB se disponibili
+
     cb_key, cb_secret = "", ""
     if db_pool:
         try:
@@ -749,7 +979,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
                     cb_secret = row["cb_secret"] or ""
         except Exception as e:
             print(f"DB key fetch error: {e}")
-    
+
     state.update({
         "running": True,
         "capital": capital,
@@ -759,23 +989,33 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         "sessionStart": datetime.now().timestamp(),
         "sessionDuration": int(cfg.get("sessionDuration", 8)) * 3600 * 1000,
         "config": {
-            "allocPct":        float(cfg.get("allocPct", 0.20)),
-            "stopLoss":        float(cfg.get("stopLoss", 0.03)),
-            "cooldown":        float(cfg.get("cooldown", 1)),
-            "minMomentum":     float(cfg.get("minMomentum", 0.0)),
-            "minVolume":       float(cfg.get("minVolume", 0)),
-            "sessionDuration": int(cfg.get("sessionDuration", 8)),
-            "realMode":        bool(cfg.get("realMode", False)),
+            "allocPct":            float(cfg.get("allocPct", 0.20)),
+            "stopLoss":            float(cfg.get("stopLoss", 0.01)),
+            "cooldown":            float(cfg.get("cooldown", 1)),
+            "minVolume":           float(cfg.get("minVolume", 0)),
+            "sessionDuration":     int(cfg.get("sessionDuration", 8)),
+            "realMode":            bool(cfg.get("realMode", False)),
+            "emaFilter":           bool(cfg.get("emaFilter", True)),
+            "pullbackTolerance":   float(cfg.get("pullbackTolerance", 0.015)),
+            "volMultiplier":       float(cfg.get("volMultiplier", 1.2)),
+            "maxStopPct":          float(cfg.get("maxStopPct", 0.025)),
+            "maxTrades":           int(cfg.get("maxTrades", 0)),
+            "maxConsecutiveLosses": int(cfg.get("maxConsecutiveLosses", 3)),
         },
         "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
         "cb_key": cb_key, "cb_secret": cb_secret,
+        "consecutiveLosses": 0,
     })
-    alloc = float(cfg.get("allocPct", 0.20)) * 100
-    sl    = float(cfg.get("stopLoss", 0.03)) * 100
-    vol   = float(cfg.get("minVolume", 0)) / 1_000_000
-    mode  = "REALE" if cfg.get("realMode", False) else "SIMULAZIONE"
+    alloc  = float(cfg.get("allocPct", 0.20)) * 100
+    vol    = float(cfg.get("minVolume", 0)) / 1_000_000
+    mode   = "REALE" if cfg.get("realMode", False) else "SIMULAZIONE"
+    ema_s  = "ON" if cfg.get("emaFilter", True) else "OFF"
+    ptol   = float(cfg.get("pullbackTolerance", 0.015)) * 100
+    mt     = int(cfg.get("maxTrades", 0))
+    mcl    = int(cfg.get("maxConsecutiveLosses", 3))
     add_log(state, "info", "AVVIO",
-        f"${capital:.0f} | {mode} | Alloc: {alloc:.0f}% | SL: {sl:.1f}% | Vol: ${vol:.0f}M"
+        f"${capital:.0f} | {mode} | Alloc: {alloc:.0f}% | Vol: ${vol:.0f}M | "
+        f"EMA: {ema_s} | Pullback: {ptol:.1f}% | MaxTrade: {mt or 'inf'} | MaxLoss: {mcl}"
     )
     return {"ok": True}
 
@@ -805,7 +1045,7 @@ async def chat(body: dict):
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return {"error": "API key non configurata"}
-    state = get_session(0)  # chat senza auth per ora
+    state = get_session(0)
     positions = state["positions"]
     pnl = state["currentCapital"] - state["capital"]
     if positions:
@@ -828,9 +1068,30 @@ async def chat(body: dict):
             return {"reply": data["content"][0]["text"]}
         return {"error": str(data.get("error", data))}
 
+# ── DEBUG / UTILITY ENDPOINTS ──────────────────────────────────────────────────
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "coinbase": any(d["price"] > 0 for d in market_data.values())}
+    return {
+        "status": "ok",
+        "coinbase": any(d["price"] > 0 for d in market_data.values()),
+        "candles": len(candle_data),
+        "candles_age_min": round((time.time() - _candles_last_update) / 60, 1) if _candles_last_update else None,
+    }
+
+@app.get("/candles_status")
+async def candles_status(user_id: int = Depends(get_current_user)):
+    """Mostra stato aggiornamento candele e un esempio di segnale EMA."""
+    sample = {}
+    for sym in list(candle_data.keys())[:5]:
+        price = market_data.get(sym, {}).get("price", 0)
+        sample[sym] = get_ema_signal(sym, price)
+    return {
+        "candles_count": len(candle_data),
+        "last_update": datetime.fromtimestamp(_candles_last_update).isoformat() if _candles_last_update else None,
+        "next_update_in_sec": max(0, CANDLE_UPDATE_INTERVAL - (time.time() - _candles_last_update)) if _candles_last_update else 0,
+        "sample_signals": sample,
+    }
 
 @app.get("/test_coinbase")
 async def test_coinbase(user_id: int = Depends(get_current_user)):
@@ -858,48 +1119,8 @@ async def test_coinbase(user_id: int = Depends(get_current_user)):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-@app.get("/test_order_blur")
-async def test_order_blur():
-    """Testa un ordine minimo su TON-USD e mostra risposta completa"""
-    try:
-        body = {
-            "client_order_id": f"ca-test-{int(time.time())}",
-            "product_id": "BLUR-USDC",
-            "side": "BUY",
-            "order_configuration": {
-                "market_market_ioc": {
-                    "quote_size": "1.00"
-                }
-            }
-        }
-        result = await coinbase_request("POST", "/api/v3/brokerage/orders", body)
-        return result
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/debug_product")
-async def debug_product():
-    """Mostra struttura grezza del prodotto BTC-USD da Coinbase"""
-    try:
-        result = await coinbase_request("GET", "/api/v3/brokerage/market/products/BTC-USDC")
-        return result
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/debug_key")
-async def debug_key():
-    key = COINBASE_PRIVATE_KEY
-    return {
-        "len": len(key),
-        "has_literal_backslash_n": chr(92)+"n" in key,
-        "has_real_newline": chr(10) in key,
-        "first_50": key[:50],
-        "lines": len(key.splitlines())
-    }
-
 @app.get("/logos")
 async def get_logos():
-    """Restituisce mappa sym->logo_url da CoinGecko per le coin approvate"""
     LOGO_URLS = {
         "BTC":"https://assets.coingecko.com/coins/images/1/small/bitcoin.png",
         "ETH":"https://assets.coingecko.com/coins/images/279/small/ethereum.png",
@@ -924,87 +1145,15 @@ async def get_logos():
         "TON":"https://assets.coingecko.com/coins/images/17980/small/ton_symbol.png",
         "TRX":"https://assets.coingecko.com/coins/images/1094/small/tron-logo.png",
         "HBAR":"https://assets.coingecko.com/coins/images/3688/small/hbar.png",
-        "VET":"https://assets.coingecko.com/coins/images/1167/small/VET_Token_Icon.png",
-        "FIL":"https://assets.coingecko.com/coins/images/12817/small/filecoin.png",
-        "ALGO":"https://assets.coingecko.com/coins/images/4380/small/download.png",
-        "ETC":"https://assets.coingecko.com/coins/images/453/small/ethereum-classic-logo.png",
         "AAVE":"https://assets.coingecko.com/coins/images/12645/small/AAVE.png",
         "GRT":"https://assets.coingecko.com/coins/images/13397/small/Graph_Token.png",
-        "MKR":"https://assets.coingecko.com/coins/images/1364/small/Mark_Maker.png",
-        "SNX":"https://assets.coingecko.com/coins/images/3406/small/SNX.png",
-        "CRV":"https://assets.coingecko.com/coins/images/12124/small/Curve.png",
-        "LDO":"https://assets.coingecko.com/coins/images/13573/small/Lido_DAO.png",
-        "RUNE":"https://assets.coingecko.com/coins/images/6595/small/Rune200x200.png",
-        "FTM":"https://assets.coingecko.com/coins/images/4001/small/Fantom_round.png",
-        "ENJ":"https://assets.coingecko.com/coins/images/1102/small/enjin-coin-logo.png",
-        "ENA":"https://assets.coingecko.com/coins/images/36530/small/ethena.png",
-        "RENDER":"https://assets.coingecko.com/coins/images/11636/small/rndr.png",
-        "RNDR":"https://assets.coingecko.com/coins/images/11636/small/rndr.png",
-        "JUP":"https://assets.coingecko.com/coins/images/34188/small/jup.png",
-        "PYTH":"https://assets.coingecko.com/coins/images/31924/small/pyth.png",
-        "SUI":"https://assets.coingecko.com/coins/images/26375/small/sui_asset.jpeg",
-        "SEI":"https://assets.coingecko.com/coins/images/28205/small/Sei_Logo_-_Transparent.png",
-        "TAO":"https://assets.coingecko.com/coins/images/28452/small/ARUsPeNQ_400x400.jpeg",
-        "WLD":"https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg",
         "PEPE":"https://assets.coingecko.com/coins/images/29850/small/pepe-token.jpeg",
-        "FLOKI":"https://assets.coingecko.com/coins/images/16746/small/PNG_image.png",
-        "BONK":"https://assets.coingecko.com/coins/images/28600/small/bonk.jpg",
-        "WIF":"https://assets.coingecko.com/coins/images/33566/small/wif.png",
-        "RAVE":"https://assets.coingecko.com/coins/images/25686/small/rave.png",
-        "CTSI":"https://assets.coingecko.com/coins/images/11038/small/cartesi.png",
-        "IOTX":"https://assets.coingecko.com/coins/images/3334/small/iotex-logo.png",
-        "NKN":"https://assets.coingecko.com/coins/images/3375/small/nkn.png",
-        "DRIFT":"https://assets.coingecko.com/coins/images/35254/small/drift.png",
-        "XLM":"https://assets.coingecko.com/coins/images/100/small/Stellar_symbol_black_RGB.png",
-        "SAND":"https://assets.coingecko.com/coins/images/12129/small/sandbox_logo.jpg",
-        "MANA":"https://assets.coingecko.com/coins/images/878/small/decentraland-mana.png",
-        "AXS":"https://assets.coingecko.com/coins/images/13029/small/axie_infinity_logo.png",
-        "CHZ":"https://assets.coingecko.com/coins/images/8834/small/Chiliz.png",
-        "EGLD":"https://assets.coingecko.com/coins/images/12335/small/egld-token-logo.png",
-        "THETA":"https://assets.coingecko.com/coins/images/2538/small/theta-token-logo.png",
-        "ZEC":"https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png",
-        "BAT":"https://assets.coingecko.com/coins/images/677/small/basic-attention-token.png",
-        "ZRX":"https://assets.coingecko.com/coins/images/863/small/0x.png",
-        "COMP":"https://assets.coingecko.com/coins/images/10775/small/COMP.png",
-        "YFI":"https://assets.coingecko.com/coins/images/11849/small/yfi-192x192.png",
-        "SUSHI":"https://assets.coingecko.com/coins/images/12271/small/512x512_Logo_no_chop.png",
-        "SKL":"https://assets.coingecko.com/coins/images/13245/small/SKALE_token_300x300.png",
-        "ANKR":"https://assets.coingecko.com/coins/images/8710/small/Ankr.png",
-        "STORJ":"https://assets.coingecko.com/coins/images/949/small/storj.png",
-        "OGN":"https://assets.coingecko.com/coins/images/3296/small/op.jpg",
-        "RLC":"https://assets.coingecko.com/coins/images/821/small/iExec_RLC_icon_Hex_Black.png",
-        "LOOM":"https://assets.coingecko.com/coins/images/3387/small/1_QGdkBrYnqEADO-8Qavqxvg.png",
+        "SUI":"https://assets.coingecko.com/coins/images/26375/small/sui_asset.jpeg",
+        "WLD":"https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg",
         "ICP":"https://assets.coingecko.com/coins/images/14495/small/Internet_Computer_logo.png",
-        "FET":"https://assets.coingecko.com/coins/images/5681/small/Fetch.jpg",
-        "IMX":"https://assets.coingecko.com/coins/images/17233/small/imx.png",
-        "BLUR":"https://assets.coingecko.com/coins/images/28453/small/blur.png",
-        "ENS":"https://assets.coingecko.com/coins/images/19785/small/acatxTm8_400x400.jpg",
-        "DYDX":"https://assets.coingecko.com/coins/images/17500/small/hjnIm9bV.jpg",
-        "LRC":"https://assets.coingecko.com/coins/images/5765/small/loopring.png",
-        "FLOW":"https://assets.coingecko.com/coins/images/13446/small/5f6294c0c7a8cda55cb1c936_Flow_Wordmark.png",
-        "MINA":"https://assets.coingecko.com/coins/images/15628/small/JM4_vQ34_400x400.png",
-        "APE":"https://assets.coingecko.com/coins/images/24383/small/apecoin.jpg",
-        "QNT":"https://assets.coingecko.com/coins/images/3370/small/5ZOu7brX_400x400.jpg",
-        "1INCH":"https://assets.coingecko.com/coins/images/13469/small/1inch-token.png",
+        "RENDER":"https://assets.coingecko.com/coins/images/11636/small/rndr.png",
     }
     return LOGO_URLS
-
-@app.get("/debug_products")
-async def debug_products():
-    """Debug: mostra i prodotti USD tradabili su Coinbase Advanced"""
-    if not _ENV_CB_KEY:
-        return {"error": "CB_KEY non configurata"}
-    try:
-        result = await coinbase_request("GET", "/api/v3/brokerage/market/products?product_type=SPOT&limit=500")
-        products = result.get("products", [])
-        usd = [
-            {"sym": p.get("base_currency_id"), "status": p.get("status"), "price": p.get("price")}
-            for p in products
-            if p.get("quote_currency_id") == "USD"
-        ]
-        return {"total": len(usd), "products": usd}
-    except Exception as e:
-        return {"error": str(e)}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
