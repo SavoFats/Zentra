@@ -413,7 +413,7 @@ def get_session(user_id: int) -> dict:
 def add_log(state: dict, type_: str, label: str, desc: str):
     state["log"].insert(0, {
         "type": type_, "label": label, "desc": desc,
-        "time": datetime.now().strftime("%H:%M:%S")
+        "ts": int(time.time() * 1000)
     })
     if len(state["log"]) > 200:
         state["log"].pop()
