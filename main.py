@@ -506,7 +506,7 @@ async def enter_position(state: dict, sym_data: dict):
         "size":        size,
         "size_remaining": size,        # per TP parziale
         "tp1_hit":     False,          # TP1 già raggiunto?
-        "entryTime":   datetime.now().isoformat(),
+        "entryTime":   datetime.utcnow().isoformat() + "Z",
         "stopPrice":   stop_price,
         "tp1Price":    tp1_price,
         "tp2Price":    tp2_price,
@@ -522,7 +522,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     """
     cur  = pos["currentPrice"]
     sym  = pos["symbol"]
-    dur  = (datetime.now() - datetime.fromisoformat(pos["entryTime"])).total_seconds() / 60
+    dur  = (datetime.utcnow() - datetime.fromisoformat(pos["entryTime"].replace("Z", ""))).total_seconds() / 60
 
     # Dimensione effettiva da chiudere
     close_size = pos["size_remaining"] * 0.5 if partial else pos["size_remaining"]
