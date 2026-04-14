@@ -1572,7 +1572,7 @@ async function refreshMarket() {
     const r = await fetch(API + '/market');
     const d = await r.json();
     mktData = d.market || [];
-    document.getElementById('universeCount').textContent = mktData.length + ' coin';
+    // universeCount rimosso dall'header
     renderMarket();
   } catch(e) {}
 }
