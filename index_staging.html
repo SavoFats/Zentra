@@ -215,6 +215,14 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .ema-dot.signal { background:var(--blue); box-shadow:0 0 8px var(--blue-glow); animation:pulse 1s infinite; }
 .ema-dot-label { font-size:9px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.03em; }
 
+/* EMA tooltip */
+.ema-tooltip { position:fixed; background:var(--surface); border:1px solid var(--border2); border-radius:10px; padding:10px 12px; z-index:500; max-width:240px; box-shadow:0 8px 24px rgba(0,0,0,0.4); pointer-events:none; opacity:0; transition:opacity 0.15s; }
+.ema-tooltip.show { opacity:1; }
+.ema-tooltip-row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:12px; font-weight:600; color:var(--text2); }
+.ema-tooltip-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.ema-tooltip-dot.on { background:var(--green); }
+.ema-tooltip-dot.off { background:var(--text3); opacity:0.5; }
+
 .filter-row { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
 .filter-btn { font-size:12px; font-weight:600; padding:6px 12px; border-radius:20px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text3); cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
 .filter-btn.active { border-color:var(--blue); color:var(--blue); background:var(--blue-dim); }
@@ -365,10 +373,26 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 <!-- Input nascosto per foto profilo -->
 <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="handleAvatarChange(event)">
 
+<!-- Tooltip EMA -->
+<div class="ema-tooltip" id="emaTooltip"></div>
+
 <div class="pages">
 
   <!-- CONFIG -->
   <div class="page active" id="page-config">
+
+    <div class="mode-container" style="margin:0 0 16px">
+      <div class="mode-label">Modalita</div>
+      <div class="mode-row">
+        <button class="mode-btn" id="modeSimBtn" onclick="setMode(false)">
+          <span style="font-size:16px">&#9898;</span> Simulazione
+        </button>
+        <button class="mode-btn" id="modeRealBtn" onclick="setMode(true)">
+          <span style="font-size:16px">&#128308;</span> Reale
+        </button>
+      </div>
+      <div class="mode-hint" id="modeHint">Seleziona la modalita per iniziare</div>
+    </div>
 
     <div class="section-label">Capitale</div>
     <div class="field">
@@ -476,19 +500,6 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div class="field-label">Cooldown post-uscita <span id="cdVal">0h</span></div>
       <input type="range" id="cooldown" min="0" max="6" value="0" step="0.5"
         oninput="document.getElementById('cdVal').textContent=this.value+'h'">
-    </div>
-
-    <div class="mode-container">
-      <div class="mode-label">Modalita</div>
-      <div class="mode-row">
-        <button class="mode-btn active-sim" id="modeSimBtn" onclick="setMode(false)">
-          <span style="font-size:16px">&#9898;</span> Simulazione
-        </button>
-        <button class="mode-btn" id="modeRealBtn" onclick="setMode(true)">
-          <span style="font-size:16px">&#128308;</span> Reale
-        </button>
-      </div>
-      <div class="mode-hint" id="modeHint">Nessun ordine reale verra eseguito</div>
     </div>
 
     <button class="start-btn" id="startBtn" onclick="startAgent()">Avvia sessione</button>
@@ -911,14 +922,22 @@ function showTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   el.classList.add('active');
+  localStorage.setItem('ca_active_tab', name);
   if (name === 'market') refreshMarket();
   if (name === 'storico') {
     renderStorico();
-    // Azzera notifica
     _newTradeCount = 0;
     _lastSeenTradeCount = trades.length;
     updateStoricoBadge();
   }
+}
+
+function restoreActiveTab() {
+  const saved = localStorage.getItem('ca_active_tab') || 'config';
+  const tabs = document.querySelectorAll('.tab');
+  const tabMap = { config: 0, monitor: 1, market: 2, log: 3, storico: 4 };
+  const idx = tabMap[saved] ?? 0;
+  if (tabs[idx]) showTab(saved, tabs[idx]);
 }
 
 function updateStoricoBadge() {
@@ -983,8 +1002,8 @@ function resetConfigToDefaults() {
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
   setEmaFilter(true);
   document.getElementById('modeRealBtn').classList.remove('active-real');
-  document.getElementById('modeSimBtn').classList.add('active-sim');
-  document.getElementById('modeHint').textContent = 'Nessun ordine reale verra eseguito';
+  document.getElementById('modeSimBtn').classList.remove('active-sim');
+  document.getElementById('modeHint').textContent = 'Seleziona la modalita per iniziare';
   document.getElementById('modeHint').style.color = '';
   document.getElementById('totalBalanceDisplay').textContent = 'Modalita simulazione';
   document.getElementById('totalBalanceDisplay').style.color = '';
@@ -1205,9 +1224,10 @@ async function startupSession() {
       document.getElementById('startBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
       lockConfig();
-      showTab('monitor', document.querySelectorAll('.tab')[1]);
     }
   } catch(e) {}
+  // Ripristina la tab in cui l'utente era prima del refresh
+  restoreActiveTab();
   startPolling();
 }
 
@@ -1217,6 +1237,7 @@ checkAuth();
 function render() {
   const dot = document.getElementById('logoDot');
 
+  const stopBtn = document.getElementById('stopBtn');
   if (S.running) {
     if (window._realMode) {
       dot.className = 'hdr-logo-dot real';
@@ -1224,9 +1245,11 @@ function render() {
       dot.className = 'hdr-logo-dot sim';
     }
     document.getElementById('sessBanner').classList.remove('off');
+    if (stopBtn) { stopBtn.disabled = false; stopBtn.style.display = 'flex'; }
   } else {
     dot.className = 'hdr-logo-dot inactive';
     document.getElementById('sessBanner').classList.add('off');
+    if (stopBtn) { stopBtn.disabled = true; stopBtn.style.display = 'none'; }
   }
 
   // PnL banner
@@ -1256,8 +1279,8 @@ function render() {
     logList.innerHTML = '<div class="empty"><div class="empty-icon">&#128203;</div><div class="empty-text">Nessuna attivita</div></div>';
   } else {
     logList.innerHTML = logs.map(l => {
-      // Orario locale dal timestamp stringa
-      const time = l.time || '';
+      // Converti timestamp ms in orario locale
+      const time = l.ts ? new Date(l.ts).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : (l.time || '');
       return `<div class="log-item"><span class="log-badge ${l.type}">${l.label}</span><span class="log-desc">${l.desc}</span><span class="log-time">${time}</span></div>`;
     }).join('');
   }
@@ -1278,7 +1301,7 @@ function renderPositions() {
     const logo = getLogo(p.symbol);
     const img = logo ? `<img src="${logo}" class="pos-logo" onerror="this.style.display='none'">` : `<div class="pos-icon">${p.symbol[0]}</div>`;
     // Orario locale
-    const entryTime = new Date(p.entryTime).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+    const entryTime = p.entryTime ? new Date(p.entryTime).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : '--:--';
     const tp1Hit = p.tp1_hit || false;
     const tp1Price = p.tp1Price || 0;
     const tp2Price = p.tp2Price || 0;
@@ -1444,7 +1467,12 @@ function renderMarket() {
     if (ema) {
       const dot = (on, label) => `<div class="ema-dot-wrap"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.trend,'trend')}${dot(ema.pullback,'pull')}${dot(ema.volume,'vol')}${dot(ema.stop,'R')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots" 
+        onmouseenter="showEmaTooltip(this,${JSON.stringify(ema)},'${c.symbol}')"
+        onmouseleave="hideEmaTooltip()"
+        ontouchstart="showEmaTooltip(this,${JSON.stringify(ema)},'${c.symbol}')"
+        style="cursor:pointer"
+      >${dot(ema.trend,'trend')}${dot(ema.pullback,'pull')}${dot(ema.volume,'vol')}${dot(ema.stop,'R')}${signalDot}</div>`;
     }
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
       <div class="mkt-row-main">
@@ -1486,6 +1514,45 @@ async function refreshMarket() {
     renderMarket();
   } catch(e) {}
 }
+
+// ── EMA TOOLTIP ───────────────────────────────────────────────────────────────
+let _tooltipTimeout = null;
+
+function showEmaTooltip(el, ema, sym) {
+  if (!ema) return;
+  const tip = document.getElementById('emaTooltip');
+  const rows = [
+    { label: 'Trend (EMA20 > EMA50 15m)', ok: ema.trend },
+    { label: 'Pullback vicino EMA20 5m', ok: ema.pullback },
+    { label: 'Volume candela sufficiente', ok: ema.volume },
+    { label: 'Stop ATR nei limiti (R ok)', ok: ema.stop },
+  ];
+  tip.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">' + sym + ' — Segnali EMA</div>' +
+    rows.map(r => '<div class="ema-tooltip-row"><div class="ema-tooltip-dot ' + (r.ok?'on':'off') + '"></div>' + r.label + '</div>').join('') +
+    '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:' + (ema.signal?'var(--green)':'var(--text3)') + ';font-weight:700">' +
+    (ema.signal ? '✓ Segnale attivo — agente può entrare' : '✗ Segnale non attivo') + '</div>';
+  const rect = el.getBoundingClientRect();
+  const tipW = 240;
+  let left = rect.left;
+  if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+  tip.style.left = left + 'px';
+  tip.style.top = (rect.bottom + 6) + 'px';
+  tip.classList.add('show');
+  if (_tooltipTimeout) clearTimeout(_tooltipTimeout);
+}
+
+function hideEmaTooltip() {
+  if (_tooltipTimeout) clearTimeout(_tooltipTimeout);
+  _tooltipTimeout = setTimeout(() => {
+    document.getElementById('emaTooltip').classList.remove('show');
+  }, 200);
+}
+
+// Chiudi tooltip toccando altrove su mobile
+document.addEventListener('touchstart', e => {
+  const tip = document.getElementById('emaTooltip');
+  if (tip && !tip.contains(e.target)) tip.classList.remove('show');
+}, { passive: true });
 </script>
 </body>
 </html>
