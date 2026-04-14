@@ -281,7 +281,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .watchlist-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
 .watchlist-row:last-child { border-bottom:none; }
 .star-btn { width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text3); flex-shrink:0; transition:color 0.15s; border:none; background:none; }
-.star-btn.starred { color:#f0b90b; }
+.star-btn.starred { color:var(--blue); }
 .home-start-btn { width:100%; padding:17px; background:var(--blue); border:none; border-radius:var(--radius); color:#fff; font-size:16px; font-weight:700; cursor:pointer; font-family:var(--sans); letter-spacing:-0.01em; box-shadow:0 4px 20px rgba(0,82,255,0.25); transition:all 0.15s; margin-top:8px; }
 .home-start-btn:active { transform:scale(0.98); }
 
@@ -413,7 +413,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   </div>
   <div class="profile-menu-toggle" id="simModeRow" style="display:none">
     <div class="profile-menu-toggle-label">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg>
       Simulazione
     </div>
     <div class="toggle-switch" id="simModeToggle" onclick="setSimMode(!_simMode)"></div>
@@ -487,10 +487,9 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 
     <!-- Bilancio -->
     <div class="card" id="homeBalanceCard" style="margin-bottom:12px">
-      <div class="card-label">Capitale disponibile</div>
+      <div id="homeModeTag" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;color:var(--text3)">Capitale disponibile</div>
       <div style="font-size:28px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;margin-bottom:4px" id="homeBalanceVal">--</div>
       <div style="font-size:12px;color:var(--text3);font-weight:500" id="homeBalanceSub">Caricamento...</div>
-      <div id="homeModeTag" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--surface2);color:var(--text3)"></div>
     </div>
 
     <!-- Watchlist -->
@@ -2099,6 +2098,11 @@ async function loadHomeBalance() {
 
   const isReal = _hasApiKeys && !_simMode;
 
+  if (tagEl) {
+    tagEl.textContent = isReal ? 'Modalità Reale' : 'Simulazione';
+    tagEl.style.color = isReal ? 'var(--red)' : 'var(--text3)';
+  }
+
   if (isReal) {
     valEl.textContent = '...';
     subEl.textContent = 'Recupero saldo Coinbase';
@@ -2110,7 +2114,11 @@ async function loadHomeBalance() {
         const bal = usdc ? parseFloat(usdc.available) : 0;
         valEl.textContent = '$' + bal.toFixed(2);
         subEl.textContent = 'USDC disponibili su Coinbase';
-        if (tagEl) { tagEl.textContent = '🔴 Modalità Reale'; tagEl.style.color = 'var(--red)'; tagEl.style.background = 'var(--red-dim)'; }
+        // Aggiorna anche saldo totale in config
+        const tbd = document.getElementById('totalBalanceDisplay');
+        if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
+        const cap = document.getElementById('capital');
+        if (cap && !cap.value) { cap.value = (bal * 0.98).toFixed(2); onCapitalInput(); }
       } else {
         valEl.textContent = '--';
         subEl.textContent = 'Errore Coinbase';
@@ -2122,15 +2130,28 @@ async function loadHomeBalance() {
   } else {
     valEl.textContent = '$1,000';
     subEl.textContent = 'Saldo simulato';
-    if (tagEl) { tagEl.textContent = '⚪ Simulazione'; tagEl.style.color = 'var(--text3)'; tagEl.style.background = 'var(--surface2)'; }
+    // Precompila config con 1000
+    const tbd = document.getElementById('totalBalanceDisplay');
+    if (tbd) { tbd.textContent = 'Simulazione — $1,000'; tbd.style.color = ''; }
+    const cap = document.getElementById('capital');
+    if (cap && !cap.value) { cap.value = '1000'; onCapitalInput(); }
   }
 }
 
 function renderHome() {
   document.getElementById('homeUsername').textContent = _username || '--';
   loadHomeBalance();
-  // Watchlist
+  // Se non abbiamo dati mercato ancora, li carichiamo prima di mostrare watchlist
+  if (mktData.length === 0) {
+    refreshMarket().then(() => renderHomeWatchlist());
+  } else {
+    renderHomeWatchlist();
+  }
+}
+
+function renderHomeWatchlist() {
   const wl = document.getElementById('homeWatchlist');
+  if (!wl) return;
   if (_watchlist.size === 0) {
     wl.innerHTML = '<div class="empty" style="padding:20px 0"><div class="empty-text">Aggiungi coin dai preferiti nel Mercato ★</div></div>';
     return;
