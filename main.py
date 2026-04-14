@@ -939,19 +939,17 @@ def get_market():
     for s, d in market_data.items():
         if d["price"] <= 0:
             continue
+        if s not in candle_data:
+            continue
         item = {"symbol": s, **d}
-        cd = candle_data.get(s)
-        if cd:
-            sig = get_ema_signal(s, d["price"])
-            item["ema"] = {
-                "trend":    sig["trend_ok"],
-                "pullback": sig["pullback_ok"],
-                "volume":   sig["vol_ok"],
-                "stop":     sig["stop_ok"],
-                "signal":   sig["signal"],
-            }
-        else:
-            item["ema"] = None
+        sig = get_ema_signal(s, d["price"])
+        item["ema"] = {
+            "trend":    sig["trend_ok"],
+            "pullback": sig["pullback_ok"],
+            "volume":   sig["vol_ok"],
+            "stop":     sig["stop_ok"],
+            "signal":   sig["signal"],
+        }
         items.append(item)
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
     return {"market": result}
