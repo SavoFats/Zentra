@@ -468,7 +468,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 <div class="drawer" id="configDrawer">
   <div class="drawer-handle"></div>
   <div class="drawer-title">Nuova sessione</div>
-  <div id="drawerContent"><!-- popolato da JS --></div>
+  <div id="drawerConfigContent"></div>
 </div>
 
 <!-- Tooltip EMA -->
@@ -502,7 +502,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 
     <!-- Avvia sessione -->
     <div style="display:flex;justify-content:center;margin-top:16px">
-      <button onclick="openDrawer()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,82,255,0.25);transition:all 0.15s;letter-spacing:-0.01em">
+      <button id="homeStartBtn" onclick="openDrawer()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,82,255,0.25);transition:all 0.15s;letter-spacing:-0.01em">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Avvia sessione
       </button>
@@ -1570,11 +1570,21 @@ async function startupSession() {
       document.getElementById('startBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
       lockConfig();
+      // Sessione attiva: vai a monitor se non c'è tab salvata o era home
+      const t = localStorage.getItem('ca_active_tab');
+      if (!t || t === 'home') localStorage.setItem('ca_active_tab', 'monitor');
+    } else {
+      // Nessuna sessione: default home
+      if (!localStorage.getItem('ca_active_tab')) {
+        localStorage.setItem('ca_active_tab', 'home');
+      }
     }
-  } catch(e) {}
-  // Ripristina la tab in cui l'utente era prima del refresh
+  } catch(e) {
+    if (!localStorage.getItem('ca_active_tab')) {
+      localStorage.setItem('ca_active_tab', 'home');
+    }
+  }
   restoreActiveTab();
-  // Rimuovi invisibilità ora che la tab corretta è attiva — evita flash di config
   document.querySelector('.pages').classList.add('ready');
   startPolling();
 }
@@ -1647,7 +1657,10 @@ function render() {
 function renderHomeSession() {
   const widget = document.getElementById('homeSessionWidget');
   const cnt = document.getElementById('homeSessionContent');
+  const startBtn = document.getElementById('homeStartBtn');
   if (!widget || !cnt) return;
+  // Mostra/nasconde bottone avvia
+  if (startBtn) startBtn.style.display = S.running ? 'none' : 'inline-flex';
   if (!S.running) { widget.style.display = 'none'; return; }
   widget.style.display = 'block';
   const pos = S.positions || [];
@@ -2252,15 +2265,17 @@ function renderMarketStars() {
 
 // ── DRAWER CONFIG ─────────────────────────────────────────────────────────────
 function openDrawer() {
+  if (S.running) return; // non aprire se sessione in corso
   const drawerContent = document.getElementById('drawerConfigContent');
+  if (!drawerContent) return;
   const configPage = document.getElementById('page-config');
-  // Sposta page-config nel drawer se non è già lì
   if (configPage && configPage.parentNode !== drawerContent) {
     drawerContent.appendChild(configPage);
     configPage.style.position = 'relative';
     configPage.style.inset = 'auto';
     configPage.style.overflow = 'visible';
     configPage.style.padding = '0';
+    configPage.style.display = 'block';
   }
   document.getElementById('drawerOverlay').classList.add('open');
   document.getElementById('configDrawer').classList.add('open');
@@ -2270,7 +2285,6 @@ function openDrawer() {
 function closeDrawer() {
   document.getElementById('drawerOverlay').classList.remove('open');
   document.getElementById('configDrawer').classList.remove('open');
-  // Rimetti page-config nelle pages
   const configPage = document.getElementById('page-config');
   const pages = document.querySelector('.pages');
   if (configPage && pages && configPage.parentNode !== pages) {
@@ -2279,6 +2293,7 @@ function closeDrawer() {
     configPage.style.inset = '';
     configPage.style.overflow = '';
     configPage.style.padding = '';
+    configPage.style.display = '';
   }
 }
 
