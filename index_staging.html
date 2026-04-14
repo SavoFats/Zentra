@@ -411,6 +411,13 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
     Configura API Coinbase
   </div>
+  <div class="profile-menu-toggle" id="simModeRow" style="display:none">
+    <div class="profile-menu-toggle-label">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      Simulazione
+    </div>
+    <div class="toggle-switch" id="simModeToggle" onclick="setSimMode(!_simMode)"></div>
+  </div>
   <div class="profile-menu-item" onclick="changeAvatar()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
     Foto profilo
@@ -479,16 +486,11 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <!-- Bilancio -->
-    <div class="home-balance-card" id="homeBalanceCard">
-      <div class="home-balance-label">Capitale disponibile</div>
-      <div class="home-balance-val" id="homeBalanceVal">--</div>
-      <div class="home-balance-sub" id="homeBalanceSub">Seleziona modalità per vedere il saldo</div>
-    </div>
-
-    <!-- Toggle modalità compatto -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-      <button class="mode-btn" id="homeModeSimBtn" onclick="setHomeMode(false)">Simulazione</button>
-      <button class="mode-btn" id="homeModeRealBtn" onclick="setHomeMode(true)">Reale</button>
+    <div class="card" id="homeBalanceCard" style="margin-bottom:12px">
+      <div class="card-label">Capitale disponibile</div>
+      <div style="font-size:28px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;margin-bottom:4px" id="homeBalanceVal">--</div>
+      <div style="font-size:12px;color:var(--text3);font-weight:500" id="homeBalanceSub">Caricamento...</div>
+      <div id="homeModeTag" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--surface2);color:var(--text3)"></div>
     </div>
 
     <!-- Watchlist -->
@@ -511,17 +513,17 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   <div class="page" id="page-config">
     <div class="ptr-indicator" id="ptr-page-config"><div class="ptr-spinner"></div></div>
 
-    <div class="mode-container" style="margin:0 0 16px">
-      <div class="mode-label">Modalità</div>
-      <div class="mode-row">
-        <button class="mode-btn" id="modeSimBtn" onclick="setMode(false)">
-          Simulazione
-        </button>
-        <button class="mode-btn" id="modeRealBtn" onclick="setMode(true)">
-          Reale
-        </button>
-      </div>
-      <div class="mode-hint" id="modeHint">Seleziona la modalita per iniziare</div>
+    <!-- badge modalità in config -->
+    <div id="cfgModeBadge" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:16px;font-size:12px;font-weight:600;padding:6px 12px;border-radius:20px;background:var(--surface2);color:var(--text3)">
+      Modalità: <span id="cfgModeLabel">Simulazione</span>
+      <span style="font-size:10px;color:var(--text3)">· cambia dal menu profilo</span>
+    </div>
+
+    <!-- elementi nascosti per compatibilità JS -->
+    <div style="display:none">
+      <button id="modeSimBtn"></button>
+      <button id="modeRealBtn"></button>
+      <div id="modeHint"></div>
     </div>
 
     <div class="section-label">Capitale</div>
@@ -809,6 +811,8 @@ const API = 'https://crypto-agent-back-production-87b2.up.railway.app';
 let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
 let _emaFilter = true;
+let _hasApiKeys = false;
+let _simMode = true; // default simulazione
 let _pendingStartCfg = null;
 let _newTradeCount = 0;
 let _lastSeenTradeCount = 0;
@@ -1039,26 +1043,63 @@ function initApp() {
 }
 
 async function loadUserProfile() {
-  if (!db_pool_available()) return;
   try {
-    // Avatar e info utente
-    const r = await fetch(API + '/auth/me', { headers: authHeaders() });
-    const d = await r.json();
-    if (d.avatar_b64) {
-      applyAvatar(d.avatar_b64);
-      localStorage.setItem('ca_avatar', d.avatar_b64);
+    const [meRes, wlRes] = await Promise.all([
+      fetch(API + '/auth/me', { headers: authHeaders() }),
+      fetch(API + '/watchlist', { headers: authHeaders() })
+    ]);
+    const me = await meRes.json();
+    const wl = await wlRes.json();
+
+    _hasApiKeys = me.has_api_keys || false;
+    _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
+    window._realMode = _hasApiKeys && !_simMode;
+
+    if (me.avatar_b64) {
+      applyAvatar(me.avatar_b64);
+      localStorage.setItem('ca_avatar', me.avatar_b64);
     } else {
       applyAvatar(localStorage.getItem('ca_avatar'));
     }
-    // Watchlist
-    const wr = await fetch(API + '/watchlist', { headers: authHeaders() });
-    const wd = await wr.json();
-    _watchlist = new Set(wd.symbols || []);
+
+    _watchlist = new Set(wl.symbols || []);
+
+    // Aggiorna toggle sim nel menu profilo
+    updateSimToggle();
     renderHome();
     renderMarketStars();
   } catch(e) {
     applyAvatar(localStorage.getItem('ca_avatar'));
   }
+}
+
+async function setSimMode(sim) {
+  _simMode = sim;
+  window._realMode = _hasApiKeys && !sim;
+  try {
+    await fetch(API + '/auth/sim_mode', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ sim_mode: sim })
+    });
+  } catch(e) {}
+  updateSimToggle();
+  renderHome();
+}
+
+function updateSimToggle() {
+  const toggle = document.getElementById('simModeToggle');
+  const row = document.getElementById('simModeRow');
+  if (row) row.style.display = _hasApiKeys ? 'flex' : 'none';
+  if (toggle) toggle.classList.toggle('on', _simMode);
+  // Aggiorna badge in config
+  const lbl = document.getElementById('cfgModeLabel');
+  const badge = document.getElementById('cfgModeBadge');
+  const isReal = _hasApiKeys && !_simMode;
+  if (lbl) lbl.textContent = isReal ? 'Reale' : 'Simulazione';
+  if (lbl) lbl.style.color = isReal ? 'var(--red)' : 'var(--text2)';
+  if (badge) badge.style.display = 'inline-flex';
+  // Aggiorna _realMode globale
+  window._realMode = isReal;
 }
 
 function db_pool_available() { return true; } // sempre true, il server gestisce
@@ -1413,9 +1454,10 @@ async function startAgent() {
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
     emaFilter:             _emaFilter,
-    realMode:              window._realMode || false,
+    realMode:              _hasApiKeys && !_simMode,
   };
-  if (cfg.realMode) { showConfirmModal(cfg); return; }
+  const isReal = _hasApiKeys && !_simMode;
+  if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);
 }
 
@@ -2049,18 +2091,17 @@ function renderMarket() {
 })();
 
 // ── HOME PAGE ─────────────────────────────────────────────────────────────────
-async function setHomeMode(real) {
-  _homeRealMode = real;
-  const simBtn = document.getElementById('homeModeSimBtn');
-  const realBtn = document.getElementById('homeModeRealBtn');
-  simBtn.classList.toggle('active-sim', !real);
-  realBtn.classList.toggle('active-real', real);
-  const card = document.getElementById('homeBalanceCard');
+async function loadHomeBalance() {
   const valEl = document.getElementById('homeBalanceVal');
   const subEl = document.getElementById('homeBalanceSub');
-  if (real) {
-    subEl.textContent = 'Recupero saldo...';
-    valEl.textContent = '--';
+  const tagEl = document.getElementById('homeModeTag');
+  if (!valEl) return;
+
+  const isReal = _hasApiKeys && !_simMode;
+
+  if (isReal) {
+    valEl.textContent = '...';
+    subEl.textContent = 'Recupero saldo Coinbase';
     try {
       const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
       const d = await r.json();
@@ -2069,22 +2110,25 @@ async function setHomeMode(real) {
         const bal = usdc ? parseFloat(usdc.available) : 0;
         valEl.textContent = '$' + bal.toFixed(2);
         subEl.textContent = 'USDC disponibili su Coinbase';
+        if (tagEl) { tagEl.textContent = '🔴 Modalità Reale'; tagEl.style.color = 'var(--red)'; tagEl.style.background = 'var(--red-dim)'; }
       } else {
-        valEl.textContent = 'Errore';
-        subEl.textContent = d.error || 'Coinbase non raggiungibile';
+        valEl.textContent = '--';
+        subEl.textContent = 'Errore Coinbase';
       }
     } catch(e) {
-      valEl.textContent = 'Errore';
+      valEl.textContent = '--';
       subEl.textContent = 'Connessione fallita';
     }
   } else {
-    valEl.textContent = 'Simulazione';
-    subEl.textContent = 'Nessun capitale reale coinvolto';
+    valEl.textContent = '$1,000';
+    subEl.textContent = 'Saldo simulato';
+    if (tagEl) { tagEl.textContent = '⚪ Simulazione'; tagEl.style.color = 'var(--text3)'; tagEl.style.background = 'var(--surface2)'; }
   }
 }
 
 function renderHome() {
   document.getElementById('homeUsername').textContent = _username || '--';
+  loadHomeBalance();
   // Watchlist
   const wl = document.getElementById('homeWatchlist');
   if (_watchlist.size === 0) {
