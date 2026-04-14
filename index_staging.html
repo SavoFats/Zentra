@@ -447,6 +447,17 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   </div>
 </div>
 
+<!-- Modal avviso sessione attiva -->
+<div class="modal-overlay" id="sessionActiveModal">
+  <div class="modal-card">
+    <div class="modal-title">Sessione in corso</div>
+    <div class="modal-body">Non puoi cambiare modalità mentre una sessione è attiva. Interrompi prima la sessione dal Monitor, poi torna qui per effettuare il cambio.</div>
+    <div class="modal-actions" style="grid-template-columns:1fr">
+      <button class="modal-btn cancel" style="text-align:center" onclick="document.getElementById('sessionActiveModal').classList.remove('open')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal chiudi posizione -->
 <div class="modal-overlay" id="closeModal">
   <div class="modal-card">
@@ -1085,6 +1096,14 @@ async function loadUserProfile() {
 }
 
 async function setSimMode(sim) {
+  // Blocca switch se sessione attiva
+  if (S.running) {
+    document.getElementById('profileMenu').classList.remove('open');
+    document.getElementById('sessionActiveModal').classList.add('open');
+    // Rimetti il toggle nella posizione corretta
+    updateSimToggle();
+    return;
+  }
   _simMode = sim;
   window._realMode = _hasApiKeys && !sim;
   try {
