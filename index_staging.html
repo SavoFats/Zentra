@@ -9,6 +9,15 @@
 <meta name="apple-mobile-web-app-title" content="CryptoAgent">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;CryptoAgent&quot;,&quot;short_name&quot;:&quot;CryptoAgent&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%230a0b0d&quot;,&quot;theme_color&quot;:&quot;%230a0b0d&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;https://assets.coingecko.com/coins/images/1/small/bitcoin.png&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/png&quot;}]}">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+// Applica tema prima del rendering per evitare flash
+(function(){
+  if(localStorage.getItem('theme')==='light'){
+    document.documentElement.setAttribute('data-theme','light');
+    document.documentElement.style.background='#ffffff';
+  }
+})();
+</script>
 <style>
 :root {
   --bg: #0a0b0d;
@@ -1471,18 +1480,18 @@ function renderMarket() {
     const ema = c.ema;
     let emaDots = '';
     if (ema) {
-      const dot = (on, label) => `<div class="ema-dot-wrap"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
-      const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
       const emaId = 'ema_' + c.symbol;
       _emaCache[emaId] = ema;
-      emaDots = `<div class="ema-dots" 
-        data-emaid="${emaId}"
-        data-sym="${c.symbol}"
-        onmouseenter="showEmaTooltipById(this)"
-        onmouseleave="hideEmaTooltip()"
-        ontouchstart="showEmaTooltipById(this);event.stopPropagation()"
-        style="cursor:pointer"
-      >${dot(ema.trend,'trend')}${dot(ema.pullback,'pull')}${dot(ema.volume,'vol')}${dot(ema.stop,'R')}${signalDot}</div>`;
+      const dot = (on, key, label) => {
+        return `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}"
+          onmouseenter="showDotTooltip(this)"
+          onmouseleave="hideEmaTooltip()"
+          ontouchstart="showDotTooltip(this);event.stopPropagation()"
+          style="cursor:pointer"
+        ><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
+      };
+      const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
+      emaDots = `<div class="ema-dots">${dot(ema.trend,'trend','trend')}${dot(ema.pullback,'pullback','pull')}${dot(ema.volume,'volume','vol')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
     }
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
       <div class="mkt-row-main">
@@ -1528,35 +1537,62 @@ async function refreshMarket() {
 // ── EMA TOOLTIP ───────────────────────────────────────────────────────────────
 let _tooltipTimeout = null;
 
-function showEmaTooltipById(el) {
+// Definizioni indicatori per tooltip
+const EMA_DOT_INFO = {
+  trend: {
+    name: 'Trend',
+    descOn:  'EMA20 > EMA50 su 15min — il mercato è in tendenza rialzista. È il filtro principale: senza trend l'agente non entra.',
+    descOff: 'EMA20 < EMA50 su 15min — nessuna tendenza rialzista chiara. L'agente aspetta che il trend si formi prima di considerare ingressi.',
+  },
+  pullback: {
+    name: 'Pullback',
+    descOn:  'Il prezzo è tornato vicino a EMA20 su 5min (entro la soglia configurata). È il momento ottimale: trend attivo + prezzo che ritraccia.',
+    descOff: 'Il prezzo è troppo lontano da EMA20 su 5min. O è già salito troppo (FOMO) o è sceso sotto. L'agente aspetta il ritracciamento.',
+  },
+  volume: {
+    name: 'Volume',
+    descOn:  'Il volume dell'ultima candela 5min è superiore alla media delle ultime 20 candele × il moltiplicatore impostato. Conferma partecipazione reale.',
+    descOff: 'Volume insufficiente sull'ultima candela 5min. Un rimbalzo su volume basso è spesso falso — serve partecipazione reale per validare il segnale.',
+  },
+  stop: {
+    name: 'R (Stop)',
+    descOn:  'Lo stop contestuale (minimo pullback o 1×ATR) è dentro la soglia massima configurata. Il rischio/rendimento è favorevole.',
+    descOff: 'Lo stop richiesto è troppo largo rispetto alla soglia impostata. Entrare significherebbe rischiare troppo — il trade viene scartato.',
+  },
+};
+
+function showDotTooltip(el) {
+  const key = el.dataset.emakey;
   const emaId = el.dataset.emaid;
-  const sym = el.dataset.sym;
   const ema = _emaCache[emaId];
-  if (!ema) return;
-  showEmaTooltip(el, ema, sym);
+  if (!ema || !key) return;
+  const info = EMA_DOT_INFO[key];
+  if (!info) return;
+  const on = ema[key];
+  const tip = document.getElementById('emaTooltip');
+  const color = on ? 'var(--green)' : 'var(--red)';
+  const icon = on ? '✓' : '✗';
+  tip.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+      '<div style="width:10px;height:10px;border-radius:50%;background:' + color + ';flex-shrink:0"></div>' +
+      '<div style="font-size:13px;font-weight:700;color:var(--text)">' + info.name + '</div>' +
+      '<div style="font-size:11px;font-weight:700;color:' + color + ';margin-left:auto">' + icon + ' ' + (on ? 'Attivo' : 'Non attivo') + '</div>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text2);line-height:1.5;font-weight:500">' + (on ? info.descOn : info.descOff) + '</div>';
+  const rect = el.getBoundingClientRect();
+  const tipW = 250;
+  let left = rect.left;
+  if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
+  if (left < 8) left = 8;
+  let top = rect.bottom + 6;
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+  tip.classList.add('show');
+  if (_tooltipTimeout) clearTimeout(_tooltipTimeout);
 }
 
 function showEmaTooltip(el, ema, sym) {
-  if (!ema) return;
-  const tip = document.getElementById('emaTooltip');
-  const rows = [
-    { label: 'Trend (EMA20 > EMA50 15m)', ok: ema.trend },
-    { label: 'Pullback vicino EMA20 5m', ok: ema.pullback },
-    { label: 'Volume candela sufficiente', ok: ema.volume },
-    { label: 'Stop ATR nei limiti (R ok)', ok: ema.stop },
-  ];
-  tip.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">' + sym + ' — Segnali EMA</div>' +
-    rows.map(r => '<div class="ema-tooltip-row"><div class="ema-tooltip-dot ' + (r.ok?'on':'off') + '"></div>' + r.label + '</div>').join('') +
-    '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:' + (ema.signal?'var(--green)':'var(--text3)') + ';font-weight:700">' +
-    (ema.signal ? '✓ Segnale attivo — agente può entrare' : '✗ Segnale non attivo') + '</div>';
-  const rect = el.getBoundingClientRect();
-  const tipW = 240;
-  let left = rect.left;
-  if (left + tipW > window.innerWidth - 8) left = window.innerWidth - tipW - 8;
-  tip.style.left = left + 'px';
-  tip.style.top = (rect.bottom + 6) + 'px';
-  tip.classList.add('show');
-  if (_tooltipTimeout) clearTimeout(_tooltipTimeout);
+  // fallback non usato ma tenuto per compatibilità
 }
 
 function hideEmaTooltip() {
