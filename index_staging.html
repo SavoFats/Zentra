@@ -2,12 +2,13 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>CryptoAgent</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="CryptoAgent">
-<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;CryptoAgent&quot;,&quot;short_name&quot;:&quot;CryptoAgent&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%230a0b0d&quot;,&quot;theme_color&quot;:&quot;%230a0b0d&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;https://assets.coingecko.com/coins/images/1/small/bitcoin.png&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/png&quot;}]}">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%230052ff'/><polyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/><circle cx='156' cy='80' r='10' fill='white'/></svg>">
+<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;CryptoAgent&quot;,&quot;short_name&quot;:&quot;CryptoAgent&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%230a0b0d&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -97,7 +98,7 @@ html { overflow-x:hidden; }
 .modal-btn:active { transform:scale(0.97); }
 
 /* Notifica tab storico */
-.tab-badge { position:absolute; top:6px; right:50%; transform:translateX(8px); background:var(--red); color:#fff; font-size:9px; font-weight:700; border-radius:10px; padding:1px 5px; min-width:16px; text-align:center; line-height:14px; }
+.tab-badge { position:absolute; top:2px; right:4px; width:7px; height:7px; background:var(--red); border-radius:50%; box-shadow:0 0 0 1.5px var(--bg); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
 .tabbar { position:fixed; bottom:0; left:0; right:0; height:calc(var(--tab-h) + var(--safe-b)); padding-bottom:var(--safe-b); background:var(--bg); border-top:1px solid var(--border); display:flex; z-index:100; }
@@ -235,7 +236,8 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .ema-tooltip-dot.on { background:var(--green); }
 .ema-tooltip-dot.off { background:var(--text3); opacity:0.5; }
 
-.filter-row { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+.filter-row { display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.filter-row::-webkit-scrollbar { display:none; }
 .filter-btn { font-size:12px; font-weight:600; padding:6px 12px; border-radius:20px; border:1.5px solid var(--border); background:var(--surface2); color:var(--text3); cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
 .filter-btn.active { border-color:var(--blue); color:var(--blue); background:var(--blue-dim); }
 .filter-btn.gain { color:var(--green); }
@@ -563,26 +565,21 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   <!-- MERCATO -->
   <div class="page" id="page-market">
     <div class="card" style="padding-bottom:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <div class="card-label" style="margin:0">Mercato</div>
-        <div style="font-size:11px;font-weight:600;color:var(--text3)" id="universeCount"></div>
-      </div>
       <div style="position:relative;margin-bottom:12px">
         <input type="text" id="mktSearch" placeholder="Cerca coin..." oninput="renderMarket()"
           style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px 11px 36px;color:var(--text);font-size:14px;font-family:var(--sans);outline:none"
           onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'">
         <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px">&#128269;</span>
       </div>
-      <div class="filter-row" id="sortRow">
-        <button class="filter-btn active" onclick="setMktSort('change24h',this)">24h %</button>
-        <button class="filter-btn" onclick="setMktSort('change1h',this)">1h %</button>
-        <button class="filter-btn" onclick="setMktSort('volume24h',this)">Volume</button>
-        <button class="filter-btn" onclick="setMktSort('price',this)">Prezzo</button>
-      </div>
-      <div class="filter-row" id="filterRow">
-        <button class="filter-btn active" onclick="setMktFilter('all',this)">Tutti</button>
-        <button class="filter-btn gain" onclick="setMktFilter('gainers',this)">Gainers</button>
-        <button class="filter-btn loss" onclick="setMktFilter('losers',this)">Losers</button>
+      <div class="filter-row" id="allFiltersRow" style="gap:6px;flex-shrink:0">
+        <button class="filter-btn active" id="sortBtn24h" onclick="setMktSort('change24h',this)">24h %</button>
+        <button class="filter-btn" id="sortBtn1h" onclick="setMktSort('change1h',this)">1h %</button>
+        <button class="filter-btn" id="sortBtnVol" onclick="setMktSort('volume24h',this)">Volume</button>
+        <button class="filter-btn" id="sortBtnPrice" onclick="setMktSort('price',this)">Prezzo</button>
+        <div style="width:1px;background:var(--border);margin:0 2px;flex-shrink:0"></div>
+        <button class="filter-btn active" id="filterBtnAll" onclick="setMktFilter('all',this)">Tutti</button>
+        <button class="filter-btn gain" id="filterBtnGain" onclick="setMktFilter('gainers',this)">Rialzo</button>
+        <button class="filter-btn loss" id="filterBtnLoss" onclick="setMktFilter('losers',this)">Ribasso</button>
       </div>
       <div id="marketList"><div class="empty"><div class="empty-icon">&#128225;</div><div class="empty-text">Caricamento...</div></div></div>
     </div>
@@ -920,6 +917,46 @@ const LOGO_URLS = {
   WLD:'https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg',
   ICP:'https://assets.coingecko.com/coins/images/14495/small/Internet_Computer_logo.png',
   RENDER:'https://assets.coingecko.com/coins/images/11636/small/rndr.png',
+  VET:'https://assets.coingecko.com/coins/images/1167/small/VET_Token_Icon.png',
+  FIL:'https://assets.coingecko.com/coins/images/12817/small/filecoin.png',
+  ALGO:'https://assets.coingecko.com/coins/images/4380/small/download.png',
+  ETC:'https://assets.coingecko.com/coins/images/453/small/ethereum-classic-logo.png',
+  MKR:'https://assets.coingecko.com/coins/images/1364/small/Mark_Maker.png',
+  SNX:'https://assets.coingecko.com/coins/images/3406/small/SNX.png',
+  CRV:'https://assets.coingecko.com/coins/images/12124/small/Curve.png',
+  LDO:'https://assets.coingecko.com/coins/images/13573/small/Lido_DAO.png',
+  RUNE:'https://assets.coingecko.com/coins/images/6595/small/Rune200x200.png',
+  FTM:'https://assets.coingecko.com/coins/images/4001/small/Fantom_round.png',
+  ENJ:'https://assets.coingecko.com/coins/images/1102/small/enjin-coin-logo.png',
+  ENA:'https://assets.coingecko.com/coins/images/36530/small/ethena.png',
+  FET:'https://assets.coingecko.com/coins/images/5681/small/Fetch.jpg',
+  FLOKI:'https://assets.coingecko.com/coins/images/16746/small/PNG_image.png',
+  BONK:'https://assets.coingecko.com/coins/images/28600/small/bonk.jpg',
+  WIF:'https://assets.coingecko.com/coins/images/33566/small/wif.png',
+  JUP:'https://assets.coingecko.com/coins/images/34188/small/jup.png',
+  PYTH:'https://assets.coingecko.com/coins/images/31924/small/pyth.png',
+  SEI:'https://assets.coingecko.com/coins/images/28205/small/Sei_Logo_-_Transparent.png',
+  TAO:'https://assets.coingecko.com/coins/images/28452/small/ARUsPeNQ_400x400.jpeg',
+  XLM:'https://assets.coingecko.com/coins/images/100/small/Stellar_symbol_black_RGB.png',
+  DOT:'https://assets.coingecko.com/coins/images/12171/small/polkadot.png',
+  LINK:'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
+  MATIC:'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+  UNI:'https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png',
+  NEAR:'https://assets.coingecko.com/coins/images/10365/small/near_icon.png',
+  INJ:'https://assets.coingecko.com/coins/images/12882/small/Secondary_Symbol.png',
+  APT:'https://assets.coingecko.com/coins/images/26455/small/aptos_round.png',
+  ARB:'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
+  OP:'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
+  ATOM:'https://assets.coingecko.com/coins/images/1481/small/cosmos_hub.png',
+  TRX:'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
+  HBAR:'https://assets.coingecko.com/coins/images/3688/small/hbar.png',
+  AAVE:'https://assets.coingecko.com/coins/images/12645/small/AAVE.png',
+  GRT:'https://assets.coingecko.com/coins/images/13397/small/Graph_Token.png',
+  ZAMA:'https://assets.coingecko.com/coins/images/37479/small/zama.png',
+  PENGU:'https://assets.coingecko.com/coins/images/36158/small/pengu.png',
+  CAKE:'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
+  XPL:'https://assets.coingecko.com/coins/images/38444/small/xpl.png',
+  PLUME:'https://assets.coingecko.com/coins/images/39352/small/plume.jpg',
 };
 function getLogo(sym) { return LOGO_URLS[sym] || null; }
 
@@ -955,7 +992,6 @@ function restoreActiveTab() {
 function updateStoricoBadge() {
   const badge = document.getElementById('storicoBadge');
   if (_newTradeCount > 0) {
-    badge.textContent = _newTradeCount;
     badge.style.display = '';
   } else {
     badge.style.display = 'none';
@@ -1449,15 +1485,19 @@ const _emaCache = {};
 
 function setMktSort(key, btn) {
   mktSort = key;
-  // Reset solo i btn di ordinamento (prima riga)
-  document.querySelectorAll('#sortRow .filter-btn').forEach(b => b.classList.remove('active'));
+  ['sortBtn24h','sortBtn1h','sortBtnVol','sortBtnPrice'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
   btn.classList.add('active');
   renderMarket();
 }
 function setMktFilter(key, btn) {
   mktFilter = key;
-  // Reset solo i btn di filtro (seconda riga)
-  document.querySelectorAll('#filterRow .filter-btn').forEach(b => b.classList.remove('active'));
+  ['filterBtnAll','filterBtnGain','filterBtnLoss'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+  });
   btn.classList.add('active');
   renderMarket();
 }
