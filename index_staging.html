@@ -105,7 +105,7 @@ html { overflow-x:hidden; }
 .tab-badge { position:absolute; top:-2px; right:-2px; width:7px; height:7px; background:var(--red); border-radius:50%; box-shadow:0 0 0 2px var(--bg); }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-.tabbar { position:fixed; bottom:0; left:0; right:0; height:calc(var(--tab-h) + var(--safe-b)); padding-bottom:var(--safe-b); background:var(--bg); border-top:1px solid var(--border); display:flex; z-index:100; }
+.tabbar { position:fixed; bottom:0; left:0; right:0; height:calc(var(--tab-h) + env(safe-area-inset-bottom, 0px)); padding-bottom:env(safe-area-inset-bottom, 0px); background:var(--bg); border-top:1px solid var(--border); display:flex; z-index:100; }
 .tab { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; border:none; background:none; color:var(--text3); font-size:10px; font-weight:600; font-family:var(--sans); transition:color 0.15s; position:relative; letter-spacing:0.01em; }
 .tab.active { color:var(--blue); }
 .tab-icon { width:24px; height:24px; display:flex; align-items:center; justify-content:center; }
@@ -114,7 +114,7 @@ html { overflow-x:hidden; }
 .tab::after { content:''; position:absolute; bottom:4px; width:4px; height:4px; border-radius:50%; background:var(--blue); opacity:0; transition:opacity 0.2s; }
 .tab.active::after { opacity:1; }
 
-.pages { position:fixed; top:calc(var(--hdr-h) + var(--safe-t)); bottom:calc(var(--tab-h) + var(--safe-b)); left:0; right:0; overflow:hidden; }
+.pages { position:fixed; top:calc(var(--hdr-h) + env(safe-area-inset-top, 0px)); bottom:calc(var(--tab-h) + env(safe-area-inset-bottom, 0px)); left:0; right:0; overflow:hidden; }
 .page { position:absolute; inset:0; overflow-y:auto; padding:16px; display:none; }
 .page.active { display:block; }
 
@@ -512,7 +512,8 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <!-- Avvia sessione -->
-    <div style="display:flex;justify-content:center;margin-top:16px">
+    <div style="height:32px"></div>
+    <div style="display:flex;justify-content:center">
       <button id="homeStartBtn" onclick="openDrawer()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,82,255,0.25);transition:all 0.15s;letter-spacing:-0.01em">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Avvia sessione
@@ -1016,12 +1017,14 @@ async function saveKeys() {
 }
 function skipKeys() { hideAuthScreen(); initApp(); }
 function logout() {
-  localStorage.removeItem('ca_token'); localStorage.removeItem('ca_username');
+  localStorage.removeItem('ca_token');
+  localStorage.removeItem('ca_username');
+  localStorage.removeItem('ca_avatar');
+  localStorage.removeItem('ca_active_tab');
   location.reload();
 }
 
 async function checkAuth() {
-  // Mostra subito la UI nascondendo la auth screen se abbiamo token — evita flash
   if (_authToken) {
     document.getElementById('authScreen').style.display = 'none';
   }
@@ -1050,16 +1053,15 @@ let _watchlist = new Set();
 let _homeRealMode = false;
 
 function initApp() {
-  // Username
   document.getElementById('homeUsername').textContent = _username;
-  // Tema
   const t = localStorage.getItem('theme');
   if (t === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
     document.getElementById('themeToggle').classList.add('on');
   }
+  // Avatar: mostra iniziale subito, poi sovrascrive con foto dal server
+  applyAvatar(null); // mostra iniziale username
   updateProfileMenu();
-  // Carica avatar e watchlist dal server
   loadUserProfile();
   startupSession();
 }
@@ -2231,7 +2233,7 @@ function renderHomeWatchlist() {
   const wl = document.getElementById('homeWatchlist');
   if (!wl) return;
   if (_watchlist.size === 0) {
-    wl.innerHTML = '<div class="empty" style="padding:20px 0"><div class="empty-text">Aggiungi coin dai preferiti nel Mercato ★</div></div>';
+    wl.innerHTML = '<div class="empty" style="padding:20px 0"><div class="empty-text">Aggiungi le tue crypto preferite dal Mercato <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:2px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div></div>';
     return;
   }
   const symbols = [..._watchlist];
