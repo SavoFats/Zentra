@@ -426,15 +426,15 @@ def unrealized_pnl(state: dict) -> float:
 
 # ── trading ───────────────────────────────────────────────────────────────────
 
-async def enter_position(state: dict, sym_data: dict):
+async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     cfg      = state["config"]
     price    = sym_data["price"]
     sym      = sym_data["symbol"]
     is_real  = cfg.get("realMode", False)
 
     alloc_pct = cfg.get("allocPct", 0.20)
-    size = state["capital"] * alloc_pct
-    size = min(size, state["currentCapital"])
+    # Size = quota del capitale tradabile per questo trade
+    size = tradable_capital * alloc_pct
     if size < 1:
         return
 
@@ -471,6 +471,11 @@ async def enter_position(state: dict, sym_data: dict):
                 if any(x in err_str for x in ["not available", "cancel only", "permission_denied", "orderbook", "suspended"]):
                     state["cooldowns"][sym] = (datetime.now().timestamp() + 3600) * 1000
                     add_log(state, "info", "ESCLUSA", f"{sym} esclusa per 1h — {err_msg[:60]}")
+                # Saldo insufficiente: ferma la sessione
+                if any(x in err_str for x in ["insufficient", "insufficient_fund", "not enough"]):
+                    state["running"] = False
+                    add_log(state, "info", "STOP AUTO", f"Saldo insufficiente — sessione fermata")
+                    await send_telegram(f"⛔ STOP AUTO: saldo insufficiente su Coinbase")
                 return
             filled      = result.get("success_response", {})
             actual_price = float(filled.get("average_filled_price", price)) or price
@@ -681,7 +686,39 @@ async def scan_and_trade(state: dict, user_id: int = None):
             reason = "STOP BREAKEVEN" if pos.get("tp1_hit") else "STOP LOSS"
             await exit_position(state, pos, reason, user_id=user_id)
 
-    alloc_pct = cfg.get("allocPct", 0.20)
+    alloc_pct   = cfg.get("allocPct", 0.20)
+    capital_pct = cfg.get("capitalPct", 1.0)
+
+    # Calcola il capitale tradabile dinamicamente
+    if cfg.get("realMode", False):
+        # Reale: leggi saldo USDC effettivo da Coinbase
+        cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
+        cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
+        try:
+            accounts = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
+            usdc_balance = 0.0
+            for acc in accounts.get("accounts", []):
+                if acc["currency"] in ("USDC", "USD"):
+                    usdc_balance += float(acc["available_balance"]["value"])
+            tradable_capital = usdc_balance * capital_pct
+        except Exception as e:
+            add_log(state, "info", "ERRORE", f"Fetch saldo fallito: {e}")
+            _update_pnl(state)
+            return
+    else:
+        # Sim: usa currentCapital (già aggiornato dopo ogni trade)
+        tradable_capital = state["currentCapital"] * capital_pct
+
+    # Soglia minima: se il capitale tradabile è troppo basso, ferma
+    min_tradable = max(1.0, state["capital"] * alloc_pct * capital_pct * 0.1)
+    if tradable_capital < min_tradable:
+        state["running"] = False
+        add_log(state, "info", "STOP AUTO",
+            f"Capitale tradabile insufficiente (${tradable_capital:.2f}) — sessione fermata")
+        await send_telegram(f"⛔ STOP AUTO: capitale disponibile ${tradable_capital:.2f} insufficiente")
+        return
+
+    # Numero massimo di posizioni aperte contemporaneamente
     max_pos   = max(1, int(round(1 / alloc_pct)))
     open_syms = {p["symbol"] for p in state["positions"]}
     slots     = max_pos - len(state["positions"])
@@ -691,7 +728,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         _update_pnl(state)
         return
 
-    if slots <= 0 or state["currentCapital"] < state["capital"] * alloc_pct * 0.5:
+    if slots <= 0 or tradable_capital < state["capital"] * alloc_pct * capital_pct * 0.5:
         _update_pnl(state)
         return
 
@@ -748,7 +785,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     for d in candidates:
         add_log(state, "info", "SEGNALE", f"{d['symbol']} | {d.get('ema_reason', 'EMA off')}")
-        await enter_position(state, d)
+        await enter_position(state, d, tradable_capital)
 
     _update_pnl(state)
 
@@ -1168,6 +1205,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         "sessionDuration": int(cfg.get("sessionDuration", 8)) * 3600 * 1000,
         "config": {
             "allocPct":            float(cfg.get("allocPct", 0.20)),
+            "capitalPct":          float(cfg.get("capitalPct", 1.0)),
             "stopLoss":            float(cfg.get("stopLoss", 0.01)),
             "cooldown":            float(cfg.get("cooldown", 1)),
             "minVolume":           float(cfg.get("minVolume", 0)),
@@ -1185,6 +1223,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         "consecutiveLosses": 0,
     })
     alloc  = float(cfg.get("allocPct", 0.20)) * 100
+    capp   = float(cfg.get("capitalPct", 1.0)) * 100
     vol    = float(cfg.get("minVolume", 0)) / 1_000_000
     mode   = "REALE" if real_mode else "SIMULAZIONE"
     ema_s  = "ON" if cfg.get("emaFilter", True) else "OFF"
@@ -1192,7 +1231,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
     mt     = int(cfg.get("maxTrades", 0))
     mcl    = int(cfg.get("maxConsecutiveLosses", 3))
     add_log(state, "info", "AVVIO",
-        f"${capital:.0f} | {mode} | Alloc: {alloc:.0f}% | Vol: ${vol:.0f}M | "
+        f"${capital:.0f} | {mode} | Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | Vol: ${vol:.0f}M | "
         f"EMA: {ema_s} | Pullback: {ptol:.1f}% | MaxTrade: {mt or 'inf'} | MaxLoss: {mcl}"
     )
     return {"ok": True}
