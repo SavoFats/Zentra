@@ -552,10 +552,13 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;font-size:16px;font-weight:700;color:var(--text3)" id="totalBalanceDisplay">--</div>
       <div class="field-hint">Aggiornato in tempo reale da Coinbase / simulato</div>
     </div>
+    <!-- elemento nascosto per compatibilità JS (dataset.total) -->
+    <input type="hidden" id="capital">
+
     <div class="field">
-      <div class="field-label">Capitale da tradare <span id="capitalDisplay">$0</span></div>
-      <input type="number" id="capital" value="" min="0" step="0.5" inputmode="decimal" placeholder="Es. 100.00" oninput="onCapitalInput()">
-      <div class="field-hint" id="capitalHint">Inserisci quanto vuoi mettere a rischio in questa sessione</div>
+      <div class="field-label">Capitale da tradare <span id="capitalPctVal">100%</span> · <span id="capitalDisplay" style="color:var(--blue)">$0</span></div>
+      <input type="range" id="capitalPct" min="10" max="100" value="100" step="5" oninput="updateCapitalPct()">
+      <div class="field-hint" id="capitalHint">Percentuale del saldo disponibile da mettere in gioco</div>
     </div>
     <div class="field">
       <div class="field-label">Allocazione per trade <span id="allocVal">0%</span></div>
@@ -915,8 +918,9 @@ function updateProfileMenu() {
 function showConfirmModal(cfg) {
   _pendingStartCfg = cfg;
   const capital = cfg.capital.toFixed(2);
+  const capPct = Math.round((cfg.capitalPct || 1) * 100);
   document.getElementById('confirmModalBody').innerHTML =
-    'Stai per avviare una sessione <strong style="color:var(--red)">REALE</strong> con <strong>$' + capital + '</strong> su Coinbase.<br><br>Gli ordini verranno eseguiti con denaro vero. Confermi?';
+    'Stai per avviare una sessione <strong style="color:var(--red)">REALE</strong> con il <strong>' + capPct + '%</strong> del tuo saldo (<strong>$' + capital + '</strong>) su Coinbase.<br><br>Gli ordini verranno eseguiti con denaro vero. Confermi?';
   document.getElementById('confirmModal').classList.add('open');
 }
 function closeModal() {
@@ -1331,7 +1335,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capital','allocPct','sessionDuration','stopLoss','pullbackTolerance','volMultiplier','minVolume','maxTrades','maxConsecutiveLosses','cooldown'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','pullbackTolerance','volMultiplier','minVolume','maxTrades','maxConsecutiveLosses','cooldown'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -1353,8 +1357,8 @@ function unlockConfig() {
 }
 
 function resetConfigToDefaults() {
-  document.getElementById('capital').value = '';
-  document.getElementById('capitalDisplay').textContent = '$0';
+  document.getElementById('capitalPct').value = 100; document.getElementById('capitalPctVal').textContent = '100%';
+  document.getElementById('capitalDisplay').textContent = '--';
   document.getElementById('allocPct').value = 0; document.getElementById('allocVal').textContent = '0%';
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
   document.getElementById('stopLoss').value = 2.5; document.getElementById('slVal').textContent = '2.5%';
@@ -1380,7 +1384,7 @@ function saveConfigToStorage(cfg) { localStorage.setItem('ca_config', JSON.strin
 function restoreConfigFromStorage() {
   const saved = JSON.parse(localStorage.getItem('ca_config') || 'null');
   if (!saved) return;
-  if (saved.capital) { document.getElementById('capital').value = saved.capital; document.getElementById('capitalDisplay').textContent = '$' + parseFloat(saved.capital).toLocaleString(); }
+  if (saved.capitalPct !== undefined) { const p=Math.round(saved.capitalPct*100); document.getElementById('capitalPct').value=p; document.getElementById('capitalPctVal').textContent=p+'%'; }
   if (saved.allocPct) { const p=Math.round(saved.allocPct*100); document.getElementById('allocPct').value=p; document.getElementById('allocVal').textContent=p+'%'; }
   if (saved.sessionDuration) { document.getElementById('sessionDuration').value=saved.sessionDuration; document.getElementById('sessionVal').textContent=saved.sessionDuration+'h'; }
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
@@ -1401,32 +1405,28 @@ function restoreConfigFromStorage() {
   updateAlloc();
 }
 
+function updateCapitalPct() {
+  const pct = parseInt(document.getElementById('capitalPct').value);
+  document.getElementById('capitalPctVal').textContent = pct + '%';
+  const total = parseFloat(document.getElementById('capital').dataset.total || 0);
+  const dollars = total > 0 ? (total * pct / 100) : 0;
+  document.getElementById('capitalDisplay').textContent = dollars > 0 ? '$' + dollars.toFixed(2) : '--';
+  updateAlloc();
+}
+
 function updateAlloc() {
   const v = parseInt(document.getElementById('allocPct').value);
   document.getElementById('allocVal').textContent = v + '%';
   if (v === 0) { document.getElementById('allocHint').textContent = "Imposta l'allocazione per calcolare le posizioni"; return; }
   const max = Math.floor(100 / v);
-  const budget = parseFloat(document.getElementById('capital').value) || 0;
-  const perTrade = (budget * v / 100).toFixed(2);
-  document.getElementById('allocHint').textContent = 'Max ' + max + ' posizioni · $' + perTrade + ' per trade';
+  const pct = parseInt(document.getElementById('capitalPct').value) || 100;
+  const total = parseFloat(document.getElementById('capital').dataset.total || 0);
+  const tradable = total > 0 ? (total * pct / 100) : 0;
+  const perTrade = tradable > 0 ? '$' + (tradable * v / 100).toFixed(2) : '--';
+  document.getElementById('allocHint').textContent = 'Max ' + max + ' posizioni · ' + perTrade + ' per trade';
 }
 
-function onCapitalInput() {
-  const val = parseFloat(document.getElementById('capital').value) || 0;
-  const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  document.getElementById('capitalDisplay').textContent = '$' + val.toFixed(2);
-  const hint = document.getElementById('capitalHint');
-  if (total > 0 && val > total * 0.98) {
-    document.getElementById('capital').value = (total * 0.98).toFixed(2);
-    document.getElementById('capitalDisplay').textContent = '$' + (total * 0.98).toFixed(2);
-    hint.textContent = 'Ridotto al 98% del saldo — il 2% e riservato alle commissioni';
-    hint.style.color = 'var(--yellow)';
-  } else {
-    hint.textContent = 'Inserisci quanto vuoi mettere a rischio in questa sessione';
-    hint.style.color = '';
-  }
-  updateAlloc();
-}
+function onCapitalInput() { updateCapitalPct(); } // compat
 
 let _realMode = false;
 async function setMode(real) {
@@ -1470,13 +1470,17 @@ async function setMode(real) {
 
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
-  const capitalVal = parseFloat(document.getElementById('capital').value);
-  if (!capitalVal || capitalVal <= 0) { alert('Inserisci il capitale da tradare prima di avviare.'); return; }
-  const totalBal = parseFloat(document.getElementById('capital').dataset.total || 0);
-  if (totalBal > 0 && capitalVal > totalBal * 0.98) { alert('Il capitale supera il 98% del saldo disponibile.'); return; }
+  const capitalPctVal = parseInt(document.getElementById('capitalPct').value);
+  if (!capitalPctVal || capitalPctVal <= 0) { alert('Imposta la percentuale di capitale prima di avviare.'); return; }
+  const allocVal = parseInt(document.getElementById('allocPct').value);
+  if (!allocVal || allocVal <= 0) { alert("Imposta l'allocazione per trade prima di avviare."); return; }
+  const total = parseFloat(document.getElementById('capital').dataset.total || 0);
+  // capital = valore in $ al momento dell'avvio (solo per stats/P&L reference)
+  const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : 1000;
   const cfg = {
     capital:               capitalVal,
-    allocPct:              parseInt(document.getElementById('allocPct').value) / 100,
+    capitalPct:            capitalPctVal / 100,
+    allocPct:              allocVal / 100,
     sessionDuration:       parseInt(document.getElementById('sessionDuration').value),
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
     pullbackTolerance:     parseFloat(document.getElementById('pullbackTolerance').value) / 100,
@@ -2204,11 +2208,12 @@ async function loadHomeBalance() {
         const bal = usdc ? parseFloat(usdc.available) : 0;
         valEl.textContent = '$' + bal.toFixed(2);
         subEl.textContent = 'USDC disponibili su Coinbase';
-        // Aggiorna anche saldo totale in config
         const tbd = document.getElementById('totalBalanceDisplay');
         if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
+        // Salva il saldo totale come riferimento per lo slider capitalPct
         const cap = document.getElementById('capital');
-        if (cap && !cap.value) { cap.value = (bal * 0.98).toFixed(2); onCapitalInput(); }
+        if (cap) cap.dataset.total = bal;
+        updateCapitalPct();
       } else {
         valEl.textContent = '--';
         subEl.textContent = 'Errore Coinbase';
@@ -2220,11 +2225,12 @@ async function loadHomeBalance() {
   } else {
     valEl.textContent = '$1,000';
     subEl.textContent = 'Saldo simulato';
-    // Precompila config con 1000
     const tbd = document.getElementById('totalBalanceDisplay');
     if (tbd) { tbd.textContent = 'Simulazione — $1,000'; tbd.style.color = ''; }
+    // In simulazione il saldo di riferimento è 1000
     const cap = document.getElementById('capital');
-    if (cap && !cap.value) { cap.value = '1000'; onCapitalInput(); }
+    if (cap) cap.dataset.total = 1000;
+    updateCapitalPct();
   }
 }
 
