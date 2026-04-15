@@ -1128,9 +1128,9 @@ async def get_trades(user_id: int = Depends(get_current_user)):
                 "size": r["size"],
             } for r in rows]
             # Merge: DB ha tutto, mem ha solo sessione corrente
-            # Usa DB come source of truth, aggiungi mem solo se non già in DB
-            db_keys = set((t["symbol"], t["time"]) for t in db_trades)
-            extra = [t for t in mem_trades if (t["symbol"], t["time"]) not in db_keys]
+            # Usa entryTime come chiave — è identico in memoria e nel DB
+            db_keys = set((t["symbol"], t["entryTime"]) for t in db_trades)
+            extra = [t for t in mem_trades if (t["symbol"], t["entryTime"]) not in db_keys]
             return {"trades": extra + db_trades}
         except Exception as e:
             print(f"DB trades fetch error: {e}")
