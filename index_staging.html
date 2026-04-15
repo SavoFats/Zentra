@@ -1115,6 +1115,7 @@ async function setSimMode(sim) {
   } catch(e) {}
   updateSimToggle();
   renderHome();
+  renderTransazioni();
 }
 
 function updateSimToggle() {
@@ -1801,6 +1802,9 @@ function applyTxFilters(list) {
   const now = Date.now();
   const periods = { today: 86400000, week: 7*86400000, month: 30*86400000, '6m': 180*86400000 };
   return list.filter(t => {
+    // Filtro modalità: sim mostra solo sim, reale mostra solo reale
+    if (_simMode && t.realMode) return false;
+    if (!_simMode && !t.realMode) return false;
     // Periodo
     if (txFilters.period !== 'all') {
       const age = now - new Date(t.time).getTime();
@@ -1831,7 +1835,7 @@ function renderTransazioni() {
     document.getElementById('txWinLoss').textContent = '-- vittorie · -- sconfitte';
     return;
   }
-  const filtered = applyTxFilters([...trades].reverse());
+  const filtered = applyTxFilters([...trades].sort((a, b) => new Date(b.time) - new Date(a.time)));
   // Stats
   const wins = filtered.filter(t => t.pnl >= 0).length;
   const losses = filtered.filter(t => t.pnl < 0).length;
