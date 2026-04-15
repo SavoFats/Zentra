@@ -1563,6 +1563,13 @@ async function poll() {
     const td = await tRes.json();
     const md = await mRes.json();
     mktData = md.market || [];
+    // Aggiorna prezzi in-place se i tab sono già renderizzati
+    if (document.getElementById('page-market').classList.contains('active')) {
+      updateMarketPricesInPlace();
+    }
+    if (document.getElementById('page-home').classList.contains('active')) {
+      updateWatchlistPricesInPlace();
+    }
     const newTrades = td.trades || [];
 
     // Notifica nuovi trade chiusi
@@ -1702,7 +1709,6 @@ function render() {
   }
 
   if (document.getElementById('page-transazioni').classList.contains('active')) renderStorico();
-  if (document.getElementById('page-home').classList.contains('active')) renderHomeWatchlist();
   renderHomeSession();
 }
 
@@ -2117,15 +2123,15 @@ function renderMarket() {
           </div>
         </div>
         <div class="mkt-right">
-          <div class="mkt-price-val">${fmtPrice(c.price)}</div>
+          <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtPrice(c.price)}</div>
           <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:5px">
             <div style="text-align:center">
               <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">24H</div>
-              <div class="mkt-chg-pill" style="background:${bg24};color:${c24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</div>
+              <div class="mkt-chg-pill" id="mkt-chg24-${c.symbol}" style="background:${bg24};color:${c24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</div>
             </div>
             <div style="text-align:center">
               <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">1H</div>
-              <div class="mkt-chg-pill" style="background:rgba(138,143,168,0.08);color:${c1h}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}%</div>
+              <div class="mkt-chg-pill" id="mkt-chg1h-${c.symbol}" style="background:rgba(138,143,168,0.08);color:${c1h}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}%</div>
             </div>
           </div>
         </div>
@@ -2288,8 +2294,8 @@ function renderHomeWatchlist() {
       </div>
       <div style="display:flex;align-items:center;gap:12px">
         <div style="text-align:right">
-          <div style="font-size:14px;font-weight:700">${price}</div>
-          <div style="font-size:11px;font-weight:600;color:${chgColor}">${chgText}</div>
+          <div style="font-size:14px;font-weight:700" id="wl-price-${sym}">${price}</div>
+          <div style="font-size:11px;font-weight:600;color:${chgColor}" id="wl-chg-${sym}">${chgText}</div>
         </div>
         <button class="star-btn starred" onclick="toggleWatchlist('${sym}')" title="Rimuovi dai preferiti">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -2299,7 +2305,41 @@ function renderHomeWatchlist() {
   }).join('');
 }
 
-async function toggleWatchlist(symbol) {
+function updateWatchlistPricesInPlace() {
+  for (const sym of _watchlist) {
+    const d = mktData.find(c => c.symbol === sym);
+    if (!d) continue;
+    const priceEl = document.getElementById('wl-price-' + sym);
+    const chgEl   = document.getElementById('wl-chg-' + sym);
+    if (priceEl) priceEl.textContent = fmtPrice(d.price);
+    if (chgEl) {
+      const chg = d.change24h || 0;
+      chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      chgEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+  }
+}
+
+function updateMarketPricesInPlace() {
+  for (const c of mktData) {
+    const priceEl = document.getElementById('mkt-price-' + c.symbol);
+    const chg24El = document.getElementById('mkt-chg24-' + c.symbol);
+    const chg1hEl = document.getElementById('mkt-chg1h-' + c.symbol);
+    if (!priceEl) continue; // riga non ancora nel DOM (filtro attivo)
+    priceEl.textContent = fmtPrice(c.price);
+    if (chg24El) {
+      const chg = c.change24h || 0;
+      chg24El.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      chg24El.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+      chg24El.style.background = chg >= 0 ? 'rgba(5,193,104,0.12)' : 'rgba(246,70,93,0.12)';
+    }
+    if (chg1hEl) {
+      const chg = c.change1h || 0;
+      chg1hEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      chg1hEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+  }
+}
   if (_watchlist.has(symbol)) {
     _watchlist.delete(symbol);
     await fetch(API + '/watchlist/' + symbol, { method: 'DELETE', headers: authHeaders() });
