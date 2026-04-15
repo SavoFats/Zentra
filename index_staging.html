@@ -552,10 +552,13 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;font-size:16px;font-weight:700;color:var(--text3)" id="totalBalanceDisplay">--</div>
       <div class="field-hint">Aggiornato in tempo reale da Coinbase / simulato</div>
     </div>
+    <!-- elemento nascosto per compatibilità JS (dataset.total) -->
+    <input type="hidden" id="capital">
+
     <div class="field">
-      <div class="field-label">Capitale da tradare <span id="capitalDisplay">$0</span></div>
-      <input type="number" id="capital" value="" min="0" step="0.5" inputmode="decimal" placeholder="Es. 100.00" oninput="onCapitalInput()">
-      <div class="field-hint" id="capitalHint">Inserisci quanto vuoi mettere a rischio in questa sessione</div>
+      <div class="field-label">Capitale da tradare <span id="capitalPctVal">100%</span> · <span id="capitalDisplay" style="color:var(--blue)">$0</span></div>
+      <input type="range" id="capitalPct" min="10" max="100" value="100" step="5" oninput="updateCapitalPct()">
+      <div class="field-hint" id="capitalHint">Percentuale del saldo disponibile da mettere in gioco</div>
     </div>
     <div class="field">
       <div class="field-label">Allocazione per trade <span id="allocVal">0%</span></div>
@@ -915,8 +918,9 @@ function updateProfileMenu() {
 function showConfirmModal(cfg) {
   _pendingStartCfg = cfg;
   const capital = cfg.capital.toFixed(2);
+  const capPct = Math.round((cfg.capitalPct || 1) * 100);
   document.getElementById('confirmModalBody').innerHTML =
-    'Stai per avviare una sessione <strong style="color:var(--red)">REALE</strong> con <strong>$' + capital + '</strong> su Coinbase.<br><br>Gli ordini verranno eseguiti con denaro vero. Confermi?';
+    'Stai per avviare una sessione <strong style="color:var(--red)">REALE</strong> con il <strong>' + capPct + '%</strong> del tuo saldo (<strong>$' + capital + '</strong>) su Coinbase.<br><br>Gli ordini verranno eseguiti con denaro vero. Confermi?';
   document.getElementById('confirmModal').classList.add('open');
 }
 function closeModal() {
@@ -1115,6 +1119,7 @@ async function setSimMode(sim) {
   } catch(e) {}
   updateSimToggle();
   renderHome();
+  renderTransazioni();
 }
 
 function updateSimToggle() {
@@ -1256,8 +1261,20 @@ const LOGO_URLS = {
   HBAR:'https://assets.coingecko.com/coins/images/3688/small/hbar.png',
   AAVE:'https://assets.coingecko.com/coins/images/12645/small/AAVE.png',
   GRT:'https://assets.coingecko.com/coins/images/13397/small/Graph_Token.png',
+  // Coin mancanti o con ID errato
+  CHZ:'https://assets.coingecko.com/coins/images/8834/small/CHZ_Token_updated.png',
+  BIO:'https://assets.coingecko.com/coins/images/31069/small/bio.png',
+  WLFI:'https://assets.coingecko.com/coins/images/39344/small/wlfi.jpg',
+  RED:'https://assets.coingecko.com/coins/images/34455/small/red.png',
+  KITE:'https://assets.coingecko.com/coins/images/36758/small/kite.png',
+  CTSI:'https://assets.coingecko.com/coins/images/11038/small/cartesi.png',
+  WCT:'https://assets.coingecko.com/coins/images/39384/small/wct.jpg',
+  PENGU:'https://assets.coingecko.com/coins/images/36129/small/pengu.png',
+  TRUMP:'https://assets.coingecko.com/coins/images/39189/small/trump.jpg',
+  BARD:'https://assets.coingecko.com/coins/images/38900/small/bard.jpg',
   ZAMA:'https://assets.coingecko.com/coins/images/37479/small/zama.png',
-  PENGU:'https://assets.coingecko.com/coins/images/36158/small/pengu.png',
+  ASTER:'https://assets.coingecko.com/coins/images/35276/small/aster.png',
+  XPL:'https://assets.coingecko.com/coins/images/38444/small/xpl.png',
   CAKE:'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
   XPL:'https://assets.coingecko.com/coins/images/38444/small/xpl.png',
   PLUME:'https://assets.coingecko.com/coins/images/39352/small/plume.jpg',
@@ -1270,7 +1287,28 @@ const LOGO_URLS = {
   ZEC:'https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png',
   TREE:'https://assets.coingecko.com/coins/images/39972/small/tree.jpg',
 };
-function getLogo(sym) { return LOGO_URLS[sym] || null; }
+const _logoCache = {};
+function getLogo(sym) {
+  if (LOGO_URLS[sym]) return LOGO_URLS[sym];
+  if (_logoCache[sym] !== undefined) return _logoCache[sym] || null;
+  // Segnaposto mentre carica
+  _logoCache[sym] = null;
+  fetch(`https://api.coingecko.com/api/v3/search?query=${sym}`)
+    .then(r => r.json())
+    .then(d => {
+      const coin = (d.coins || []).find(c => c.symbol.toUpperCase() === sym);
+      if (coin && coin.large) {
+        _logoCache[sym] = coin.large.replace('/large/', '/small/');
+        // Aggiorna img già nel DOM tramite id
+        const img = document.getElementById('logo-img-' + sym);
+        const ph  = document.getElementById('logo-ph-' + sym);
+        if (img) { img.src = _logoCache[sym]; img.style.display = ''; }
+        if (ph)  { ph.style.display = 'none'; }
+      }
+    })
+    .catch(() => {});
+  return null;
+}
 
 // ── STATE ────────────────────────────────────────────────────────────────────
 let S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
@@ -1330,7 +1368,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capital','allocPct','sessionDuration','stopLoss','pullbackTolerance','volMultiplier','minVolume','maxTrades','maxConsecutiveLosses','cooldown'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','pullbackTolerance','volMultiplier','minVolume','maxTrades','maxConsecutiveLosses','cooldown'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -1352,8 +1390,8 @@ function unlockConfig() {
 }
 
 function resetConfigToDefaults() {
-  document.getElementById('capital').value = '';
-  document.getElementById('capitalDisplay').textContent = '$0';
+  document.getElementById('capitalPct').value = 100; document.getElementById('capitalPctVal').textContent = '100%';
+  document.getElementById('capitalDisplay').textContent = '--';
   document.getElementById('allocPct').value = 0; document.getElementById('allocVal').textContent = '0%';
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
   document.getElementById('stopLoss').value = 2.5; document.getElementById('slVal').textContent = '2.5%';
@@ -1379,7 +1417,7 @@ function saveConfigToStorage(cfg) { localStorage.setItem('ca_config', JSON.strin
 function restoreConfigFromStorage() {
   const saved = JSON.parse(localStorage.getItem('ca_config') || 'null');
   if (!saved) return;
-  if (saved.capital) { document.getElementById('capital').value = saved.capital; document.getElementById('capitalDisplay').textContent = '$' + parseFloat(saved.capital).toLocaleString(); }
+  if (saved.capitalPct !== undefined) { const p=Math.round(saved.capitalPct*100); document.getElementById('capitalPct').value=p; document.getElementById('capitalPctVal').textContent=p+'%'; }
   if (saved.allocPct) { const p=Math.round(saved.allocPct*100); document.getElementById('allocPct').value=p; document.getElementById('allocVal').textContent=p+'%'; }
   if (saved.sessionDuration) { document.getElementById('sessionDuration').value=saved.sessionDuration; document.getElementById('sessionVal').textContent=saved.sessionDuration+'h'; }
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
@@ -1400,32 +1438,42 @@ function restoreConfigFromStorage() {
   updateAlloc();
 }
 
+function updateCapitalPct() {
+  const pct = parseInt(document.getElementById('capitalPct').value);
+  document.getElementById('capitalPctVal').textContent = pct + '%';
+  const total = parseFloat(document.getElementById('capital').dataset.total || 0);
+  const dollars = total > 0 ? (total * pct / 100) : 0;
+  document.getElementById('capitalDisplay').textContent = dollars > 0 ? '$' + dollars.toFixed(2) : '--';
+  updateAlloc();
+}
+
 function updateAlloc() {
   const v = parseInt(document.getElementById('allocPct').value);
   document.getElementById('allocVal').textContent = v + '%';
   if (v === 0) { document.getElementById('allocHint').textContent = "Imposta l'allocazione per calcolare le posizioni"; return; }
   const max = Math.floor(100 / v);
-  const budget = parseFloat(document.getElementById('capital').value) || 0;
-  const perTrade = (budget * v / 100).toFixed(2);
-  document.getElementById('allocHint').textContent = 'Max ' + max + ' posizioni · $' + perTrade + ' per trade';
+  const pct = parseInt(document.getElementById('capitalPct').value) || 100;
+  const total = parseFloat(document.getElementById('capital').dataset.total || 0);
+  const tradable = total > 0 ? (total * pct / 100) : 0;
+  const sizePerTrade = tradable * v / 100;
+  const slots = max; // slot massimi contemporanei
+  const feeReserve = sizePerTrade * 0.012 * slots; // 0.6% entrata + 0.6% uscita * n posizioni
+  const netCapital = tradable - feeReserve;
+  const netPerTrade = netCapital * v / 100;
+
+  const hint = document.getElementById('allocHint');
+  if (tradable > 0) {
+    hint.innerHTML =
+      'Max ' + max + ' posizioni · <strong>$' + netPerTrade.toFixed(2) + '</strong> per trade' +
+      '<br><span style="color:var(--text3);font-size:10px">Capitale: $' + tradable.toFixed(2) +
+      ' · Fee stimate: <span style="color:var(--red)">−$' + feeReserve.toFixed(2) + '</span>' +
+      ' · Netto: $' + netCapital.toFixed(2) + '</span>';
+  } else {
+    hint.innerHTML = 'Max ' + max + ' posizioni · configura il capitale per vedere le fee';
+  }
 }
 
-function onCapitalInput() {
-  const val = parseFloat(document.getElementById('capital').value) || 0;
-  const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  document.getElementById('capitalDisplay').textContent = '$' + val.toFixed(2);
-  const hint = document.getElementById('capitalHint');
-  if (total > 0 && val > total * 0.98) {
-    document.getElementById('capital').value = (total * 0.98).toFixed(2);
-    document.getElementById('capitalDisplay').textContent = '$' + (total * 0.98).toFixed(2);
-    hint.textContent = 'Ridotto al 98% del saldo — il 2% e riservato alle commissioni';
-    hint.style.color = 'var(--yellow)';
-  } else {
-    hint.textContent = 'Inserisci quanto vuoi mettere a rischio in questa sessione';
-    hint.style.color = '';
-  }
-  updateAlloc();
-}
+function onCapitalInput() { updateCapitalPct(); } // compat
 
 let _realMode = false;
 async function setMode(real) {
@@ -1469,13 +1517,17 @@ async function setMode(real) {
 
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
-  const capitalVal = parseFloat(document.getElementById('capital').value);
-  if (!capitalVal || capitalVal <= 0) { alert('Inserisci il capitale da tradare prima di avviare.'); return; }
-  const totalBal = parseFloat(document.getElementById('capital').dataset.total || 0);
-  if (totalBal > 0 && capitalVal > totalBal * 0.98) { alert('Il capitale supera il 98% del saldo disponibile.'); return; }
+  const capitalPctVal = parseInt(document.getElementById('capitalPct').value);
+  if (!capitalPctVal || capitalPctVal <= 0) { alert('Imposta la percentuale di capitale prima di avviare.'); return; }
+  const allocVal = parseInt(document.getElementById('allocPct').value);
+  if (!allocVal || allocVal <= 0) { alert("Imposta l'allocazione per trade prima di avviare."); return; }
+  const total = parseFloat(document.getElementById('capital').dataset.total || 0);
+  // capital = valore in $ al momento dell'avvio (solo per stats/P&L reference)
+  const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : 1000;
   const cfg = {
     capital:               capitalVal,
-    allocPct:              parseInt(document.getElementById('allocPct').value) / 100,
+    capitalPct:            capitalPctVal / 100,
+    allocPct:              allocVal / 100,
     sessionDuration:       parseInt(document.getElementById('sessionDuration').value),
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
     pullbackTolerance:     parseFloat(document.getElementById('pullbackTolerance').value) / 100,
@@ -1535,12 +1587,22 @@ function startPolling() {
 
 async function poll() {
   try {
-    const [sRes, tRes] = await Promise.all([
+    const [sRes, tRes, mRes] = await Promise.all([
       fetch(API + '/status', { headers:authHeaders() }),
-      fetch(API + '/trades', { headers:authHeaders() })
+      fetch(API + '/trades', { headers:authHeaders() }),
+      fetch(API + '/market'),
     ]);
     S = await sRes.json(); window._lastStatus = S;
     const td = await tRes.json();
+    const md = await mRes.json();
+    mktData = md.market || [];
+    // Aggiorna prezzi in-place se i tab sono già renderizzati
+    if (document.getElementById('page-market').classList.contains('active')) {
+      updateMarketPricesInPlace();
+    }
+    if (document.getElementById('page-home').classList.contains('active')) {
+      updateWatchlistPricesInPlace();
+    }
     const newTrades = td.trades || [];
 
     // Notifica nuovi trade chiusi
@@ -1606,6 +1668,13 @@ async function startupSession() {
       localStorage.setItem('ca_active_tab', 'home');
     }
   }
+  // Pre-carica i trade prima di mostrare il tab, così transazioni non appare vuota al refresh
+  try {
+    const tRes = await fetch(API + '/trades', { headers: authHeaders() });
+    const td = await tRes.json();
+    trades = td.trades || [];
+    _lastSeenTradeCount = trades.length;
+  } catch(e) {}
   restoreActiveTab();
   document.querySelector('.pages').classList.add('ready');
   startPolling();
@@ -1679,10 +1748,10 @@ function render() {
 function renderHomeSession() {
   const widget = document.getElementById('homeSessionWidget');
   const cnt = document.getElementById('homeSessionContent');
-  const startBtn = document.getElementById('homeStartBtn');
+  const startBtnWrap = document.getElementById('homeStartBtnWrap');
   if (!widget || !cnt) return;
-  // Mostra/nasconde bottone avvia
-  if (startBtn) startBtn.style.display = S.running ? 'none' : 'inline-flex';
+  // Nasconde l'intero wrapper (bottone + margini) quando la sessione è attiva
+  if (startBtnWrap) startBtnWrap.style.display = S.running ? 'none' : 'flex';
   if (!S.running) { widget.style.display = 'none'; return; }
   widget.style.display = 'block';
   if (!S.running) { cnt.innerHTML = ''; return; }
@@ -1802,6 +1871,9 @@ function applyTxFilters(list) {
   const now = Date.now();
   const periods = { today: 86400000, week: 7*86400000, month: 30*86400000, '6m': 180*86400000 };
   return list.filter(t => {
+    // Filtro modalità: sim mostra solo sim, reale mostra solo reale
+    if (_simMode && t.realMode) return false;
+    if (!_simMode && !t.realMode) return false;
     // Periodo
     if (txFilters.period !== 'all') {
       const age = now - new Date(t.time).getTime();
@@ -1832,7 +1904,7 @@ function renderTransazioni() {
     document.getElementById('txWinLoss').textContent = '-- vittorie · -- sconfitte';
     return;
   }
-  const filtered = applyTxFilters([...trades].reverse());
+  const filtered = applyTxFilters([...trades].sort((a, b) => new Date(b.time) - new Date(a.time)));
   // Stats
   const wins = filtered.filter(t => t.pnl >= 0).length;
   const losses = filtered.filter(t => t.pnl < 0).length;
@@ -2070,8 +2142,8 @@ function renderMarket() {
       <div class="mkt-row-main">
         <div class="mkt-coin">
           <div class="mkt-logo-wrap">
-            <img src="${getLogo(c.symbol)}" class="mkt-logo" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div class="mkt-icon-placeholder" style="display:none">${c.symbol[0]}</div>
+            <img ${getLogo(c.symbol) ? `src="${getLogo(c.symbol)}"` : ''} class="mkt-logo" data-logo-sym="${c.symbol}" id="logo-img-${c.symbol}" ${!getLogo(c.symbol) ? 'style="display:none"' : ''} onerror="this.onerror=null;this.style.display='none';document.getElementById('logo-ph-${c.symbol}').style.display='flex'">
+            <div class="mkt-icon-placeholder" id="logo-ph-${c.symbol}" style="${getLogo(c.symbol) ? 'display:none' : 'display:flex'}">${c.symbol[0]}</div>
           </div>
           <div>
             <div class="mkt-name" style="display:flex;align-items:center;justify-content:space-between;width:100%">
@@ -2085,15 +2157,15 @@ function renderMarket() {
           </div>
         </div>
         <div class="mkt-right">
-          <div class="mkt-price-val">${fmtPrice(c.price)}</div>
+          <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtPrice(c.price)}</div>
           <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:5px">
             <div style="text-align:center">
               <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">24H</div>
-              <div class="mkt-chg-pill" style="background:${bg24};color:${c24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</div>
+              <div class="mkt-chg-pill" id="mkt-chg24-${c.symbol}" style="background:${bg24};color:${c24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</div>
             </div>
             <div style="text-align:center">
               <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">1H</div>
-              <div class="mkt-chg-pill" style="background:rgba(138,143,168,0.08);color:${c1h}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}%</div>
+              <div class="mkt-chg-pill" id="mkt-chg1h-${c.symbol}" style="background:rgba(138,143,168,0.08);color:${c1h}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}%</div>
             </div>
           </div>
         </div>
@@ -2194,11 +2266,12 @@ async function loadHomeBalance() {
         const bal = usdc ? parseFloat(usdc.available) : 0;
         valEl.textContent = '$' + bal.toFixed(2);
         subEl.textContent = 'USDC disponibili su Coinbase';
-        // Aggiorna anche saldo totale in config
         const tbd = document.getElementById('totalBalanceDisplay');
         if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
+        // Salva il saldo totale come riferimento per lo slider capitalPct
         const cap = document.getElementById('capital');
-        if (cap && !cap.value) { cap.value = (bal * 0.98).toFixed(2); onCapitalInput(); }
+        if (cap) cap.dataset.total = bal;
+        updateCapitalPct();
       } else {
         valEl.textContent = '--';
         subEl.textContent = 'Errore Coinbase';
@@ -2210,11 +2283,12 @@ async function loadHomeBalance() {
   } else {
     valEl.textContent = '$1,000';
     subEl.textContent = 'Saldo simulato';
-    // Precompila config con 1000
     const tbd = document.getElementById('totalBalanceDisplay');
     if (tbd) { tbd.textContent = 'Simulazione — $1,000'; tbd.style.color = ''; }
+    // In simulazione il saldo di riferimento è 1000
     const cap = document.getElementById('capital');
-    if (cap && !cap.value) { cap.value = '1000'; onCapitalInput(); }
+    if (cap) cap.dataset.total = 1000;
+    updateCapitalPct();
   }
 }
 
@@ -2246,7 +2320,7 @@ function renderHomeWatchlist() {
     const chgText = d ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '--';
     return `<div class="watchlist-row">
       <div style="display:flex;align-items:center;gap:10px">
-        ${logo ? `<img src="${logo}" style="width:32px;height:32px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text2)">${sym[0]}</div>`}
+        ${logo ? `<img src="${logo}" data-logo-sym="${sym}" style="width:32px;height:32px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text2)">${sym[0]}</div>`}
         <div>
           <div style="font-size:14px;font-weight:700">${getCoinName(sym)}</div>
           <div style="font-size:11px;color:var(--text3);font-weight:500">${sym}</div>
@@ -2254,8 +2328,8 @@ function renderHomeWatchlist() {
       </div>
       <div style="display:flex;align-items:center;gap:12px">
         <div style="text-align:right">
-          <div style="font-size:14px;font-weight:700">${price}</div>
-          <div style="font-size:11px;font-weight:600;color:${chgColor}">${chgText}</div>
+          <div style="font-size:14px;font-weight:700" id="wl-price-${sym}">${price}</div>
+          <div style="font-size:11px;font-weight:600;color:${chgColor}" id="wl-chg-${sym}">${chgText}</div>
         </div>
         <button class="star-btn starred" onclick="toggleWatchlist('${sym}')" title="Rimuovi dai preferiti">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -2263,6 +2337,42 @@ function renderHomeWatchlist() {
       </div>
     </div>`;
   }).join('');
+}
+
+function updateWatchlistPricesInPlace() {
+  for (const sym of _watchlist) {
+    const d = mktData.find(c => c.symbol === sym);
+    if (!d) continue;
+    const priceEl = document.getElementById('wl-price-' + sym);
+    const chgEl   = document.getElementById('wl-chg-' + sym);
+    if (priceEl) priceEl.textContent = fmtPrice(d.price);
+    if (chgEl) {
+      const chg = d.change24h || 0;
+      chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      chgEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+  }
+}
+
+function updateMarketPricesInPlace() {
+  for (const c of mktData) {
+    const priceEl = document.getElementById('mkt-price-' + c.symbol);
+    const chg24El = document.getElementById('mkt-chg24-' + c.symbol);
+    const chg1hEl = document.getElementById('mkt-chg1h-' + c.symbol);
+    if (!priceEl) continue; // riga non ancora nel DOM (filtro attivo)
+    priceEl.textContent = fmtPrice(c.price);
+    if (chg24El) {
+      const chg = c.change24h || 0;
+      chg24El.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      chg24El.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+      chg24El.style.background = chg >= 0 ? 'rgba(5,193,104,0.12)' : 'rgba(246,70,93,0.12)';
+    }
+    if (chg1hEl) {
+      const chg = c.change1h || 0;
+      chg1hEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      chg1hEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+  }
 }
 
 async function toggleWatchlist(symbol) {

@@ -426,17 +426,21 @@ def unrealized_pnl(state: dict) -> float:
 
 # ── trading ───────────────────────────────────────────────────────────────────
 
-async def enter_position(state: dict, sym_data: dict):
+async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     cfg      = state["config"]
     price    = sym_data["price"]
     sym      = sym_data["symbol"]
     is_real  = cfg.get("realMode", False)
 
     alloc_pct = cfg.get("allocPct", 0.20)
-    size = state["capital"] * alloc_pct
-    size = min(size, state["currentCapital"])
+    COINBASE_FEE = 0.006  # 0.60% per lato
+    # Size = quota del capitale tradabile netto per questo trade
+    size = tradable_capital * alloc_pct
     if size < 1:
         return
+
+    # Fee di entrata (sempre applicata, in reale la detrae Coinbase, in sim la contabilizziamo noi)
+    entry_fee = size * COINBASE_FEE
 
     # Stop price: dalla funzione EMA signal (contestuale ATR/low)
     # Fallback: stop fisso da config
@@ -471,6 +475,11 @@ async def enter_position(state: dict, sym_data: dict):
                 if any(x in err_str for x in ["not available", "cancel only", "permission_denied", "orderbook", "suspended"]):
                     state["cooldowns"][sym] = (datetime.now().timestamp() + 3600) * 1000
                     add_log(state, "info", "ESCLUSA", f"{sym} esclusa per 1h — {err_msg[:60]}")
+                # Saldo insufficiente: ferma la sessione
+                if any(x in err_str for x in ["insufficient", "insufficient_fund", "not enough"]):
+                    state["running"] = False
+                    add_log(state, "info", "STOP AUTO", f"Saldo insufficiente — sessione fermata")
+                    await send_telegram(f"⛔ STOP AUTO: saldo insufficiente su Coinbase")
                 return
             filled      = result.get("success_response", {})
             actual_price = float(filled.get("average_filled_price", price)) or price
@@ -493,10 +502,11 @@ async def enter_position(state: dict, sym_data: dict):
     else:
         actual_price = price
         add_log(state, "buy", "ACQUISTO SIM",
-            f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | "
+            f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | Fee: ${entry_fee:.2f} | "
             f"SL: ${stop_price:.4f} | TP1: ${tp1_price:.4f} | TP2: ${tp2_price:.4f} | R: {R_pct*100:.2f}%")
 
-    state["currentCapital"] -= size
+    # In sim sottraiamo anche la fee di entrata dal capitale disponibile
+    state["currentCapital"] -= size + (entry_fee if not is_real else 0)
     pos = {
         "symbol":      sym,
         "icon":        sym_data["icon"],
@@ -504,14 +514,15 @@ async def enter_position(state: dict, sym_data: dict):
         "currentPrice": actual_price,
         "highPrice":   actual_price,
         "size":        size,
-        "size_remaining": size,        # per TP parziale
-        "tp1_hit":     False,          # TP1 già raggiunto?
+        "size_remaining": size,
+        "tp1_hit":     False,
         "entryTime":   datetime.utcnow().isoformat() + "Z",
         "stopPrice":   stop_price,
         "tp1Price":    tp1_price,
         "tp2Price":    tp2_price,
         "R_pct":       R_pct,
         "realMode":    is_real,
+        "fee_pct":     COINBASE_FEE,  # usato in exit per calcolare fee uscita
     }
     state["positions"].append(pos)
 
@@ -559,6 +570,11 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 
     pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
+
+    # Fee di uscita: 0.60% sul valore liquidato (applicata sempre per riflettere realtà)
+    fee_pct = pos.get("fee_pct", 0.006)
+    exit_fee = close_size * fee_pct
+    pnl -= exit_fee  # riduce il PnL netto
 
     if partial:
         # TP1: restituisce metà capitale, aggiorna size_remaining, sposta stop a breakeven
@@ -618,7 +634,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     state["positions"] = [p for p in state["positions"] if p is not pos]
     mode = "REALE" if pos.get("realMode") else "SIM"
     add_log(state, "sell", f"{reason} {mode}",
-        f"{sym} @ ${cur:.4f} | {pnl:+.2f}$ ({pct:+.2f}%) | {dur:.0f} min")
+        f"{sym} @ ${cur:.4f} | {pnl:+.2f}$ ({pct:+.2f}%) | fee: ${exit_fee:.2f} | {dur:.0f} min")
     if pos.get("realMode"):
         esito = "PROFITTO" if pnl >= 0 else "PERDITA"
         msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ $" + f"{cur:.4f}" +
@@ -681,17 +697,56 @@ async def scan_and_trade(state: dict, user_id: int = None):
             reason = "STOP BREAKEVEN" if pos.get("tp1_hit") else "STOP LOSS"
             await exit_position(state, pos, reason, user_id=user_id)
 
-    alloc_pct = cfg.get("allocPct", 0.20)
+    alloc_pct   = cfg.get("allocPct", 0.20)
+    capital_pct = cfg.get("capitalPct", 1.0)
+    COINBASE_FEE = 0.006  # 0.60% per lato (taker fee)
+
+    # Calcola il capitale tradabile dinamicamente
+    if cfg.get("realMode", False):
+        # Reale: leggi saldo USDC effettivo da Coinbase
+        cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
+        cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
+        try:
+            accounts = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
+            usdc_balance = 0.0
+            for acc in accounts.get("accounts", []):
+                if acc["currency"] in ("USDC", "USD"):
+                    usdc_balance += float(acc["available_balance"]["value"])
+            tradable_capital = usdc_balance * capital_pct
+        except Exception as e:
+            add_log(state, "info", "ERRORE", f"Fetch saldo fallito: {e}")
+            _update_pnl(state)
+            return
+    else:
+        # Sim: usa currentCapital (già aggiornato dopo ogni trade)
+        tradable_capital = state["currentCapital"] * capital_pct
+
+    # Soglia minima: se il capitale tradabile è troppo basso, ferma
+    min_tradable = max(1.0, state["capital"] * alloc_pct * capital_pct * 0.1)
+    if tradable_capital < min_tradable:
+        state["running"] = False
+        add_log(state, "info", "STOP AUTO",
+            f"Capitale tradabile insufficiente (${tradable_capital:.2f}) — sessione fermata")
+        await send_telegram(f"⛔ STOP AUTO: capitale disponibile ${tradable_capital:.2f} insufficiente")
+        return
+
+    # Numero massimo di posizioni aperte contemporaneamente
     max_pos   = max(1, int(round(1 / alloc_pct)))
     open_syms = {p["symbol"] for p in state["positions"]}
     slots     = max_pos - len(state["positions"])
+
+    # Sottrai le commissioni round-trip attese per tutte le posizioni apribili
+    # fee_totale = size_per_trade * 1.2% * slot_disponibili
+    size_per_trade = tradable_capital * alloc_pct
+    fee_reserve = size_per_trade * COINBASE_FEE * 2 * slots  # entrata + uscita per ogni slot
+    tradable_capital_net = tradable_capital - fee_reserve
 
     # Non aprire nuove posizioni se maxTrades raggiunto
     if max_trades > 0 and state["tradeCount"] >= max_trades:
         _update_pnl(state)
         return
 
-    if slots <= 0 or state["currentCapital"] < state["capital"] * alloc_pct * 0.5:
+    if slots <= 0 or tradable_capital < state["capital"] * alloc_pct * capital_pct * 0.5:
         _update_pnl(state)
         return
 
@@ -748,7 +803,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     for d in candidates:
         add_log(state, "info", "SEGNALE", f"{d['symbol']} | {d.get('ema_reason', 'EMA off')}")
-        await enter_position(state, d)
+        await enter_position(state, d, tradable_capital_net)
 
     _update_pnl(state)
 
@@ -1128,9 +1183,9 @@ async def get_trades(user_id: int = Depends(get_current_user)):
                 "size": r["size"],
             } for r in rows]
             # Merge: DB ha tutto, mem ha solo sessione corrente
-            # Usa DB come source of truth, aggiungi mem solo se non già in DB
-            db_keys = set((t["symbol"], t["time"]) for t in db_trades)
-            extra = [t for t in mem_trades if (t["symbol"], t["time"]) not in db_keys]
+            # Usa entryTime come chiave — è identico in memoria e nel DB
+            db_keys = set((t["symbol"], t["entryTime"]) for t in db_trades)
+            extra = [t for t in mem_trades if (t["symbol"], t["entryTime"]) not in db_keys]
             return {"trades": extra + db_trades}
         except Exception as e:
             print(f"DB trades fetch error: {e}")
@@ -1168,6 +1223,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         "sessionDuration": int(cfg.get("sessionDuration", 8)) * 3600 * 1000,
         "config": {
             "allocPct":            float(cfg.get("allocPct", 0.20)),
+            "capitalPct":          float(cfg.get("capitalPct", 1.0)),
             "stopLoss":            float(cfg.get("stopLoss", 0.01)),
             "cooldown":            float(cfg.get("cooldown", 1)),
             "minVolume":           float(cfg.get("minVolume", 0)),
@@ -1185,6 +1241,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         "consecutiveLosses": 0,
     })
     alloc  = float(cfg.get("allocPct", 0.20)) * 100
+    capp   = float(cfg.get("capitalPct", 1.0)) * 100
     vol    = float(cfg.get("minVolume", 0)) / 1_000_000
     mode   = "REALE" if real_mode else "SIMULAZIONE"
     ema_s  = "ON" if cfg.get("emaFilter", True) else "OFF"
@@ -1192,7 +1249,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
     mt     = int(cfg.get("maxTrades", 0))
     mcl    = int(cfg.get("maxConsecutiveLosses", 3))
     add_log(state, "info", "AVVIO",
-        f"${capital:.0f} | {mode} | Alloc: {alloc:.0f}% | Vol: ${vol:.0f}M | "
+        f"${capital:.0f} | {mode} | Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | Vol: ${vol:.0f}M | "
         f"EMA: {ema_s} | Pullback: {ptol:.1f}% | MaxTrade: {mt or 'inf'} | MaxLoss: {mcl}"
     )
     return {"ok": True}
