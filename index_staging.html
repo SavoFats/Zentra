@@ -115,20 +115,20 @@ html { overflow-x:hidden; }
 .tab.active::after { opacity:1; }
 
 .pages { position:fixed; top:calc(var(--hdr-h) + env(safe-area-inset-top, 0px)); bottom:calc(var(--tab-h) + env(safe-area-inset-bottom, 0px)); left:0; right:0; overflow:hidden; }
-.page { position:absolute; inset:0; overflow-y:auto; padding:20px; display:none; }
+.page { position:absolute; inset:0; overflow-y:auto; padding:16px; display:none; }
 .page.active { display:block; }
 
-.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
 .card-label { font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:14px; }
 
-.sess-banner { background:linear-gradient(135deg, rgba(0,82,255,0.15), rgba(0,82,255,0.05)); border:1px solid rgba(0,82,255,0.3); border-radius:var(--radius); padding:16px 20px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; transition:all 0.3s; }
+.sess-banner { background:linear-gradient(135deg, rgba(0,82,255,0.15), rgba(0,82,255,0.05)); border:1px solid rgba(0,82,255,0.3); border-radius:var(--radius); padding:16px 20px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; transition:all 0.3s; }
 .sess-banner.off { background:var(--surface); border-color:var(--border); }
 .sess-label { font-size:10px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; }
 .sess-time { font-size:28px; font-weight:700; color:var(--blue); letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
 .sess-banner.off .sess-time { font-size:22px; color:var(--text3); }
 .sess-pnl { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
 
-.kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+.kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
 .kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
 .kpi-label { font-size:10px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px; }
 .kpi-value { font-size:22px; font-weight:700; color:var(--text); letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
@@ -491,7 +491,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   <div class="page" id="page-home">
     <div class="ptr-indicator" id="ptr-page-home"><div class="ptr-spinner"></div></div>
 
-    <div class="home-welcome" style="padding:16px 0 20px">
+    <div class="home-welcome" style="padding:24px 0 20px">
       <div class="home-welcome-sub">Benvenuto</div>
       <div class="home-username" id="homeUsername">--</div>
     </div>
@@ -504,7 +504,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <!-- Watchlist -->
-    <div class="card">
+    <div class="card" style="padding-bottom:0">
       <div class="card-label">Preferiti</div>
       <div id="homeWatchlist">
         <div class="empty" style="padding:24px 0"><div class="empty-text">Aggiungi coin dai preferiti nel Mercato</div></div>
@@ -512,21 +512,21 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <!-- Avvia sessione -->
-    <div style="display:flex;justify-content:center;margin-bottom:16px">
+    <div id="homeStartBtnWrap" style="display:flex;justify-content:center">
       <button id="homeStartBtn" onclick="openDrawer()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,82,255,0.25);transition:all 0.15s;letter-spacing:-0.01em">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Avvia sessione
       </button>
     </div>
     <!-- Widget sessione in corso -->
-    <div class="card" id="homeSessionWidget">
+    <div class="card" id="homeSessionWidget" style="display:none;margin-top:12px">
       <div class="card-label" style="margin-bottom:10px">Sessione in corso</div>
       <div id="homeSessionContent">
         <div class="empty" style="padding:16px 0"><div class="empty-text" style="color:var(--text3)">Nessuna sessione attiva</div></div>
       </div>
     </div>
 
-    <div style="height:16px"></div>
+    <div style="height:8px"></div>
   </div>
 
   <!-- CONFIG -->
@@ -589,6 +589,57 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <div class="field">
+      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span></div>
+      <div class="ema-toggle-row">
+        <button class="ema-btn active" id="trend1hOnBtn" onclick="setTrend1h(true)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Attivo
+        </button>
+        <button class="ema-btn" id="trend1hOffBtn" onclick="setTrend1h(false)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Disattivo
+        </button>
+      </div>
+      <div class="field-hint">EMA20 &gt; EMA50 su 1h — entra solo in trend superiore confermato</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Filtro BTC EMA1h <span id="btcEmaLabel" style="color:var(--green);font-weight:700">ON</span></div>
+      <div class="ema-toggle-row">
+        <button class="ema-btn active" id="btcEmaOnBtn" onclick="setBtcEma(true)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Attivo
+        </button>
+        <button class="ema-btn" id="btcEmaOffBtn" onclick="setBtcEma(false)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Disattivo
+        </button>
+      </div>
+      <div class="field-hint">Pausa se BTC è sotto la propria EMA20 su 1h — evita long in bear market</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Filtro RSI <span id="rsiFilterLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="rsiRangeVal" style="color:var(--blue);font-weight:700">40–60</span></div>
+      <div class="ema-toggle-row" style="margin-bottom:10px">
+        <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Attivo
+        </button>
+        <button class="ema-btn" id="rsiOffBtn" onclick="setRsiFilter(false)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Disattivo
+        </button>
+      </div>
+      <div id="rsiRangeFields">
+        <div class="field-label" style="font-size:12px">RSI min <span id="rsiMinVal">40</span></div>
+        <input type="range" id="rsiMin" min="20" max="50" value="40" step="5" oninput="updateRsiRange()">
+        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">60</span></div>
+        <input type="range" id="rsiMax" min="50" max="80" value="60" step="5" oninput="updateRsiRange()">
+      </div>
+      <div class="field-hint" style="margin-top:6px">Entra solo con RSI in zona neutrale — evita ipercomprato e ipervenduto</div>
+    </div>
+
+    <div class="field">
       <div class="field-label">Pullback Tolerance <span id="pullbackVal">1.5%</span></div>
       <input type="range" id="pullbackTolerance" min="0.1" max="3" value="1.5" step="0.1"
         oninput="document.getElementById('pullbackVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
@@ -611,16 +662,42 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div class="field-hint">Scarta il trade se lo stop contestuale (ATR / low pullback) supera questa soglia</div>
     </div>
 
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px">
+    <div class="field">
+      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">2.5R</span></div>
+      <input type="range" id="tp2R" min="1.5" max="4" value="2.5" step="0.5"
+        oninput="document.getElementById('tp2RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
+      <div class="field-hint">Obiettivo del 50% rimanente dopo TP1 — più alto = meno frequente ma più profittevole</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="trailingPctVal" style="color:var(--blue);font-weight:700">50%</span></div>
+      <div class="ema-toggle-row" style="margin-bottom:10px">
+        <button class="ema-btn active" id="trailingOnBtn" onclick="setTrailing(true)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Attivo
+        </button>
+        <button class="ema-btn" id="trailingOffBtn" onclick="setTrailing(false)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Disattivo
+        </button>
+      </div>
+      <div id="trailingPctField">
+        <input type="range" id="trailingPct" min="10" max="90" value="50" step="10"
+          oninput="document.getElementById('trailingPctVal').textContent=this.value+'%'">
+        <div class="field-hint">Dopo TP1 lo stop segue il massimo − N% di R, invece di restare fisso a breakeven</div>
+      </div>
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
       <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Schema Take Profit</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
           <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">TP1 — 1R</div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude 50%</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Stop → breakeven</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Trailing stop attivo</div>
         </div>
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">TP2 — 1.5R</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp2Label">TP2 — 2.5R</div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude tutto</div>
           <div style="font-size:10px;color:var(--text3);margin-top:3px">Posizione chiusa</div>
         </div>
@@ -695,7 +772,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       </div>
     </div>
     <!-- Mini-log agente -->
-    <div id="agentActivityWrap" style="display:none;margin-bottom:16px">
+    <div id="agentActivityWrap" style="display:none;margin-bottom:12px">
       <div class="card" style="padding:14px 16px">
         <div class="card-label" style="margin-bottom:10px">Attivita agente</div>
         <div id="agentActivityList"></div>
@@ -1368,7 +1445,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','pullbackTolerance','volMultiplier','minVolume','maxTrades','maxConsecutiveLosses','cooldown'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','pullbackTolerance','volMultiplier','minVolume','maxTrades','maxConsecutiveLosses','cooldown','tp2R','trailingPct','rsiMin','rsiMax'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -1401,7 +1478,10 @@ function resetConfigToDefaults() {
   document.getElementById('maxTrades').value = 0; updateMaxTrades();
   document.getElementById('maxConsecutiveLosses').value = 3; updateMaxLoss();
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
-  setEmaFilter(true);
+  document.getElementById('tp2R').value = 2.5; document.getElementById('tp2RVal').textContent = '2.5R'; updateTpSchema();
+  document.getElementById('trailingPct').value = 50; document.getElementById('trailingPctVal').textContent = '50%';
+  document.getElementById('rsiMin').value = 40; document.getElementById('rsiMax').value = 60; updateRsiRange();
+  setEmaFilter(true); setTrend1h(true); setBtcEma(true); setRsiFilter(true); setTrailing(true);
   document.getElementById('modeRealBtn').classList.remove('active-real');
   document.getElementById('modeSimBtn').classList.remove('active-sim');
   document.getElementById('modeHint').textContent = 'Seleziona la modalita per iniziare';
@@ -1428,6 +1508,15 @@ function restoreConfigFromStorage() {
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
   if (saved.cooldown !== undefined) { document.getElementById('cooldown').value=saved.cooldown; document.getElementById('cdVal').textContent=saved.cooldown+'h'; }
   if (saved.emaFilter !== undefined) setEmaFilter(saved.emaFilter);
+  if (saved.trend1hFilter !== undefined) setTrend1h(saved.trend1hFilter);
+  if (saved.btcEmaFilter !== undefined) setBtcEma(saved.btcEmaFilter);
+  if (saved.rsiFilter !== undefined) setRsiFilter(saved.rsiFilter);
+  if (saved.rsiMin) { document.getElementById('rsiMin').value=saved.rsiMin; }
+  if (saved.rsiMax) { document.getElementById('rsiMax').value=saved.rsiMax; }
+  updateRsiRange();
+  if (saved.tp2R) { document.getElementById('tp2R').value=saved.tp2R; document.getElementById('tp2RVal').textContent=parseFloat(saved.tp2R).toFixed(1)+'R'; updateTpSchema(); }
+  if (saved.trailingStop !== undefined) setTrailing(saved.trailingStop);
+  if (saved.trailingPct) { document.getElementById('trailingPct').value=Math.round(saved.trailingPct*100); document.getElementById('trailingPctVal').textContent=Math.round(saved.trailingPct*100)+'%'; }
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
@@ -1475,7 +1564,52 @@ function updateAlloc() {
 
 function onCapitalInput() { updateCapitalPct(); } // compat
 
-let _realMode = false;
+let _trend1hFilter = true;
+let _btcEmaFilter  = true;
+let _rsiFilter     = true;
+let _trailingStop  = true;
+
+function setTrend1h(on) {
+  _trend1hFilter = on;
+  document.getElementById('trend1hOnBtn').classList.toggle('active', on);
+  document.getElementById('trend1hOffBtn').classList.toggle('active', !on);
+  document.getElementById('trend1hLabel').textContent = on ? 'ON' : 'OFF';
+  document.getElementById('trend1hLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
+}
+function setBtcEma(on) {
+  _btcEmaFilter = on;
+  document.getElementById('btcEmaOnBtn').classList.toggle('active', on);
+  document.getElementById('btcEmaOffBtn').classList.toggle('active', !on);
+  document.getElementById('btcEmaLabel').textContent = on ? 'ON' : 'OFF';
+  document.getElementById('btcEmaLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
+}
+function setRsiFilter(on) {
+  _rsiFilter = on;
+  document.getElementById('rsiOnBtn').classList.toggle('active', on);
+  document.getElementById('rsiOffBtn').classList.toggle('active', !on);
+  document.getElementById('rsiFilterLabel').textContent = on ? 'ON' : 'OFF';
+  document.getElementById('rsiFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
+  document.getElementById('rsiRangeFields').style.display = on ? '' : 'none';
+}
+function updateRsiRange() {
+  const min = document.getElementById('rsiMin').value;
+  const max = document.getElementById('rsiMax').value;
+  document.getElementById('rsiMinVal').textContent = min;
+  document.getElementById('rsiMaxVal').textContent = max;
+  document.getElementById('rsiRangeVal').textContent = min + '–' + max;
+}
+function setTrailing(on) {
+  _trailingStop = on;
+  document.getElementById('trailingOnBtn').classList.toggle('active', on);
+  document.getElementById('trailingOffBtn').classList.toggle('active', !on);
+  document.getElementById('trailingLabel').textContent = on ? 'ON' : 'OFF';
+  document.getElementById('trailingLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
+  document.getElementById('trailingPctField').style.display = on ? '' : 'none';
+}
+function updateTpSchema() {
+  const tp2r = parseFloat(document.getElementById('tp2R').value).toFixed(1);
+  document.getElementById('tp2Label').textContent = 'TP2 — ' + tp2r + 'R';
+}
 async function setMode(real) {
   _realMode = real; window._realMode = real;
   const simBtn = document.getElementById('modeSimBtn');
@@ -1522,8 +1656,10 @@ async function startAgent() {
   const allocVal = parseInt(document.getElementById('allocPct').value);
   if (!allocVal || allocVal <= 0) { alert("Imposta l'allocazione per trade prima di avviare."); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  // capital = valore in $ al momento dell'avvio (solo per stats/P&L reference)
-  const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : 1000;
+  const isReal = _hasApiKeys && !_simMode;
+  // In sim usa 1000 se il saldo non è ancora stato caricato
+  const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
+  if (isReal && capitalVal <= 0) { alert('Saldo Coinbase non ancora caricato. Attendi qualche secondo e riprova.'); return; }
   const cfg = {
     capital:               capitalVal,
     capitalPct:            capitalPctVal / 100,
@@ -1538,8 +1674,15 @@ async function startAgent() {
     cooldown:              parseFloat(document.getElementById('cooldown').value),
     emaFilter:             _emaFilter,
     realMode:              _hasApiKeys && !_simMode,
+    trend1hFilter:         _trend1hFilter,
+    btcEmaFilter:          _btcEmaFilter,
+    rsiFilter:             _rsiFilter,
+    rsiMin:                parseFloat(document.getElementById('rsiMin').value),
+    rsiMax:                parseFloat(document.getElementById('rsiMax').value),
+    tp2R:                  parseFloat(document.getElementById('tp2R').value),
+    trailingStop:          _trailingStop,
+    trailingPct:           parseFloat(document.getElementById('trailingPct').value) / 100,
   };
-  const isReal = _hasApiKeys && !_simMode;
   if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);
 }
@@ -1754,7 +1897,6 @@ function renderHomeSession() {
   if (startBtnWrap) startBtnWrap.style.display = S.running ? 'none' : 'flex';
   if (!S.running) { widget.style.display = 'none'; return; }
   widget.style.display = 'block';
-  if (!S.running) { cnt.innerHTML = ''; return; }
   const pos = S.positions || [];
   if (pos.length === 0) {
     cnt.innerHTML = '<div style="text-align:center;padding:16px 0;font-size:13px;color:var(--text3);font-weight:500">Scan mercato in corso</div>';
@@ -2136,7 +2278,7 @@ function renderMarket() {
         ><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       };
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.trend,'trend','trend')}${dot(ema.pullback,'pullback','pull')}${dot(ema.volume,'volume','vol')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots">${dot(ema.trend1h_ok ?? true,'trend1h','1h')}${dot(ema.trend,'trend','15m')}${dot(ema.pullback,'pullback','pull')}${dot(ema.volume,'volume','vol')}${dot(ema.rsi_ok ?? true,'rsi','RSI')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
     }
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
       <div class="mkt-row-main">
@@ -2447,9 +2589,14 @@ let _tooltipTimeout = null;
 
 // Definizioni indicatori per tooltip
 const EMA_DOT_INFO = {
+  trend1h: {
+    name: 'Trend 1h',
+    descOn:  "EMA20 > EMA50 su 1h — trend superiore confermato. Filtro aggiuntivo: evita long contro il trend principale.",
+    descOff: "EMA20 < EMA50 su 1h — trend principale ribassista. L'agente non apre long in questa condizione.",
+  },
   trend: {
-    name: 'Trend',
-    descOn:  "EMA20 > EMA50 su 15min — mercato in tendenza rialzista. Filtro principale: senza trend l'agente non entra.",
+    name: 'Trend 15m',
+    descOn:  "EMA20 > EMA50 su 15min — mercato in tendenza rialzista sul medio termine.",
     descOff: "EMA20 < EMA50 su 15min — nessuna tendenza rialzista chiara. L'agente aspetta che il trend si formi.",
   },
   pullback: {
@@ -2461,6 +2608,11 @@ const EMA_DOT_INFO = {
     name: 'Volume',
     descOn:  "Volume ultima candela 5min superiore alla media 20 candele x moltiplicatore impostato. Conferma partecipazione reale.",
     descOff: "Volume insufficiente sull'ultima candela 5min. Un rimbalzo su volume basso è spesso falso — serve partecipazione reale.",
+  },
+  rsi: {
+    name: 'RSI',
+    descOn:  "RSI(14) su 5min in zona neutrale (range configurato). Evita ingressi in ipercomprato o ipervenduto.",
+    descOff: "RSI(14) fuori dalla zona neutrale — mercato in ipercomprato (>60) o ipervenduto (<40). Trade scartato.",
   },
   stop: {
     name: 'R (Stop)',
@@ -2476,7 +2628,9 @@ function showDotTooltip(el) {
   if (!ema || !key) return;
   const info = EMA_DOT_INFO[key];
   if (!info) return;
-  const on = ema[key];
+  // Mappa chiave dot → chiave nel cache ema
+  const keyMap = { trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback', volume: 'volume', rsi: 'rsi_ok', stop: 'stop' };
+  const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
   const icon = on ? '✓' : '✗';
