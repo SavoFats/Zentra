@@ -622,7 +622,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <div class="field">
-      <div class="field-label">Filtro RSI <span id="rsiFilterLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="rsiRangeVal" style="color:var(--blue);font-weight:700">40–60</span></div>
+      <div class="field-label">Filtro RSI <span id="rsiFilterLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="rsiRangeVal" style="color:var(--blue);font-weight:700">35–70</span></div>
       <div class="ema-toggle-row" style="margin-bottom:10px">
         <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -634,10 +634,10 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
         </button>
       </div>
       <div id="rsiRangeFields">
-        <div class="field-label" style="font-size:12px">RSI min <span id="rsiMinVal">40</span></div>
-        <input type="range" id="rsiMin" min="20" max="50" value="40" step="5" oninput="updateRsiRange()">
-        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">60</span></div>
-        <input type="range" id="rsiMax" min="50" max="80" value="60" step="5" oninput="updateRsiRange()">
+        <div class="field-label" style="font-size:12px">RSI min <span id="rsiMinVal">35</span></div>
+        <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" oninput="updateRsiRange()">
+        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">70</span></div>
+        <input type="range" id="rsiMax" min="50" max="80" value="70" step="5" oninput="updateRsiRange()">
       </div>
       <div class="field-hint" style="margin-top:6px">Entra solo con RSI in zona neutrale — evita ipercomprato e ipervenduto</div>
     </div>
@@ -1483,7 +1483,7 @@ function resetConfigToDefaults() {
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
   document.getElementById('tp2R').value = 2.5; document.getElementById('tp2RVal').textContent = '2.5R'; updateTpSchema();
   document.getElementById('trailingPct').value = 50; document.getElementById('trailingPctVal').textContent = '50%';
-  document.getElementById('rsiMin').value = 40; document.getElementById('rsiMax').value = 60; updateRsiRange();
+  document.getElementById('rsiMin').value = 35; document.getElementById('rsiMax').value = 70; updateRsiRange();
   setEmaFilter(true); setTrend1h(true); setBtcEma(true); setRsiFilter(true); setTrailing(true);
   document.getElementById('modeRealBtn').classList.remove('active-real');
   document.getElementById('modeSimBtn').classList.remove('active-sim');
