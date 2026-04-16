@@ -119,7 +119,7 @@ async def coinbase_request(method: str, path: str, body: dict = None,
 
 # ── market data ───────────────────────────────────────────────────────────────
 
-market_data = {}  # sym -> {price, change1h, change24h, volume24h, priceHistory, icon}
+market_data = {}  # sym -> {price, change1h, change24h, volume24h, icon}
 user_sessions: dict = {}
 
 # ── CANDLE DATA (nuovo) ───────────────────────────────────────────────────────
@@ -225,6 +225,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "ema20_1h":         calc_ema(closes1h, 20),
             "ema50_1h":         calc_ema(closes1h, 50),
             "last_close_5m":    closes5[-1],
+            "close_1h_ago":     closes1h[-2],  # close della candela 1h precedente = 1h fa esatto
             "atr_5m":           atr_5m,
             "pullback_low_5m":  pullback_low_5m,
             "vol_avg_20":       vol_avg_20,
@@ -429,22 +430,16 @@ async def fetch_prices():
             if sym not in market_data:
                 market_data[sym] = {
                     "price": 0.0, "change1h": 0.0, "change24h": 0.0,
-                    "volume24h": 0.0, "priceHistory": [], "icon": sym[0]
+                    "volume24h": 0.0, "icon": sym[0]
                 }
 
-            hist = market_data[sym]["priceHistory"]
-            hist.append(price)
-            if len(hist) > 450:
-                hist.pop(0)
+            # change1h: usa close_1h_ago dalle candele Binance — dato preciso
+            # Se le candele non sono ancora disponibili mostra 0.0 (nessuna stima)
+            cd = candle_data.get(sym)
+            change1h = (price - cd["close_1h_ago"]) / cd["close_1h_ago"] * 100 if (cd and cd.get("close_1h_ago", 0) > 0) else 0.0
 
-            if len(hist) >= 10:
-                price_1h_ago = hist[0]
-                change1h = (price - price_1h_ago) / price_1h_ago * 100
-            else:
-                change1h = change24h * 0.04
-
-            market_data[sym]["price"] = price
-            market_data[sym]["change1h"] = change1h
+            market_data[sym]["price"]     = price
+            market_data[sym]["change1h"]  = change1h
             market_data[sym]["change24h"] = change24h
             market_data[sym]["volume24h"] = vol_usd
 
