@@ -848,6 +848,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     candidates  = []
     ema_skipped = 0
+    block_count = {"trend1h": 0, "trend": 0, "pullback": 0, "bounce": 0, "volume": 0, "rsi": 0, "stop": 0}
 
     for d in universe_sorted:
         sym = d["symbol"]
@@ -856,6 +857,14 @@ async def scan_and_trade(state: dict, user_id: int = None):
                                     trend1h_filter, rsi_filter, rsi_min, rsi_max)
             if not signal["signal"]:
                 ema_skipped += 1
+                # Conta quale filtro ha bloccato
+                if not signal.get("trend1h_ok", True): block_count["trend1h"] += 1
+                elif not signal["trend_ok"]:            block_count["trend"] += 1
+                elif not signal["pullback_ok"]:         block_count["pullback"] += 1
+                elif not signal["bounce_ok"]:           block_count["bounce"] += 1
+                elif not signal["vol_ok"]:              block_count["volume"] += 1
+                elif not signal.get("rsi_ok", True):   block_count["rsi"] += 1
+                elif not signal["stop_ok"]:             block_count["stop"] += 1
                 continue
             d["ema_reason"]  = signal["reason"]
             d["stop_price"]  = signal["stop_price"]
@@ -864,11 +873,15 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if len(candidates) >= slots:
             break
 
+    # Trova il filtro che blocca di più
+    top_blocker = max(block_count, key=block_count.get) if ema_skipped > 0 else "-"
+    top_blocker_n = block_count.get(top_blocker, 0)
+
     top3 = [(d["symbol"], round(d.get("volume24h", 0) / 1e6, 0)) for d in universe_sorted[:3]]
     add_log(state, "info", "SCAN",
-        f"Universe: {len(prices_ok)} | Top3 vol (M$): {top3} | "
-        f"Candidati: {len(candidates)} | Saltati EMA: {ema_skipped} | "
-        f"Candele: {len(candle_data)} | BTC1h: {btc_1h:+.2f}% | Trade: {state['tradeCount']}/{max_trades or 'inf'}"
+        f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | "
+        f"Saltati: {ema_skipped} | Blocco: {top_blocker}({top_blocker_n}) | "
+        f"RSI range: {rsi_min:.0f}-{rsi_max:.0f} | Candele: {len(candle_data)}"
     )
 
     for d in candidates:
@@ -1208,13 +1221,29 @@ async def get_status(user_id: int = Depends(get_current_user)):
 @app.get("/market")
 def get_market():
     items = []
+    # Usa i parametri della prima sessione attiva, altrimenti default
+    active_cfg = {}
+    for s in user_sessions.values():
+        if s.get("running"):
+            active_cfg = s.get("config", {})
+            break
+
+    pullback_tol   = active_cfg.get("pullbackTolerance", 0.015)
+    vol_mult       = active_cfg.get("volMultiplier", 1.2)
+    max_stop_pct   = active_cfg.get("maxStopPct", 0.025)
+    trend1h_filter = active_cfg.get("trend1hFilter", True)
+    rsi_filter     = active_cfg.get("rsiFilter", True)
+    rsi_min        = active_cfg.get("rsiMin", 40.0)
+    rsi_max        = active_cfg.get("rsiMax", 60.0)
+
     for s, d in market_data.items():
         if d["price"] <= 0:
             continue
         if s not in candle_data:
             continue
         item = {"symbol": s, **d}
-        sig = get_ema_signal(s, d["price"])
+        sig = get_ema_signal(s, d["price"], pullback_tol, vol_mult, max_stop_pct,
+                             trend1h_filter, rsi_filter, rsi_min, rsi_max)
         item["ema"] = {
             "trend":      sig["trend_ok"],
             "trend1h_ok": sig["trend1h_ok"],
@@ -1224,6 +1253,7 @@ def get_market():
             "stop":       sig["stop_ok"],
             "signal":     sig["signal"],
             "rsi":        sig.get("rsi", 50),
+            "reason":     sig["reason"],
         }
         items.append(item)
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
