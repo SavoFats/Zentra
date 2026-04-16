@@ -166,8 +166,8 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
     pair = f"{sym}USDT"
     try:
         r5, r15, r1h = await asyncio.gather(
-            client.get(f"{BINANCE_BASE}/api/v3/klines", params={"symbol": pair, "interval": "5m",  "limit": 150}),
-            client.get(f"{BINANCE_BASE}/api/v3/klines", params={"symbol": pair, "interval": "15m", "limit": 150}),
+            client.get(f"{BINANCE_BASE}/api/v3/klines", params={"symbol": pair, "interval": "5m",  "limit": 60}),
+            client.get(f"{BINANCE_BASE}/api/v3/klines", params={"symbol": pair, "interval": "15m", "limit": 60}),
             client.get(f"{BINANCE_BASE}/api/v3/klines", params={"symbol": pair, "interval": "1h",  "limit": 60}),
         )
         if r5.status_code != 200 or r15.status_code != 200 or r1h.status_code != 200:
@@ -179,7 +179,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
 
         if not isinstance(klines5, list) or not isinstance(klines15, list) or not isinstance(klines1h, list):
             return None
-        if len(klines5) < 100 or len(klines15) < 100 or len(klines1h) < 50:
+        if len(klines5) < 50 or len(klines15) < 50 or len(klines1h) < 50:
             return None
 
         closes5  = [float(k[4]) for k in klines5]
@@ -207,16 +207,6 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         # RSI(14) su 5m
         rsi_14 = calc_rsi(closes5, 14)
 
-        # Corpo ultima candela 5m: close - open
-        last_candle  = klines5[-1]
-        last_open    = float(last_candle[1])
-        last_close_c = float(last_candle[4])
-        last_high    = float(last_candle[2])
-        last_low_c   = float(last_candle[3])
-        candle_range = last_high - last_low_c
-        candle_body  = last_close_c - last_open  # positivo = verde
-        body_ratio   = abs(candle_body) / candle_range if candle_range > 0 else 0.0
-
         return {
             "ema20_5m":         calc_ema(closes5,  20),
             "ema50_5m":         calc_ema(closes5,  50),
@@ -231,8 +221,6 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "vol_avg_20":       vol_avg_20,
             "vol_last":         vol_last,
             "rsi_14":           rsi_14,
-            "candle_body":      candle_body,
-            "body_ratio":       body_ratio,
             "updated_at":       time.time(),
         }
     except Exception as e:
@@ -273,8 +261,7 @@ async def fetch_all_candles():
 def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0.015,
                    vol_multiplier: float = 1.2, max_stop_pct: float = 0.025,
                    trend1h_filter: bool = True, rsi_filter: bool = True,
-                   rsi_min: float = 35.0, rsi_max: float = 70.0,
-                   min_r: float = 0.01) -> dict:
+                   rsi_min: float = 40.0, rsi_max: float = 60.0) -> dict:
     """
     Analizza il segnale EMA + RSI + volume per una coin.
     Restituisce segnale, stop price contestuale e R (rischio per unità).
@@ -296,8 +283,6 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     vol_avg_20      = cd["vol_avg_20"]
     vol_last        = cd["vol_last"]
     rsi_14          = cd.get("rsi_14", 50.0)
-    body_ratio      = cd.get("body_ratio", 0.0)
-    candle_body     = cd.get("candle_body", 0.0)
 
     # 1. Trend rialzista su 15min
     trend_ok = ema20_15m > ema50_15m
@@ -318,18 +303,15 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     # 6. RSI in zona neutrale (né ipercomprato né ipervenduto)
     rsi_ok = (rsi_min <= rsi_14 <= rsi_max) if rsi_filter else True
 
-    # 7. Corpo candela verde e almeno 30% del range (rimbalzo convinto, no doji)
-    body_ok = candle_body > 0 and body_ratio >= 0.30
-
     # Stop contestuale
     stop_from_low = pullback_low_5m
     stop_from_atr = current_price - atr_5m if atr_5m > 0 else 0.0
     stop_price    = min(stop_from_low, stop_from_atr) if stop_from_atr > 0 else stop_from_low
 
     R = (current_price - stop_price) / current_price if stop_price > 0 else 0.0
-    stop_ok = min_r <= R <= max_stop_pct
+    stop_ok = 0 < R <= max_stop_pct
 
-    signal = trend_ok and trend1h_ok and pullback_ok and bounce_ok and vol_ok and rsi_ok and body_ok and stop_ok
+    signal = trend_ok and trend1h_ok and pullback_ok and bounce_ok and vol_ok and rsi_ok and stop_ok
 
     if not trend1h_ok:
         reason = f"no trend 1h (EMA20 {ema20_1h:.4f} < EMA50 {ema50_1h:.4f})"
@@ -344,8 +326,6 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         reason = f"volume basso ({ratio:.1f}x media, richiesto {vol_multiplier}x)"
     elif not rsi_ok:
         reason = f"RSI fuori range ({rsi_14:.1f}, range {rsi_min:.0f}-{rsi_max:.0f})"
-    elif not body_ok:
-        reason = f"candela debole (corpo {body_ratio*100:.0f}% del range, min 30%)" if candle_body > 0 else "candela ribassista — no entrata"
     elif not stop_ok:
         if R > 0 and R < min_r:
             reason = f"R troppo piccolo ({R*100:.2f}% < {min_r*100:.1f}% min) — fee mangerebbero il profitto"
@@ -357,7 +337,7 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         reason = (f"OK | EMA20/50 1h: {ema20_1h:.4f}/{ema50_1h:.4f} | "
                   f"EMA20/50 15m: {ema20_15m:.4f}/{ema50_15m:.4f} | "
                   f"dist EMA20: {dist_from_ema20*100:.2f}% | "
-                  f"RSI: {rsi_14:.1f} | corpo: {body_ratio*100:.0f}% | vol: {vol_last/vol_avg_20:.1f}x | R: {R*100:.2f}%")
+                  f"RSI: {rsi_14:.1f} | vol: {vol_last/vol_avg_20:.1f}x | R: {R*100:.2f}%")
 
     return {
         "signal":      signal,
@@ -370,7 +350,6 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         "bounce_ok":   bounce_ok,
         "vol_ok":      vol_ok,
         "rsi_ok":      rsi_ok,
-        "body_ok":     body_ok,
         "stop_ok":     stop_ok,
         "rsi":         rsi_14,
     }
@@ -842,16 +821,14 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     prices_ok = [sym for sym, d in market_data.items() if d["price"] > 0]
 
-    # Filtro BTC: deve essere sopra EMA20 su 1h con tolleranza 0.1%
-    # Evita falsi negativi quando BTC è praticamente sulla EMA (zona di contatto)
+    # Filtro BTC: deve essere sopra EMA20 su 1h (trend superiore positivo)
     btc_cd = candle_data.get("BTC", {})
     btc_ema20_1h = btc_cd.get("ema20_1h", 0)
     btc_ema50_1h = btc_cd.get("ema50_1h", 0)
     btc_price    = market_data.get("BTC", {}).get("price", 0)
     btc_filter   = cfg.get("btcEmaFilter", True)
     if btc_filter and btc_ema20_1h > 0 and btc_price > 0:
-        tolerance = btc_ema20_1h * 0.001  # 0.1% sotto EMA20 è ancora accettabile
-        if btc_price < btc_ema20_1h - tolerance:
+        if btc_price < btc_ema20_1h:
             add_log(state, "info", "PAUSA",
                 f"BTC sotto EMA20 1h (${btc_price:.0f} < ${btc_ema20_1h:.0f}) — agente in attesa")
             _update_pnl(state)
@@ -864,9 +841,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
     max_stop_pct  = cfg.get("maxStopPct", 0.025)
     trend1h_filter = cfg.get("trend1hFilter", True)
     rsi_filter    = cfg.get("rsiFilter", True)
-    rsi_min       = cfg.get("rsiMin", 35.0)
-    rsi_max       = cfg.get("rsiMax", 70.0)
-    min_r         = cfg.get("minR", 0.01)
+    rsi_min       = cfg.get("rsiMin", 40.0)
+    rsi_max       = cfg.get("rsiMax", 60.0)
 
     universe = [
         {**d, "symbol": sym}
@@ -887,7 +863,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         sym = d["symbol"]
         if ema_filter:
             signal = get_ema_signal(sym, d["price"], pullback_tol, vol_mult, max_stop_pct,
-                                    trend1h_filter, rsi_filter, rsi_min, rsi_max, min_r)
+                                    trend1h_filter, rsi_filter, rsi_min, rsi_max)
             if not signal["signal"]:
                 ema_skipped += 1
                 # Conta quale filtro ha bloccato
@@ -1288,7 +1264,6 @@ def get_market():
             "stop":       sig["stop_ok"],
             "signal":     sig["signal"],
             "rsi":        sig.get("rsi", 50),
-            "reason":     sig["reason"],
         }
         items.append(item)
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
@@ -1376,9 +1351,8 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
             "trend1hFilter":       bool(cfg.get("trend1hFilter", True)),
             "btcEmaFilter":        bool(cfg.get("btcEmaFilter", True)),
             "rsiFilter":           bool(cfg.get("rsiFilter", True)),
-            "rsiMin":              float(cfg.get("rsiMin", 35.0)),
-            "rsiMax":              float(cfg.get("rsiMax", 70.0)),
-            "minR":                float(cfg.get("minR", 0.01)),
+            "rsiMin":              float(cfg.get("rsiMin", 40.0)),
+            "rsiMax":              float(cfg.get("rsiMax", 60.0)),
             "tp2R":                float(cfg.get("tp2R", 2.5)),
             "trailingStop":        bool(cfg.get("trailingStop", True)),
             "trailingPct":         float(cfg.get("trailingPct", 0.5)),
