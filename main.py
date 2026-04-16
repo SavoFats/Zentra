@@ -810,14 +810,16 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     prices_ok = [sym for sym, d in market_data.items() if d["price"] > 0]
 
-    # Filtro BTC: deve essere sopra EMA20 su 1h (trend superiore positivo)
+    # Filtro BTC: deve essere sopra EMA20 su 1h con tolleranza 0.1%
+    # Evita falsi negativi quando BTC è praticamente sulla EMA (zona di contatto)
     btc_cd = candle_data.get("BTC", {})
     btc_ema20_1h = btc_cd.get("ema20_1h", 0)
     btc_ema50_1h = btc_cd.get("ema50_1h", 0)
     btc_price    = market_data.get("BTC", {}).get("price", 0)
     btc_filter   = cfg.get("btcEmaFilter", True)
     if btc_filter and btc_ema20_1h > 0 and btc_price > 0:
-        if btc_price < btc_ema20_1h:
+        tolerance = btc_ema20_1h * 0.001  # 0.1% sotto EMA20 è ancora accettabile
+        if btc_price < btc_ema20_1h - tolerance:
             add_log(state, "info", "PAUSA",
                 f"BTC sotto EMA20 1h (${btc_price:.0f} < ${btc_ema20_1h:.0f}) — agente in attesa")
             _update_pnl(state)
