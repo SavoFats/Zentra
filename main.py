@@ -6,7 +6,7 @@ import hashlib
 import json
 import secrets
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -14,12 +14,48 @@ import httpx
 import uvicorn
 import asyncpg
 import bcrypt
+from cryptography.fernet import Fernet
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
+app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET","POST","DELETE"], allow_headers=["Authorization","Content-Type"])
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-SECRET_KEY = os.environ.get("SECRET_KEY", "crypto-agent-secret-key-change-in-prod")
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable non impostata — il server non può partire in modo sicuro")
+
+# ── ENCRYPTION (chiavi Coinbase) ──────────────────────────────────────────────
+def _get_fernet() -> Fernet:
+    import base64, hashlib
+    key = hashlib.sha256(SECRET_KEY.encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
+
+def encrypt_key(text: str) -> str:
+    """Cifra una stringa sensibile prima di salvarla nel DB."""
+    if not text:
+        return ""
+    try:
+        return _get_fernet().encrypt(text.encode()).decode()
+    except Exception:
+        return text  # fallback: salva plaintext se qualcosa va storto
+
+def decrypt_key(text: str) -> str:
+    """Decifra una stringa recuperata dal DB."""
+    if not text:
+        return ""
+    try:
+        return _get_fernet().decrypt(text.encode()).decode()
+    except Exception:
+        return text  # fallback: restituisce così com'è (retrocompatibilità con valori plaintext esistenti)
+
+def sanitize_error(e: Exception, *secrets: str) -> str:
+    """Rimuove stringhe sensibili dal messaggio di errore prima di loggarlo."""
+    msg = str(e)
+    for secret in secrets:
+        if secret and len(secret) > 4:
+            msg = msg.replace(secret, "[REDACTED]")
+    return msg
 
 db_pool = None
 
@@ -31,7 +67,8 @@ security = HTTPBearer()
 def create_token(user_id: int) -> str:
     import base64
     payload = f"{user_id}:{int(time.time()) + 86400 * 30}"
-    return base64.urlsafe_b64encode(f"{payload}:{hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:16]}".encode()).decode()
+    sig = hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:32]
+    return base64.urlsafe_b64encode(f"{payload}:{sig}".encode()).decode()
 
 def verify_token(token: str) -> int:
     import base64
@@ -42,7 +79,7 @@ def verify_token(token: str) -> int:
         if int(time.time()) > expires:
             raise HTTPException(status_code=401, detail="Token scaduto")
         payload = f"{user_id}:{expires}"
-        expected = hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:16]
+        expected = hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:32]
         if sig != expected:
             raise HTTPException(status_code=401, detail="Token non valido")
         return user_id
@@ -121,6 +158,8 @@ async def coinbase_request(method: str, path: str, body: dict = None,
 
 market_data = {}  # sym -> {price, change1h, change24h, volume24h, icon}
 user_sessions: dict = {}
+_market_data_lock = asyncio.Lock()
+_sessions_lock = asyncio.Lock()
 
 # ── CANDLE DATA (nuovo) ───────────────────────────────────────────────────────
 # sym -> {
@@ -390,14 +429,18 @@ async def fetch_prices():
             all_products = r.json()
 
         usd_syms = {}
+        usdc_syms = {}  # coin che hanno anche il pair USDC
         for p in all_products:
             if not isinstance(p, dict): continue
-            if p.get("quote_currency") != "USD": continue
             if p.get("status") != "online": continue
             sym = p.get("base_currency", "")
             if not sym or not sym.isascii() or not sym.isalpha(): continue
             if sym in STABLES: continue
-            usd_syms[p["id"]] = sym
+            quote = p.get("quote_currency", "")
+            if quote == "USD":
+                usd_syms[p["id"]] = sym
+            elif quote == "USDC":
+                usdc_syms[sym] = p["id"]  # es. "BTC" -> "BTC-USDC"
 
         async with httpx.AsyncClient(timeout=15) as client:
             r2, r1h = await asyncio.gather(
@@ -440,7 +483,13 @@ async def fetch_prices():
                 continue
             if price <= 0: continue
 
-            _coinbase_products[sym] = {"price": price, "change24h": change24h, "volume24h": vol_usd, "logo_url": ""}
+            # Preferisci USDC se disponibile, altrimenti USD
+            product_id_trading = usdc_syms.get(sym, product_id)
+            _coinbase_products[sym] = {
+                "price": price, "change24h": change24h,
+                "volume24h": vol_usd, "logo_url": "",
+                "product_id": product_id_trading  # es. "BTC-USDC" o "BTC-USD"
+            }
 
             if sym not in market_data:
                 market_data[sym] = {
@@ -451,17 +500,19 @@ async def fetch_prices():
             # change1h: direttamente da Binance ticker 1h rolling (dato preciso al minuto)
             change1h = binance_1h.get(sym, 0.0)
 
-            market_data[sym]["price"]     = price
-            market_data[sym]["change1h"]  = change1h
-            market_data[sym]["change24h"] = change24h
-            market_data[sym]["volume24h"] = vol_usd
+            async with _market_data_lock:
+                market_data[sym]["price"]     = price
+                market_data[sym]["change1h"]  = change1h
+                market_data[sym]["change24h"] = change24h
+                market_data[sym]["volume24h"] = vol_usd
 
-            for state in user_sessions.values():
-                for pos in state["positions"]:
-                    if pos["symbol"] == sym:
-                        pos["currentPrice"] = price
-                        if price > pos["highPrice"]:
-                            pos["highPrice"] = price
+            async with _market_data_lock:
+                for state in user_sessions.values():
+                    for pos in state["positions"]:
+                        if pos["symbol"] == sym:
+                            pos["currentPrice"] = price
+                            if price > pos["highPrice"]:
+                                pos["highPrice"] = price
 
     except Exception as e:
         print(f"Fetch error: {e}")
@@ -492,10 +543,13 @@ def add_log(state: dict, type_: str, label: str, desc: str):
         state["log"].pop()
 
 def unrealized_pnl(state: dict) -> float:
-    return sum(
-        (p["currentPrice"] - p["entryPrice"]) / p["entryPrice"] * p.get("size_remaining", p["size"])
-        for p in state["positions"]
-    )
+    total = 0.0
+    for p in state["positions"]:
+        size = p.get("size_remaining", p["size"])
+        gross = (p["currentPrice"] - p["entryPrice"]) / p["entryPrice"] * size
+        exit_fee = size * p.get("fee_pct", 0.006)  # fee di uscita stimata
+        total += gross - exit_fee
+    return total
 
 # ── trading ───────────────────────────────────────────────────────────────────
 
@@ -539,9 +593,10 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
         cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
         cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
         try:
+            product_id = _coinbase_products.get(sym, {}).get("product_id", f"{sym}-USDC")
             body = {
                 "client_order_id": f"ca-{sym}-{int(time.time())}",
-                "product_id": f"{sym}-USDC",
+                "product_id": product_id,
                 "side": "BUY",
                 "order_configuration": {"market_market_ioc": {"quote_size": str(round(size, 2))}}
             }
@@ -561,14 +616,16 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                     add_log(state, "info", "STOP AUTO", f"Saldo insufficiente — sessione fermata")
                     await send_telegram(f"⛔ STOP AUTO: saldo insufficiente su Coinbase")
                 return
-            filled      = result.get("success_response", {})
+            filled       = result.get("success_response", {})
             actual_price = float(filled.get("average_filled_price", price)) or price
+            # Quantità effettivamente acquistata — useremo questo per vendere solo ciò che abbiamo comprato
+            qty_purchased = size / actual_price if actual_price > 0 else 0.0
             # Ricalcola stop e TP sull'actual price
             stop_price  = actual_price * (1 - R_pct)
             tp1_price   = actual_price * (1 + R_pct)
             tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
             add_log(state, "buy", "ACQUISTO REALE",
-                f"{sym} @ {fmt_price(actual_price)} | Size: ${size:.0f} | Fee: ${entry_fee:.2f} | "
+                f"{sym} @ {fmt_price(actual_price)} | Size: ${size:.0f} | Qty: {qty_purchased:.6f} | Fee: ${entry_fee:.2f} | "
                 f"SL: {fmt_price(stop_price)} | TP1: {fmt_price(tp1_price)} | TP2: {fmt_price(tp2_price)} | R: {R_pct*100:.2f}%")
             await send_telegram(
                 "ACQUISTO REALE\n" + sym + " @ $" + f"{actual_price:.4f}" +
@@ -577,7 +634,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "\nTP1: $" + f"{tp1_price:.4f}" + " | TP2: $" + f"{tp2_price:.4f}"
             )
         except Exception as e:
-            add_log(state, "info", "ERRORE", f"Coinbase error: {e}")
+            add_log(state, "info", "ERRORE", f"Coinbase error: {sanitize_error(e, cb_key, cb_secret)}")
             return
     else:
         actual_price = price
@@ -588,21 +645,23 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     # In sim sottraiamo anche la fee di entrata dal capitale disponibile
     state["currentCapital"] -= size + (entry_fee if not is_real else 0)
     pos = {
-        "symbol":      sym,
-        "icon":        sym_data["icon"],
-        "entryPrice":  actual_price,
-        "currentPrice": actual_price,
-        "highPrice":   actual_price,
-        "size":        size,
+        "symbol":        sym,
+        "icon":          sym_data["icon"],
+        "entryPrice":    actual_price,
+        "currentPrice":  actual_price,
+        "highPrice":     actual_price,
+        "size":          size,
         "size_remaining": size,
-        "tp1_hit":     False,
-        "entryTime":   datetime.utcnow().isoformat() + "Z",
-        "stopPrice":   stop_price,
-        "tp1Price":    tp1_price,
-        "tp2Price":    tp2_price,
-        "R_pct":       R_pct,
-        "realMode":    is_real,
-        "fee_pct":     COINBASE_FEE,  # usato in exit per calcolare fee uscita
+        "tp1_hit":       False,
+        "entryTime":     datetime.utcnow().isoformat() + "Z",
+        "stopPrice":     stop_price,
+        "tp1Price":      tp1_price,
+        "tp2Price":      tp2_price,
+        "R_pct":         R_pct,
+        "realMode":      is_real,
+        "fee_pct":       COINBASE_FEE,
+        "qty_purchased": qty_purchased if is_real else 0.0,  # quantità crypto acquistata (solo reale)
+        "product_id":    _coinbase_products.get(sym, {}).get("product_id", f"{sym}-USDC"),
     }
     state["positions"].append(pos)
 
@@ -622,20 +681,17 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
         cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
         try:
-            accounts = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
-            real_qty = 0.0
-            for acc in accounts.get("accounts", []):
-                if acc["currency"] == sym:
-                    real_qty = float(acc["available_balance"]["value"])
-                    break
-            # In caso parziale vendiamo metà qty, arrotondata
-            qty_to_sell = round(real_qty * 0.5, 8) if partial else round(real_qty, 8)
-            if qty_to_sell <= 0:
-                add_log(state, "info", "ERRORE", f"Saldo {sym}: {real_qty} — vendita annullata")
+            # Usa la quantità tracciata all'acquisto — NON il saldo totale del conto
+            # Evita di vendere crypto pre-esistente non comprata dall'agente
+            qty_purchased = pos.get("qty_purchased", 0.0)
+            if qty_purchased <= 0:
+                add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} — vendita annullata")
             else:
+                qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
+                product_id  = pos.get("product_id", f"{sym}-USDC")
                 body = {
                     "client_order_id": f"ca-exit-{sym}-{int(time.time())}",
-                    "product_id": f"{sym}-USDC", "side": "SELL",
+                    "product_id": product_id, "side": "SELL",
                     "order_configuration": {"market_market_ioc": {"base_size": str(qty_to_sell)}}
                 }
                 result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
@@ -644,9 +700,12 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 else:
                     filled = result.get("success_response", {})
                     cur = float(filled.get("average_filled_price", cur)) or cur
-                    add_log(state, "info", "VENDUTO", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f}")
+                    add_log(state, "info", "VENDUTO", f"{sym} qty: {qty_to_sell:.6f} @ {_fp(cur)}")
+                    # Aggiorna qty_purchased rimanente dopo vendita parziale
+                    if partial:
+                        pos["qty_purchased"] = qty_purchased - qty_to_sell
         except Exception as e:
-            add_log(state, "info", "ERRORE", f"Coinbase exit error: {e}")
+            add_log(state, "info", "ERRORE", f"Coinbase exit error: {sanitize_error(e, cb_key, cb_secret)}")
 
     pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
@@ -743,7 +802,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
     cfg = state["config"]
 
     elapsed_ms = (datetime.now().timestamp() - state["sessionStart"]) * 1000
-    if elapsed_ms >= state["sessionDuration"]:
+    session_duration = state["sessionDuration"]
+    if session_duration > 0 and elapsed_ms >= session_duration:
         state["running"] = False
         for p in list(state["positions"]):
             await exit_position(state, p, "SESSIONE SCADUTA", user_id=user_id)
@@ -811,7 +871,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
                     usdc_balance += float(acc["available_balance"]["value"])
             tradable_capital = usdc_balance * capital_pct
         except Exception as e:
-            add_log(state, "info", "ERRORE", f"Fetch saldo fallito: {e}")
+            add_log(state, "info", "ERRORE", f"Fetch saldo fallito: {sanitize_error(e, cb_key, cb_secret)}")
             _update_pnl(state)
             return
     else:
@@ -888,16 +948,17 @@ async def scan_and_trade(state: dict, user_id: int = None):
     rsi_max       = cfg.get("rsiMax", 70.0)
     min_r         = cfg.get("minR", 0.01)
 
-    universe = [
-        {**d, "symbol": sym}
-        for sym, d in market_data.items()
-        if d["price"] > 0
-        and d.get("volume24h", 0) >= min_vol
-        and sym not in open_syms
-        and sym in _coinbase_products
-        and sym in candle_data  # solo coin con candele disponibili
-        and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
-    ]
+    async with _market_data_lock:
+        universe = [
+            {**d, "symbol": sym}
+            for sym, d in market_data.items()
+            if d["price"] > 0
+            and d.get("volume24h", 0) >= min_vol
+            and sym not in open_syms
+            and sym in _coinbase_products
+            and sym in candle_data
+            and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
+        ]
     universe_sorted = sorted(universe, key=lambda d: d.get("volume24h", 0), reverse=True)
 
     candidates  = []
@@ -1015,22 +1076,66 @@ async def poll_telegram():
 # ── background loop ───────────────────────────────────────────────────────────
 
 async def background_loop():
+    consecutive_errors = 0
+    last_persist = 0.0
     while True:
         try:
             await fetch_prices()
 
-            # Aggiorna candele ogni 5 minuti
             if time.time() - _candles_last_update >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_candles()
 
-            for uid, state in list(user_sessions.items()):
+            async with _sessions_lock:
+                sessions_snapshot = list(user_sessions.items())
+            for uid, state in sessions_snapshot:
                 if state["running"]:
                     await scan_and_trade(state, user_id=uid)
-            await poll_telegram()
+
+            # Persisti sessioni ogni 30 secondi
+            if time.time() - last_persist >= 30:
+                await persist_sessions()
+                last_persist = time.time()
+
+            consecutive_errors = 0
+            await asyncio.sleep(8)
         except Exception as e:
             import traceback
-            print(f"Loop error: {e}\n{traceback.format_exc()}")
-        await asyncio.sleep(8)
+            consecutive_errors += 1
+            wait = min(8 * (2 ** (consecutive_errors - 1)), 120)
+            print(f"Loop error ({consecutive_errors}), retry in {wait}s: {e}\n{traceback.format_exc()}")
+            await asyncio.sleep(wait)
+
+async def persist_sessions():
+    """Salva lo stato delle sessioni attive nel DB per sopravvivere ai riavvii."""
+    if not db_pool:
+        return
+    async with _sessions_lock:
+        sessions_snapshot = list(user_sessions.items())
+    for uid, state in sessions_snapshot:
+        try:
+            # Serializza lo stato (escludiamo i log per tenere il JSON piccolo)
+            state_to_save = {k: v for k, v in state.items() if k != "log"}
+            state_json = json.dumps(state_to_save, default=str)
+            async with db_pool.acquire() as conn:
+                if state.get("running"):
+                    await conn.execute("""
+                        INSERT INTO active_sessions (user_id, state_json, updated_at)
+                        VALUES ($1, $2, NOW())
+                        ON CONFLICT (user_id) DO UPDATE
+                        SET state_json = $2, updated_at = NOW()
+                    """, uid, state_json)
+                else:
+                    # Sessione terminata — rimuovi dal DB
+                    await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
+        except Exception as e:
+            print(f"Errore persist sessione user {uid}: {e}")
+    """Loop separato per Telegram — non blocca il trading se Telegram è lento."""
+    while True:
+        try:
+            await poll_telegram()
+        except Exception as e:
+            print(f"Telegram loop error: {e}")
+        await asyncio.sleep(10)
 
 # ── startup ───────────────────────────────────────────────────────────────────
 
@@ -1078,17 +1183,66 @@ async def startup():
                         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
                         symbol TEXT NOT NULL,
                         UNIQUE(user_id, symbol)
+                    );
+                    CREATE TABLE IF NOT EXISTS active_sessions (
+                        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                        state_json TEXT NOT NULL,
+                        updated_at TIMESTAMP DEFAULT NOW()
                     )
                 """)
             print("Database connesso e schema creato")
+
+            # Ripristina sessioni attive dopo riavvio
+            await restore_sessions_from_db(db_pool)
+
         except Exception as e:
             print(f"Database error: {e}")
     asyncio.create_task(background_loop())
+    asyncio.create_task(telegram_loop())
+
+async def restore_sessions_from_db(pool):
+    """Ripristina sessioni attive salvate nel DB dopo un riavvio."""
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("SELECT user_id, state_json FROM active_sessions")
+        for row in rows:
+            uid = row["user_id"]
+            try:
+                state = json.loads(row["state_json"])
+                # Ripristina solo se era in running e la sessione non è scaduta
+                if not state.get("running"):
+                    continue
+                session_start = state.get("sessionStart", 0)
+                session_dur   = state.get("sessionDuration", 0)
+                if session_dur > 0:
+                    elapsed = (datetime.now().timestamp() - session_start) * 1000
+                    if elapsed >= session_dur:
+                        continue  # sessione scaduta durante il downtime
+                user_sessions[uid] = state
+                print(f"Sessione ripristinata per user {uid} con {len(state.get('positions',[]))} posizioni")
+            except Exception as e:
+                print(f"Errore ripristino sessione user {uid}: {e}")
+    except Exception as e:
+        print(f"Errore restore sessioni: {e}")
+
+# ── RATE LIMITING ─────────────────────────────────────────────────────────────
+from collections import defaultdict
+_login_attempts: dict = defaultdict(list)  # ip -> [timestamps]
+
+def check_rate_limit(ip: str, max_attempts: int = 10, window: int = 300):
+    """Max 10 tentativi per 5 minuti per IP."""
+    now = time.time()
+    attempts = [t for t in _login_attempts[ip] if now - t < window]
+    _login_attempts[ip] = attempts
+    if len(attempts) >= max_attempts:
+        raise HTTPException(status_code=429, detail="Troppi tentativi — riprova tra qualche minuto")
+    _login_attempts[ip].append(now)
 
 # ── AUTH ENDPOINTS ─────────────────────────────────────────────────────────────
 
 @app.post("/auth/register")
-async def register(req: RegisterRequest):
+async def register(req: RegisterRequest, request: Request):
+    check_rate_limit(request.client.host)
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database non disponibile")
     if len(req.username) < 3:
@@ -1108,7 +1262,8 @@ async def register(req: RegisterRequest):
         raise HTTPException(status_code=400, detail="Username già in uso")
 
 @app.post("/auth/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
+    check_rate_limit(request.client.host)
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
@@ -1135,7 +1290,7 @@ async def save_keys(req: ApiKeyRequest, user_id: int = Depends(get_current_user)
     async with db_pool.acquire() as conn:
         await conn.execute(
             "UPDATE users SET cb_key = $1, cb_secret = $2 WHERE id = $3",
-            req.cb_key, req.cb_secret, user_id
+            encrypt_key(req.cb_key), encrypt_key(req.cb_secret), user_id
         )
     return {"ok": True}
 
@@ -1357,6 +1512,10 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         return {"error": "Already running"}
     cfg     = body.get("config", {})
     capital = float(cfg.get("capital", 1000))
+    if capital <= 0 or capital > 1_000_000:
+        return {"error": "Capitale non valido (min $1, max $1,000,000)"}
+    if float(cfg.get("allocPct", 0.20)) <= 0 or float(cfg.get("allocPct", 0.20)) > 1:
+        return {"error": "Allocazione non valida (0-100%)"}
 
     cb_key, cb_secret, real_mode = "", "", False
     if db_pool:
@@ -1365,8 +1524,8 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
                 row = await conn.fetchrow(
                     "SELECT cb_key, cb_secret, sim_mode FROM users WHERE id = $1", user_id)
                 if row:
-                    cb_key    = row["cb_key"] or ""
-                    cb_secret = row["cb_secret"] or ""
+                    cb_key    = decrypt_key(row["cb_key"] or "")
+                    cb_secret = decrypt_key(row["cb_secret"] or "")
                     sim = row["sim_mode"] if row["sim_mode"] is not None else True
                     real_mode = bool(cb_key) and not sim
         except Exception as e:
@@ -1437,6 +1596,7 @@ async def stop_agent(user_id: int = Depends(get_current_user)):
         await exit_position(state, p, "STOP MANUALE", user_id=user_id)
     pnl = state["currentCapital"] - state["capital"]
     add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
+    await persist_sessions()  # rimuovi dal DB
     return {"ok": True, "pnl": pnl}
 
 @app.post("/close_position/{symbol}")
@@ -1449,11 +1609,11 @@ async def close_symbol(symbol: str, user_id: int = Depends(get_current_user)):
     return {"ok": True}
 
 @app.post("/chat")
-async def chat(body: dict):
+async def chat(body: dict, user_id: int = Depends(get_current_user)):
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return {"error": "API key non configurata"}
-    state = get_session(0)
+    state = get_session(user_id)
     positions = state["positions"]
     pnl = state["currentCapital"] - state["capital"]
     if positions:
@@ -1509,8 +1669,8 @@ async def test_coinbase(user_id: int = Depends(get_current_user)):
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow("SELECT cb_key, cb_secret FROM users WHERE id = $1", user_id)
                 if row and row["cb_key"]:
-                    cb_key    = row["cb_key"]
-                    cb_secret = row["cb_secret"]
+                    cb_key    = decrypt_key(row["cb_key"])
+                    cb_secret = decrypt_key(row["cb_secret"])
         except Exception as e:
             print(f"DB error: {e}")
     if not cb_key:
