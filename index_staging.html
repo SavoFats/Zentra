@@ -1664,14 +1664,16 @@ async function setMode(real) {
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
   const capitalPctVal = parseInt(document.getElementById('capitalPct').value);
-  if (!capitalPctVal || capitalPctVal <= 0) { alert('Imposta la percentuale di capitale prima di avviare.'); return; }
+  if (!capitalPctVal || capitalPctVal <= 0 || capitalPctVal > 100) { alert('Percentuale di capitale non valida (1-100%).'); return; }
   const allocVal = parseInt(document.getElementById('allocPct').value);
-  if (!allocVal || allocVal <= 0) { alert("Imposta l'allocazione per trade prima di avviare."); return; }
+  if (!allocVal || allocVal <= 0 || allocVal > 100) { alert("Allocazione per trade non valida (1-100%)."); return; }
+  const sessionDur = parseInt(document.getElementById('sessionDuration').value);
+  if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const isReal = _hasApiKeys && !_simMode;
-  // In sim usa 1000 se il saldo non è ancora stato caricato
   const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
   if (isReal && capitalVal <= 0) { alert('Saldo Coinbase non ancora caricato. Attendi qualche secondo e riprova.'); return; }
+  if (capitalVal > 1000000) { alert('Capitale troppo alto (max $1,000,000).'); return; }
   const cfg = {
     capital:               capitalVal,
     capitalPct:            capitalPctVal / 100,
@@ -1748,6 +1750,14 @@ async function poll() {
       fetch(API + '/trades', { headers:authHeaders() }),
       fetch(API + '/market'),
     ]);
+    // Se il token è scaduto, fai logout automatico
+    if (sRes.status === 401) {
+      if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+      localStorage.removeItem('ca_token');
+      document.getElementById('authScreen').style.display = 'flex';
+      showLogin();
+      return;
+    }
     S = await sRes.json(); window._lastStatus = S;
     const td = await tRes.json();
     const md = await mRes.json();
