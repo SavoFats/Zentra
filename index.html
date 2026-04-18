@@ -1671,9 +1671,9 @@ async function startAgent() {
   if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const isReal = _hasApiKeys && !_simMode;
-  // In sim usa 1000 se il saldo non è ancora stato caricato
   const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
   if (isReal && capitalVal <= 0) { alert('Saldo Coinbase non ancora caricato. Attendi qualche secondo e riprova.'); return; }
+  if (capitalVal > 1000000) { alert('Capitale troppo alto (max $1,000,000).'); return; }
   const cfg = {
     capital:               capitalVal,
     capitalPct:            capitalPctVal / 100,
