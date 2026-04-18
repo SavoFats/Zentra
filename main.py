@@ -1072,8 +1072,7 @@ async def background_loop():
             if time.time() - _candles_last_update >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_candles()
 
-            async with _sessions_lock:
-                sessions_snapshot = list(user_sessions.items())
+            sessions_snapshot = list(user_sessions.items())
             for uid, state in sessions_snapshot:
                 if state["running"]:
                     await scan_and_trade(state, user_id=uid)
@@ -1096,11 +1095,9 @@ async def persist_sessions():
     """Salva lo stato delle sessioni attive nel DB per sopravvivere ai riavvii."""
     if not db_pool:
         return
-    async with _sessions_lock:
-        sessions_snapshot = list(user_sessions.items())
+    sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
         try:
-            # Serializza lo stato (escludiamo i log per tenere il JSON piccolo)
             state_to_save = {k: v for k, v in state.items() if k != "log"}
             state_json = json.dumps(state_to_save, default=str)
             async with db_pool.acquire() as conn:
@@ -1112,17 +1109,9 @@ async def persist_sessions():
                         SET state_json = $2, updated_at = NOW()
                     """, uid, state_json)
                 else:
-                    # Sessione terminata — rimuovi dal DB
                     await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
         except Exception as e:
             print(f"Errore persist sessione user {uid}: {e}")
-    """Loop separato per Telegram — non blocca il trading se Telegram è lento."""
-    while True:
-        try:
-            await poll_telegram()
-        except Exception as e:
-            print(f"Telegram loop error: {e}")
-        await asyncio.sleep(10)
 
 async def telegram_loop():
     """Loop separato per Telegram — non blocca il trading se Telegram è lento."""
