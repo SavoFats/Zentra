@@ -701,13 +701,17 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 }
                 add_log(state, "info", "DEBUG", f"Ordine RevX {symbol_revx} size=€{size:.2f}")
                 result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
-                if result.get("success") != True and not result.get("order_id"):
-                    err_msg = result.get("message") or result.get("error") or str(result)
+                print(f"[REVX ORDER RESULT] {sym}: {result}")
+                # Revolut X risponde con {"data": {"venue_order_id": ..., "client_order_id": ...}}
+                data = result.get("data") or result
+                order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+                # Se non c'è order_id e c'è un errore esplicito, fallisce
+                if not order_id:
+                    err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
                     add_log(state, "info", "ERRORE", f"Ordine RevX {sym} fallito: {err_msg}")
                     await send_telegram(f"ERRORE ORDINE RevX {sym}: {err_msg[:100]}")
                     return
-                order_id = result.get("order_id") or result.get("id", "")
-                actual_price = float(result.get("average_price") or result.get("price") or price)
+                actual_price = float(data.get("average_price") or data.get("price") or price)
                 qty_purchased = size / actual_price if actual_price > 0 else 0.0
                 stop_price  = actual_price * (1 - R_pct)
                 tp1_price   = actual_price * (1 + R_pct)
@@ -854,12 +858,15 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     "order_configuration": {"market": {"base_size": str(qty_to_sell)}}
                 }
                 result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
-                if result.get("success") != True and not result.get("order_id"):
-                    err_msg = result.get("message") or result.get("error") or str(result)
+                print(f"[REVX SELL RESULT] {sym}: {result}")
+                data = result.get("data") or result
+                order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+                if not order_id:
+                    err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
                     add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita: {err_msg}")
                     await send_telegram(f"ERRORE VENDITA RevX {sym}: {err_msg[:100]}")
                     return
-                filled_price = float(result.get("average_price") or result.get("price") or cur)
+                filled_price = float(data.get("average_price") or data.get("price") or cur)
                 if filled_price > 0:
                     cur = filled_price
                 add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ €{cur:.4f}")
