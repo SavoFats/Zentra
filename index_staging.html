@@ -1218,7 +1218,7 @@ async function loadUserProfile() {
 }
 
 function showRevxConfig() {
-  closeProfileMenu();
+  document.getElementById('profileMenu').classList.remove('open');
   document.getElementById('revxModal').classList.add('open');
 }
 
