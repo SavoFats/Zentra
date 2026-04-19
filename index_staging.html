@@ -377,8 +377,8 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   </div>
   <div class="auth-card" id="apiKeysCard" style="display:none">
     <div class="auth-logo"><span class="auth-logo-dot"></span><span style="font-size:20px;font-weight:700">Zentra</span></div>
-    <div class="auth-title">Collega Coinbase</div>
-    <div class="auth-sub">Inserisci le tue API key di Coinbase Advanced per abilitare il trading reale</div>
+    <div class="auth-title">Collega Revolut X</div>
+    <div class="auth-sub">Inserisci le tue credenziali Revolut X per abilitare il trading reale</div>
     <div class="auth-error" id="keysError"></div>
     <div class="auth-field">
       <label>API Key</label>
@@ -411,10 +411,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <div class="profile-menu-user" id="pmUsername">--</div>
     <div class="profile-menu-sub" id="pmMode" style="display:none"></div>
   </div>
-  <div class="profile-menu-item" onclick="openApiKeysFromMenu()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-    Configura API Coinbase
-  </div>
+  <!-- Configura API Coinbase nascosto — fallback silenzioso -->
   <div class="profile-menu-item" onclick="showRevxConfig()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
     Configura Revolut X
@@ -447,7 +444,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 <div class="modal-overlay" id="confirmModal">
   <div class="modal-card">
     <div class="modal-title">&#9888;&#65039; Sessione Reale</div>
-    <div class="modal-body" id="confirmModalBody">Stai per avviare una sessione con denaro reale su Coinbase. Gli ordini verranno eseguiti immediatamente. Confermi?</div>
+    <div class="modal-body" id="confirmModalBody">Stai per avviare una sessione con denaro reale. Gli ordini verranno eseguiti immediatamente sul tuo account. Confermi?</div>
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeModal()">Annulla</button>
       <button class="modal-btn confirm-real" onclick="confirmRealStart()">Conferma</button>
@@ -580,7 +577,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <div class="field">
       <div class="field-label">Saldo totale disponibile</div>
       <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;font-size:16px;font-weight:700;color:var(--text3)" id="totalBalanceDisplay">--</div>
-      <div class="field-hint" id="balanceSourceHint">Aggiornato in tempo reale</div>
+      <div class="field-hint" id="balanceSourceHint">Aggiornato in tempo reale da Revolut X</div>
     </div>
     <!-- elemento nascosto per compatibilità JS (dataset.total) -->
     <input type="hidden" id="capital">
@@ -1043,7 +1040,7 @@ function showConfirmModal(cfg) {
   const capital = cfg.capital.toFixed(2);
   const capPct = Math.round((cfg.capitalPct || 1) * 100);
   document.getElementById('confirmModalBody').innerHTML =
-    'Stai per avviare una sessione <strong style="color:var(--red)">REALE</strong> con il <strong>' + capPct + '%</strong> del tuo saldo (<strong>$' + capital + '</strong>) su Coinbase.<br><br>Gli ordini verranno eseguiti con denaro vero. Confermi?';
+    'Stai per avviare una sessione <strong style="color:var(--red)">REALE</strong> con il <strong>' + capPct + '%</strong> del tuo saldo (<strong>' + getCurrSym() + capital + '</strong>) sul tuo exchange.<br><br>Gli ordini verranno eseguiti con denaro vero. Confermi?';
   document.getElementById('confirmModal').classList.add('open');
 }
 function closeModal() {
@@ -1306,16 +1303,18 @@ async function setSimMode(sim) {
 function updateSimToggle() {
   const toggle = document.getElementById('simModeToggle');
   const row = document.getElementById('simModeRow');
-  if (row) row.style.display = _hasApiKeys ? 'flex' : 'none';
+  // Mostra toggle simulazione solo se ha almeno un exchange reale configurato
+  if (row) row.style.display = (_hasApiKeys || _hasRevxKeys) ? 'flex' : 'none';
   if (toggle) toggle.classList.toggle('on', _simMode);
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
   const badge = document.getElementById('cfgModeBadge');
-  const isReal = _hasApiKeys && !_simMode;
-  if (lbl) lbl.textContent = isReal ? 'Reale' : 'Simulazione';
+  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+  let modeLabel = 'Simulazione';
+  if (isReal) modeLabel = _hasRevxKeys ? 'Reale — Revolut X' : 'Reale — Coinbase';
+  if (lbl) lbl.textContent = modeLabel;
   if (lbl) lbl.style.color = isReal ? 'var(--red)' : 'var(--text2)';
   if (badge) badge.style.display = 'inline-flex';
-  // Aggiorna _realMode globale
   window._realMode = isReal;
 }
 
@@ -1579,7 +1578,7 @@ function resetConfigToDefaults() {
   document.getElementById('minR').value = 1.0; document.getElementById('minRVal').textContent = '1.0%';
   document.getElementById('pullbackTolerance').value = 1.5; document.getElementById('pullbackVal').textContent = '1.5%';
   document.getElementById('volMultiplier').value = 1.2; document.getElementById('volMultVal').textContent = '1.2x';
-  document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = '$0M';
+  document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = getCurrSym() + '0M';
   document.getElementById('maxTrades').value = 0; updateMaxTrades();
   document.getElementById('maxConsecutiveLosses').value = 3; updateMaxLoss();
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
@@ -1738,7 +1737,7 @@ async function setMode(real) {
   const capitalInput = document.getElementById('capital');
   if (real) {
     simBtn.classList.remove('active-sim'); realBtn.classList.add('active-real');
-    hint.textContent = 'Recupero saldo Coinbase...'; hint.style.color = 'var(--yellow)';
+    hint.textContent = 'Recupero saldo...'; hint.style.color = 'var(--yellow)';
     capitalInput.disabled = false;
     try {
       const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
@@ -1754,7 +1753,7 @@ async function setMode(real) {
         hint.textContent = 'Saldo USDC: $' + bal.toFixed(2) + ' — ordini reali su Coinbase';
         hint.style.color = 'var(--red)'; updateAlloc();
       } else {
-        hint.textContent = 'Errore Coinbase: ' + (d.error || 'sconosciuto'); hint.style.color = 'var(--red)';
+        hint.textContent = 'Errore connessione: ' + (d.error || 'sconosciuto'); hint.style.color = 'var(--red)';
       }
     } catch(e) { hint.textContent = 'Errore: ' + e.message; hint.style.color = 'var(--red)'; }
   } else {
@@ -1780,8 +1779,8 @@ async function startAgent() {
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const isReal = _hasApiKeys && !_simMode;
   const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
-  if (isReal && capitalVal <= 0) { alert('Saldo Coinbase non ancora caricato. Attendi qualche secondo e riprova.'); return; }
-  if (capitalVal > 1000000) { alert('Capitale troppo alto (max $1,000,000).'); return; }
+  if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
+  if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
   const cfg = {
     capital:               capitalVal,
     capitalPct:            capitalPctVal / 100,
@@ -1986,7 +1985,7 @@ function render() {
   const capEl = document.getElementById('kpiCapital');
   capEl.textContent = '$' + cap.toFixed(2);
   capEl.className = 'kpi-value' + (pnl > 0 ? ' up' : pnl < 0 ? ' down' : '');
-  document.getElementById('kpiCapSub').textContent = window._realMode ? 'reale Coinbase' : 'simulato';
+  document.getElementById('kpiCapSub').textContent = window._realMode ? (_hasRevxKeys ? 'reale Revolut X' : 'reale Coinbase') : 'simulato';
 
   // KPI trades
   document.getElementById('kpiTrades').textContent = S.tradeCount || 0;
@@ -2637,7 +2636,7 @@ async function loadHomeBalance() {
         }
       } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
     } else {
-      subEl.textContent = 'Recupero saldo Coinbase';
+      subEl.textContent = 'Recupero saldo...';
       try {
         const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
         const d = await r.json();
@@ -2645,14 +2644,14 @@ async function loadHomeBalance() {
           const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
           const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
           valEl.textContent = '$' + bal.toFixed(2);
-          subEl.textContent = 'USDC disponibili su Coinbase';
+          subEl.textContent = 'USDC disponibili';
           const tbd = document.getElementById('totalBalanceDisplay');
           if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
           const cap = document.getElementById('capital');
           if (cap) cap.dataset.total = bal;
           updateCapitalPct();
         } else {
-          valEl.textContent = '--'; subEl.textContent = 'Errore Coinbase';
+          valEl.textContent = '--'; subEl.textContent = 'Errore connessione';
         }
       } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
     }
