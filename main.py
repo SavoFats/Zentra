@@ -1676,6 +1676,41 @@ async def test_coinbase(user_id: int = Depends(get_current_user)):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+@app.get("/debug_coinbase")
+async def debug_coinbase(user_id: int = Depends(get_current_user)):
+    """Mostra la risposta raw di Coinbase per debug saldi."""
+    cb_key, cb_secret = _ENV_CB_KEY, _ENV_CB_SECRET
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT cb_key, cb_secret FROM users WHERE id = $1", user_id)
+                if row and row["cb_key"]:
+                    cb_key    = decrypt_key(row["cb_key"])
+                    cb_secret = decrypt_key(row["cb_secret"])
+        except Exception as e:
+            pass
+    if not cb_key:
+        return {"error": "no keys"}
+    try:
+        result = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
+        accounts = result.get("accounts", [])
+        # Mostra TUTTI gli account senza filtri
+        return {
+            "total_accounts": len(accounts),
+            "all_accounts": [
+                {
+                    "currency": a.get("currency"),
+                    "available": a.get("available_balance", {}).get("value"),
+                    "hold": a.get("hold", {}).get("value") if isinstance(a.get("hold"), dict) else a.get("hold"),
+                    "type": a.get("type"),
+                    "name": a.get("name"),
+                }
+                for a in accounts
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/logos")
 async def get_logos():
     LOGO_URLS = {
