@@ -955,6 +955,7 @@ let _username  = localStorage.getItem('ca_username') || '';
 let _emaFilter = true;
 let _hasApiKeys = false;
 let _simMode = true; // default simulazione
+let _hasRevxKeys = false;
 let _pendingStartCfg = null;
 let _newTradeCount = 0;
 let _lastSeenTradeCount = 0;
@@ -1196,8 +1197,9 @@ async function loadUserProfile() {
     const wl = await wlRes.json();
 
     _hasApiKeys = me.has_api_keys || false;
+    _hasRevxKeys = me.has_revx_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
-    window._realMode = _hasApiKeys && !_simMode;
+    window._realMode = (_hasApiKeys || _hasRevxKeys) && !_simMode;
 
     if (me.avatar_b64) {
       applyAvatar(me.avatar_b64);
@@ -1241,14 +1243,32 @@ async function saveRevxKeys() {
       const tr = await fetch(API + '/test_revx', { headers: authHeaders() });
       const td = await tr.json();
       if (td.ok) {
-        alert('Revolut X configurato. Saldi: ' + td.balances.map(b => b.currency + ' ' + parseFloat(b.available).toFixed(4)).join(', '));
+        const saldi = td.balances.length > 0
+          ? td.balances.map(b => parseFloat(b.available).toFixed(2) + ' ' + b.currency).join(' · ')
+          : 'nessun saldo disponibile';
+        showToast('Revolut X connesso — ' + saldi);
       } else {
-        alert('Chiavi salvate ma test fallito: ' + (td.error || 'errore sconosciuto'));
+        showToast('Chiavi salvate ma connessione fallita: ' + (td.error || 'errore sconosciuto'), true);
       }
     }
   } catch(e) {
     alert('Errore: ' + e.message);
   }
+}
+
+function showToast(msg, isError = false) {
+  let t = document.getElementById('_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:calc(var(--tab-h) + env(safe-area-inset-bottom,0px) + 16px);left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:10px 20px;border-radius:20px;z-index:999;white-space:nowrap;transition:opacity 0.3s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = isError ? 'var(--red)' : 'var(--text)';
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
 }
 
 async function setSimMode(sim) {
