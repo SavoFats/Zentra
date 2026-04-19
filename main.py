@@ -425,23 +425,32 @@ _products_last_update: float = 0
 async def fetch_prices():
     global _products_last_update
     try:
+        # Usa Advanced Trade API per i prodotti — più aggiornata di Exchange API
+        # Prodotti pubblici, nessuna auth richiesta
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get("https://api.exchange.coinbase.com/products")
-            all_products = r.json()
+            r = await client.get(
+                "https://api.coinbase.com/api/v3/brokerage/market/products",
+                params={"product_type": "SPOT", "limit": 500}
+            )
+            all_products_adv = r.json().get("products", [])
 
         usd_syms = {}
-        usdc_syms = {}  # coin che hanno anche il pair USDC
-        for p in all_products:
+        usdc_syms = {}
+        for p in all_products_adv:
             if not isinstance(p, dict): continue
-            if p.get("status") != "online": continue
-            sym = p.get("base_currency", "")
-            if not sym or not sym.isascii() or not sym.isalpha(): continue
+            if p.get("status", "") not in ("online", ""): continue
+            if p.get("is_disabled", False): continue
+            product_id = p.get("product_id", "")
+            if not product_id or "-" not in product_id: continue
+            parts = product_id.split("-")
+            if len(parts) != 2: continue
+            sym, quote = parts[0], parts[1]
+            if not sym.isascii() or not sym.isalpha(): continue
             if sym in STABLES: continue
-            quote = p.get("quote_currency", "")
             if quote == "USD":
-                usd_syms[p["id"]] = sym
+                usd_syms[product_id] = sym
             elif quote == "USDC":
-                usdc_syms[sym] = p["id"]  # es. "BTC" -> "BTC-USDC"
+                usdc_syms[sym] = product_id
 
         async with httpx.AsyncClient(timeout=15) as client:
             r2 = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
@@ -631,11 +640,22 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "order_configuration": {"market_market_ioc": {"quote_size": str(round(size, 2))}}
             }
             add_log(state, "info", "DEBUG", f"Ordine {sym}: product_id={product_id} size=${size:.2f}")
-            print(f"[ORDER] {sym} body={body}")
             result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
-            print(f"[ORDER RESULT] {sym}: {result}")
+            # Se fallisce con USDC prova USD e viceversa
             if result.get("success") != True:
-                # Gestisci sia struttura piatta che annidata
+                err_str = str(result).lower()
+                if "not available" in err_str or "invalid_argument" in err_str:
+                    alt_id = product_id.replace("-USDC", "-USD") if "-USDC" in product_id else product_id.replace("-USD", "-USDC")
+                    if alt_id != product_id:
+                        add_log(state, "info", "RETRY", f"{sym}: provo {alt_id}")
+                        body["product_id"] = alt_id
+                        result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
+                        if result.get("success") == True:
+                            product_id = alt_id
+                            # Aggiorna il product_id in cache per i prossimi ordini
+                            if sym in _coinbase_products:
+                                _coinbase_products[sym]["product_id"] = alt_id
+            if result.get("success") != True:
                 err = result.get("error_response") or result
                 err_msg = err.get("message") or err.get("error_details") or str(result)
                 err_str = str(result).lower()
