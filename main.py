@@ -473,7 +473,7 @@ async def fetch_prices():
             _coinbase_products[sym] = {
                 "price": price, "change24h": change24h,
                 "volume24h": vol_usd, "logo_url": "",
-                "product_id": product_id_trading  # es. "BTC-USDC" o "BTC-USD"
+                "product_id": product_id_trading
             }
 
             if sym not in market_data:
@@ -490,19 +490,17 @@ async def fetch_prices():
             else:
                 change1h = market_data[sym].get("change1h", 0.0)
 
-            async with _market_data_lock:
-                market_data[sym]["price"]     = price
-                market_data[sym]["change1h"]  = change1h
-                market_data[sym]["change24h"] = change24h
-                market_data[sym]["volume24h"] = vol_usd
+            market_data[sym]["price"]     = price
+            market_data[sym]["change1h"]  = change1h
+            market_data[sym]["change24h"] = change24h
+            market_data[sym]["volume24h"] = vol_usd
 
-            async with _market_data_lock:
-                for state in user_sessions.values():
-                    for pos in state["positions"]:
-                        if pos["symbol"] == sym:
-                            pos["currentPrice"] = price
-                            if price > pos["highPrice"]:
-                                pos["highPrice"] = price
+            for state in user_sessions.values():
+                for pos in state["positions"]:
+                    if pos["symbol"] == sym:
+                        pos["currentPrice"] = price
+                        if price > pos["highPrice"]:
+                            pos["highPrice"] = price
 
     except Exception as e:
         print(f"Fetch error: {e}")
@@ -590,12 +588,16 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "side": "BUY",
                 "order_configuration": {"market_market_ioc": {"quote_size": str(round(size, 2))}}
             }
+            add_log(state, "info", "DEBUG", f"Ordine {sym}: product_id={product_id} size=${size:.2f}")
+            print(f"[ORDER] {sym} body={body}")
             result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
+            print(f"[ORDER RESULT] {sym}: {result}")
             if result.get("success") != True:
-                err = result.get("error_response", {})
-                err_msg = err.get("message", str(result))
+                # Gestisci sia struttura piatta che annidata
+                err = result.get("error_response") or result
+                err_msg = err.get("message") or err.get("error_details") or str(result)
                 err_str = str(result).lower()
-                add_log(state, "info", "ERRORE", f"Ordine {sym} fallito: {err_msg}")
+                add_log(state, "info", "ERRORE", f"Ordine {sym} fallito [{product_id}]: {err_msg}")
                 # Cooldown automatico per errori che indicano coin non tradabile temporaneamente
                 if any(x in err_str for x in ["not available", "cancel only", "permission_denied", "orderbook", "suspended"]):
                     state["cooldowns"][sym] = (datetime.now().timestamp() + 3600) * 1000
@@ -938,8 +940,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
     rsi_max       = cfg.get("rsiMax", 70.0)
     min_r         = cfg.get("minR", 0.01)
 
-    async with _market_data_lock:
-        universe = [
+    universe = [
             {**d, "symbol": sym}
             for sym, d in market_data.items()
             if d["price"] > 0
@@ -1075,8 +1076,7 @@ async def background_loop():
             if time.time() - _candles_last_update >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_candles()
 
-            async with _sessions_lock:
-                sessions_snapshot = list(user_sessions.items())
+            sessions_snapshot = list(user_sessions.items())
             for uid, state in sessions_snapshot:
                 if state["running"]:
                     await scan_and_trade(state, user_id=uid)
@@ -1099,11 +1099,9 @@ async def persist_sessions():
     """Salva lo stato delle sessioni attive nel DB per sopravvivere ai riavvii."""
     if not db_pool:
         return
-    async with _sessions_lock:
-        sessions_snapshot = list(user_sessions.items())
+    sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
         try:
-            # Serializza lo stato (escludiamo i log per tenere il JSON piccolo)
             state_to_save = {k: v for k, v in state.items() if k != "log"}
             state_json = json.dumps(state_to_save, default=str)
             async with db_pool.acquire() as conn:
@@ -1115,17 +1113,9 @@ async def persist_sessions():
                         SET state_json = $2, updated_at = NOW()
                     """, uid, state_json)
                 else:
-                    # Sessione terminata — rimuovi dal DB
                     await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
         except Exception as e:
             print(f"Errore persist sessione user {uid}: {e}")
-    """Loop separato per Telegram — non blocca il trading se Telegram è lento."""
-    while True:
-        try:
-            await poll_telegram()
-        except Exception as e:
-            print(f"Telegram loop error: {e}")
-        await asyncio.sleep(10)
 
 async def telegram_loop():
     """Loop separato per Telegram — non blocca il trading se Telegram è lento."""
