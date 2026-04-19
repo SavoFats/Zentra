@@ -264,7 +264,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "ema20_1h":         calc_ema(closes1h, 20),
             "ema50_1h":         calc_ema(closes1h, 50),
             "last_close_5m":    closes5[-1],
-            "close_1h_ago":     closes5[-13] if len(closes5) >= 13 else (closes1h[-2] if len(closes1h) >= 2 else 0.0),
+            "close_1h_ago":     closes1h[-2] if len(closes1h) >= 2 else 0.0,
             "atr_5m":           atr_5m,
             "pullback_low_5m":  pullback_low_5m,
             "vol_avg_20":       vol_avg_20,
@@ -473,7 +473,7 @@ async def fetch_prices():
             _coinbase_products[sym] = {
                 "price": price, "change24h": change24h,
                 "volume24h": vol_usd, "logo_url": "",
-                "product_id": product_id_trading  # es. "BTC-USDC" o "BTC-USD"
+                "product_id": product_id_trading
             }
 
             if sym not in market_data:
@@ -588,12 +588,16 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "side": "BUY",
                 "order_configuration": {"market_market_ioc": {"quote_size": str(round(size, 2))}}
             }
+            add_log(state, "info", "DEBUG", f"Ordine {sym}: product_id={product_id} size=${size:.2f}")
+            print(f"[ORDER] {sym} body={body}")
             result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
+            print(f"[ORDER RESULT] {sym}: {result}")
             if result.get("success") != True:
-                err = result.get("error_response", {})
-                err_msg = err.get("message", str(result))
+                # Gestisci sia struttura piatta che annidata
+                err = result.get("error_response") or result
+                err_msg = err.get("message") or err.get("error_details") or str(result)
                 err_str = str(result).lower()
-                add_log(state, "info", "ERRORE", f"Ordine {sym} fallito: {err_msg}")
+                add_log(state, "info", "ERRORE", f"Ordine {sym} fallito [{product_id}]: {err_msg}")
                 # Cooldown automatico per errori che indicano coin non tradabile temporaneamente
                 if any(x in err_str for x in ["not available", "cancel only", "permission_denied", "orderbook", "suspended"]):
                     state["cooldowns"][sym] = (datetime.now().timestamp() + 3600) * 1000
