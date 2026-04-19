@@ -541,6 +541,50 @@ def unrealized_pnl(state: dict) -> float:
 
 # ── trading ───────────────────────────────────────────────────────────────────
 
+async def get_coinbase_usdc_balance(cb_key: str, cb_secret: str) -> float:
+    """
+    Legge il saldo USDC/USD disponibile su Coinbase Advanced Trade.
+    Prova prima /portfolios (saldo aggregato), poi /accounts come fallback.
+    """
+    # Metodo 1: portfolios — restituisce il breakdown completo con USD/USDC
+    try:
+        port_res = await coinbase_request("GET", "/api/v3/brokerage/portfolios", cb_key=cb_key, cb_secret=cb_secret)
+        portfolios = port_res.get("portfolios", [])
+        # Trova il portfolio default
+        default = next((p for p in portfolios if p.get("type") == "DEFAULT"), None)
+        if not default and portfolios:
+            default = portfolios[0]
+        if default:
+            uuid = default.get("uuid", "")
+            detail = await coinbase_request("GET", f"/api/v3/brokerage/portfolios/{uuid}", cb_key=cb_key, cb_secret=cb_secret)
+            breakdown = detail.get("breakdown", {})
+            # cash_equivalent_value include USD e USDC
+            spot_pos = breakdown.get("spot_positions", [])
+            for pos in spot_pos:
+                if pos.get("asset") in ("USDC", "USD", "USDT"):
+                    val = float(pos.get("total_balance_fiat", 0) or pos.get("available_to_trade_fiat", 0) or 0)
+                    if val > 0:
+                        print(f"[BALANCE] {pos['asset']}: ${val:.2f} (via portfolios)")
+                        return val
+    except Exception as e:
+        print(f"[BALANCE] portfolios error: {e}")
+
+    # Metodo 2: accounts — fallback classico
+    try:
+        accounts = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
+        total = 0.0
+        for acc in accounts.get("accounts", []):
+            if acc.get("currency") in ("USDC", "USD"):
+                val = float(acc.get("available_balance", {}).get("value", 0) or 0)
+                total += val
+        if total > 0:
+            print(f"[BALANCE] USD/USDC via accounts: ${total:.2f}")
+            return total
+    except Exception as e:
+        print(f"[BALANCE] accounts error: {e}")
+
+    return 0.0
+
 async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     cfg      = state["config"]
     price    = sym_data["price"]
@@ -852,15 +896,11 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     # Calcola il capitale tradabile dinamicamente
     if cfg.get("realMode", False):
-        # Reale: leggi saldo USDC effettivo da Coinbase
+        # Reale: leggi saldo USDC/USD effettivo da Coinbase
         cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
         cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
         try:
-            accounts = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
-            usdc_balance = 0.0
-            for acc in accounts.get("accounts", []):
-                if acc["currency"] in ("USDC", "USD"):
-                    usdc_balance += float(acc["available_balance"]["value"])
+            usdc_balance = await get_coinbase_usdc_balance(cb_key, cb_secret)
             tradable_capital = usdc_balance * capital_pct
         except Exception as e:
             add_log(state, "info", "ERRORE", f"Fetch saldo fallito: {sanitize_error(e, cb_key, cb_secret)}")
@@ -1665,14 +1705,20 @@ async def test_coinbase(user_id: int = Depends(get_current_user)):
     if not cb_key:
         return {"ok": False, "error": "API key non configurata"}
     try:
+        # Leggi saldo USDC/USD
+        usdc_balance = await get_coinbase_usdc_balance(cb_key, cb_secret)
+        # Leggi anche tutti gli account crypto
         result = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
         accounts = result.get("accounts", [])
         balances = [
             {"currency": a["currency"], "available": a["available_balance"]["value"]}
             for a in accounts
-            if float(a["available_balance"]["value"]) > 0
+            if float(a.get("available_balance", {}).get("value", 0) or 0) > 0
         ]
-        return {"ok": True, "balances": balances}
+        # Aggiungi USDC in cima se trovato
+        if usdc_balance > 0:
+            balances.insert(0, {"currency": "USDC/USD", "available": str(round(usdc_balance, 2))})
+        return {"ok": True, "balances": balances, "usdc_tradable": usdc_balance}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -1692,21 +1738,28 @@ async def debug_coinbase(user_id: int = Depends(get_current_user)):
     if not cb_key:
         return {"error": "no keys"}
     try:
-        result = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
-        accounts = result.get("accounts", [])
-        # Mostra TUTTI gli account senza filtri
+        # Prova endpoint portfolios per trovare USDC
+        portfolios_result = await coinbase_request("GET", "/api/v3/brokerage/portfolios", cb_key=cb_key, cb_secret=cb_secret)
+
+        # Cerca UUID del portfolio default
+        portfolios = portfolios_result.get("portfolios", [])
+        default_uuid = None
+        for p in portfolios:
+            if p.get("type") == "DEFAULT" or p.get("name") in ("Default", "Portafoglio principale"):
+                default_uuid = p.get("uuid")
+                break
+        if not default_uuid and portfolios:
+            default_uuid = portfolios[0].get("uuid")
+
+        portfolio_balances = {}
+        if default_uuid:
+            bal_result = await coinbase_request("GET", f"/api/v3/brokerage/portfolios/{default_uuid}", cb_key=cb_key, cb_secret=cb_secret)
+            portfolio_balances = bal_result
+
         return {
-            "total_accounts": len(accounts),
-            "all_accounts": [
-                {
-                    "currency": a.get("currency"),
-                    "available": a.get("available_balance", {}).get("value"),
-                    "hold": a.get("hold", {}).get("value") if isinstance(a.get("hold"), dict) else a.get("hold"),
-                    "type": a.get("type"),
-                    "name": a.get("name"),
-                }
-                for a in accounts
-            ]
+            "portfolios": portfolios,
+            "default_uuid": default_uuid,
+            "portfolio_detail": portfolio_balances,
         }
     except Exception as e:
         return {"error": str(e)}
