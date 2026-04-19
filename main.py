@@ -640,22 +640,11 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "order_configuration": {"market_market_ioc": {"quote_size": str(round(size, 2))}}
             }
             add_log(state, "info", "DEBUG", f"Ordine {sym}: product_id={product_id} size=${size:.2f}")
+            print(f"[ORDER] {sym} body={body}")
             result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
-            # Se fallisce con USDC prova USD e viceversa
+            print(f"[ORDER RESULT] {sym}: {result}")
             if result.get("success") != True:
-                err_str = str(result).lower()
-                if "not available" in err_str or "invalid_argument" in err_str:
-                    alt_id = product_id.replace("-USDC", "-USD") if "-USDC" in product_id else product_id.replace("-USD", "-USDC")
-                    if alt_id != product_id:
-                        add_log(state, "info", "RETRY", f"{sym}: provo {alt_id}")
-                        body["product_id"] = alt_id
-                        result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
-                        if result.get("success") == True:
-                            product_id = alt_id
-                            # Aggiorna il product_id in cache per i prossimi ordini
-                            if sym in _coinbase_products:
-                                _coinbase_products[sym]["product_id"] = alt_id
-            if result.get("success") != True:
+                # Gestisci sia struttura piatta che annidata
                 err = result.get("error_response") or result
                 err_msg = err.get("message") or err.get("error_details") or str(result)
                 err_str = str(result).lower()
