@@ -745,9 +745,9 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <div class="section-label">Gestione Rischio</div>
 
     <div class="field">
-      <div class="field-label">Volume minimo universe <span id="volVal">$0M</span></div>
+      <div class="field-label">Volume minimo universe <span id="volVal">€0M</span></div>
       <input type="range" id="minVolume" min="0" max="500" value="0" step="1"
-        oninput="document.getElementById('volVal').textContent='$'+this.value+'M'">
+        oninput="document.getElementById('volVal').textContent=getCurrSym()+this.value+'M'">
       <div class="field-hint">Coin con volume inferiore vengono escluse dall'universo</div>
     </div>
 
@@ -799,7 +799,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <div class="kpi-grid">
       <div class="kpi">
         <div class="kpi-label">Capitale</div>
-        <div class="kpi-value up" id="kpiCapital">$0</div>
+        <div class="kpi-value up" id="kpiCapital">0</div>
         <div class="kpi-sub" id="kpiCapSub">simulato</div>
       </div>
       <div class="kpi">
@@ -1608,7 +1608,7 @@ function restoreConfigFromStorage() {
   if (saved.minR !== undefined) { const mr=(saved.minR*100).toFixed(1); document.getElementById('minR').value=mr; document.getElementById('minRVal').textContent=mr+'%'; }
   if (saved.pullbackTolerance) { const pt=(saved.pullbackTolerance*100).toFixed(1); document.getElementById('pullbackTolerance').value=pt; document.getElementById('pullbackVal').textContent=pt+'%'; }
   if (saved.volMultiplier) { document.getElementById('volMultiplier').value=saved.volMultiplier; document.getElementById('volMultVal').textContent=parseFloat(saved.volMultiplier).toFixed(1)+'x'; }
-  if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent='$'+mv+'M'; }
+  if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
   if (saved.cooldown !== undefined) { document.getElementById('cooldown').value=saved.cooldown; document.getElementById('cdVal').textContent=saved.cooldown+'h'; }
@@ -1746,11 +1746,11 @@ async function setMode(real) {
         const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
         const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
         const suggested = parseFloat((bal * 0.98).toFixed(2));
-        document.getElementById('totalBalanceDisplay').textContent = '$' + bal.toFixed(2) + ' USDC disponibili';
+        document.getElementById('totalBalanceDisplay').textContent = getCurrSym() + bal.toFixed(2) + ' disponibili';
         document.getElementById('totalBalanceDisplay').style.color = 'var(--green)';
         capitalInput.value = suggested; capitalInput.dataset.total = bal;
         document.getElementById('capitalDisplay').textContent = getCurrSym() + suggested;
-        hint.textContent = 'Saldo USDC: $' + bal.toFixed(2) + ' — ordini reali su Coinbase';
+        hint.textContent = getCurrSym() + bal.toFixed(2) + ' disponibili';
         hint.style.color = 'var(--red)'; updateAlloc();
       } else {
         hint.textContent = 'Errore connessione: ' + (d.error || 'sconosciuto'); hint.style.color = 'var(--red)';
@@ -1977,13 +1977,13 @@ function render() {
   // PnL banner
   const pnl = S.pnl || 0;
   const pnlEl = document.getElementById('sessPnl');
-  pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+  pnlEl.textContent = (pnl >= 0 ? '+' : '') + getCurrSym() + pnl.toFixed(2);
   pnlEl.style.color = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--text3)';
 
   // KPI capitale — il backend restituisce già pnl = total - capital
   const cap = (S.capital||0) + pnl;
   const capEl = document.getElementById('kpiCapital');
-  capEl.textContent = '$' + cap.toFixed(2);
+  capEl.textContent = getCurrSym() + cap.toFixed(2);
   capEl.className = 'kpi-value' + (pnl > 0 ? ' up' : pnl < 0 ? ' down' : '');
   document.getElementById('kpiCapSub').textContent = window._realMode ? (_hasRevxKeys ? 'reale Revolut X' : 'reale Coinbase') : 'simulato';
 
@@ -2044,11 +2044,11 @@ function renderHomeSession() {
         <div style="display:flex;align-items:center;gap:10px">${img}
           <div>
             <div style="font-size:14px;font-weight:700">${p.symbol}</div>
-            <div style="font-size:11px;color:var(--text3)">$${p.currentPrice.toFixed(4)}</div>
+            <div style="font-size:11px;color:var(--text3)">${getCurrSym()}${p.currentPrice.toFixed(4)}</div>
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}$${pnl.toFixed(2)}</div>
+          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
           <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
         </div>
       </div>
@@ -2161,7 +2161,7 @@ function renderPositions() {
           </div>
         </div>
         <div class="pos-pnl">
-          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':''}$${pnl.toFixed(2)}</div>
+          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
           <div class="pos-pnl-pct" style="color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
         </div>
       </div>
@@ -2273,7 +2273,7 @@ function renderTransazioni() {
   document.getElementById('txCount').textContent = filtered.length;
   document.getElementById('txWinRate').textContent = filtered.length > 0 ? wr + '%' : '--%';
   document.getElementById('txWinRate').style.color = wr >= 50 ? 'var(--green)' : wr > 0 ? 'var(--red)' : '';
-  document.getElementById('txPnl').textContent = 'P&L: ' + (totalPnl >= 0 ? '+' : '') + '$' + totalPnl.toFixed(2);
+  document.getElementById('txPnl').textContent = 'P&L: ' + (totalPnl >= 0 ? '+' : '') + getCurrSym() + totalPnl.toFixed(2);
   document.getElementById('txPnl').style.color = totalPnl > 0 ? 'var(--green)' : totalPnl < 0 ? 'var(--red)' : '';
   document.getElementById('txWinLoss').textContent = wins + ' vittorie · ' + losses + ' sconfitte';
 
@@ -2309,18 +2309,18 @@ function renderTransazioni() {
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-weight:700;font-size:15px;color:${color}">${isWin?'+':''}$${t.pnl.toFixed(2)}</div>
+          <div style="font-weight:700;font-size:15px;color:${color}">${isWin?'+':''}${getCurrSym()}${t.pnl.toFixed(2)}</div>
           <div style="font-size:12px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
         <div style="background:var(--surface3);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">ENTRATA</div>
-          <div style="font-size:12px;font-weight:600">$${t.entryPrice.toFixed(4)}</div>
+          <div style="font-size:12px;font-weight:600">${t.exchange === 'revx' ? '€' : '$'}${t.entryPrice.toFixed(4)}</div>
         </div>
         <div style="background:var(--surface3);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">USCITA</div>
-          <div style="font-size:12px;font-weight:600">$${t.exitPrice.toFixed(4)}</div>
+          <div style="font-size:12px;font-weight:600">${t.exchange === 'revx' ? '€' : '$'}${t.exitPrice.toFixed(4)}</div>
         </div>
       </div>
     </div>`;
@@ -2519,7 +2519,7 @@ function renderMarket() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="${_watchlist.has(c.symbol)?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
               </button>
             </div>
-            <div class="mkt-sym-sub">${c.symbol} &middot; Vol $${fmtVol(vol)}</div>
+            <div class="mkt-sym-sub">${c.symbol} &middot; Vol ${getCurrSym()}${fmtVol(vol)}</div>
             ${emaDots}
           </div>
         </div>
@@ -2655,7 +2655,7 @@ async function loadHomeBalance() {
         if (d.ok) {
           const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
           const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
-          valEl.textContent = '$' + bal.toFixed(2);
+          valEl.textContent = '$' + bal.toFixed(2); // Coinbase fallback
           subEl.textContent = 'USDC disponibili';
           const tbd = document.getElementById('totalBalanceDisplay');
           if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
@@ -2668,7 +2668,7 @@ async function loadHomeBalance() {
       } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
     }
   } else {
-    valEl.textContent = '$1,000';
+    valEl.textContent = '€1,000'; // simulazione
     subEl.textContent = 'Saldo simulato';
     const tbd = document.getElementById('totalBalanceDisplay');
     if (tbd) { tbd.textContent = 'Simulazione — $1,000'; tbd.style.color = ''; }
