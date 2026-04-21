@@ -159,13 +159,18 @@ def make_revx_signature(api_key_id: str, private_key_pem: str, method: str, path
 REVX_BASE = "https://revx.revolut.com"
 
 async def revx_request(method: str, path: str, body: dict = None,
-                        key_id: str = None, private_key: str = None) -> dict:
+                        key_id: str = None, private_key: str = None,
+                        params: dict = None) -> dict:
     """Esegue una richiesta autenticata a Revolut X."""
     body_str = json.dumps(body, separators=(',', ':')) if body else ""
-    headers = make_revx_signature(key_id, private_key, method, path, "", body_str)
+    # Costruisci query string per la firma (deve essere nell'ordine corretto)
+    query_str = ""
+    if params:
+        query_str = "&".join(f"{k}={v}" for k, v in params.items())
+    headers = make_revx_signature(key_id, private_key, method, path, query_str, body_str)
     async with httpx.AsyncClient(timeout=30) as client:
         if method == "GET":
-            r = await client.get(f"{REVX_BASE}{path}", headers=headers)
+            r = await client.get(f"{REVX_BASE}{path}", headers=headers, params=params or {})
         else:
             r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
     return r.json()
@@ -2000,13 +2005,17 @@ async def debug_revx_ticker(user_id: int = Depends(get_current_user)):
             return {"error": "Chiavi RevX non configurate"}
         key_id = decrypt_key(row["revx_key_id"])
         priv   = decrypt_key(row["revx_private_key"])
-        result = await revx_request("GET", "/api/1.0/market/tickers", key_id=key_id, private_key=priv)
+        result = await revx_request("GET", "/api/1.0/market/tickers", key_id=key_id, private_key=priv, params={})
         tickers = result if isinstance(result, list) else result.get("data", result.get("tickers", []))
         eur = [t for t in (tickers if isinstance(tickers, list) else [])
                if isinstance(t, dict) and str(t.get("symbol","")).endswith("-EUR")][:3]
+        # Mostra anche i primi 2 ticker raw per vedere la struttura
+        all_sample = (tickers[:2] if isinstance(tickers, list) else [])
         return {"status": "ok", "total": len(tickers) if isinstance(tickers, list) else 0,
-                "sample_eur": eur, "raw_type": type(result).__name__,
-                "raw_keys": list(result.keys()) if isinstance(result, dict) else "list"}
+                "sample_eur": eur, "all_sample": all_sample,
+                "raw_type": type(result).__name__,
+                "raw_keys": list(result.keys()) if isinstance(result, dict) else "list",
+                "raw_first_50": str(result)[:300]}
     except Exception as e:
         return {"error": str(e)}
 
@@ -2020,15 +2029,11 @@ async def debug_revx_candles(user_id: int = Depends(get_current_user)):
             return {"error": "Chiavi RevX non configurate"}
         key_id = decrypt_key(row["revx_key_id"])
         priv   = decrypt_key(row["revx_private_key"])
-        # Candles con auth
-        import time as _time
-        body_str = ""
-        path = "/api/1.0/market/candles"
-        query = "symbol=BTC-EUR&interval=5&limit=3"
-        headers = make_revx_signature(key_id, priv, "GET", path, query, body_str)
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(f"{REVX_BASE}{path}?{query}", headers=headers)
-        return {"status": r.status_code, "data": r.json()}
+        # Candles: interval in minuti (5 = 5min), limit max 5000
+        result = await revx_request("GET", "/api/1.0/market/candles", key_id=key_id, private_key=priv,
+                                    params={"symbol": "BTC-EUR", "interval": "5", "limit": "3"})
+        return {"data": result, "raw_type": type(result).__name__,
+                "raw_keys": list(result.keys()) if isinstance(result, dict) else "list"}
     except Exception as e:
         return {"error": str(e)}
 
