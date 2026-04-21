@@ -1997,7 +1997,7 @@ async def test_revx(user_id: int = Depends(get_current_user)):
 
 @app.get("/debug_revx_ticker")
 async def debug_revx_ticker(user_id: int = Depends(get_current_user)):
-    """Mostra la struttura raw del ticker Revolut X usando le chiavi dell'utente."""
+    """Prova path diversi per trovare quello corretto dei ticker Revolut X."""
     try:
         async with db_pool.acquire() as conn:
             row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
@@ -2005,23 +2005,21 @@ async def debug_revx_ticker(user_id: int = Depends(get_current_user)):
             return {"error": "Chiavi RevX non configurate"}
         key_id = decrypt_key(row["revx_key_id"])
         priv   = decrypt_key(row["revx_private_key"])
-        result = await revx_request("GET", "/api/1.0/market/tickers", key_id=key_id, private_key=priv, params={})
-        tickers = result if isinstance(result, list) else result.get("data", result.get("tickers", []))
-        eur = [t for t in (tickers if isinstance(tickers, list) else [])
-               if isinstance(t, dict) and str(t.get("symbol","")).endswith("-EUR")][:3]
-        # Mostra anche i primi 2 ticker raw per vedere la struttura
-        all_sample = (tickers[:2] if isinstance(tickers, list) else [])
-        return {"status": "ok", "total": len(tickers) if isinstance(tickers, list) else 0,
-                "sample_eur": eur, "all_sample": all_sample,
-                "raw_type": type(result).__name__,
-                "raw_keys": list(result.keys()) if isinstance(result, dict) else "list",
-                "raw_first_50": str(result)[:300]}
+        results = {}
+        for path in ["/api/1.0/market/tickers", "/api/1.0/market/ticker",
+                     "/api/1.0/tickers", "/api/1.0/orders/active"]:
+            try:
+                r = await revx_request("GET", path, key_id=key_id, private_key=priv, params={})
+                results[path] = str(r)[:300]
+            except Exception as e:
+                results[path] = f"ERROR: {e}"
+        return results
     except Exception as e:
         return {"error": str(e)}
 
 @app.get("/debug_revx_candles")
 async def debug_revx_candles(user_id: int = Depends(get_current_user)):
-    """Mostra la struttura raw delle candles Revolut X usando le chiavi dell'utente."""
+    """Prova path diversi per trovare quello corretto delle candles Revolut X."""
     try:
         async with db_pool.acquire() as conn:
             row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
@@ -2029,11 +2027,21 @@ async def debug_revx_candles(user_id: int = Depends(get_current_user)):
             return {"error": "Chiavi RevX non configurate"}
         key_id = decrypt_key(row["revx_key_id"])
         priv   = decrypt_key(row["revx_private_key"])
-        # Candles: interval in minuti (5 = 5min), limit max 5000
-        result = await revx_request("GET", "/api/1.0/market/candles", key_id=key_id, private_key=priv,
-                                    params={"symbol": "BTC-EUR", "interval": "5", "limit": "3"})
-        return {"data": result, "raw_type": type(result).__name__,
-                "raw_keys": list(result.keys()) if isinstance(result, dict) else "list"}
+        results = {}
+        tests = [
+            ("/api/1.0/market/candles", {"symbol": "BTC-EUR", "interval": "5", "limit": "3"}),
+            ("/api/1.0/market/candles", {"symbol": "BTC-EUR", "interval": "5m", "limit": "3"}),
+            ("/api/1.0/market/ohlcv",   {"symbol": "BTC-EUR", "interval": "5", "limit": "3"}),
+            ("/api/1.0/market/klines",  {"symbol": "BTC-EUR", "interval": "5m", "limit": "3"}),
+        ]
+        for path, params in tests:
+            key = path + "?" + "&".join(f"{k}={v}" for k,v in params.items())
+            try:
+                r = await revx_request("GET", path, key_id=key_id, private_key=priv, params=params)
+                results[key] = str(r)[:300]
+            except Exception as e:
+                results[key] = f"ERROR: {e}"
+        return results
     except Exception as e:
         return {"error": str(e)}
 
