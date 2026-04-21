@@ -452,6 +452,44 @@ STABLES = {'USDT','USDC','BUSD','DAI','FDUSD','TUSD','USDP','GUSD','FRAX',
 _coinbase_products: dict = {}
 _products_last_update: float = 0
 
+REVX_BASE_PUB = "https://revx.revolut.com"
+
+async def fetch_revx_market_data() -> dict:
+    """
+    Scarica ticker e variazioni da Revolut X (endpoint pubblico).
+    Restituisce dict sym -> {price_eur, change24h, volume24h}
+    """
+    result = {}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Tickers pubblici - no auth (endpoint aperto)
+            r = await client.get(f"{REVX_BASE_PUB}/api/1.0/market/tickers")
+            if r.status_code != 200:
+                print(f"[REVX TICKER] status {r.status_code}")
+                return result
+            data = r.json()
+            tickers = data if isinstance(data, list) else data.get("data", [])
+            for t in tickers:
+                symbol = t.get("symbol", "")  # es. "BTC-EUR"
+                if not symbol.endswith("-EUR"):
+                    continue
+                sym = symbol[:-4]  # "BTC"
+                if not sym or sym in STABLES:
+                    continue
+                price = float(t.get("last_price") or t.get("close") or t.get("mid_price") or 0)
+                change24h = float(t.get("price_change_24h_pct") or t.get("change_24h") or 0)
+                volume24h = float(t.get("volume_24h") or t.get("volume") or 0)
+                if price > 0:
+                    result[sym] = {
+                        "price_eur": price,
+                        "change24h": change24h,
+                        "volume24h_eur": volume24h,
+                        "symbol_pair": symbol,
+                    }
+    except Exception as e:
+        print(f"[REVX TICKER] error: {e}")
+    return result
+
 async def fetch_prices():
     global _products_last_update
     try:
@@ -540,6 +578,37 @@ async def fetch_prices():
                         pos["currentPrice"] = price
                         if price > pos["highPrice"]:
                             pos["highPrice"] = price
+
+        # Overlay con dati Revolut X in EUR se disponibili
+        try:
+            revx_data = await fetch_revx_market_data()
+            for sym, rd in revx_data.items():
+                if sym in market_data and rd["price_eur"] > 0:
+                    market_data[sym]["price_eur"]    = rd["price_eur"]
+                    market_data[sym]["change24h_eur"] = rd["change24h"]
+                    market_data[sym]["symbol_revx"]  = rd["symbol_pair"]
+                elif rd["price_eur"] > 0:
+                    # Coin disponibile su Revolut X ma non su Coinbase
+                    market_data[sym] = {
+                        "price": 0.0, "price_eur": rd["price_eur"],
+                        "change1h": 0.0, "change24h": rd["change24h"],
+                        "change24h_eur": rd["change24h"],
+                        "volume24h": rd["volume24h_eur"],
+                        "icon": sym[0], "symbol_revx": rd["symbol_pair"]
+                    }
+            # Aggiorna prezzi posizioni aperte con EUR se use_revx
+            for state in user_sessions.values():
+                if not state.get("use_revx"):
+                    continue
+                for pos in state["positions"]:
+                    sym = pos["symbol"]
+                    rd = revx_data.get(sym)
+                    if rd and rd["price_eur"] > 0:
+                        pos["currentPrice"] = rd["price_eur"]
+                        if rd["price_eur"] > pos["highPrice"]:
+                            pos["highPrice"] = rd["price_eur"]
+        except Exception as e:
+            print(f"[REVX OVERLAY] error: {e}")
 
     except Exception as e:
         print(f"Fetch error: {e}")
