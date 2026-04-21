@@ -455,6 +455,8 @@ STABLES = {'USDT','USDC','BUSD','DAI','FDUSD','TUSD','USDP','GUSD','FRAX',
            'LUSD','SUSD','EUR','GBP','USD','USDD','USTC','PAX','CBBTC','WBTC'}
 
 _coinbase_products: dict = {}
+_global_revx_key_id: str = ""
+_global_revx_private_key: str = ""
 _products_last_update: float = 0
 
 REVX_BASE_PUB = "https://revx.revolut.com"
@@ -593,14 +595,13 @@ async def fetch_prices():
 
         # Overlay con dati Revolut X in EUR se disponibili
         try:
-            # Usa le chiavi del primo utente attivo con RevX
-            revx_key_id, revx_priv_key = "", ""
+            # Usa chiavi sessione attiva, altrimenti chiavi globali caricate all'avvio
+            revx_key_id, revx_priv_key = _global_revx_key_id, _global_revx_private_key
             for state in user_sessions.values():
                 if state.get("revx_key_id") and state.get("use_revx"):
                     revx_key_id = state["revx_key_id"]
                     revx_priv_key = state["revx_private_key"]
                     break
-            # Se non c'è sessione attiva, cerca nelle chiavi salvate in DB (non disponibile qui)
             revx_data = await fetch_revx_market_data(revx_key_id, revx_priv_key)
             for sym, rd in revx_data.items():
                 if sym in market_data and rd["price_eur"] > 0:
@@ -1497,6 +1498,25 @@ async def startup():
             print(f"Database error: {e}")
     asyncio.create_task(background_loop())
     asyncio.create_task(telegram_loop())
+    asyncio.create_task(load_global_revx_keys())
+
+async def load_global_revx_keys():
+    """Carica le chiavi RevX del primo utente configurato per usarle nel fetch_prices."""
+    global _global_revx_key_id, _global_revx_private_key
+    if not db_pool:
+        return
+    try:
+        await asyncio.sleep(3)  # Aspetta che il DB sia pronto
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT revx_key_id, revx_private_key FROM users WHERE revx_key_id != '' AND sim_mode = FALSE ORDER BY id LIMIT 1"
+            )
+        if row and row["revx_key_id"]:
+            _global_revx_key_id = decrypt_key(row["revx_key_id"])
+            _global_revx_private_key = decrypt_key(row["revx_private_key"])
+            print(f"[REVX] Chiavi globali caricate per market data")
+    except Exception as e:
+        print(f"[REVX] Errore caricamento chiavi globali: {e}")
 
 async def restore_sessions_from_db(pool):
     """Ripristina sessioni attive salvate nel DB dopo un riavvio."""
