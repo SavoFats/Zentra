@@ -462,7 +462,8 @@ REVX_BASE_PUB = "https://revx.revolut.com"
 async def fetch_revx_market_data(key_id: str = "", private_key: str = "") -> dict:
     """
     Scarica ticker da Revolut X usando le chiavi utente.
-    Path corretto: GET /api/1.0/tickers
+    Path: GET /api/1.0/tickers — risposta: {"data": [...], "metadata": {...}}
+    Simboli formato: "BTC/EUR" (slash, non trattino)
     Restituisce dict sym -> {price_eur, change24h, volume24h, symbol_pair}
     """
     result = {}
@@ -471,29 +472,30 @@ async def fetch_revx_market_data(key_id: str = "", private_key: str = "") -> dic
     try:
         data = await revx_request("GET", "/api/1.0/tickers",
                                    key_id=key_id, private_key=private_key, params={})
-        tickers = data if isinstance(data, list) else data.get("tickers", data.get("data", []))
+        # Risposta: {"data": [...tickers...], "metadata": {...}}
+        tickers = data.get("data", []) if isinstance(data, dict) else data
         if not isinstance(tickers, list):
             print(f"[REVX TICKER] risposta inattesa: {str(data)[:200]}")
             return result
         for t in tickers:
             if not isinstance(t, dict):
                 continue
-            symbol = t.get("symbol", "")
-            if not symbol.endswith("-EUR"):
+            symbol = t.get("symbol", "")  # es. "BTC/EUR"
+            # Filtra coppie EUR (con slash)
+            if not symbol.endswith("/EUR"):
                 continue
-            sym = symbol[:-4]
+            sym = symbol[:-4]  # rimuove "/EUR"
             if not sym or sym in STABLES:
                 continue
-            # Campi risposta Revolut X ticker
-            price = float(t.get("last_price") or t.get("close") or t.get("mid_price") or t.get("price") or 0)
-            change24h = float(t.get("price_change_24h_pct") or t.get("change_24h_pct") or t.get("change24h") or 0)
-            volume24h = float(t.get("volume_24h") or t.get("base_volume") or t.get("volume") or 0)
+            price = float(t.get("last_price") or t.get("mid") or t.get("ask") or 0)
+            change24h = float(t.get("price_change_24h_pct") or t.get("change_24h") or 0)
+            volume24h = float(t.get("volume_24h") or t.get("volume") or 0)
             if price > 0:
                 result[sym] = {
                     "price_eur": price,
                     "change24h": change24h,
                     "volume24h_eur": volume24h,
-                    "symbol_pair": symbol,
+                    "symbol_pair": symbol.replace("/", "-"),  # normalizza a BTC-EUR
                 }
         print(f"[REVX TICKER] {len(result)} coppie EUR caricate")
     except Exception as e:
@@ -2043,7 +2045,7 @@ async def debug_revx_candles(user_id: int = Depends(get_current_user)):
         key_id = decrypt_key(row["revx_key_id"])
         priv   = decrypt_key(row["revx_private_key"])
         # Candles: simbolo nel path, interval in minuti come query param
-        result = await revx_request("GET", "/api/1.0/candles/BTC-EUR",
+        result = await revx_request("GET", "/api/1.0/candles/BTC/EUR",
                                     key_id=key_id, private_key=priv,
                                     params={"interval": "5", "limit": "3"})
         return {
