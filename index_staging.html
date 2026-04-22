@@ -2464,13 +2464,7 @@ function setMktFilterDropdown(val) {
 
 function fmtVol(v) { if(v>=1e9) return (v/1e9).toFixed(1)+'B'; if(v>=1e6) return (v/1e6).toFixed(0)+'M'; return (v/1e3).toFixed(0)+'K'; }
 function fmtPrice(p, sym='$') { if(p>=1000) return sym+p.toLocaleString('en-US',{maximumFractionDigits:0}); if(p>=1) return sym+p.toFixed(2); if(p>=0.01) return sym+p.toFixed(4); return sym+p.toFixed(6); }
-function fmtCoinPrice(c) {
-  // Usa price_eur se disponibile e RevX è configurato, altrimenti price in USD
-  const useEur = _hasRevxKeys && !_simMode;
-  const p = (useEur && c.price_eur) ? c.price_eur : c.price;
-  const sym = (useEur && c.price_eur) ? '€' : '$';
-  return fmtPrice(p, sym);
-}
+
 
 function renderMarket() {
   let data = [...mktData];
@@ -2524,7 +2518,7 @@ function renderMarket() {
           </div>
         </div>
         <div class="mkt-right">
-          <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtCoinPrice(c)}</div>
+          <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtPrice(c.price)}</div>
           <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:5px">
             <div style="text-align:center">
               <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">24H</div>
@@ -2701,7 +2695,7 @@ function renderHomeWatchlist() {
   wl.innerHTML = symbols.map(sym => {
     const d = mktData.find(c => c.symbol === sym);
     const logo = getLogo(sym);
-    const price = d ? fmtCoinPrice(d) : '--';
+    const price = d ? fmtPrice(d.price) : '--';
     const chg = d ? d.change24h : 0;
     const chgColor = chg >= 0 ? 'var(--green)' : 'var(--red)';
     const chgText = d ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '--';
@@ -2732,7 +2726,7 @@ function updateWatchlistPricesInPlace() {
     if (!d) continue;
     const priceEl = document.getElementById('wl-price-' + sym);
     const chgEl   = document.getElementById('wl-chg-' + sym);
-    if (priceEl) priceEl.textContent = fmtCoinPrice(d);
+    if (priceEl) priceEl.textContent = fmtPrice(d.price);
     if (chgEl) {
       const chg = d.change24h || 0;
       chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
@@ -2747,7 +2741,7 @@ function updateMarketPricesInPlace() {
     const chg24El = document.getElementById('mkt-chg24-' + c.symbol);
     const chg1hEl = document.getElementById('mkt-chg1h-' + c.symbol);
     if (!priceEl) continue; // riga non ancora nel DOM (filtro attivo)
-    priceEl.textContent = fmtCoinPrice(c);
+    priceEl.textContent = fmtPrice(c.price);
     if (chg24El) {
       const chg = c.change24h || 0;
       chg24El.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
