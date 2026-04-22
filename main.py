@@ -766,10 +766,35 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                     add_log(state, "info", "ERRORE", f"Ordine RevX {sym} fallito: {err_msg}")
                     await send_telegram(f"ERRORE ORDINE RevX {sym}: {err_msg[:100]}")
                     return
-                # Prezzo di entrata: da risposta RevX, fallback su prezzo Binance USD
-                # Tutto in USD — coerente con currentPrice aggiornato da Binance
-                actual_price = float(data.get("average_price") or data.get("price") or price)
-                qty_purchased = size / actual_price if actual_price > 0 else 0.0
+                # Recupera prezzo fill reale da Revolut X tramite order ID
+                # La risposta dell'ordine non include il fill price — dobbiamo interrogare l'ordine
+                actual_price = 0.0
+                qty_purchased = 0.0
+                if order_id:
+                    try:
+                        await asyncio.sleep(1.5)  # Attendi che l'ordine sia processato
+                        order_detail = await revx_request(
+                            "GET", f"/api/1.0/orders/{order_id}",
+                            key_id=revx_key_id, private_key=revx_priv
+                        )
+                        print(f"[REVX ORDER DETAIL] {sym}: {order_detail}")
+                        od = order_detail.get("data") or order_detail
+                        # Campi possibili: average_price, filled_price, price, fills
+                        actual_price = float(od.get("average_price") or od.get("filled_price") or od.get("price") or 0)
+                        qty_purchased_raw = float(od.get("filled_quantity") or od.get("quantity") or od.get("base_size") or 0)
+                        if qty_purchased_raw > 0:
+                            qty_purchased = qty_purchased_raw
+                        elif actual_price > 0:
+                            qty_purchased = size / actual_price
+                    except Exception as e2:
+                        print(f"[REVX ORDER DETAIL] error: {e2}")
+                # Fallback: calcola da size/price — usa price EUR se disponibile
+                if actual_price <= 0:
+                    price_eur_fallback = market_data.get(sym, {}).get("price_eur", 0.0)
+                    actual_price = price_eur_fallback if price_eur_fallback > 0 else price
+                    print(f"[REVX ORDER] prezzo fill non disponibile, uso fallback: {actual_price}")
+                if qty_purchased <= 0:
+                    qty_purchased = size / actual_price if actual_price > 0 else 0.0
                 stop_price  = actual_price * (1 - R_pct)
                 tp1_price   = actual_price * (1 + R_pct)
                 tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
