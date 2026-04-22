@@ -140,6 +140,41 @@ def make_coinbase_jwt(method: str, path: str, cb_key: str, cb_secret: str) -> st
                        headers={"kid": cb_key, "nonce": hashlib.sha256(os.urandom(16)).hexdigest()[:16]})
     return token
 
+def make_revx_signature(api_key_id: str, private_key_pem: str, method: str, path: str, query: str = "", body: str = "") -> dict:
+    """Genera gli header di autenticazione per Revolut X (Ed25519)."""
+    import base64
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    timestamp = str(int(time.time() * 1000))
+    message = f"{timestamp}{method}{path}{query}{body}".encode('utf-8')
+    private_key = load_pem_private_key(private_key_pem.encode(), password=None)
+    signature = base64.b64encode(private_key.sign(message)).decode()
+    return {
+        "X-Revx-API-Key": api_key_id,
+        "X-Revx-Timestamp": timestamp,
+        "X-Revx-Signature": signature,
+        "Content-Type": "application/json",
+    }
+
+REVX_BASE = "https://revx.revolut.com"
+
+async def revx_request(method: str, path: str, body: dict = None,
+                        key_id: str = None, private_key: str = None,
+                        params: dict = None) -> dict:
+    """Esegue una richiesta autenticata a Revolut X."""
+    body_str = json.dumps(body, separators=(',', ':')) if body else ""
+    # Costruisci query string per la firma (deve essere nell'ordine corretto)
+    query_str = ""
+    if params:
+        query_str = "&".join(f"{k}={v}" for k, v in params.items())
+    headers = make_revx_signature(key_id, private_key, method, path, query_str, body_str)
+    async with httpx.AsyncClient(timeout=30) as client:
+        if method == "GET":
+            r = await client.get(f"{REVX_BASE}{path}", headers=headers, params=params or {})
+        else:
+            r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
+    return r.json()
+
 async def coinbase_request(method: str, path: str, body: dict = None,
                            cb_key: str = None, cb_secret: str = None) -> dict:
     api_key    = cb_key    or _ENV_CB_KEY
@@ -420,28 +455,84 @@ STABLES = {'USDT','USDC','BUSD','DAI','FDUSD','TUSD','USDP','GUSD','FRAX',
            'LUSD','SUSD','EUR','GBP','USD','USDD','USTC','PAX','CBBTC','WBTC'}
 
 _coinbase_products: dict = {}
+_global_revx_key_id: str = ""
+_global_revx_private_key: str = ""
 _products_last_update: float = 0
+
+REVX_BASE_PUB = "https://revx.revolut.com"
+
+async def fetch_revx_market_data(key_id: str = "", private_key: str = "") -> dict:
+    """
+    Scarica ticker da Revolut X usando le chiavi utente.
+    Path: GET /api/1.0/tickers — risposta: {"data": [...], "metadata": {...}}
+    Simboli formato: "BTC/EUR" (slash, non trattino)
+    Restituisce dict sym -> {price_eur, change24h, volume24h, symbol_pair}
+    """
+    result = {}
+    if not key_id or not private_key:
+        return result
+    try:
+        data = await revx_request("GET", "/api/1.0/tickers",
+                                   key_id=key_id, private_key=private_key, params={})
+        # Risposta: {"data": [...tickers...], "metadata": {...}}
+        tickers = data.get("data", []) if isinstance(data, dict) else data
+        if not isinstance(tickers, list):
+            print(f"[REVX TICKER] risposta inattesa: {str(data)[:200]}")
+            return result
+        for t in tickers:
+            if not isinstance(t, dict):
+                continue
+            symbol = t.get("symbol", "")  # es. "BTC/EUR"
+            # Filtra coppie EUR (con slash)
+            if not symbol.endswith("/EUR"):
+                continue
+            sym = symbol[:-4]  # rimuove "/EUR"
+            if not sym or sym in STABLES:
+                continue
+            price = float(t.get("last_price") or t.get("mid") or t.get("ask") or 0)
+            change24h = float(t.get("price_change_24h_pct") or t.get("change_24h") or 0)
+            volume24h = float(t.get("volume_24h") or t.get("volume") or 0)
+            if price > 0:
+                result[sym] = {
+                    "price_eur": price,
+                    "change24h": change24h,
+                    "volume24h_eur": volume24h,
+                    "symbol_pair": symbol.replace("/", "-"),  # normalizza a BTC-EUR
+                }
+        print(f"[REVX TICKER] {len(result)} coppie EUR caricate")
+    except Exception as e:
+        print(f"[REVX TICKER] error: {e}")
+    return result
 
 async def fetch_prices():
     global _products_last_update
     try:
+        # Usa Advanced Trade API per i prodotti — più aggiornata di Exchange API
+        # Prodotti pubblici, nessuna auth richiesta
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get("https://api.exchange.coinbase.com/products")
-            all_products = r.json()
+            r = await client.get(
+                "https://api.coinbase.com/api/v3/brokerage/market/products",
+                params={"product_type": "SPOT", "limit": 500}
+            )
+            all_products_adv = r.json().get("products", [])
 
         usd_syms = {}
-        usdc_syms = {}  # coin che hanno anche il pair USDC
-        for p in all_products:
+        usdc_syms = {}
+        for p in all_products_adv:
             if not isinstance(p, dict): continue
-            if p.get("status") != "online": continue
-            sym = p.get("base_currency", "")
-            if not sym or not sym.isascii() or not sym.isalpha(): continue
+            if p.get("status", "") not in ("online", ""): continue
+            if p.get("is_disabled", False): continue
+            product_id = p.get("product_id", "")
+            if not product_id or "-" not in product_id: continue
+            parts = product_id.split("-")
+            if len(parts) != 2: continue
+            sym, quote = parts[0], parts[1]
+            if not sym.isascii() or not sym.isalpha(): continue
             if sym in STABLES: continue
-            quote = p.get("quote_currency", "")
             if quote == "USD":
-                usd_syms[p["id"]] = sym
+                usd_syms[product_id] = sym
             elif quote == "USDC":
-                usdc_syms[sym] = p["id"]  # es. "BTC" -> "BTC-USDC"
+                usdc_syms[sym] = product_id
 
         async with httpx.AsyncClient(timeout=15) as client:
             r2 = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
@@ -498,9 +589,54 @@ async def fetch_prices():
             for state in user_sessions.values():
                 for pos in state["positions"]:
                     if pos["symbol"] == sym:
+                        # NON aggiornare con prezzo USD le posizioni RevX
+                        # Il prezzo EUR viene aggiornato dopo nell'overlay RevX
+                        if pos.get("exchange") == "revx":
+                            continue
                         pos["currentPrice"] = price
                         if price > pos["highPrice"]:
                             pos["highPrice"] = price
+
+        # Overlay con dati Revolut X in EUR se disponibili
+        try:
+            # Usa chiavi sessione attiva, altrimenti chiavi globali caricate all'avvio
+            revx_key_id, revx_priv_key = _global_revx_key_id, _global_revx_private_key
+            for state in user_sessions.values():
+                if state.get("revx_key_id") and state.get("use_revx"):
+                    revx_key_id = state["revx_key_id"]
+                    revx_priv_key = state["revx_private_key"]
+                    break
+            revx_data = await fetch_revx_market_data(revx_key_id, revx_priv_key)
+            for sym, rd in revx_data.items():
+                if sym in market_data and rd["price_eur"] > 0:
+                    market_data[sym]["price_eur"]   = rd["price_eur"]
+                    # Non sovrascrivere change24h — manteniamo quello Binance (più affidabile)
+                    # change24h_eur=0 da RevX ticker (campo non disponibile)
+                    market_data[sym]["symbol_revx"] = rd["symbol_pair"]
+                elif rd["price_eur"] > 0:
+                    # Coin disponibile su Revolut X ma non su Coinbase
+                    market_data[sym] = {
+                        "price": 0.0, "price_eur": rd["price_eur"],
+                        "change1h": 0.0, "change24h": rd["change24h"],
+                        "change24h_eur": rd["change24h"],
+                        "volume24h": rd["volume24h_eur"],
+                        "icon": sym[0], "symbol_revx": rd["symbol_pair"]
+                    }
+            # Aggiorna prezzi posizioni aperte con EUR se use_revx
+            for state in user_sessions.values():
+                if not state.get("use_revx"):
+                    continue
+                for pos in state["positions"]:
+                    sym = pos["symbol"]
+                    rd = revx_data.get(sym)
+                    if rd and rd["price_eur"] > 0:
+                        pos["currentPrice"] = rd["price_eur"]
+                        if rd["price_eur"] > pos["highPrice"]:
+                            pos["highPrice"] = rd["price_eur"]
+        except Exception as e:
+            print(f"[REVX OVERLAY] error: {e}")
+            # In caso di errore, le posizioni RevX mantengono l'ultimo currentPrice EUR valido
+            # (non vengono toccate dal loop USD sopra grazie al check exchange==revx)
 
     except Exception as e:
         print(f"Fetch error: {e}")
@@ -541,6 +677,72 @@ def unrealized_pnl(state: dict) -> float:
 
 # ── trading ───────────────────────────────────────────────────────────────────
 
+async def get_revx_eur_balance(key_id: str, private_key: str) -> float:
+    """Legge il saldo EUR disponibile su Revolut X."""
+    try:
+        result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
+        balances = result if isinstance(result, list) else result.get("balances", [])
+        for b in balances:
+            if b.get("currency") == "EUR":
+                return float(b.get("available", 0) or 0)
+    except Exception as e:
+        print(f"[REVX BALANCE] error: {e}")
+    return 0.0
+
+async def get_revx_eur_balance(key_id: str, private_key: str) -> float:
+    """Legge il saldo EUR disponibile su Revolut X."""
+    try:
+        result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
+        balances = result if isinstance(result, list) else result.get("balances", [])
+        for b in balances:
+            if b.get("currency") == "EUR":
+                return float(b.get("available", 0) or 0)
+    except Exception as e:
+        print(f"[REVX BALANCE] error: {e}")
+    return 0.0
+
+async def get_coinbase_usdc_balance(cb_key: str, cb_secret: str) -> float:
+    """
+    Legge il saldo USDC/USD disponibile su Coinbase Advanced Trade.
+    Usa /portfolios/{uuid} che restituisce available_to_trade_fiat per ogni asset.
+    """
+    try:
+        # Trova il portfolio DEFAULT
+        port_res = await coinbase_request("GET", "/api/v3/brokerage/portfolios", cb_key=cb_key, cb_secret=cb_secret)
+        portfolios = port_res.get("portfolios", [])
+        default = next((p for p in portfolios if p.get("type") == "DEFAULT"), None)
+        if not default and portfolios:
+            default = portfolios[0]
+        if not default:
+            print("[BALANCE] nessun portfolio trovato")
+            return 0.0
+
+        uuid = default.get("uuid", "")
+        detail = await coinbase_request("GET", f"/api/v3/brokerage/portfolios/{uuid}", cb_key=cb_key, cb_secret=cb_secret)
+        spot_positions = detail.get("breakdown", {}).get("spot_positions", [])
+
+        total = 0.0
+        for pos in spot_positions:
+            if pos.get("asset") in ("USDC", "USD") and pos.get("is_cash"):
+                val = float(pos.get("available_to_trade_fiat", 0) or 0)
+                total += val
+                print(f"[BALANCE] {pos['asset']}: ${val:.2f} disponibile per trading")
+
+        if total > 0:
+            return total
+
+        # Fallback: total_cash_equivalent_balance dal portfolio
+        cash = detail.get("breakdown", {}).get("portfolio_balances", {}).get("total_cash_equivalent_balance", {})
+        total_cash = float(cash.get("value", 0) or 0)
+        if total_cash > 0:
+            print(f"[BALANCE] cash_equivalent fallback: ${total_cash:.2f}")
+            return total_cash
+
+    except Exception as e:
+        print(f"[BALANCE] portfolios error: {e}")
+
+    return 0.0
+
 async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     cfg      = state["config"]
     price    = sym_data["price"]
@@ -577,7 +779,61 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     tp1_price = price * (1 + R_pct)
     tp2_price = price * (1 + R_pct * tp2_multiplier)
 
+    # Determina exchange da usare
+    use_revx = state.get("use_revx", False)
+
     if is_real:
+        if use_revx:
+            # ── REVOLUT X ────────────────────────────────────────────────────
+            revx_key_id  = state.get("revx_key_id", "")
+            revx_priv    = state.get("revx_private_key", "")
+            try:
+                symbol_revx = f"{sym}-EUR"
+                import uuid as _uuid
+                order_body = {
+                    "client_order_id": str(_uuid.uuid4()),
+                    "symbol": symbol_revx,
+                    "side": "BUY",
+                    "order_configuration": {"market": {"quote_size": str(round(size, 2))}}
+                }
+                add_log(state, "info", "DEBUG", f"Ordine RevX {symbol_revx} size=€{size:.2f}")
+                result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                print(f"[REVX ORDER RESULT] {sym}: {result}")
+                # Revolut X risponde con {"data": {"venue_order_id": ..., "client_order_id": ...}}
+                data = result.get("data") or result
+                order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+                # Se non c'è order_id e c'è un errore esplicito, fallisce
+                if not order_id:
+                    err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
+                    add_log(state, "info", "ERRORE", f"Ordine RevX {sym} fallito: {err_msg}")
+                    await send_telegram(f"ERRORE ORDINE RevX {sym}: {err_msg[:100]}")
+                    return
+                actual_price = float(data.get("average_price") or data.get("price") or price)
+                qty_purchased = size / actual_price if actual_price > 0 else 0.0
+                stop_price  = actual_price * (1 - R_pct)
+                tp1_price   = actual_price * (1 + R_pct)
+                tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
+                add_log(state, "buy", "ACQUISTO REALE (RevX)",
+                    f"{sym} @ {fmt_price(actual_price)} | Size: €{size:.0f} | Qty: {qty_purchased:.6f} | "
+                    f"SL: {fmt_price(stop_price)} | TP1: {fmt_price(tp1_price)} | TP2: {fmt_price(tp2_price)} | R: {R_pct*100:.2f}%")
+                await send_telegram(f"ACQUISTO REALE RevX\n{sym} @ €{actual_price:.4f}\nSize: €{size:.2f}")
+            except Exception as e:
+                add_log(state, "info", "ERRORE", f"RevX error: {e}")
+                return
+            # Aggiorna stato posizione
+            state["currentCapital"] -= size
+            pos = {
+                "symbol": sym, "icon": sym_data["icon"],
+                "entryPrice": actual_price, "currentPrice": actual_price, "highPrice": actual_price,
+                "size": size, "size_remaining": size, "tp1_hit": False,
+                "entryTime": datetime.utcnow().isoformat() + "Z",
+                "stopPrice": stop_price, "tp1Price": tp1_price, "tp2Price": tp2_price,
+                "R_pct": R_pct, "realMode": True, "fee_pct": 0.001,
+                "qty_purchased": qty_purchased, "exchange": "revx", "symbol_pair": symbol_revx,
+            }
+            state["positions"].append(pos)
+            return
+        # ── COINBASE ─────────────────────────────────────────────────────────
         cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
         cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
         try:
@@ -589,11 +845,22 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "order_configuration": {"market_market_ioc": {"quote_size": str(round(size, 2))}}
             }
             add_log(state, "info", "DEBUG", f"Ordine {sym}: product_id={product_id} size=${size:.2f}")
-            print(f"[ORDER] {sym} body={body}")
             result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
-            print(f"[ORDER RESULT] {sym}: {result}")
+            # Se fallisce con USDC prova USD e viceversa
             if result.get("success") != True:
-                # Gestisci sia struttura piatta che annidata
+                err_str = str(result).lower()
+                if "not available" in err_str or "invalid_argument" in err_str:
+                    alt_id = product_id.replace("-USDC", "-USD") if "-USDC" in product_id else product_id.replace("-USD", "-USDC")
+                    if alt_id != product_id:
+                        add_log(state, "info", "RETRY", f"{sym}: provo {alt_id}")
+                        body["product_id"] = alt_id
+                        result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
+                        if result.get("success") == True:
+                            product_id = alt_id
+                            # Aggiorna il product_id in cache per i prossimi ordini
+                            if sym in _coinbase_products:
+                                _coinbase_products[sym]["product_id"] = alt_id
+            if result.get("success") != True:
                 err = result.get("error_response") or result
                 err_msg = err.get("message") or err.get("error_details") or str(result)
                 err_str = str(result).lower()
@@ -606,7 +873,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 if any(x in err_str for x in ["insufficient", "insufficient_fund", "not enough"]):
                     state["running"] = False
                     add_log(state, "info", "STOP AUTO", f"Saldo insufficiente — sessione fermata")
-                    await send_telegram(f"⛔ STOP AUTO: saldo insufficiente su Coinbase")
+                    await send_telegram(f"STOP AUTO: saldo insufficiente")
                 return
             filled       = result.get("success_response", {})
             actual_price = float(filled.get("average_filled_price", price)) or price
@@ -670,15 +937,50 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     close_size = pos["size_remaining"] * 0.5 if partial else pos["size_remaining"]
 
     if pos.get("realMode", False):
-        cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
-        cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
-        try:
-            # Usa la quantità tracciata all'acquisto — NON il saldo totale del conto
-            # Evita di vendere crypto pre-esistente non comprata dall'agente
+        # ── REVOLUT X EXIT ────────────────────────────────────────────────────
+        if pos.get("exchange") == "revx":
+            revx_key_id = state.get("revx_key_id", "")
+            revx_priv   = state.get("revx_private_key", "")
             qty_purchased = pos.get("qty_purchased", 0.0)
             if qty_purchased <= 0:
-                add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} — vendita annullata")
-            else:
+                add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} RevX — vendita annullata")
+                return
+            try:
+                import uuid as _uuid
+                qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
+                order_body = {
+                    "client_order_id": str(_uuid.uuid4()),
+                    "symbol": pos.get("symbol_pair", f"{sym}-EUR"),
+                    "side": "SELL",
+                    "order_configuration": {"market": {"base_size": str(qty_to_sell)}}
+                }
+                result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                print(f"[REVX SELL RESULT] {sym}: {result}")
+                data = result.get("data") or result
+                order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+                if not order_id:
+                    err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
+                    add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita: {err_msg}")
+                    await send_telegram(f"ERRORE VENDITA RevX {sym}: {err_msg[:100]}")
+                    return
+                filled_price = float(data.get("average_price") or data.get("price") or cur)
+                if filled_price > 0:
+                    cur = filled_price
+                add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ €{cur:.4f}")
+                if partial:
+                    pos["qty_purchased"] = qty_purchased - qty_to_sell
+            except Exception as e:
+                add_log(state, "info", "ERRORE", f"RevX exit error: {e}")
+                return
+        # ── COINBASE EXIT ─────────────────────────────────────────────────────
+        else:
+            cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
+            cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
+            try:
+                qty_purchased = pos.get("qty_purchased", 0.0)
+                if qty_purchased <= 0:
+                    add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} — vendita annullata")
+                    return
                 qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
                 product_id  = pos.get("product_id", f"{sym}-USDC")
                 body = {
@@ -688,16 +990,19 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 }
                 result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
                 if result.get("success") != True:
-                    add_log(state, "info", "ERRORE", f"Vendita {sym} fallita: {result.get('error_response', {}).get('message', str(result))}")
-                else:
-                    filled = result.get("success_response", {})
-                    cur = float(filled.get("average_filled_price", cur)) or cur
-                    add_log(state, "info", "VENDUTO", f"{sym} qty: {qty_to_sell:.6f} @ {_fp(cur)}")
-                    # Aggiorna qty_purchased rimanente dopo vendita parziale
-                    if partial:
-                        pos["qty_purchased"] = qty_purchased - qty_to_sell
-        except Exception as e:
-            add_log(state, "info", "ERRORE", f"Coinbase exit error: {sanitize_error(e, cb_key, cb_secret)}")
+                    err = result.get("error_response") or result
+                    err_msg = err.get("message") or err.get("error_details") or str(result)
+                    add_log(state, "info", "ERRORE", f"Vendita {sym} fallita [{product_id}]: {err_msg}")
+                    await send_telegram(f"ERRORE VENDITA {sym}: {err_msg[:100]}")
+                    return
+                filled = result.get("success_response", {})
+                cur = float(filled.get("average_filled_price", cur)) or cur
+                add_log(state, "info", "VENDUTO", f"{sym} qty: {qty_to_sell:.6f} @ {_fp(cur)}")
+                if partial:
+                    pos["qty_purchased"] = qty_purchased - qty_to_sell
+            except Exception as e:
+                add_log(state, "info", "ERRORE", f"Coinbase exit error: {sanitize_error(e, cb_key, cb_secret)}")
+                return
 
     pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
@@ -816,6 +1121,14 @@ async def scan_and_trade(state: dict, user_id: int = None):
     for pos in list(state["positions"]):
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
+        # Sanity check: per posizioni RevX entrambi i prezzi devono essere EUR
+        # Se currentPrice è molto diverso da entryPrice (>50%) probabilmente è un mix USD/EUR
+        if pos.get("exchange") == "revx" and entry > 0:
+            ratio = cur / entry
+            if ratio > 1.5 or ratio < 0.5:
+                # Prezzo anomalo — probabilmente USD invece di EUR, skip questo ciclo
+                print(f"[SANITY] {pos['symbol']} RevX prezzo anomalo: entry={entry:.2f} cur={cur:.2f} ratio={ratio:.2f} — skip")
+                continue
         trailing_stop   = cfg.get("trailingStop", True)
         trailing_pct    = cfg.get("trailingPct", 0.5)
 
@@ -852,20 +1165,27 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     # Calcola il capitale tradabile dinamicamente
     if cfg.get("realMode", False):
-        # Reale: leggi saldo USDC effettivo da Coinbase
-        cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
-        cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
-        try:
-            accounts = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
-            usdc_balance = 0.0
-            for acc in accounts.get("accounts", []):
-                if acc["currency"] in ("USDC", "USD"):
-                    usdc_balance += float(acc["available_balance"]["value"])
-            tradable_capital = usdc_balance * capital_pct
-        except Exception as e:
-            add_log(state, "info", "ERRORE", f"Fetch saldo fallito: {sanitize_error(e, cb_key, cb_secret)}")
-            _update_pnl(state)
-            return
+        use_revx = state.get("use_revx", False)
+        if use_revx:
+            revx_key_id = state.get("revx_key_id", "")
+            revx_priv   = state.get("revx_private_key", "")
+            try:
+                eur_balance = await get_revx_eur_balance(revx_key_id, revx_priv)
+                tradable_capital = eur_balance * capital_pct
+            except Exception as e:
+                add_log(state, "info", "ERRORE", f"Fetch saldo RevX fallito: {e}")
+                _update_pnl(state)
+                return
+        else:
+            cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
+            cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
+            try:
+                usdc_balance = await get_coinbase_usdc_balance(cb_key, cb_secret)
+                tradable_capital = usdc_balance * capital_pct
+            except Exception as e:
+                add_log(state, "info", "ERRORE", f"Fetch saldo fallito: {sanitize_error(e, cb_key, cb_secret)}")
+                _update_pnl(state)
+                return
     else:
         # Sim: usa currentCapital (già aggiornato dopo ogni trade)
         tradable_capital = state["currentCapital"] * capital_pct
@@ -883,8 +1203,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
             # Nessuna posizione aperta e saldo USDC esaurito — stop legittimo
             state["running"] = False
             add_log(state, "info", "STOP AUTO",
-                f"Saldo USDC insufficiente (${tradable_capital:.2f}) — sessione fermata")
-            await send_telegram(f"⛔ STOP AUTO: saldo USDC ${tradable_capital:.2f} insufficiente")
+                f"Saldo insufficiente ({'€' if state.get('use_revx') else '$'}{tradable_capital:.2f}) — sessione fermata")
+            await send_telegram(f"STOP AUTO: saldo insufficiente (€{tradable_capital:.2f})" if state.get("use_revx") else f"STOP AUTO: saldo USDC ${tradable_capital:.2f} insufficiente")
             return
     elif tradable_capital < 1.0 and not cfg.get("realMode", False):
         # Sim con capitale esaurito
@@ -940,13 +1260,16 @@ async def scan_and_trade(state: dict, user_id: int = None):
     rsi_max       = cfg.get("rsiMax", 70.0)
     min_r         = cfg.get("minR", 0.01)
 
+    # Se Revolut X: usa tutte le coin con candele disponibili (non filtriamo per _coinbase_products)
+    # Se Coinbase: filtra solo le coin con prodotto disponibile
+    use_revx_filter = state.get("use_revx", False)
     universe = [
             {**d, "symbol": sym}
             for sym, d in market_data.items()
             if d["price"] > 0
             and d.get("volume24h", 0) >= min_vol
             and sym not in open_syms
-            and sym in _coinbase_products
+            and (use_revx_filter or sym in _coinbase_products)
             and sym in candle_data
             and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ]
@@ -1150,6 +1473,8 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS sim_mode BOOLEAN DEFAULT TRUE;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_b64 TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_key_id TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_private_key TEXT DEFAULT '';
                     CREATE TABLE IF NOT EXISTS trades_history (
                         id SERIAL PRIMARY KEY,
                         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -1188,6 +1513,25 @@ async def startup():
             print(f"Database error: {e}")
     asyncio.create_task(background_loop())
     asyncio.create_task(telegram_loop())
+    asyncio.create_task(load_global_revx_keys())
+
+async def load_global_revx_keys():
+    """Carica le chiavi RevX del primo utente configurato per usarle nel fetch_prices."""
+    global _global_revx_key_id, _global_revx_private_key
+    if not db_pool:
+        return
+    try:
+        await asyncio.sleep(3)  # Aspetta che il DB sia pronto
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT revx_key_id, revx_private_key FROM users WHERE revx_key_id != '' AND sim_mode = FALSE ORDER BY id LIMIT 1"
+            )
+        if row and row["revx_key_id"]:
+            _global_revx_key_id = decrypt_key(row["revx_key_id"])
+            _global_revx_private_key = decrypt_key(row["revx_private_key"])
+            print(f"[REVX] Chiavi globali caricate per market data")
+    except Exception as e:
+        print(f"[REVX] Errore caricamento chiavi globali: {e}")
 
 async def restore_sessions_from_db(pool):
     """Ripristina sessioni attive salvate nel DB dopo un riavvio."""
@@ -1343,7 +1687,7 @@ async def get_me(user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT username, display_name, cb_key, avatar_b64, sim_mode FROM users WHERE id = $1", user_id
+            "SELECT username, display_name, cb_key, avatar_b64, sim_mode, revx_key_id FROM users WHERE id = $1", user_id
         )
     has_keys = bool(row["cb_key"])
     sim = row["sim_mode"] if row["sim_mode"] is not None else True
@@ -1355,7 +1699,8 @@ async def get_me(user_id: int = Depends(get_current_user)):
         "username": dname,
         "has_api_keys": has_keys,
         "avatar_b64": row["avatar_b64"] or "",
-        "sim_mode": sim
+        "sim_mode": sim,
+        "has_revx_keys": bool(row.get("revx_key_id") or ""),
     }
 
 class SimModeRequest(BaseModel):
@@ -1507,16 +1852,21 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         return {"error": "Allocazione non valida (0-100%)"}
 
     cb_key, cb_secret, real_mode = "", "", False
+    revx_key_id, revx_private_key, use_revx = "", "", False
     if db_pool:
         try:
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT cb_key, cb_secret, sim_mode FROM users WHERE id = $1", user_id)
+                    "SELECT cb_key, cb_secret, sim_mode, revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
                 if row:
                     cb_key    = decrypt_key(row["cb_key"] or "")
                     cb_secret = decrypt_key(row["cb_secret"] or "")
+                    revx_key_id     = decrypt_key(row["revx_key_id"] or "")
+                    revx_private_key = decrypt_key(row["revx_private_key"] or "")
                     sim = row["sim_mode"] if row["sim_mode"] is not None else True
-                    real_mode = bool(cb_key) and not sim
+                    # Preferisci Revolut X se configurato
+                    use_revx = bool(revx_key_id) and not sim
+                    real_mode = (bool(cb_key) or use_revx) and not sim
         except Exception as e:
             print(f"DB key fetch error: {e}")
 
@@ -1554,6 +1904,8 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         },
         "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
         "cb_key": cb_key, "cb_secret": cb_secret,
+        "revx_key_id": revx_key_id, "revx_private_key": revx_private_key,
+        "use_revx": use_revx,
         "consecutiveLosses": 0,
     })
     alloc  = float(cfg.get("allocPct", 0.20)) * 100
@@ -1568,8 +1920,10 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
     rsi_s  = f"{cfg.get('rsiMin',40):.0f}-{cfg.get('rsiMax',60):.0f}" if cfg.get("rsiFilter", True) else "OFF"
     t1h_s  = "ON" if cfg.get("trend1hFilter", True) else "OFF"
     trl_s  = f"{cfg.get('trailingPct',0.5)*100:.0f}%" if cfg.get("trailingStop", True) else "OFF"
+    curr_sym = "€" if use_revx else "$"
+    exchange_name = "Revolut X" if use_revx else ("Coinbase" if cb_key else "SIM")
     add_log(state, "info", "AVVIO",
-        f"${capital:.0f} | {mode} | Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | "
+        f"{curr_sym}{capital:.0f} | {mode} [{exchange_name}] | Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | "
         f"EMA: {ema_s} | Trend1h: {t1h_s} | RSI: {rsi_s} | "
         f"TP2: {tp2r}R | Trailing: {trl_s} | MaxLoss: {mcl}"
     )
@@ -1631,7 +1985,7 @@ async def chat(body: dict, user_id: int = Depends(get_current_user)):
 def health():
     return {
         "status": "ok",
-        "coinbase": any(d["price"] > 0 for d in market_data.values()),
+        "market_data": any(d["price"] > 0 for d in market_data.values()),
         "candles": len(candle_data),
         "candles_age_min": round((time.time() - _candles_last_update) / 60, 1) if _candles_last_update else None,
     }
@@ -1650,6 +2004,93 @@ async def candles_status(user_id: int = Depends(get_current_user)):
         "sample_signals": sample,
     }
 
+class RevxKeysRequest(BaseModel):
+    key_id: str
+    private_key: str
+
+@app.post("/auth/save_revx_keys")
+async def save_revx_keys(req: RevxKeysRequest, user_id: int = Depends(get_current_user)):
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET revx_key_id = $1, revx_private_key = $2 WHERE id = $3",
+            encrypt_key(req.key_id), encrypt_key(req.private_key), user_id
+        )
+    return {"ok": True}
+
+@app.get("/test_revx")
+async def test_revx(user_id: int = Depends(get_current_user)):
+    if not db_pool:
+        return {"ok": False, "error": "DB non disponibile"}
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
+    if not row or not row["revx_key_id"]:
+        return {"ok": False, "error": "Chiavi Revolut X non configurate"}
+    key_id = decrypt_key(row["revx_key_id"])
+    private_key = decrypt_key(row["revx_private_key"])
+    try:
+        result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
+        # Revolut X può restituire lista diretta o dict con "balances"
+        if isinstance(result, list):
+            balances_raw = result
+        else:
+            balances_raw = result.get("balances", [])
+        balances = [
+            {"currency": b.get("currency", ""), "available": b.get("available", "0")}
+            for b in balances_raw
+            if float(b.get("available", 0) or 0) > 0
+        ]
+        return {"ok": True, "balances": balances, "raw": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@app.get("/debug_revx_ticker")
+async def debug_revx_ticker(user_id: int = Depends(get_current_user)):
+    """Tickers Revolut X — path corretto: /api/1.0/tickers"""
+    try:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
+        if not row or not row["revx_key_id"]:
+            return {"error": "Chiavi RevX non configurate"}
+        key_id = decrypt_key(row["revx_key_id"])
+        priv   = decrypt_key(row["revx_private_key"])
+        result = await revx_request("GET", "/api/1.0/tickers", key_id=key_id, private_key=priv, params={})
+        tickers = result if isinstance(result, list) else result.get("tickers", result.get("data", []))
+        eur = [t for t in (tickers if isinstance(tickers, list) else [])
+               if isinstance(t, dict) and str(t.get("symbol","")).endswith("/EUR")][:3]
+        return {
+            "raw_type": type(result).__name__,
+            "raw_keys": list(result.keys()) if isinstance(result, dict) else "list",
+            "total": len(tickers) if isinstance(tickers, list) else 0,
+            "sample_eur": eur,
+            "first_2_raw": (tickers[:2] if isinstance(tickers, list) else [str(result)[:300]])
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/debug_revx_candles")
+async def debug_revx_candles(user_id: int = Depends(get_current_user)):
+    """Candles Revolut X — path corretto: /api/1.0/candles/{symbol}"""
+    try:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
+        if not row or not row["revx_key_id"]:
+            return {"error": "Chiavi RevX non configurate"}
+        key_id = decrypt_key(row["revx_key_id"])
+        priv   = decrypt_key(row["revx_private_key"])
+        # Candles: simbolo nel path, interval in minuti come query param
+        result = await revx_request("GET", "/api/1.0/candles/BTC/EUR",
+                                    key_id=key_id, private_key=priv,
+                                    params={"interval": "5", "limit": "3"})
+        return {
+            "raw_type": type(result).__name__,
+            "raw_keys": list(result.keys()) if isinstance(result, dict) else "list",
+            "data": result
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/test_coinbase")
 async def test_coinbase(user_id: int = Depends(get_current_user)):
     cb_key, cb_secret = _ENV_CB_KEY, _ENV_CB_SECRET
@@ -1665,16 +2106,64 @@ async def test_coinbase(user_id: int = Depends(get_current_user)):
     if not cb_key:
         return {"ok": False, "error": "API key non configurata"}
     try:
+        # Leggi saldo USDC/USD
+        usdc_balance = await get_coinbase_usdc_balance(cb_key, cb_secret)
+        # Leggi anche tutti gli account crypto
         result = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
         accounts = result.get("accounts", [])
         balances = [
             {"currency": a["currency"], "available": a["available_balance"]["value"]}
             for a in accounts
-            if float(a["available_balance"]["value"]) > 0
+            if float(a.get("available_balance", {}).get("value", 0) or 0) > 0
         ]
-        return {"ok": True, "balances": balances}
+        # Aggiungi USDC in cima se trovato
+        if usdc_balance > 0:
+            balances.insert(0, {"currency": "USDC/USD", "available": str(round(usdc_balance, 2))})
+        return {"ok": True, "balances": balances, "usdc_tradable": usdc_balance}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+@app.get("/debug_coinbase")
+async def debug_coinbase(user_id: int = Depends(get_current_user)):
+    """Mostra la risposta raw di Coinbase per debug saldi."""
+    cb_key, cb_secret = _ENV_CB_KEY, _ENV_CB_SECRET
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT cb_key, cb_secret FROM users WHERE id = $1", user_id)
+                if row and row["cb_key"]:
+                    cb_key    = decrypt_key(row["cb_key"])
+                    cb_secret = decrypt_key(row["cb_secret"])
+        except Exception as e:
+            pass
+    if not cb_key:
+        return {"error": "no keys"}
+    try:
+        # Prova endpoint portfolios per trovare USDC
+        portfolios_result = await coinbase_request("GET", "/api/v3/brokerage/portfolios", cb_key=cb_key, cb_secret=cb_secret)
+
+        # Cerca UUID del portfolio default
+        portfolios = portfolios_result.get("portfolios", [])
+        default_uuid = None
+        for p in portfolios:
+            if p.get("type") == "DEFAULT" or p.get("name") in ("Default", "Portafoglio principale"):
+                default_uuid = p.get("uuid")
+                break
+        if not default_uuid and portfolios:
+            default_uuid = portfolios[0].get("uuid")
+
+        portfolio_balances = {}
+        if default_uuid:
+            bal_result = await coinbase_request("GET", f"/api/v3/brokerage/portfolios/{default_uuid}", cb_key=cb_key, cb_secret=cb_secret)
+            portfolio_balances = bal_result
+
+        return {
+            "portfolios": portfolios,
+            "default_uuid": default_uuid,
+            "portfolio_detail": portfolio_balances,
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/logos")
 async def get_logos():
