@@ -808,14 +808,22 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                     add_log(state, "info", "ERRORE", f"Ordine RevX {sym} fallito: {err_msg}")
                     await send_telegram(f"ERRORE ORDINE RevX {sym}: {err_msg[:100]}")
                     return
-                actual_price = float(data.get("average_price") or data.get("price") or price)
+                # Prezzo da risposta RevX, fallback su price_eur (EUR), MAI su price (USD)
+                price_eur = market_data.get(sym, {}).get("price_eur", 0.0)
+                actual_price = float(data.get("average_price") or data.get("price") or price_eur or price)
+                # Se il prezzo è chiaramente USD (molto diverso da price_eur), usa price_eur
+                if price_eur > 0 and actual_price > 0:
+                    ratio = actual_price / price_eur
+                    if ratio > 1.3 or ratio < 0.7:
+                        print(f"[REVX ORDER] prezzo risposta {actual_price} sembra USD, uso price_eur {price_eur}")
+                        actual_price = price_eur
                 qty_purchased = size / actual_price if actual_price > 0 else 0.0
                 stop_price  = actual_price * (1 - R_pct)
                 tp1_price   = actual_price * (1 + R_pct)
                 tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
                 add_log(state, "buy", "ACQUISTO REALE (RevX)",
-                    f"{sym} @ {fmt_price(actual_price)} | Size: €{size:.0f} | Qty: {qty_purchased:.6f} | "
-                    f"SL: {fmt_price(stop_price)} | TP1: {fmt_price(tp1_price)} | TP2: {fmt_price(tp2_price)} | R: {R_pct*100:.2f}%")
+                    f"{sym} @ €{actual_price:.4f} | Size: €{size:.0f} | Qty: {qty_purchased:.6f} | "
+                    f"SL: €{stop_price:.4f} | TP1: €{tp1_price:.4f} | TP2: €{tp2_price:.4f} | R: {R_pct*100:.2f}%")
                 await send_telegram(f"ACQUISTO REALE RevX\n{sym} @ €{actual_price:.4f}\nSize: €{size:.2f}")
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"RevX error: {e}")
