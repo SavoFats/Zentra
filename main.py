@@ -9,6 +9,7 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 import httpx
 import uvicorn
@@ -1832,6 +1833,12 @@ def get_market():
             "reason":     sig["reason"],
         }
         items.append(item)
+
+    # Se RevX è attivo e le coppie sono caricate, mostra solo le coin disponibili
+    use_revx = any(s.get("use_revx") for s in user_sessions.values())
+    if use_revx and _revx_pairs:
+        items = [i for i in items if i["symbol"] in _revx_pairs]
+
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
     return {"market": result}
 
@@ -2020,6 +2027,22 @@ def health():
         "candles": len(candle_data),
         "candles_age_min": round((time.time() - _candles_last_update) / 60, 1) if _candles_last_update else None,
     }
+
+@app.get("/logs")
+async def get_logs(key: str = "", n: int = 50):
+    """Restituisce gli ultimi N log — accessibile direttamente nel browser con ?key=SECRET_KEY"""
+    if key != SECRET_KEY:
+        return PlainTextResponse("Non autorizzato.", status_code=401)
+    # Aggrega log di tutte le sessioni attive
+    lines = []
+    for uid, state in user_sessions.items():
+        for l in state.get("log", [])[-n:]:
+            ts = ""
+            if l.get("ts"):
+                import datetime as _dt
+                ts = _dt.datetime.fromtimestamp(l["ts"]/1000).strftime("%H:%M:%S") + " "
+            lines.append(f"{ts}[{l.get('label','?')}] {l.get('desc','')}")
+    return PlainTextResponse("\n".join(lines) if lines else "Nessun log disponibile.")
 
 @app.get("/candles_status")
 async def candles_status(user_id: int = Depends(get_current_user)):
