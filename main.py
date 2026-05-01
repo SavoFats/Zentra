@@ -478,6 +478,7 @@ STABLES = {'USDT','USDC','BUSD','DAI','FDUSD','TUSD','USDP','GUSD','FRAX',
 _coinbase_products: dict = {}
 _global_revx_key_id: str = ""
 _global_revx_private_key: str = ""
+_revx_pairs: set = set()  # simboli EUR disponibili su Revolut X es. {"BTC","ETH","ADA"} — caricato all'avvio
 _products_last_update: float = 0
 
 REVX_BASE_PUB = "https://revx.revolut.com"
@@ -1168,7 +1169,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if cur <= pos["stopPrice"]:
             reason = "STOP TRAILING" if pos.get("tp1_hit") else "STOP LOSS"
             await exit_position(state, pos, reason, user_id=user_id)
-            continue  # evita re-entry nella stessa iterazione — cooldown già impostato
+            continue  # evita re-entry nella stessa iterazione
 
     alloc_pct   = cfg.get("allocPct", 0.20)
     capital_pct = cfg.get("capitalPct", 1.0)
@@ -1281,6 +1282,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             and d.get("volume24h", 0) >= min_vol
             and sym not in open_syms
             and (use_revx_filter or sym in _coinbase_products)
+            and (not use_revx_filter or not _revx_pairs or sym in _revx_pairs)
             and sym in candle_data
             and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ]
@@ -1527,8 +1529,8 @@ async def startup():
     asyncio.create_task(load_global_revx_keys())
 
 async def load_global_revx_keys():
-    """Carica le chiavi RevX del primo utente configurato per usarle nel fetch_prices."""
-    global _global_revx_key_id, _global_revx_private_key
+    """Carica le chiavi RevX e le coppie EUR disponibili all'avvio."""
+    global _global_revx_key_id, _global_revx_private_key, _revx_pairs
     if not db_pool:
         return
     try:
@@ -1541,6 +1543,24 @@ async def load_global_revx_keys():
             _global_revx_key_id = decrypt_key(row["revx_key_id"])
             _global_revx_private_key = decrypt_key(row["revx_private_key"])
             print(f"[REVX] Chiavi globali caricate per market data")
+            # Carica coppie EUR disponibili su Revolut X
+            try:
+                data = await revx_request("GET", "/api/1.0/tickers",
+                                          key_id=_global_revx_key_id,
+                                          private_key=_global_revx_private_key)
+                tickers = data.get("data", []) if isinstance(data, dict) else data
+                pairs = set()
+                for t in (tickers if isinstance(tickers, list) else []):
+                    symbol = t.get("symbol", "")
+                    if symbol.endswith("/EUR"):
+                        pairs.add(symbol[:-4])  # "BTC/EUR" -> "BTC"
+                if pairs:
+                    _revx_pairs = pairs
+                    print(f"[REVX] {len(pairs)} coppie EUR caricate: {sorted(pairs)[:8]}...")
+                else:
+                    print(f"[REVX] Nessuna coppia EUR trovata nel ticker")
+            except Exception as e2:
+                print(f"[REVX] Errore caricamento coppie: {e2}")
     except Exception as e:
         print(f"[REVX] Errore caricamento chiavi globali: {e}")
 
