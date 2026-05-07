@@ -228,7 +228,7 @@ _sessions_lock = asyncio.Lock()
 candle_data: dict = {}
 _candles_last_update: float = 0
 CANDLE_UPDATE_INTERVAL = 300  # secondi (5 minuti)
-CANDLE_UNIVERSE_SIZE   = 40   # top N coin per volume
+CANDLE_UNIVERSE_SIZE   = 60   # top N coin per volume
 
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
@@ -479,6 +479,7 @@ STABLES = {'USDT','USDC','BUSD','DAI','FDUSD','TUSD','USDP','GUSD','FRAX',
 _coinbase_products: dict = {}
 _global_revx_key_id: str = ""
 _global_revx_private_key: str = ""
+_revx_pairs: set = set()  # simboli EUR disponibili su Revolut X es. {"BTC","ETH","ADA"} — caricato all'avvio
 _products_last_update: float = 0
 
 REVX_BASE_PUB = "https://revx.revolut.com"
@@ -669,18 +670,6 @@ async def get_revx_eur_balance(key_id: str, private_key: str) -> float:
         print(f"[REVX BALANCE] error: {e}")
     return 0.0
 
-async def get_revx_eur_balance(key_id: str, private_key: str) -> float:
-    """Legge il saldo EUR disponibile su Revolut X."""
-    try:
-        result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
-        balances = result if isinstance(result, list) else result.get("balances", [])
-        for b in balances:
-            if b.get("currency") == "EUR":
-                return float(b.get("available", 0) or 0)
-    except Exception as e:
-        print(f"[REVX BALANCE] error: {e}")
-    return 0.0
-
 async def get_coinbase_usdc_balance(cb_key: str, cb_secret: str) -> float:
     """
     Legge il saldo USDC/USD disponibile su Coinbase Advanced Trade.
@@ -780,7 +769,19 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                     "order_configuration": {"market": {"quote_size": str(size_eur)}}
                 }
                 add_log(state, "info", "DEBUG", f"Ordine RevX {symbol_revx} size=${size:.2f} (€{size_eur:.2f} @ {eur_usd:.4f})")
-                result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                # Retry su errori di rete — max 2 tentativi
+                result = None
+                for attempt in range(2):
+                    try:
+                        result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                        break
+                    except Exception as net_err:
+                        if attempt == 0:
+                            print(f"[REVX ORDER] tentativo 1 fallito: {net_err}, riprovo...")
+                            await asyncio.sleep(2)
+                            order_body["client_order_id"] = str(_uuid.uuid4())  # nuovo ID per il retry
+                        else:
+                            raise
                 print(f"[REVX ORDER RESULT] {sym}: {result}")
                 data = result.get("data") or result
                 order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
@@ -814,6 +815,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "stopPrice": stop_price, "tp1Price": tp1_price, "tp2Price": tp2_price,
                 "R_pct": R_pct, "realMode": True, "fee_pct": 0.001,
                 "qty_purchased": qty_purchased, "exchange": "revx", "symbol_pair": symbol_revx,
+                "entry_eur": size_eur,  # EUR effettivamente spesi su RevX
             }
             state["positions"].append(pos)
             return
@@ -964,7 +966,19 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     "side": "SELL",
                     "order_configuration": {"market": {"base_size": str(qty_to_sell)}}
                 }
-                result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                # Retry su errori di rete — max 2 tentativi
+                result = None
+                for attempt in range(2):
+                    try:
+                        result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                        break
+                    except Exception as net_err:
+                        if attempt == 0:
+                            print(f"[REVX SELL] tentativo 1 fallito: {net_err}, riprovo...")
+                            await asyncio.sleep(2)
+                            order_body["client_order_id"] = str(_uuid.uuid4())
+                        else:
+                            raise
                 print(f"[REVX SELL RESULT] {sym}: {result}")
                 data = result.get("data") or result
                 order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
@@ -1025,6 +1039,21 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
 
+    # Per RevX: ricalcola pnl in EUR reali usando entry_eur
+    if pos.get("exchange") == "revx" and pos.get("entry_eur"):
+        try:
+            eur_usd = await get_eur_usd_rate()
+            qty_total = pos.get("qty_purchased", 0) + (pos.get("qty_tp1_sold", 0) or 0)
+            entry_eur_total = pos["entry_eur"]
+            # EUR proporzionale alla quota che stiamo vendendo
+            proportion = qty_to_sell / qty_total if qty_total > 0 else 0.5
+            entry_eur_part = entry_eur_total * proportion
+            exit_eur = qty_to_sell * cur / eur_usd
+            pnl = exit_eur - entry_eur_part
+            pct = (pnl / entry_eur_part) * 100 if entry_eur_part > 0 else 0
+        except Exception:
+            pass  # fallback al calcolo USD
+
     # Fee di uscita: 0.60% sul valore liquidato (applicata sempre per riflettere realtà)
     fee_pct = pos.get("fee_pct", 0.006)
     exit_fee = close_size * fee_pct
@@ -1037,13 +1066,16 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         pos["size_remaining"] -= close_size
         pos["stopPrice"]       = pos["entryPrice"]  # breakeven minimo
         pos["tp1_hit"]         = True
+        pos["tp1_pnl"]         = pnl  # salviamo per il messaggio finale
+        pos["qty_tp1_sold"]    = qty_to_sell  # qty venduta a TP1 per calcolo proporzione
         mode = "REALE" if pos.get("realMode") else "SIM"
         add_log(state, "sell", f"TP1 {mode}",
             f"{sym} 50% @ ${cur:.4f} | +{pnl:.2f}$ ({pct:+.2f}%) | trailing stop attivo")
         if pos.get("realMode"):
+            curr = "€" if pos.get("exchange") == "revx" else "$"
             await send_telegram(
-                "TP1 REALE\n" + sym + " 50% @ $" + f"{cur:.4f}" +
-                "\nP&L parziale: +" + f"{pnl:.2f}" + "$\nStop spostato a breakeven"
+                "TP1 REALE\n" + sym + " 50% @ " + curr + f"{cur:.4f}" +
+                "\nP&L parziale: +" + f"{pnl:.2f}" + curr + "\nStop spostato a breakeven"
             )
         return  # posizione resta aperta per TP2
 
@@ -1097,8 +1129,16 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         f"{sym} @ {_fp(cur)} | {pnl:+.2f}$ ({pct:+.2f}%) | fee: ${exit_fee:.2f} | {dur:.0f} min")
     if pos.get("realMode"):
         esito = "PROFITTO" if pnl >= 0 else "PERDITA"
-        msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ $" + f"{cur:.4f}" +
-               "\nP&L: " + f"{pnl:+.2f}" + "$")
+        curr = "€" if pos.get("exchange") == "revx" else "$"
+        tp1_pnl = pos.get("tp1_pnl", 0)
+        total_pnl = pnl + tp1_pnl
+        if tp1_pnl:
+            msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ " + curr + f"{cur:.4f}" +
+                   "\nP&L seconda metà: " + f"{pnl:+.2f}" + curr +
+                   "\nP&L totale: " + f"{total_pnl:+.2f}" + curr)
+        else:
+            msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ " + curr + f"{cur:.4f}" +
+                   "\nP&L: " + f"{pnl:+.2f}" + curr)
         await send_telegram(msg)
 
     # Controllo stop automatico per perdite consecutive
@@ -1282,6 +1322,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             and d.get("volume24h", 0) >= min_vol
             and sym not in open_syms
             and (use_revx_filter or sym in _coinbase_products)
+            and (not use_revx_filter or not _revx_pairs or sym in _revx_pairs)
             and sym in candle_data
             and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ]
@@ -1327,7 +1368,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
     )
 
     for d in candidates:
-        add_log(state, "info", "SEGNALE", f"{d['symbol']} | {d.get('ema_reason', 'EMA off')}")
+        sym = d["symbol"]
+        add_log(state, "info", "SEGNALE", f"{sym} | {d.get('ema_reason', 'EMA off')}")
         await enter_position(state, d, tradable_capital_net)
 
     _update_pnl(state)
@@ -1528,8 +1570,8 @@ async def startup():
     asyncio.create_task(load_global_revx_keys())
 
 async def load_global_revx_keys():
-    """Carica le chiavi RevX del primo utente configurato per usarle nel fetch_prices."""
-    global _global_revx_key_id, _global_revx_private_key
+    """Carica le chiavi RevX e le coppie EUR disponibili all'avvio."""
+    global _global_revx_key_id, _global_revx_private_key, _revx_pairs
     if not db_pool:
         return
     try:
@@ -1542,6 +1584,24 @@ async def load_global_revx_keys():
             _global_revx_key_id = decrypt_key(row["revx_key_id"])
             _global_revx_private_key = decrypt_key(row["revx_private_key"])
             print(f"[REVX] Chiavi globali caricate per market data")
+            # Carica coppie EUR disponibili su Revolut X
+            try:
+                data = await revx_request("GET", "/api/1.0/tickers",
+                                          key_id=_global_revx_key_id,
+                                          private_key=_global_revx_private_key)
+                tickers = data.get("data", []) if isinstance(data, dict) else data
+                pairs = set()
+                for t in (tickers if isinstance(tickers, list) else []):
+                    symbol = t.get("symbol", "")
+                    if symbol.endswith("/EUR"):
+                        pairs.add(symbol[:-4])  # "BTC/EUR" -> "BTC"
+                if pairs:
+                    _revx_pairs = pairs
+                    print(f"[REVX] {len(pairs)} coppie EUR caricate: {sorted(pairs)[:8]}...")
+                else:
+                    print(f"[REVX] Nessuna coppia EUR trovata nel ticker")
+            except Exception as e2:
+                print(f"[REVX] Errore caricamento coppie: {e2}")
     except Exception as e:
         print(f"[REVX] Errore caricamento chiavi globali: {e}")
 
@@ -1814,9 +1874,8 @@ def get_market():
         }
         items.append(item)
 
-    # Se RevX è attivo e le coppie sono caricate, mostra solo le coin disponibili
-    use_revx = any(s.get("use_revx") for s in user_sessions.values())
-    if use_revx and _revx_pairs:
+    # Se RevX è configurato (chiavi globali caricate), mostra solo le coin disponibili
+    if _revx_pairs and _global_revx_key_id:
         items = [i for i in items if i["symbol"] in _revx_pairs]
 
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
