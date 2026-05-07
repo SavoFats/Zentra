@@ -815,6 +815,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "stopPrice": stop_price, "tp1Price": tp1_price, "tp2Price": tp2_price,
                 "R_pct": R_pct, "realMode": True, "fee_pct": 0.001,
                 "qty_purchased": qty_purchased, "exchange": "revx", "symbol_pair": symbol_revx,
+                "entry_eur": size_eur,  # EUR effettivamente spesi su RevX
             }
             state["positions"].append(pos)
             return
@@ -1038,6 +1039,21 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
 
+    # Per RevX: ricalcola pnl in EUR reali usando entry_eur
+    if pos.get("exchange") == "revx" and pos.get("entry_eur"):
+        try:
+            eur_usd = await get_eur_usd_rate()
+            qty_total = pos.get("qty_purchased", 0) + (pos.get("qty_tp1_sold", 0) or 0)
+            entry_eur_total = pos["entry_eur"]
+            # EUR proporzionale alla quota che stiamo vendendo
+            proportion = qty_to_sell / qty_total if qty_total > 0 else 0.5
+            entry_eur_part = entry_eur_total * proportion
+            exit_eur = qty_to_sell * cur / eur_usd
+            pnl = exit_eur - entry_eur_part
+            pct = (pnl / entry_eur_part) * 100 if entry_eur_part > 0 else 0
+        except Exception:
+            pass  # fallback al calcolo USD
+
     # Fee di uscita: 0.60% sul valore liquidato (applicata sempre per riflettere realtà)
     fee_pct = pos.get("fee_pct", 0.006)
     exit_fee = close_size * fee_pct
@@ -1050,13 +1066,16 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         pos["size_remaining"] -= close_size
         pos["stopPrice"]       = pos["entryPrice"]  # breakeven minimo
         pos["tp1_hit"]         = True
+        pos["tp1_pnl"]         = pnl  # salviamo per il messaggio finale
+        pos["qty_tp1_sold"]    = qty_to_sell  # qty venduta a TP1 per calcolo proporzione
         mode = "REALE" if pos.get("realMode") else "SIM"
         add_log(state, "sell", f"TP1 {mode}",
             f"{sym} 50% @ ${cur:.4f} | +{pnl:.2f}$ ({pct:+.2f}%) | trailing stop attivo")
         if pos.get("realMode"):
+            curr = "€" if pos.get("exchange") == "revx" else "$"
             await send_telegram(
-                "TP1 REALE\n" + sym + " 50% @ $" + f"{cur:.4f}" +
-                "\nP&L parziale: +" + f"{pnl:.2f}" + "$\nStop spostato a breakeven"
+                "TP1 REALE\n" + sym + " 50% @ " + curr + f"{cur:.4f}" +
+                "\nP&L parziale: +" + f"{pnl:.2f}" + curr + "\nStop spostato a breakeven"
             )
         return  # posizione resta aperta per TP2
 
@@ -1110,8 +1129,16 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         f"{sym} @ {_fp(cur)} | {pnl:+.2f}$ ({pct:+.2f}%) | fee: ${exit_fee:.2f} | {dur:.0f} min")
     if pos.get("realMode"):
         esito = "PROFITTO" if pnl >= 0 else "PERDITA"
-        msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ $" + f"{cur:.4f}" +
-               "\nP&L: " + f"{pnl:+.2f}" + "$")
+        curr = "€" if pos.get("exchange") == "revx" else "$"
+        tp1_pnl = pos.get("tp1_pnl", 0)
+        total_pnl = pnl + tp1_pnl
+        if tp1_pnl:
+            msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ " + curr + f"{cur:.4f}" +
+                   "\nP&L seconda metà: " + f"{pnl:+.2f}" + curr +
+                   "\nP&L totale: " + f"{total_pnl:+.2f}" + curr)
+        else:
+            msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ " + curr + f"{cur:.4f}" +
+                   "\nP&L: " + f"{pnl:+.2f}" + curr)
         await send_telegram(msg)
 
     # Controllo stop automatico per perdite consecutive
@@ -1341,8 +1368,28 @@ async def scan_and_trade(state: dict, user_id: int = None):
     )
 
     for d in candidates:
-        add_log(state, "info", "SEGNALE", f"{d['symbol']} | {d.get('ema_reason', 'EMA off')}")
-        await enter_position(state, d, tradable_capital_net)
+        sym = d["symbol"]
+        add_log(state, "info", "SEGNALE", f"{sym} | {d.get('ema_reason', 'EMA off')}")
+        # Modalità conferma Telegram: notifica e aspetta /entra
+        if state.get("use_revx") and state.get("realMode") and TELEGRAM_TOKEN:
+            if sym not in _pending_signals:
+                _pending_signals[sym] = {
+                    "state": state,
+                    "user_id": user_id,
+                    "d": d,
+                    "tradable_capital": tradable_capital_net,
+                    "ts": time.time()
+                }
+                price = d.get("price", 0)
+                change1h = d.get("change1h", 0)
+                await send_telegram(
+                    f"SEGNALE {sym}\n"
+                    f"Prezzo: ${price:.4f} | 1h: {change1h:+.2f}%\n"
+                    f"{d.get('ema_reason', '')}\n"
+                    f"Rispondi /entra {sym} per comprare"
+                )
+        else:
+            await enter_position(state, d, tradable_capital_net)
 
     _update_pnl(state)
 
@@ -1362,6 +1409,11 @@ def _update_pnl(state: dict):
 # ── Telegram polling ──────────────────────────────────────────────────────────
 
 _tg_last_update: int = 0
+
+# Segnali pendenti in attesa di conferma via Telegram
+# { sym: { "state": state, "user_id": uid, "d": market_data, "ts": timestamp } }
+_pending_signals: dict = {}
+
 
 async def poll_telegram():
     global _tg_last_update
@@ -1410,6 +1462,23 @@ async def poll_telegram():
             elif text.upper() == "/STOP" and tg_state:
                 tg_state["running"] = False
                 await send_telegram("Agente fermato via Telegram")
+            elif text.upper().startswith("/ENTRA"):
+                parts = text.split()
+                if len(parts) >= 2:
+                    sym = parts[1].upper()
+                    pending = _pending_signals.get(sym)
+                    if not pending:
+                        await send_telegram(f"Nessun segnale attivo per {sym}")
+                    else:
+                        state = pending["state"]
+                        uid = pending["user_id"]
+                        d = pending["d"]
+                        capital = pending["tradable_capital"]
+                        await send_telegram(f"Esecuzione acquisto {sym}...")
+                        await enter_position(state, d, capital, user_id=uid)
+                        del _pending_signals[sym]
+                else:
+                    await send_telegram("Uso: /entra SYMBOL (es. /entra ICP)")
     except Exception as e:
         print(f"Telegram poll error: {e}")
 
