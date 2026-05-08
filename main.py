@@ -506,10 +506,10 @@ async def fetch_revx_market_data(key_id: str = "", private_key: str = "") -> dic
             if not isinstance(t, dict):
                 continue
             symbol = t.get("symbol", "")  # es. "BTC/EUR"
-            # Filtra coppie EUR (con slash)
-            if not symbol.endswith("/EUR"):
+            # Filtra coppie USD (con slash)
+            if not symbol.endswith("/USD"):
                 continue
-            sym = symbol[:-4]  # rimuove "/EUR"
+            sym = symbol[:-4]  # rimuove "/USD"
             if not sym or sym in STABLES:
                 continue
             price = float(t.get("last_price") or t.get("mid") or t.get("ask") or 0)
@@ -517,12 +517,12 @@ async def fetch_revx_market_data(key_id: str = "", private_key: str = "") -> dic
             volume24h = float(t.get("volume_24h") or t.get("volume") or 0)
             if price > 0:
                 result[sym] = {
-                    "price_eur": price,
+                    "price_usd": price,
                     "change24h": change24h,
-                    "volume24h_eur": volume24h,
-                    "symbol_pair": symbol.replace("/", "-"),  # normalizza a BTC-EUR
+                    "volume24h_usd": volume24h,
+                    "symbol_pair": symbol.replace("/", "-"),  # normalizza a BTC-USD
                 }
-        print(f"[REVX TICKER] {len(result)} coppie EUR caricate")
+        print(f"[REVX TICKER] {len(result)} coppie USD caricate")
     except Exception as e:
         print(f"[REVX TICKER] error: {e}")
     return result
@@ -658,13 +658,13 @@ def unrealized_pnl(state: dict) -> float:
 
 # ── trading ───────────────────────────────────────────────────────────────────
 
-async def get_revx_eur_balance(key_id: str, private_key: str) -> float:
-    """Legge il saldo EUR disponibile su Revolut X."""
+async def get_revx_usd_balance(key_id: str, private_key: str) -> float:
+    """Legge il saldo USD disponibile su Revolut X."""
     try:
         result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
         balances = result if isinstance(result, list) else result.get("balances", [])
         for b in balances:
-            if b.get("currency") == "EUR":
+            if b.get("currency") == "USD":
                 return float(b.get("available", 0) or 0)
     except Exception as e:
         print(f"[REVX BALANCE] error: {e}")
@@ -757,18 +757,15 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
             revx_key_id  = state.get("revx_key_id", "")
             revx_priv    = state.get("revx_private_key", "")
             try:
-                symbol_revx = f"{sym}-EUR"
+                symbol_revx = f"{sym}-USD"
                 import uuid as _uuid
-                # Converti size USD in EUR per l'ordine RevX
-                eur_usd = await get_eur_usd_rate()
-                size_eur = round(size / eur_usd, 2)
                 order_body = {
                     "client_order_id": str(_uuid.uuid4()),
                     "symbol": symbol_revx,
                     "side": "BUY",
-                    "order_configuration": {"market": {"quote_size": str(size_eur)}}
+                    "order_configuration": {"market": {"quote_size": str(round(size, 2))}}
                 }
-                add_log(state, "info", "DEBUG", f"Ordine RevX {symbol_revx} size=${size:.2f} (€{size_eur:.2f} @ {eur_usd:.4f})")
+                add_log(state, "info", "DEBUG", f"Ordine RevX {symbol_revx} size=${size:.2f}")
                 # Retry su errori di rete — max 2 tentativi
                 result = None
                 for attempt in range(2):
@@ -813,9 +810,9 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "size": size, "size_remaining": size, "tp1_hit": False,
                 "entryTime": datetime.utcnow().isoformat() + "Z",
                 "stopPrice": stop_price, "tp1Price": tp1_price, "tp2Price": tp2_price,
-                "R_pct": R_pct, "realMode": True, "fee_pct": 0.001,
+                "R_pct": R_pct, "realMode": True, "fee_pct": 0.0009,
                 "qty_purchased": qty_purchased, "exchange": "revx", "symbol_pair": symbol_revx,
-                "entry_eur": size_eur,  # EUR effettivamente spesi su RevX
+                "entry_usd": round(size, 2),  # USD effettivamente spesi su RevX
             }
             state["positions"].append(pos)
             return
@@ -934,8 +931,8 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
             try:
                 import uuid as _uuid
                 qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
-                symbol_pair = pos.get("symbol_pair", f"{sym}-EUR")
-                # Normalizza: usa sempre formato "SYM-EUR" non "SYM/EUR"
+                symbol_pair = pos.get("symbol_pair", f"{sym}-USD")
+                # Normalizza: usa sempre formato "SYM-USD" non "SYM/USD"
                 symbol_pair = symbol_pair.replace("/", "-")
                 print(f"[REVX SELL] {sym} symbol_pair={symbol_pair} qty_purchased={qty_purchased}")
                 # Leggi saldo reale da RevX per evitare "Insufficient balance"
@@ -1198,7 +1195,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     alloc_pct   = cfg.get("allocPct", 0.20)
     capital_pct = cfg.get("capitalPct", 1.0)
-    COINBASE_FEE = 0.006  # 0.60% per lato (taker fee)
+    COINBASE_FEE = 0.0009  # 0.09% per lato (taker fee RevX)
 
     # Calcola il capitale tradabile dinamicamente
     if cfg.get("realMode", False):
@@ -1207,8 +1204,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
             revx_key_id = state.get("revx_key_id", "")
             revx_priv   = state.get("revx_private_key", "")
             try:
-                eur_balance = await get_revx_eur_balance(revx_key_id, revx_priv)
-                tradable_capital = eur_balance * capital_pct
+                usd_balance = await get_revx_usd_balance(revx_key_id, revx_priv)
+                tradable_capital = usd_balance * capital_pct
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"Fetch saldo RevX fallito: {e}")
                 _update_pnl(state)
@@ -1555,7 +1552,7 @@ async def startup():
     asyncio.create_task(load_global_revx_keys())
 
 async def load_global_revx_keys():
-    """Carica le chiavi RevX e le coppie EUR disponibili all'avvio."""
+    """Carica le chiavi RevX e le coppie USD disponibili all'avvio."""
     global _global_revx_key_id, _global_revx_private_key, _revx_pairs
     if not db_pool:
         return
@@ -1578,13 +1575,13 @@ async def load_global_revx_keys():
                 pairs = set()
                 for t in (tickers if isinstance(tickers, list) else []):
                     symbol = t.get("symbol", "")
-                    if symbol.endswith("/EUR"):
-                        pairs.add(symbol[:-4])  # "BTC/EUR" -> "BTC"
+                    if symbol.endswith("/USD"):
+                        pairs.add(symbol[:-4])  # "BTC/USD" -> "BTC"
                 if pairs:
                     _revx_pairs = pairs
-                    print(f"[REVX] {len(pairs)} coppie EUR caricate: {sorted(pairs)[:8]}...")
+                    print(f"[REVX] {len(pairs)} coppie USD caricate: {sorted(pairs)[:8]}...")
                 else:
-                    print(f"[REVX] Nessuna coppia EUR trovata nel ticker")
+                    print(f"[REVX] Nessuna coppia USD trovata nel ticker")
             except Exception as e2:
                 print(f"[REVX] Errore caricamento coppie: {e2}")
     except Exception as e:
@@ -2136,7 +2133,7 @@ async def debug_revx_ticker(user_id: int = Depends(get_current_user)):
         result = await revx_request("GET", "/api/1.0/tickers", key_id=key_id, private_key=priv, params={})
         tickers = result if isinstance(result, list) else result.get("tickers", result.get("data", []))
         eur = [t for t in (tickers if isinstance(tickers, list) else [])
-               if isinstance(t, dict) and str(t.get("symbol","")).endswith("/EUR")][:3]
+               if isinstance(t, dict) and str(t.get("symbol","")).endswith("/USD")][:3]
         return {
             "raw_type": type(result).__name__,
             "raw_keys": list(result.keys()) if isinstance(result, dict) else "list",
@@ -2158,7 +2155,7 @@ async def debug_revx_candles(user_id: int = Depends(get_current_user)):
         key_id = decrypt_key(row["revx_key_id"])
         priv   = decrypt_key(row["revx_private_key"])
         # Candles: simbolo nel path, interval in minuti come query param
-        result = await revx_request("GET", "/api/1.0/candles/BTC/EUR",
+        result = await revx_request("GET", "/api/1.0/candles/BTC/USD",
                                     key_id=key_id, private_key=priv,
                                     params={"interval": "5", "limit": "3"})
         return {
