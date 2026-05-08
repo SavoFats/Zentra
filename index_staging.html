@@ -833,10 +833,6 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div class="card-label" id="posTitle">Posizioni aperte</div>
       <div id="positionsWrap"><div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div></div>
     </div>
-    <div class="card">
-      <div class="card-label">P&amp;L nel tempo</div>
-      <div class="chart-wrap"><canvas id="pnlChart"></canvas></div>
-    </div>
   </div>
 
   <!-- MERCATO -->
@@ -1639,7 +1635,7 @@ function restoreConfigFromStorage() {
 
 function getCurrSym() {
   // Restituisce il simbolo valuta corretto basato sull'exchange attivo
-  return _hasRevxKeys && !_simMode ? '€' : '$';
+  return _hasRevxKeys && !_simMode ? '$' : '$';
 }
 
 function getFeePct() {
@@ -2025,8 +2021,6 @@ function render() {
   document.getElementById('kpiWR').textContent = S.tradeCount > 0 ? 'Win rate: ' + Math.round(S.winRate) + '%' : 'Win rate: --';
 
   renderPositions();
-  drawChart();
-
   // Mini-log agente nel monitor (ultime 4 righe, tono conversazionale)
   const logs = S.log || [];
   const actWrap = document.getElementById('agentActivityWrap');
@@ -2100,7 +2094,7 @@ function renderHomeSession() {
 
 function getPriceSym(pos) {
   // Usa € per posizioni Revolut X, $ per le altre
-  return pos && pos.exchange === 'revx' ? '€' : '$';
+  return pos && pos.exchange === 'revx' ? '$' : '$';
 }
 
 // Cache grafici mini per non ricaricare ad ogni render
@@ -2361,44 +2355,6 @@ function renderTransazioni() {
   }).join('');
 }
 
-function drawChart() {
-  const canvas = document.getElementById('pnlChart');
-  const wrap = canvas.parentElement;
-  const dpr = window.devicePixelRatio || 1;
-  const w = wrap.clientWidth, h = wrap.clientHeight;
-  if (!w || !h) return;
-  canvas.width = w*dpr; canvas.height = h*dpr;
-  const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
-  ctx.clearRect(0,0,w,h);
-  const data = S.pnlHistory || [];
-  if (data.length < 2) {
-    ctx.fillStyle = 'rgba(138,143,168,0.4)'; ctx.font = '12px Inter'; ctx.textAlign = 'center';
-    ctx.fillText('Avvia la sessione per vedere il P&L', w/2, h/2); return;
-  }
-  const vals = data.map(d => d.v);
-  const minV = Math.min(...vals, 0), maxV = Math.max(...vals, 0.01);
-  const range = maxV - minV || 1;
-  const pad = {t:10,r:8,b:20,l:52};
-  const iw = w-pad.l-pad.r, ih = h-pad.t-pad.b;
-  const toX = i => pad.l + (i/(data.length-1))*iw;
-  const toY = v => pad.t + ih - ((v-minV)/range)*ih;
-  const zy = toY(0);
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
-  ctx.beginPath(); ctx.moveTo(pad.l,zy); ctx.lineTo(pad.l+iw,zy); ctx.stroke(); ctx.setLineDash([]);
-  const last = vals[vals.length-1]; const isUp = last >= 0;
-  const lineColor = isUp ? '#05c168' : '#f6465d';
-  const grad = ctx.createLinearGradient(0,pad.t,0,pad.t+ih);
-  if (isUp) { grad.addColorStop(0,'rgba(5,193,104,0.25)'); grad.addColorStop(1,'rgba(5,193,104,0)'); }
-  else { grad.addColorStop(0,'rgba(246,70,93,0)'); grad.addColorStop(1,'rgba(246,70,93,0.25)'); }
-  ctx.beginPath(); ctx.moveTo(toX(0), toY(vals[0]));
-  data.forEach((d,i) => ctx.lineTo(toX(i), toY(d.v)));
-  ctx.lineTo(toX(data.length-1), h); ctx.lineTo(toX(0), h); ctx.closePath();
-  ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath(); ctx.moveTo(toX(0), toY(vals[0]));
-  data.forEach((d,i) => ctx.lineTo(toX(i), toY(d.v)));
-  ctx.strokeStyle = lineColor; ctx.lineWidth = 2.5; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '10px Inter'; ctx.textAlign = 'right';
-  [0,0.5,1].forEach(f => { const v=minV+f*range; ctx.fillText((v>=0?'+':'')+v.toFixed(2), pad.l-4, toY(v)+3); });
 }
 
 // ── MERCATO ───────────────────────────────────────────────────────────────────
@@ -2659,9 +2615,9 @@ async function loadHomeBalance() {
         const r = await fetch(API + '/test_revx', { headers: authHeaders() });
         const d = await r.json();
         if (d.ok && d.balances && d.balances.length > 0) {
-          const eur = d.balances.find(b => b.currency === 'EUR');
           const usd = d.balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
-          const best = eur || usd || d.balances[0];
+          const eur = d.balances.find(b => b.currency === 'EUR');
+          const best = usd || eur || d.balances[0];
           const bal = parseFloat(best.available);
           const sym = best.currency;
           valEl.textContent = (sym === 'EUR' ? '€' : '$') + bal.toFixed(2);
