@@ -1748,7 +1748,7 @@ async function poll() {
     const [sRes, tRes, mRes] = await Promise.all([
       fetch(API + '/status', { headers:authHeaders() }),
       fetch(API + '/trades', { headers:authHeaders() }),
-      fetch(API + '/market'),
+      fetch(API + '/market', { headers:authHeaders() }),
     ]);
     // Se il token è scaduto, fai logout automatico
     if (sRes.status === 401) {
@@ -1994,7 +1994,7 @@ function renderPositions() {
         <div class="pos-progress-labels"><span>SL</span><span>${pct.toFixed(2)}%</span><span>${tp1Hit?'TP2':'TP1'}</span></div>
         <div class="pos-bar"><div class="pos-bar-fill" style="width:${progress}%;background:${barColor}"></div></div>
       </div>
-      <button class="close-btn" onclick="closePosition('${p.symbol}')">Chiudi posizione</button>
+      <button class="close-btn" data-close-sym="${p.symbol}" onclick="closePosition(this.dataset.closeSym)">Chiudi posizione</button>
     </div>`;
   }).join('');
 }
@@ -2646,7 +2646,7 @@ function closeDrawer() {
 
 async function refreshMarket() {
   try {
-    const r = await fetch(API + '/market');
+    const r = await fetch(API + '/market', { headers: authHeaders() });
     const d = await r.json();
     mktData = d.market || [];
     // universeCount rimosso dall'header
