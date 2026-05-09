@@ -361,7 +361,13 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 /* ── GLASSMORPHISM ── */
 body { background:var(--bg); }
 .hdr { background:var(--surface) !important; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border-bottom:1px solid var(--border) !important; }
-.tabbar { background:var(--surface) !important; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border-top:1px solid var(--border) !important; }
+.tabbar { background:rgba(255,255,255,0.52) !important; backdrop-filter:blur(32px) saturate(200%) !important; -webkit-backdrop-filter:blur(32px) saturate(200%) !important; border-top:1px solid rgba(255,255,255,0.75) !important; box-shadow:0 -1px 0 rgba(0,0,0,0.04), 0 -12px 40px rgba(0,20,100,0.07); }
+[data-theme="dark"] .tabbar { background:rgba(10,14,38,0.78) !important; border-top:1px solid rgba(255,255,255,0.06) !important; box-shadow:0 -1px 0 rgba(0,0,0,0.4), 0 -12px 40px rgba(0,0,30,0.4) !important; }
+.tab::before { content:''; position:absolute; top:8px; left:50%; transform:translateX(-50%) scale(0); width:52px; height:34px; border-radius:17px; background:var(--blue-dim); transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.2s; opacity:0; }
+.tab.active::before { transform:translateX(-50%) scale(1); opacity:1; }
+.tab::after { display:none; }
+.tab.active .tab-icon { filter:drop-shadow(0 0 8px rgba(0,82,255,0.45)); }
+[data-theme="dark"] .tab.active .tab-icon { filter:drop-shadow(0 0 10px rgba(0,120,255,0.6)); }
 .card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 4px 24px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6); }
 [data-theme="dark"] .card { box-shadow:0 4px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05); }
 .kpi { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 4px 24px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6); }
