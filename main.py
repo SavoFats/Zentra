@@ -1426,6 +1426,18 @@ async def poll_telegram():
                 _tg_last_update = uid_upd
                 if uid_upd in _tg_processed_ids:
                     continue
+                # Deduplication DB: garantisce un solo processo per update anche con più istanze
+                if db_pool:
+                    try:
+                        async with db_pool.acquire() as conn:
+                            inserted = await conn.fetchval(
+                                "INSERT INTO tg_updates (update_id) VALUES ($1) ON CONFLICT (update_id) DO NOTHING RETURNING update_id",
+                                uid_upd
+                            )
+                        if inserted is None:
+                            continue  # già processato da un'altra istanza
+                    except Exception:
+                        pass
                 _tg_processed_ids.add(uid_upd)
                 if len(_tg_processed_ids) > 500:
                     _tg_processed_ids.discard(min(_tg_processed_ids))
@@ -1666,7 +1678,12 @@ async def startup():
                         user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                         state_json TEXT NOT NULL,
                         updated_at TIMESTAMP DEFAULT NOW()
-                    )
+                    );
+                    CREATE TABLE IF NOT EXISTS tg_updates (
+                        update_id BIGINT PRIMARY KEY,
+                        processed_at TIMESTAMP DEFAULT NOW()
+                    );
+                    DELETE FROM tg_updates WHERE processed_at < NOW() - INTERVAL '7 days'
                 """)
             print("Database connesso e schema creato")
 
