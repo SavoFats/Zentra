@@ -36,10 +36,7 @@ def encrypt_key(text: str) -> str:
     """Cifra una stringa sensibile prima di salvarla nel DB."""
     if not text:
         return ""
-    try:
-        return _get_fernet().encrypt(text.encode()).decode()
-    except Exception:
-        return text  # fallback: salva plaintext se qualcosa va storto
+    return _get_fernet().encrypt(text.encode()).decode()
 
 def decrypt_key(text: str) -> str:
     """Decifra una stringa recuperata dal DB."""
@@ -215,8 +212,6 @@ async def coinbase_request(method: str, path: str, body: dict = None,
 
 market_data = {}  # sym -> {price, change1h, change24h, volume24h, icon}
 user_sessions: dict = {}
-_market_data_lock = asyncio.Lock()
-_sessions_lock = asyncio.Lock()
 
 # ── CANDLE DATA (nuovo) ───────────────────────────────────────────────────────
 # sym -> {
@@ -791,14 +786,14 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 # Coerente con currentPrice, stopPrice, tp1Price che sono tutti USD
                 actual_price = price  # prezzo Binance USD al momento dell'ordine
                 qty_purchased = size / actual_price if actual_price > 0 else 0.0
-                print(f"[REVX BUY] qty={qty_purchased:.6f} @ ${actual_price:.4f} USD (size_eur={size_eur:.2f})")
+                print(f"[REVX BUY] qty={qty_purchased:.6f} @ ${actual_price:.4f} USD size=${size:.2f}")
                 stop_price  = actual_price * (1 - R_pct)
                 tp1_price   = actual_price * (1 + R_pct)
                 tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
                 add_log(state, "buy", "ACQUISTO REALE (RevX)",
-                    f"{sym} @ €{actual_price:.4f} | Size: €{size:.0f} | Qty: {qty_purchased:.6f} | "
-                    f"SL: €{stop_price:.4f} | TP1: €{tp1_price:.4f} | TP2: €{tp2_price:.4f} | R: {R_pct*100:.2f}%")
-                await send_telegram(f"ACQUISTO REALE RevX\n{sym} @ €{actual_price:.4f}\nSize: €{size:.2f}")
+                    f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | Qty: {qty_purchased:.6f} | "
+                    f"SL: ${stop_price:.4f} | TP1: ${tp1_price:.4f} | TP2: ${tp2_price:.4f} | R: {R_pct*100:.2f}%")
+                await send_telegram(f"ACQUISTO REALE RevX\n{sym} @ ${actual_price:.4f}\nSize: ${size:.2f}")
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"RevX error: {e}")
                 return
@@ -912,6 +907,11 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     Se partial=True: chiude il 50% della posizione (TP1).
     Se partial=False: chiude tutto.
     """
+    def _fp(p: float) -> str:
+        if p >= 1: return f"${p:.4f}"
+        if p >= 0.0001: return f"${p:.6f}"
+        return f"${p:.8f}"
+
     cur  = pos["currentPrice"]
     sym  = pos["symbol"]
     dur  = (datetime.utcnow() - datetime.fromisoformat(pos["entryTime"].replace("Z", ""))).total_seconds() / 60
@@ -995,7 +995,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 filled_price = float(data.get("average_price") or data.get("price") or cur)
                 if filled_price > 0:
                     cur = filled_price
-                add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ €{cur:.4f}")
+                add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f}")
                 if partial:
                     pos["qty_purchased"] = qty_purchased - qty_to_sell
             except Exception as e:
@@ -1054,10 +1054,9 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         add_log(state, "sell", f"TP1 {mode}",
             f"{sym} 50% @ ${cur:.4f} | +{pnl:.2f}$ ({pct:+.2f}%) | trailing stop attivo")
         if pos.get("realMode"):
-            curr = "€" if pos.get("exchange") == "revx" else "$"
             await send_telegram(
-                "TP1 REALE\n" + sym + " 50% @ " + curr + f"{cur:.4f}" +
-                "\nP&L parziale: +" + f"{pnl:.2f}" + curr + "\nStop spostato a breakeven"
+                "TP1 REALE\n" + sym + " 50% @ $" + f"{cur:.4f}" +
+                "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
             )
         return  # posizione resta aperta per TP2
 
@@ -1100,18 +1099,13 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 )
         except Exception as e:
             print(f"DB trade save error: {e}")
-    def _fp(p):
-        if p >= 1: return f"${p:.4f}"
-        if p >= 0.0001: return f"${p:.6f}"
-        return f"${p:.8f}"
-
     state["positions"] = [p for p in state["positions"] if p is not pos]
     mode = "REALE" if pos.get("realMode") else "SIM"
     add_log(state, "sell", f"{reason} {mode}",
         f"{sym} @ {_fp(cur)} | {pnl:+.2f}$ ({pct:+.2f}%) | fee: ${exit_fee:.2f} | {dur:.0f} min")
     if pos.get("realMode"):
         esito = "PROFITTO" if pnl >= 0 else "PERDITA"
-        curr = "€" if pos.get("exchange") == "revx" else "$"
+        curr = "$"
         tp1_pnl = pos.get("tp1_pnl", 0)
         total_pnl = pnl + tp1_pnl
         if tp1_pnl:
@@ -1237,8 +1231,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
             # Nessuna posizione aperta e saldo USDC esaurito — stop legittimo
             state["running"] = False
             add_log(state, "info", "STOP AUTO",
-                f"Saldo insufficiente ({'€' if state.get('use_revx') else '$'}{tradable_capital:.2f}) — sessione fermata")
-            await send_telegram(f"STOP AUTO: saldo insufficiente (€{tradable_capital:.2f})" if state.get("use_revx") else f"STOP AUTO: saldo USDC ${tradable_capital:.2f} insufficiente")
+                f"Saldo insufficiente (${tradable_capital:.2f}) — sessione fermata")
+            await send_telegram(f"STOP AUTO: saldo insufficiente ${tradable_capital:.2f}")
             return
     elif tradable_capital < 1.0 and not cfg.get("realMode", False):
         # Sim con capitale esaurito
@@ -1458,10 +1452,11 @@ async def persist_sessions():
     """Salva lo stato delle sessioni attive nel DB per sopravvivere ai riavvii."""
     if not db_pool:
         return
+    _SENSITIVE_KEYS = {"cb_key", "cb_secret", "revx_key_id", "revx_private_key"}
     sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
         try:
-            state_to_save = {k: v for k, v in state.items() if k != "log"}
+            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k != "log"}
             state_json = json.dumps(state_to_save, default=str)
             async with db_pool.acquire() as conn:
                 if state.get("running"):
@@ -1591,12 +1586,14 @@ async def restore_sessions_from_db(pool):
     """Ripristina sessioni attive salvate nel DB dopo un riavvio."""
     try:
         async with pool.acquire() as conn:
-            rows = await conn.fetch("SELECT user_id, state_json FROM active_sessions")
+            rows = await conn.fetch("""
+                SELECT s.user_id, s.state_json, u.cb_key, u.cb_secret, u.revx_key_id, u.revx_private_key
+                FROM active_sessions s JOIN users u ON u.id = s.user_id
+            """)
         for row in rows:
             uid = row["user_id"]
             try:
                 state = json.loads(row["state_json"])
-                # Ripristina solo se era in running e la sessione non è scaduta
                 if not state.get("running"):
                     continue
                 session_start = state.get("sessionStart", 0)
@@ -1604,7 +1601,12 @@ async def restore_sessions_from_db(pool):
                 if session_dur > 0:
                     elapsed = (datetime.now().timestamp() - session_start) * 1000
                     if elapsed >= session_dur:
-                        continue  # sessione scaduta durante il downtime
+                        continue
+                # Reinserisce le chiavi (cifrate nel DB, decifrate in memoria) — non salvate in state_json
+                state["cb_key"]          = decrypt_key(row["cb_key"] or "")
+                state["cb_secret"]       = decrypt_key(row["cb_secret"] or "")
+                state["revx_key_id"]     = decrypt_key(row["revx_key_id"] or "")
+                state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
                 user_sessions[uid] = state
                 print(f"Sessione ripristinata per user {uid} con {len(state.get('positions',[]))} posizioni")
             except Exception as e:
@@ -1817,7 +1819,7 @@ async def get_status(user_id: int = Depends(get_current_user)):
     }
 
 @app.get("/market")
-def get_market():
+async def get_market(user_id: int = Depends(get_current_user)):
     items = []
     # Usa i parametri della prima sessione attiva, altrimenti default
     active_cfg = {}
@@ -2011,10 +2013,14 @@ async def close_symbol(symbol: str, user_id: int = Depends(get_current_user)):
     return {"ok": True}
 
 @app.post("/chat")
-async def chat(body: dict, user_id: int = Depends(get_current_user)):
+async def chat(body: dict, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request.client.host, max_attempts=20, window=60)
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return {"error": "API key non configurata"}
+    messages = body.get("messages", [])
+    if len(messages) > 20:
+        raise HTTPException(status_code=400, detail="Troppi messaggi nella richiesta")
     state = get_session(user_id)
     positions = state["positions"]
     pnl = state["currentCapital"] - state["capital"]
@@ -2031,7 +2037,7 @@ async def chat(body: dict, user_id: int = Depends(get_current_user)):
         res = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-            json={"model": "claude-haiku-4-5-20251001", "max_tokens": 500, "system": system, "messages": body.get("messages", [])}
+            json={"model": "claude-haiku-4-5-20251001", "max_tokens": 500, "system": system, "messages": messages}
         )
         data = res.json()
         if "content" in data:
@@ -2050,9 +2056,11 @@ def health():
     }
 
 @app.get("/logs")
-async def get_logs(key: str = "", n: int = 50):
-    """Restituisce gli ultimi N log — accessibile direttamente nel browser con ?key=SECRET_KEY"""
-    if key != SECRET_KEY:
+async def get_logs(request: Request, n: int = 50):
+    """Restituisce gli ultimi N log — protetto da Authorization: Bearer <SECRET_KEY>"""
+    auth = request.headers.get("Authorization", "")
+    provided = auth.removeprefix("Bearer ").strip()
+    if not provided or provided != SECRET_KEY:
         return PlainTextResponse("Non autorizzato.", status_code=401)
     # Aggrega log di tutte le sessioni attive
     lines = []
