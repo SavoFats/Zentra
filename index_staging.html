@@ -536,6 +536,79 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 </div>
 <input type="hidden" id="closeModalPending" value="">
 
+<!-- Modal legenda segnali -->
+<div class="modal-overlay" id="signalInfoModal" onclick="if(event.target===this)closeSignalInfo()">
+  <div class="modal-card" style="max-width:440px;width:100%;max-height:85vh;overflow-y:auto">
+    <div class="modal-title" style="margin-bottom:4px">Legenda segnali</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:18px;font-weight:500">I pallini colorati indicano le condizioni che l'agente verifica prima di aprire un trade.</div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">1H</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Trend 1h</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">EMA20 &gt; EMA50 sulla timeframe oraria. Non misura l'ultima ora — misura la <strong style="color:var(--text)">struttura di trend delle ultime 50 ore</strong>. Anche se il mercato è rosso oggi, il trend 1h può restare verde se l'uptrend è iniziato giorni fa. È il filtro principale: niente long contro il trend strutturale.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">15M</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Trend 15m</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">EMA20 &gt; EMA50 sulla timeframe a 15 minuti. Conferma che il trend di medio termine è rialzista. Deve essere allineato con il trend 1h.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">PULL</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Pullback</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">Il prezzo è tornato vicino all'EMA20 su 5 minuti (entro la soglia configurata). È il <strong style="color:var(--text)">timing dell'ingresso</strong>: si entra quando il trend è attivo ma il prezzo ha fatto un ritracciamento, non quando è già esploso al rialzo. Evita il FOMO.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">RSI</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">RSI</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">RSI(14) su 5 minuti in zona neutrale (range configurabile). Evita ingressi quando la coin è in ipercomprato (RSI alto → già salita troppo) o ipervenduto (RSI basso → crollo in corso).</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">R</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">R — Rischio/Rendimento</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">Lo stop loss viene calcolato automaticamente usando l'<strong style="color:var(--text)">ATR (volatilità media)</strong> e il minimo recente della candela. Se lo stop richiesto è troppo stretto (sotto il minimo configurabile) o troppo largo, il trade viene scartato. Questo garantisce un rapporto rischio/rendimento sensato prima ancora di entrare.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px">
+        <div style="font-size:12px;color:var(--text2);line-height:1.6">
+          <strong style="color:var(--green)">Verde</strong> = condizione soddisfatta &nbsp;·&nbsp; <strong style="color:var(--red)">Rosso</strong> = condizione non soddisfatta<br>
+          L'agente entra solo quando <strong style="color:var(--text)">tutti e 5 i segnali sono verdi</strong> contemporaneamente.
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-actions" style="margin-top:18px">
+      <button class="modal-btn confirm-real" style="background:var(--blue)" onclick="closeSignalInfo()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Input nascosto per foto profilo -->
 <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="handleAvatarChange(event)">
 
@@ -880,7 +953,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   <div class="page" id="page-market">
     <div class="ptr-indicator" id="ptr-page-market"><div class="ptr-spinner"></div></div>
     <div class="card" style="padding-bottom:8px">
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
         <div class="fdd" id="fddMktVar">
           <div class="fdd-btn active" onclick="toggleFdd('fddMktVar')" id="fddMktVarBtn">24h % <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="fdd-menu" id="fddMktVarMenu">
@@ -903,6 +976,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
             <div class="fdd-item" onclick="selectFddMkt('fddMktDir','losers','Ribasso','dir')">Ribasso</div>
           </div>
         </div>
+        <button onclick="openSignalInfo()" style="margin-left:auto;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:serif" title="Legenda segnali">ⓘ</button>
       </div>
       <div style="position:relative;margin-bottom:12px">
         <input type="text" id="mktSearch" placeholder="Cerca coin..." oninput="renderMarket()"
@@ -2352,6 +2426,13 @@ function showCloseModal(symbol) {
 
 function hideCloseModal() {
   document.getElementById('closeModal').classList.remove('open');
+}
+
+function openSignalInfo() {
+  document.getElementById('signalInfoModal').classList.add('open');
+}
+function closeSignalInfo() {
+  document.getElementById('signalInfoModal').classList.remove('open');
 }
 
 async function confirmClosePosition() {
