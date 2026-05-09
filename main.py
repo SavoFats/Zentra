@@ -1405,6 +1405,7 @@ def _update_pnl(state: dict):
 
 _tg_last_update: int = 0
 _tg_poll_lock = asyncio.Lock()
+_tg_processed_ids: set = set()
 
 async def poll_telegram():
     global _tg_last_update
@@ -1421,7 +1422,13 @@ async def poll_telegram():
                 )
                 data = r.json()
             for update in data.get("result", []):
-                _tg_last_update = update["update_id"]
+                uid_upd = update["update_id"]
+                _tg_last_update = uid_upd
+                if uid_upd in _tg_processed_ids:
+                    continue
+                _tg_processed_ids.add(uid_upd)
+                if len(_tg_processed_ids) > 500:
+                    _tg_processed_ids.discard(min(_tg_processed_ids))
                 msg = update.get("message", {})
                 chat_id = str(msg.get("chat", {}).get("id", ""))
                 text = msg.get("text", "").strip()
@@ -1583,20 +1590,27 @@ async def telegram_loop():
 # ── startup ───────────────────────────────────────────────────────────────────
 
 async def _skip_old_telegram_updates():
-    """Scarta gli update Telegram pendenti prima dell'avvio, per evitare che vecchi comandi vengano rieseguiti dopo un deploy."""
+    """Drena e conferma tutti gli update Telegram pendenti per evitare che vecchi comandi vengano rieseguiti dopo un deploy."""
     global _tg_last_update
     if not TELEGRAM_TOKEN:
         return
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
+            # Recupera tutti gli update pendenti (fino a 100)
             r = await client.get(
                 f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
-                params={"offset": -1, "timeout": 0}
+                params={"limit": 100, "timeout": 0}
             )
-            data = r.json()
-        results = data.get("result", [])
-        if results:
-            _tg_last_update = results[-1]["update_id"]
+            results = r.json().get("result", [])
+            if results:
+                last_id = results[-1]["update_id"]
+                # Conferma esplicita: Telegram non ritornerà più questi update
+                await client.get(
+                    f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
+                    params={"offset": last_id + 1, "timeout": 0}
+                )
+                _tg_last_update = last_id
+                print(f"Telegram: scartati {len(results)} update pendenti (ultimo id: {last_id})")
     except Exception as e:
         print(f"Telegram skip-updates error: {e}")
 
