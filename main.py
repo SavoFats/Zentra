@@ -1391,35 +1391,70 @@ async def poll_telegram():
             text = msg.get("text", "").strip()
             if chat_id != str(TELEGRAM_CHAT_ID):
                 continue
-            tg_state = None
-            for s in user_sessions.values():
-                if s["running"]:
-                    tg_state = s
-                    break
-            if tg_state is None and user_sessions:
-                tg_state = next(iter(user_sessions.values()))
+            running = {uid: s for uid, s in user_sessions.items() if s["running"]}
 
-            if text.upper().startswith("/CLOSE") and tg_state:
-                parts = text.split()
-                if len(parts) >= 2:
-                    sym = parts[1].upper()
-                    pos = next((p for p in tg_state["positions"] if p["symbol"] == sym), None)
-                    if pos:
-                        await exit_position(tg_state, pos, "TELEGRAM")  # no user_id in telegram context
-                        await notify(tg_state, "Posizione " + sym + " chiusa via Telegram")
-                    else:
-                        await notify(tg_state, "Nessuna posizione aperta su " + sym)
-            elif text.upper() == "/STATUS":
+            def _resolve_session(username_hint: str = "") -> dict | None:
+                """Restituisce la sessione target o None se ambigua."""
+                if username_hint:
+                    hint = username_hint.lower()
+                    for s in running.values():
+                        if s.get("username", "").lower() == hint:
+                            return s
+                    return None
+                if len(running) == 1:
+                    return next(iter(running.values()))
+                return None  # ambiguo: più sessioni, nessun hint
+
+            cmd_parts = text.split()
+            cmd = cmd_parts[0].upper()
+
+            if cmd == "/STATUS":
                 lines = []
                 for uid, s in user_sessions.items():
                     if s["running"]:
+                        uname = s.get("username", str(uid))
                         pos_list = ", ".join([p["symbol"] for p in s["positions"]]) or "nessuna"
                         pnl = unrealized_pnl(s)
-                        lines.append(f"Sessione {uid}: {pos_list} | P&L: ${pnl:.2f}")
+                        lines.append(f"{uname}: {pos_list} | P&L: ${pnl:.2f}")
                 await send_telegram("\n".join(lines) if lines else "Nessuna sessione attiva")
-            elif text.upper() == "/STOP" and tg_state:
-                tg_state["running"] = False
-                await notify(tg_state, "Agente fermato via Telegram")
+
+            elif cmd == "/STOP":
+                # /stop  oppure  /stop <username>
+                hint = cmd_parts[1] if len(cmd_parts) >= 2 else ""
+                tg_state = _resolve_session(hint)
+                if tg_state is None:
+                    if len(running) > 1:
+                        names = ", ".join(s.get("username", str(uid)) for uid, s in running.items())
+                        await send_telegram(f"Più sessioni attive ({names}). Usa: /stop <username>")
+                    else:
+                        await send_telegram("Nessuna sessione attiva")
+                else:
+                    tg_state["running"] = False
+                    await notify(tg_state, "Agente fermato via Telegram")
+
+            elif cmd == "/CLOSE":
+                # /close <SYM>  oppure  /close <username> <SYM>
+                if len(cmd_parts) == 3:
+                    hint, sym = cmd_parts[1], cmd_parts[2].upper()
+                elif len(cmd_parts) == 2:
+                    hint, sym = "", cmd_parts[1].upper()
+                else:
+                    await send_telegram("Uso: /close <SYM>  oppure  /close <username> <SYM>")
+                    continue
+                tg_state = _resolve_session(hint)
+                if tg_state is None:
+                    if len(running) > 1:
+                        names = ", ".join(s.get("username", str(uid)) for uid, s in running.items())
+                        await send_telegram(f"Più sessioni attive ({names}). Usa: /close <username> {sym}")
+                    else:
+                        await send_telegram("Nessuna sessione attiva")
+                else:
+                    pos = next((p for p in tg_state["positions"] if p["symbol"] == sym), None)
+                    if pos:
+                        await exit_position(tg_state, pos, "TELEGRAM")
+                        await notify(tg_state, "Posizione " + sym + " chiusa via Telegram")
+                    else:
+                        await notify(tg_state, "Nessuna posizione aperta su " + sym)
     except Exception as e:
         print(f"Telegram poll error: {e}")
 
