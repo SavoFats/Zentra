@@ -117,6 +117,12 @@ async def send_telegram(msg: str):
     except Exception as e:
         print(f"Telegram error: {e}")
 
+async def notify(state: dict, msg: str):
+    """Invia notifica Telegram con prefisso username per distinguere gli utenti."""
+    username = state.get("username", "")
+    prefix = f"[{username}] " if username else ""
+    await send_telegram(prefix + msg)
+
 _ENV_CB_KEY    = os.environ.get("CB_KEY", "")
 _ENV_CB_SECRET = os.environ.get("CB_SECRET", "")
 
@@ -780,7 +786,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 if not order_id:
                     err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
                     add_log(state, "info", "ERRORE", f"Ordine RevX {sym} fallito: {err_msg}")
-                    await send_telegram(f"ERRORE ORDINE RevX {sym}: {err_msg[:100]}")
+                    await notify(state, f"ERRORE ORDINE RevX {sym}: {err_msg[:100]}")
                     return
                 # Tutto in USD: qty = size_usd / price_usd (Binance)
                 # Coerente con currentPrice, stopPrice, tp1Price che sono tutti USD
@@ -793,7 +799,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 add_log(state, "buy", "ACQUISTO REALE (RevX)",
                     f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | Qty: {qty_purchased:.6f} | "
                     f"SL: ${stop_price:.4f} | TP1: ${tp1_price:.4f} | TP2: ${tp2_price:.4f} | R: {R_pct*100:.2f}%")
-                await send_telegram(f"ACQUISTO REALE RevX\n{sym} @ ${actual_price:.4f}\nSize: ${size:.2f}")
+                await notify(state, f"ACQUISTO REALE RevX\n{sym} @ ${actual_price:.4f}\nSize: ${size:.2f}")
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"RevX error: {e}")
                 return
@@ -851,7 +857,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 if any(x in err_str for x in ["insufficient", "insufficient_fund", "not enough"]):
                     state["running"] = False
                     add_log(state, "info", "STOP AUTO", f"Saldo insufficiente — sessione fermata")
-                    await send_telegram(f"STOP AUTO: saldo insufficiente")
+                    await notify(state, f"STOP AUTO: saldo insufficiente")
                 return
             filled       = result.get("success_response", {})
             actual_price = float(filled.get("average_filled_price", price)) or price
@@ -864,7 +870,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
             add_log(state, "buy", "ACQUISTO REALE",
                 f"{sym} @ {fmt_price(actual_price)} | Size: ${size:.0f} | Qty: {qty_purchased:.6f} | Fee: ${entry_fee:.2f} | "
                 f"SL: {fmt_price(stop_price)} | TP1: {fmt_price(tp1_price)} | TP2: {fmt_price(tp2_price)} | R: {R_pct*100:.2f}%")
-            await send_telegram(
+            await notify(state,
                 "ACQUISTO REALE\n" + sym + " @ $" + f"{actual_price:.4f}" +
                 "\nSize: $" + f"{size:.2f}" +
                 "\nSL: $" + f"{stop_price:.4f}" +
@@ -984,11 +990,11 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     # Conta tentativi falliti consecutivi
                     pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
                     add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
-                    await send_telegram(f"ERRORE VENDITA RevX {sym}: {err_msg[:100]}")
+                    await notify(state, f"ERRORE VENDITA RevX {sym}: {err_msg[:100]}")
                     # Dopo 3 fallimenti: rimuovi posizione dalla memoria (l'ordine non esiste su RevX)
                     if pos.get("_sell_failures", 0) >= 3:
                         add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — verifica su RevX")
-                        await send_telegram(f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
+                        await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
                         # Non fare return — lascia che il codice dopo rimuova la posizione
                     else:
                         return
@@ -1022,7 +1028,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     err = result.get("error_response") or result
                     err_msg = err.get("message") or err.get("error_details") or str(result)
                     add_log(state, "info", "ERRORE", f"Vendita {sym} fallita [{product_id}]: {err_msg}")
-                    await send_telegram(f"ERRORE VENDITA {sym}: {err_msg[:100]}")
+                    await notify(state, f"ERRORE VENDITA {sym}: {err_msg[:100]}")
                     return
                 filled = result.get("success_response", {})
                 cur = float(filled.get("average_filled_price", cur)) or cur
@@ -1054,7 +1060,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         add_log(state, "sell", f"TP1 {mode}",
             f"{sym} 50% @ ${cur:.4f} | +{pnl:.2f}$ ({pct:+.2f}%) | trailing stop attivo")
         if pos.get("realMode"):
-            await send_telegram(
+            await notify(state,
                 "TP1 REALE\n" + sym + " 50% @ $" + f"{cur:.4f}" +
                 "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
             )
@@ -1115,7 +1121,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         else:
             msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ " + curr + f"{cur:.4f}" +
                    "\nP&L: " + f"{pnl:+.2f}" + curr)
-        await send_telegram(msg)
+        await notify(state, msg)
 
     # Controllo stop automatico per perdite consecutive
     max_losses = cfg.get("maxConsecutiveLosses", 0)
@@ -1123,7 +1129,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         state["running"] = False
         add_log(state, "info", "STOP AUTO",
             f"{max_losses} perdite consecutive — sessione fermata automaticamente")
-        await send_telegram(f"STOP AUTO: {max_losses} perdite consecutive")
+        await notify(state, f"STOP AUTO: {max_losses} perdite consecutive")
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 
@@ -1232,7 +1238,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             state["running"] = False
             add_log(state, "info", "STOP AUTO",
                 f"Saldo insufficiente (${tradable_capital:.2f}) — sessione fermata")
-            await send_telegram(f"STOP AUTO: saldo insufficiente ${tradable_capital:.2f}")
+            await notify(state, f"STOP AUTO: saldo insufficiente ${tradable_capital:.2f}")
             return
     elif tradable_capital < 1.0 and not cfg.get("realMode", False):
         # Sim con capitale esaurito
@@ -1400,9 +1406,9 @@ async def poll_telegram():
                     pos = next((p for p in tg_state["positions"] if p["symbol"] == sym), None)
                     if pos:
                         await exit_position(tg_state, pos, "TELEGRAM")  # no user_id in telegram context
-                        await send_telegram("Posizione " + sym + " chiusa via Telegram")
+                        await notify(tg_state, "Posizione " + sym + " chiusa via Telegram")
                     else:
-                        await send_telegram("Nessuna posizione aperta su " + sym)
+                        await notify(tg_state, "Nessuna posizione aperta su " + sym)
             elif text.upper() == "/STATUS":
                 lines = []
                 for uid, s in user_sessions.items():
@@ -1413,7 +1419,7 @@ async def poll_telegram():
                 await send_telegram("\n".join(lines) if lines else "Nessuna sessione attiva")
             elif text.upper() == "/STOP" and tg_state:
                 tg_state["running"] = False
-                await send_telegram("Agente fermato via Telegram")
+                await notify(tg_state, "Agente fermato via Telegram")
     except Exception as e:
         print(f"Telegram poll error: {e}")
 
@@ -1767,9 +1773,8 @@ async def set_sim_mode(req: SimModeRequest, user_id: int = Depends(get_current_u
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
-        # Verifica che l'utente abbia API keys prima di permettere reale
-        row = await conn.fetchrow("SELECT cb_key FROM users WHERE id = $1", user_id)
-        if not row["cb_key"] and not req.sim_mode:
+        row = await conn.fetchrow("SELECT cb_key, revx_key_id FROM users WHERE id = $1", user_id)
+        if not row["cb_key"] and not row["revx_key_id"] and not req.sim_mode:
             raise HTTPException(status_code=400, detail="API keys richieste per modalità reale")
         await conn.execute(
             "UPDATE users SET sim_mode = $1 WHERE id = $2",
@@ -1821,12 +1826,9 @@ async def get_status(user_id: int = Depends(get_current_user)):
 @app.get("/market")
 async def get_market(user_id: int = Depends(get_current_user)):
     items = []
-    # Usa i parametri della prima sessione attiva, altrimenti default
-    active_cfg = {}
-    for s in user_sessions.values():
-        if s.get("running"):
-            active_cfg = s.get("config", {})
-            break
+    # Usa la configurazione della sessione dell'utente richiedente, altrimenti default
+    user_state = user_sessions.get(user_id, {})
+    active_cfg = user_state.get("config", {})
 
     pullback_tol   = active_cfg.get("pullbackTolerance", 0.015)
     vol_mult       = active_cfg.get("volMultiplier", 1.2)
@@ -1858,8 +1860,8 @@ async def get_market(user_id: int = Depends(get_current_user)):
         }
         items.append(item)
 
-    # Se RevX è configurato (chiavi globali caricate), mostra solo le coin disponibili
-    if _revx_pairs and _global_revx_key_id:
+    # Se l'utente usa RevX, filtra solo le coin disponibili su Revolut X
+    if user_state.get("use_revx") and _revx_pairs:
         items = [i for i in items if i["symbol"] in _revx_pairs]
 
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
@@ -1914,11 +1916,12 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
 
     cb_key, cb_secret, real_mode = "", "", False
     revx_key_id, revx_private_key, use_revx = "", "", False
+    row = None
     if db_pool:
         try:
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT cb_key, cb_secret, sim_mode, revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
+                    "SELECT cb_key, cb_secret, sim_mode, revx_key_id, revx_private_key, username, display_name FROM users WHERE id = $1", user_id)
                 if row:
                     cb_key    = decrypt_key(row["cb_key"] or "")
                     cb_secret = decrypt_key(row["cb_secret"] or "")
@@ -1968,6 +1971,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         "revx_key_id": revx_key_id, "revx_private_key": revx_private_key,
         "use_revx": use_revx,
         "consecutiveLosses": 0,
+        "username": (row["display_name"] or row["username"]) if (db_pool and row) else "",
     })
     alloc  = float(cfg.get("allocPct", 0.20)) * 100
     capp   = float(cfg.get("capitalPct", 1.0)) * 100
