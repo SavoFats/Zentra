@@ -423,6 +423,10 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
     <div class="toggle-switch" id="simModeToggle" onclick="setSimMode(!_simMode)"></div>
   </div>
+  <div class="profile-menu-item" onclick="showTelegramConfig()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    <span id="pmTelegram">Collega Telegram</span>
+  </div>
   <div class="profile-menu-item" onclick="changeAvatar()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
     Foto profilo
@@ -470,6 +474,39 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="document.getElementById('revxModal').classList.remove('open')">Annulla</button>
       <button class="modal-btn confirm" onclick="saveRevxKeys()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Telegram linking -->
+<div class="modal-overlay" id="telegramModal">
+  <div class="modal-card" style="max-width:380px">
+    <div class="modal-title">Collega Telegram</div>
+    <div class="modal-body" style="text-align:left" id="telegramModalBody">
+      <div id="tgLinkedView" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;padding:14px;background:rgba(0,200,100,0.1);border:1px solid rgba(0,200,100,0.3);border-radius:10px;margin-bottom:16px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00c864" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span style="font-size:14px;font-weight:600;color:var(--text)">Account Telegram collegato</span>
+        </div>
+        <p style="font-size:13px;color:var(--text2);margin:0 0 16px">Puoi controllare il tuo agente direttamente via Telegram con i comandi <code>/status</code>, <code>/stop</code> e <code>/close BTC</code>.</p>
+      </div>
+      <div id="tgUnlinkedView">
+        <p style="font-size:13px;color:var(--text2);margin:0 0 16px">Per collegare il tuo account Telegram all'agente:</p>
+        <ol style="font-size:13px;color:var(--text2);margin:0 0 16px;padding-left:18px;line-height:2">
+          <li>Clicca <strong>Genera codice</strong></li>
+          <li>Apri il bot Telegram e invia il comando mostrato</li>
+          <li>Il collegamento avviene automaticamente</li>
+        </ol>
+        <div id="tgCodeBox" style="display:none;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:16px;text-align:center;margin-bottom:4px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Invia questo comando al bot Telegram</div>
+          <div style="font-size:20px;font-weight:700;color:var(--text);letter-spacing:0.1em;font-family:monospace" id="tgCodeText">/link ------</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:8px" id="tgCodeExpiry">Valido per 5 minuti</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions" id="tgModalActions">
+      <button class="modal-btn cancel" onclick="closeTelegramModal()">Chiudi</button>
+      <button class="modal-btn confirm" id="tgActionBtn" onclick="handleTelegramAction()">Genera codice</button>
     </div>
   </div>
 </div>
@@ -1203,6 +1240,9 @@ async function loadUserProfile() {
     _hasRevxKeys = me.has_revx_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
     window._realMode = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+    window._tgLinked = me.telegram_linked || false;
+    const pmTg = document.getElementById('pmTelegram');
+    if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram ✓' : 'Collega Telegram';
 
     if (me.avatar_b64) {
       applyAvatar(me.avatar_b64);
@@ -1230,6 +1270,74 @@ function showRevxConfig() {
   }
   document.getElementById('profileMenu').classList.remove('open');
   document.getElementById('revxModal').classList.add('open');
+}
+
+function showTelegramConfig() {
+  document.getElementById('profileMenu').classList.remove('open');
+  const linked = window._tgLinked || false;
+  document.getElementById('tgLinkedView').style.display = linked ? 'block' : 'none';
+  document.getElementById('tgUnlinkedView').style.display = linked ? 'none' : 'block';
+  document.getElementById('tgCodeBox').style.display = 'none';
+  const btn = document.getElementById('tgActionBtn');
+  btn.textContent = linked ? 'Scollega' : 'Genera codice';
+  btn.className = linked ? 'modal-btn cancel' : 'modal-btn confirm';
+  document.getElementById('telegramModal').classList.add('open');
+}
+
+function closeTelegramModal() {
+  document.getElementById('telegramModal').classList.remove('open');
+}
+
+async function handleTelegramAction() {
+  if (window._tgLinked) {
+    // Scollega
+    await fetch(API + '/telegram/unlink', { method: 'DELETE', headers: authHeaders() });
+    window._tgLinked = false;
+    const pmTg = document.getElementById('pmTelegram');
+    if (pmTg) pmTg.textContent = 'Collega Telegram';
+    closeTelegramModal();
+  } else {
+    // Genera codice
+    const btn = document.getElementById('tgActionBtn');
+    btn.textContent = 'Generazione...';
+    btn.disabled = true;
+    try {
+      const res = await fetch(API + '/telegram/link_code', { headers: authHeaders() });
+      const data = await res.json();
+      document.getElementById('tgCodeText').textContent = '/link ' + data.code;
+      document.getElementById('tgCodeBox').style.display = 'block';
+      let secs = data.expires_in || 300;
+      const expEl = document.getElementById('tgCodeExpiry');
+      expEl.textContent = `Valido per ${Math.floor(secs/60)}:00`;
+      const timer = setInterval(() => {
+        secs--;
+        if (secs <= 0) { clearInterval(timer); expEl.textContent = 'Codice scaduto'; return; }
+        expEl.textContent = `Valido per ${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`;
+      }, 1000);
+      // Polling: controlla se il collegamento è avvenuto
+      const pollLink = setInterval(async () => {
+        const r = await fetch(API + '/auth/me', { headers: authHeaders() });
+        const me = await r.json();
+        if (me.telegram_linked) {
+          clearInterval(pollLink);
+          clearInterval(timer);
+          window._tgLinked = true;
+          const pmTg = document.getElementById('pmTelegram');
+          if (pmTg) pmTg.textContent = 'Telegram ✓';
+          document.getElementById('tgLinkedView').style.display = 'block';
+          document.getElementById('tgUnlinkedView').style.display = 'none';
+          document.getElementById('tgCodeBox').style.display = 'none';
+          const ab = document.getElementById('tgActionBtn');
+          ab.textContent = 'Scollega';
+          ab.className = 'modal-btn cancel';
+          ab.disabled = false;
+        }
+      }, 3000);
+      setTimeout(() => clearInterval(pollLink), 310000); // stop dopo 5m+10s
+    } catch(e) {}
+    btn.textContent = 'Genera codice';
+    btn.disabled = false;
+  }
 }
 
 async function saveRevxKeys() {

@@ -105,6 +105,9 @@ COINBASE_BASE = "https://api.coinbase.com"
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+# codici temporanei per il linking Telegram: code -> (user_id, expiry_timestamp)
+_tg_link_codes: dict[str, tuple[int, float]] = {}
+
 async def send_telegram(msg: str):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         return
@@ -117,11 +120,29 @@ async def send_telegram(msg: str):
     except Exception as e:
         print(f"Telegram error: {e}")
 
+async def send_telegram_to(chat_id: str, msg: str):
+    """Invia un messaggio Telegram a uno specifico chat_id."""
+    if not TELEGRAM_TOKEN or not chat_id:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}
+            )
+    except Exception as e:
+        print(f"Telegram error (to {chat_id}): {e}")
+
 async def notify(state: dict, msg: str):
-    """Invia notifica Telegram con prefisso username per distinguere gli utenti."""
-    username = state.get("username", "")
-    prefix = f"[{username}] " if username else ""
-    await send_telegram(prefix + msg)
+    """Invia notifica Telegram all'utente: usa il suo chat_id personale se collegato,
+    altrimenti cade sul TELEGRAM_CHAT_ID globale con prefisso username."""
+    tg_chat = state.get("telegram_chat_id", "")
+    if tg_chat:
+        await send_telegram_to(tg_chat, msg)
+    else:
+        username = state.get("username", "")
+        prefix = f"[{username}] " if username else ""
+        await send_telegram(prefix + msg)
 
 _ENV_CB_KEY    = os.environ.get("CB_KEY", "")
 _ENV_CB_SECRET = os.environ.get("CB_SECRET", "")
@@ -1375,7 +1396,7 @@ _tg_last_update: int = 0
 
 async def poll_telegram():
     global _tg_last_update
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+    if not TELEGRAM_TOKEN:
         return
     try:
         async with httpx.AsyncClient(timeout=5) as client:
@@ -1389,72 +1410,87 @@ async def poll_telegram():
             msg = update.get("message", {})
             chat_id = str(msg.get("chat", {}).get("id", ""))
             text = msg.get("text", "").strip()
-            if chat_id != str(TELEGRAM_CHAT_ID):
+            if not text or not chat_id:
                 continue
-            running = {uid: s for uid, s in user_sessions.items() if s["running"]}
-
-            def _resolve_session(username_hint: str = "") -> dict | None:
-                """Restituisce la sessione target o None se ambigua."""
-                if username_hint:
-                    hint = username_hint.lower()
-                    for s in running.values():
-                        if s.get("username", "").lower() == hint:
-                            return s
-                    return None
-                if len(running) == 1:
-                    return next(iter(running.values()))
-                return None  # ambiguo: più sessioni, nessun hint
 
             cmd_parts = text.split()
             cmd = cmd_parts[0].upper()
 
+            # /link <codice> — accessibile da qualsiasi chat, non richiede registrazione
+            if cmd == "/LINK":
+                if len(cmd_parts) < 2:
+                    await send_telegram_to(chat_id, "Usa: /link <codice>")
+                    continue
+                code = cmd_parts[1].upper()
+                entry = _tg_link_codes.get(code)
+                if entry and entry[1] > time.time():
+                    uid, _ = entry
+                    del _tg_link_codes[code]
+                    if db_pool:
+                        async with db_pool.acquire() as conn:
+                            await conn.execute(
+                                "UPDATE users SET telegram_chat_id = $1 WHERE id = $2", chat_id, uid
+                            )
+                    state = user_sessions.get(uid)
+                    if state:
+                        state["telegram_chat_id"] = chat_id
+                    await send_telegram_to(chat_id,
+                        "✅ Account collegato!\nOra puoi usare:\n/status — stato sessione\n/stop — ferma l'agente\n/close BTC — chiudi posizione")
+                else:
+                    await send_telegram_to(chat_id, "❌ Codice non valido o scaduto. Genera un nuovo codice dall'app.")
+                continue
+
+            # Per tutti gli altri comandi: trova l'utente dal chat_id registrato
+            uid = None
+            if db_pool:
+                async with db_pool.acquire() as conn:
+                    user_row = await conn.fetchrow(
+                        "SELECT id FROM users WHERE telegram_chat_id = $1", chat_id
+                    )
+                if user_row:
+                    uid = user_row["id"]
+
+            # Fallback legacy: TELEGRAM_CHAT_ID globale per backward compat
+            if uid is None and TELEGRAM_CHAT_ID and chat_id == str(TELEGRAM_CHAT_ID):
+                for s_uid, s in user_sessions.items():
+                    if s.get("running"):
+                        uid = s_uid
+                        break
+
+            if uid is None:
+                continue  # chat_id non riconosciuto
+
+            state = user_sessions.get(uid)
+
             if cmd == "/STATUS":
-                lines = []
-                for uid, s in user_sessions.items():
-                    if s["running"]:
-                        uname = s.get("username", str(uid))
-                        pos_list = ", ".join([p["symbol"] for p in s["positions"]]) or "nessuna"
-                        pnl = unrealized_pnl(s)
-                        lines.append(f"{uname}: {pos_list} | P&L: ${pnl:.2f}")
-                await send_telegram("\n".join(lines) if lines else "Nessuna sessione attiva")
+                if state and state.get("running"):
+                    pos_list = ", ".join([p["symbol"] for p in state["positions"]]) or "nessuna"
+                    pnl = unrealized_pnl(state)
+                    await send_telegram_to(chat_id, f"Sessione attiva\nPosizioni: {pos_list}\nP&L: ${pnl:.2f}")
+                else:
+                    await send_telegram_to(chat_id, "Nessuna sessione attiva")
 
             elif cmd == "/STOP":
-                # /stop  oppure  /stop <username>
-                hint = cmd_parts[1] if len(cmd_parts) >= 2 else ""
-                tg_state = _resolve_session(hint)
-                if tg_state is None:
-                    if len(running) > 1:
-                        names = ", ".join(s.get("username", str(uid)) for uid, s in running.items())
-                        await send_telegram(f"Più sessioni attive ({names}). Usa: /stop <username>")
-                    else:
-                        await send_telegram("Nessuna sessione attiva")
+                if state and state.get("running"):
+                    state["running"] = False
+                    await send_telegram_to(chat_id, "✅ Agente fermato")
                 else:
-                    tg_state["running"] = False
-                    await notify(tg_state, "Agente fermato via Telegram")
+                    await send_telegram_to(chat_id, "Nessuna sessione attiva")
 
             elif cmd == "/CLOSE":
-                # /close <SYM>  oppure  /close <username> <SYM>
-                if len(cmd_parts) == 3:
-                    hint, sym = cmd_parts[1], cmd_parts[2].upper()
-                elif len(cmd_parts) == 2:
-                    hint, sym = "", cmd_parts[1].upper()
-                else:
-                    await send_telegram("Uso: /close <SYM>  oppure  /close <username> <SYM>")
-                    continue
-                tg_state = _resolve_session(hint)
-                if tg_state is None:
-                    if len(running) > 1:
-                        names = ", ".join(s.get("username", str(uid)) for uid, s in running.items())
-                        await send_telegram(f"Più sessioni attive ({names}). Usa: /close <username> {sym}")
+                if len(cmd_parts) >= 2:
+                    sym = cmd_parts[1].upper()
+                    if state:
+                        pos = next((p for p in state["positions"] if p["symbol"] == sym), None)
+                        if pos:
+                            await exit_position(state, pos, "TELEGRAM")
+                            await send_telegram_to(chat_id, f"✅ Posizione {sym} chiusa")
+                        else:
+                            await send_telegram_to(chat_id, f"Nessuna posizione aperta su {sym}")
                     else:
-                        await send_telegram("Nessuna sessione attiva")
+                        await send_telegram_to(chat_id, "Nessuna sessione attiva")
                 else:
-                    pos = next((p for p in tg_state["positions"] if p["symbol"] == sym), None)
-                    if pos:
-                        await exit_position(tg_state, pos, "TELEGRAM")
-                        await notify(tg_state, "Posizione " + sym + " chiusa via Telegram")
-                    else:
-                        await notify(tg_state, "Nessuna posizione aperta su " + sym)
+                    await send_telegram_to(chat_id, "Uso: /close <SYM>")
     except Exception as e:
         print(f"Telegram poll error: {e}")
 
@@ -1547,6 +1583,7 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_key_id TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_private_key TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT DEFAULT '';
                     CREATE TABLE IF NOT EXISTS trades_history (
                         id SERIAL PRIMARY KEY,
                         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -1784,7 +1821,7 @@ async def get_me(user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT username, display_name, cb_key, avatar_b64, sim_mode, revx_key_id FROM users WHERE id = $1", user_id
+            "SELECT username, display_name, cb_key, avatar_b64, sim_mode, revx_key_id, telegram_chat_id FROM users WHERE id = $1", user_id
         )
     has_keys = bool(row["cb_key"])
     sim = row["sim_mode"] if row["sim_mode"] is not None else True
@@ -1798,6 +1835,7 @@ async def get_me(user_id: int = Depends(get_current_user)):
         "avatar_b64": row["avatar_b64"] or "",
         "sim_mode": sim,
         "has_revx_keys": bool(row.get("revx_key_id") or ""),
+        "telegram_linked": bool(row["telegram_chat_id"] or ""),
     }
 
 class SimModeRequest(BaseModel):
@@ -1937,6 +1975,30 @@ async def get_trades(user_id: int = Depends(get_current_user)):
             print(f"DB trades fetch error: {e}")
     return {"trades": mem_trades}
 
+@app.get("/telegram/link_code")
+async def telegram_link_code(user_id: int = Depends(get_current_user)):
+    """Genera un codice temporaneo (5 min) da inviare al bot per collegare Telegram."""
+    import random, string
+    # Pulizia codici scaduti
+    now = time.time()
+    expired = [k for k, (_, exp) in _tg_link_codes.items() if exp < now]
+    for k in expired:
+        del _tg_link_codes[k]
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    _tg_link_codes[code] = (user_id, now + 300)
+    return {"code": code, "expires_in": 300}
+
+@app.delete("/telegram/unlink")
+async def telegram_unlink(user_id: int = Depends(get_current_user)):
+    """Rimuove il collegamento Telegram dell'utente."""
+    if db_pool:
+        async with db_pool.acquire() as conn:
+            await conn.execute("UPDATE users SET telegram_chat_id = '' WHERE id = $1", user_id)
+    state = user_sessions.get(user_id)
+    if state:
+        state["telegram_chat_id"] = ""
+    return {"ok": True}
+
 @app.post("/start")
 async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
     state = get_session(user_id)
@@ -1956,7 +2018,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         try:
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT cb_key, cb_secret, sim_mode, revx_key_id, revx_private_key, username, display_name FROM users WHERE id = $1", user_id)
+                    "SELECT cb_key, cb_secret, sim_mode, revx_key_id, revx_private_key, username, display_name, telegram_chat_id FROM users WHERE id = $1", user_id)
                 if row:
                     cb_key    = decrypt_key(row["cb_key"] or "")
                     cb_secret = decrypt_key(row["cb_secret"] or "")
@@ -2007,6 +2069,7 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
         "use_revx": use_revx,
         "consecutiveLosses": 0,
         "username": (row["display_name"] or row["username"]) if (db_pool and row) else "",
+        "telegram_chat_id": (row["telegram_chat_id"] or "") if (db_pool and row) else "",
     })
     alloc  = float(cfg.get("allocPct", 0.20)) * 100
     capp   = float(cfg.get("capitalPct", 1.0)) * 100
