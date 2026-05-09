@@ -2061,8 +2061,8 @@ async def get_market(user_id: int = Depends(get_current_user)):
         }
         items.append(item)
 
-    # Se l'utente usa RevX, filtra solo le coin disponibili su Revolut X
-    if user_state.get("use_revx") and _revx_pairs:
+    # Filtra sempre alle coin RevX se disponibili — sim e reale mostrano le stesse coin
+    if _revx_pairs:
         items = [i for i in items if i["symbol"] in _revx_pairs]
 
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
