@@ -701,24 +701,17 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div id="rsiRangeFields">
         <div class="field-label" style="font-size:12px">RSI min <span id="rsiMinVal">35</span></div>
         <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" oninput="updateRsiRange()">
-        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">70</span></div>
-        <input type="range" id="rsiMax" min="50" max="80" value="70" step="5" oninput="updateRsiRange()">
+        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">65</span></div>
+        <input type="range" id="rsiMax" min="50" max="80" value="65" step="5" oninput="updateRsiRange()">
       </div>
       <div class="field-hint" style="margin-top:6px">Entra solo con RSI in zona neutrale — evita ipercomprato e ipervenduto</div>
     </div>
 
     <div class="field">
-      <div class="field-label">Pullback Tolerance <span id="pullbackVal">1.5%</span></div>
-      <input type="range" id="pullbackTolerance" min="0.1" max="3" value="1.5" step="0.1"
+      <div class="field-label">Pullback Tolerance <span id="pullbackVal">2.0%</span></div>
+      <input type="range" id="pullbackTolerance" min="0.1" max="3" value="2.0" step="0.1"
         oninput="document.getElementById('pullbackVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
       <div class="field-hint">Distanza massima del prezzo da EMA20 per considerare un pullback valido</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Volume Multiplier <span id="volMultVal">1.2x</span></div>
-      <input type="range" id="volMultiplier" min="1.0" max="2.0" value="1.2" step="0.1"
-        oninput="document.getElementById('volMultVal').textContent=parseFloat(this.value).toFixed(1)+'x'">
-      <div class="field-hint">La candela di ingresso deve avere volume &ge; media 20 barre &times; questo valore</div>
     </div>
 
     <div class="section-label">Stop &amp; Take Profit</div>
@@ -738,14 +731,21 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <div class="field">
-      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">2.5R</span></div>
-      <input type="range" id="tp2R" min="1.5" max="4" value="2.5" step="0.5"
+      <div class="field-label">TP1 target <span id="tp1RVal" style="color:var(--green);font-weight:700">2.0R</span></div>
+      <input type="range" id="tp1R" min="1" max="4" value="2.0" step="0.5"
+        oninput="document.getElementById('tp1RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
+      <div class="field-hint">Obiettivo prima metà — chiude 50% e attiva trailing stop ATR</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">4.0R</span></div>
+      <input type="range" id="tp2R" min="2" max="8" value="4.0" step="0.5"
         oninput="document.getElementById('tp2RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
       <div class="field-hint">Obiettivo del 50% rimanente dopo TP1 — più alto = meno frequente ma più profittevole</div>
     </div>
 
     <div class="field">
-      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="trailingPctVal" style="color:var(--blue);font-weight:700">50%</span></div>
+      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> <span style="color:var(--text3);font-size:11px;font-weight:500">(1.5× ATR)</span></div>
       <div class="ema-toggle-row" style="margin-bottom:10px">
         <button class="ema-btn active" id="trailingOnBtn" onclick="setTrailing(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -756,23 +756,26 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
           Disattivo
         </button>
       </div>
-      <div id="trailingPctField">
-        <input type="range" id="trailingPct" min="10" max="90" value="50" step="10"
-          oninput="document.getElementById('trailingPctVal').textContent=this.value+'%'">
-        <div class="field-hint">Dopo TP1 lo stop segue il massimo − N% di R, invece di restare fisso a breakeven</div>
-      </div>
+      <div class="field-hint">Dopo TP1 lo stop segue il massimo − 1.5× ATR (volatilità reale della coin)</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">4h</span></div>
+      <input type="range" id="maxHoldHours" min="1" max="24" value="4" step="1"
+        oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
+      <div class="field-hint">Chiude la posizione automaticamente se aperta da troppo tempo</div>
     </div>
 
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
       <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Schema Take Profit</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">TP1 — 1R</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp1Label">TP1 — 2.0R</div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude 50%</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Trailing stop attivo</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Trailing ATR attivo</div>
         </div>
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp2Label">TP2 — 2.5R</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp2Label">TP2 — 4.0R</div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude tutto</div>
           <div style="font-size:10px;color:var(--text3);margin-top:3px">Posizione chiusa</div>
         </div>
@@ -1669,7 +1672,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','minR','pullbackTolerance','volMultiplier','minVolume','maxTrades','maxConsecutiveLosses','cooldown','tp2R','trailingPct','rsiMin','rsiMax'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','minR','pullbackTolerance','minVolume','maxTrades','maxConsecutiveLosses','cooldown','tp1R','tp2R','maxHoldHours','rsiMin','rsiMax'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -1697,15 +1700,15 @@ function resetConfigToDefaults() {
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
   document.getElementById('stopLoss').value = 2.5; document.getElementById('slVal').textContent = '2.5%';
   document.getElementById('minR').value = 1.0; document.getElementById('minRVal').textContent = '1.0%';
-  document.getElementById('pullbackTolerance').value = 1.5; document.getElementById('pullbackVal').textContent = '1.5%';
-  document.getElementById('volMultiplier').value = 1.2; document.getElementById('volMultVal').textContent = '1.2x';
+  document.getElementById('pullbackTolerance').value = 2.0; document.getElementById('pullbackVal').textContent = '2.0%';
   document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = getCurrSym() + '0M';
   document.getElementById('maxTrades').value = 0; updateMaxTrades();
   document.getElementById('maxConsecutiveLosses').value = 3; updateMaxLoss();
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
-  document.getElementById('tp2R').value = 2.5; document.getElementById('tp2RVal').textContent = '2.5R'; updateTpSchema();
-  document.getElementById('trailingPct').value = 50; document.getElementById('trailingPctVal').textContent = '50%';
-  document.getElementById('rsiMin').value = 35; document.getElementById('rsiMax').value = 70; updateRsiRange();
+  document.getElementById('tp1R').value = 2.0; document.getElementById('tp1RVal').textContent = '2.0R';
+  document.getElementById('tp2R').value = 4.0; document.getElementById('tp2RVal').textContent = '4.0R'; updateTpSchema();
+  document.getElementById('maxHoldHours').value = 4; document.getElementById('maxHoldVal').textContent = '4h';
+  document.getElementById('rsiMin').value = 35; document.getElementById('rsiMax').value = 65; updateRsiRange();
   setEmaFilter(true); setTrend1h(true); setBtcEma(true); setRsiFilter(true); setTrailing(true);
   document.getElementById('modeRealBtn').classList.remove('active-real');
   document.getElementById('modeSimBtn').classList.remove('active-sim');
@@ -1728,7 +1731,6 @@ function restoreConfigFromStorage() {
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
   if (saved.minR !== undefined) { const mr=(saved.minR*100).toFixed(1); document.getElementById('minR').value=mr; document.getElementById('minRVal').textContent=mr+'%'; }
   if (saved.pullbackTolerance) { const pt=(saved.pullbackTolerance*100).toFixed(1); document.getElementById('pullbackTolerance').value=pt; document.getElementById('pullbackVal').textContent=pt+'%'; }
-  if (saved.volMultiplier) { document.getElementById('volMultiplier').value=saved.volMultiplier; document.getElementById('volMultVal').textContent=parseFloat(saved.volMultiplier).toFixed(1)+'x'; }
   if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
@@ -1740,9 +1742,10 @@ function restoreConfigFromStorage() {
   if (saved.rsiMin) { document.getElementById('rsiMin').value=saved.rsiMin; }
   if (saved.rsiMax) { document.getElementById('rsiMax').value=saved.rsiMax; }
   updateRsiRange();
+  if (saved.tp1R) { document.getElementById('tp1R').value=saved.tp1R; document.getElementById('tp1RVal').textContent=parseFloat(saved.tp1R).toFixed(1)+'R'; }
   if (saved.tp2R) { document.getElementById('tp2R').value=saved.tp2R; document.getElementById('tp2RVal').textContent=parseFloat(saved.tp2R).toFixed(1)+'R'; updateTpSchema(); }
+  if (saved.maxHoldHours) { document.getElementById('maxHoldHours').value=saved.maxHoldHours; document.getElementById('maxHoldVal').textContent=saved.maxHoldHours+'h'; }
   if (saved.trailingStop !== undefined) setTrailing(saved.trailingStop);
-  if (saved.trailingPct) { document.getElementById('trailingPct').value=Math.round(saved.trailingPct*100); document.getElementById('trailingPctVal').textContent=Math.round(saved.trailingPct*100)+'%'; }
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
@@ -1844,10 +1847,11 @@ function setTrailing(on) {
   document.getElementById('trailingOffBtn').classList.toggle('active', !on);
   document.getElementById('trailingLabel').textContent = on ? 'ON' : 'OFF';
   document.getElementById('trailingLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
-  document.getElementById('trailingPctField').style.display = on ? '' : 'none';
 }
 function updateTpSchema() {
+  const tp1r = parseFloat(document.getElementById('tp1R').value).toFixed(1);
   const tp2r = parseFloat(document.getElementById('tp2R').value).toFixed(1);
+  document.getElementById('tp1Label').textContent = 'TP1 — ' + tp1r + 'R';
   document.getElementById('tp2Label').textContent = 'TP2 — ' + tp2r + 'R';
 }
 async function setMode(real) {
@@ -1910,7 +1914,6 @@ async function startAgent() {
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
     minR:                  parseFloat(document.getElementById('minR').value) / 100,
     pullbackTolerance:     parseFloat(document.getElementById('pullbackTolerance').value) / 100,
-    volMultiplier:         parseFloat(document.getElementById('volMultiplier').value),
     minVolume:             parseFloat(document.getElementById('minVolume').value) * 1000000,
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
@@ -1922,9 +1925,10 @@ async function startAgent() {
     rsiFilter:             _rsiFilter,
     rsiMin:                parseFloat(document.getElementById('rsiMin').value),
     rsiMax:                parseFloat(document.getElementById('rsiMax').value),
+    tp1R:                  parseFloat(document.getElementById('tp1R').value),
     tp2R:                  parseFloat(document.getElementById('tp2R').value),
     trailingStop:          _trailingStop,
-    trailingPct:           parseFloat(document.getElementById('trailingPct').value) / 100,
+    maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
   };
   if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);
@@ -2604,7 +2608,7 @@ function renderMarket() {
         ><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       };
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.trend1h_ok ?? true,'trend1h','1h')}${dot(ema.trend,'trend','15m')}${dot(ema.pullback,'pullback','pull')}${dot(ema.volume,'volume','vol')}${dot(ema.rsi_ok ?? true,'rsi','RSI')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots">${dot(ema.trend1h_ok ?? true,'trend1h','1h')}${dot(ema.trend,'trend','15m')}${dot(ema.pullback,'pullback','pull')}${dot(ema.rsi_ok ?? true,'rsi','RSI')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
     }
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
       <div class="mkt-row-main">
