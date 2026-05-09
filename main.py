@@ -887,6 +887,12 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
         add_log(state, "buy", "ACQUISTO SIM",
             f"{sym} @ {fmt_price(actual_price)} | Size: ${size:.0f} | Fee: ${entry_fee:.2f} | "
             f"SL: {fmt_price(stop_price)} | TP1: {fmt_price(tp1_price)} | TP2: {fmt_price(tp2_price)} | R: {R_pct*100:.2f}%")
+        await notify(state,
+            "ACQUISTO SIM\n" + sym + " @ " + fmt_price(actual_price) +
+            "\nSize: $" + f"{size:.0f}" +
+            "\nSL: " + fmt_price(stop_price) +
+            "\nTP1: " + fmt_price(tp1_price) + " | TP2: " + fmt_price(tp2_price)
+        )
 
     # In sim sottraiamo anche la fee di entrata dal capitale disponibile
     state["currentCapital"] -= size + (entry_fee if not is_real else 0)
@@ -1068,6 +1074,11 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 "TP1 REALE\n" + sym + " 50% @ $" + f"{cur:.4f}" +
                 "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
             )
+        else:
+            await notify(state,
+                "TP1 SIM\n" + sym + " 50% @ $" + f"{cur:.4f}" +
+                "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
+            )
         return  # posizione resta aperta per TP2
 
     # Chiusura totale
@@ -1126,6 +1137,18 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
             msg = ("VENDITA REALE - " + esito + "\n" + sym + " @ " + curr + f"{cur:.4f}" +
                    "\nP&L: " + f"{pnl:+.2f}" + curr)
         await notify(state, msg)
+    else:
+        esito = "PROFITTO" if pnl >= 0 else "PERDITA"
+        tp1_pnl = pos.get("tp1_pnl", 0)
+        total_pnl = pnl + tp1_pnl
+        if tp1_pnl:
+            sim_msg = ("VENDITA SIM - " + esito + "\n" + sym + " @ $" + f"{cur:.4f}" +
+                       "\nP&L seconda metà: " + f"{pnl:+.2f}$" +
+                       "\nP&L totale: " + f"{total_pnl:+.2f}$")
+        else:
+            sim_msg = ("VENDITA SIM - " + esito + "\n" + sym + " @ $" + f"{cur:.4f}" +
+                       "\nP&L: " + f"{pnl:+.2f}$")
+        await notify(state, sim_msg)
 
     # Controllo stop automatico per perdite consecutive
     max_losses = cfg.get("maxConsecutiveLosses", 0)
@@ -1557,6 +1580,24 @@ async def telegram_loop():
 
 # ── startup ───────────────────────────────────────────────────────────────────
 
+async def _skip_old_telegram_updates():
+    """Scarta gli update Telegram pendenti prima dell'avvio, per evitare che vecchi comandi vengano rieseguiti dopo un deploy."""
+    global _tg_last_update
+    if not TELEGRAM_TOKEN:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
+                params={"offset": -1, "timeout": 0}
+            )
+            data = r.json()
+        results = data.get("result", [])
+        if results:
+            _tg_last_update = results[-1]["update_id"]
+    except Exception as e:
+        print(f"Telegram skip-updates error: {e}")
+
 @app.on_event("startup")
 async def startup():
     global db_pool
@@ -1619,6 +1660,7 @@ async def startup():
         except Exception as e:
             print(f"Database error: {e}")
     asyncio.create_task(background_loop())
+    asyncio.create_task(_skip_old_telegram_updates())
     asyncio.create_task(telegram_loop())
     asyncio.create_task(load_global_revx_keys())
     asyncio.create_task(load_telegram_bot_info())
