@@ -9,47 +9,48 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
 (function(){
   const t = localStorage.getItem('theme');
   if(t === 'dark'){
     document.documentElement.setAttribute('data-theme','dark');
-    document.documentElement.style.background='#0a0b0d';
+    document.documentElement.style.background='#080c1a';
   } else {
-    // default: light
-    document.documentElement.style.background='#ffffff';
+    document.documentElement.style.background='#eef1ff';
   }
 })();
 </script>
 <style>
 :root {
-  --bg: #ffffff;
-  --surface: #f7f8fa;
-  --surface2: #f0f2f5;
-  --surface3: #e8eaef;
-  --border: #ebebeb;
-  --border2: #d0d4e0;
+  --bg: #eef1ff;
+  --surface: rgba(255,255,255,0.68);
+  --surface2: rgba(255,255,255,0.48);
+  --surface3: rgba(240,243,255,0.55);
+  --border: rgba(180,195,255,0.38);
+  --border2: rgba(150,170,255,0.52);
   --blue: #0052ff;
-  --blue-dim: rgba(0,82,255,0.15);
-  --blue-glow: rgba(0,82,255,0.3);
+  --blue-dim: rgba(0,82,255,0.12);
+  --blue-glow: rgba(0,82,255,0.38);
   --green: #05c168;
   --green-dim: rgba(5,193,104,0.12);
   --red: #f6465d;
   --red-dim: rgba(246,70,93,0.12);
   --yellow: #f0b90b;
-  --text: #0a0b0d;
+  --text: #0d0f1e;
   --text2: #5a6480;
-  --text3: #9aa0b2;
+  --text3: #9aa0b8;
   --mono: 'SF Mono', 'Fira Code', monospace;
-  --sans: 'Inter', -apple-system, sans-serif;
+  --sans: 'DM Sans', -apple-system, sans-serif;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --tab-h: 68px;
   --hdr-h: 56px;
-  --radius: 16px;
-  --radius-sm: 10px;
+  --radius: 20px;
+  --radius-sm: 14px;
+  --blur: blur(24px) saturate(180%);
+  --glass-border: rgba(255,255,255,0.7);
 }
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100dvh; overflow:hidden; overflow-x:hidden; -webkit-font-smoothing:antialiased; }
@@ -328,10 +329,102 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .empty-icon { font-size:36px; margin-bottom:10px; opacity:0.5; }
 .empty-text { font-size:14px; font-weight:500; }
 
-[data-theme="dark"] { --bg:#0a0b0d; --surface:#141519; --surface2:#1c1e24; --surface3:#23262f; --border:#2a2d38; --border2:#353844; --text:#ffffff; --text2:#8a8fa8; --text3:#5a5f74; }
+[data-theme="dark"] {
+  --bg: #080c1a;
+  --surface: rgba(16,20,48,0.78);
+  --surface2: rgba(20,26,58,0.68);
+  --surface3: rgba(26,32,70,0.58);
+  --border: rgba(120,140,255,0.1);
+  --border2: rgba(140,160,255,0.16);
+  --text: #e8ecff;
+  --text2: #7a85aa;
+  --text3: #4a5272;
+  --glass-border: rgba(255,255,255,0.06);
+}
+
+/* ── LIQUID BACKGROUND ── */
+.liquid-bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+.blob { position:absolute; border-radius:50%; pointer-events:none; }
+.blob-1 { width:70vw; height:70vw; background:radial-gradient(circle at center, rgba(0,82,255,0.22) 0%, transparent 70%); top:-15%; left:-15%; filter:blur(60px); animation:drift1 22s ease-in-out infinite; }
+.blob-2 { width:60vw; height:60vw; background:radial-gradient(circle at center, rgba(5,193,104,0.18) 0%, transparent 70%); bottom:-18%; right:-12%; filter:blur(70px); animation:drift2 28s ease-in-out infinite; }
+.blob-3 { width:50vw; height:50vw; background:radial-gradient(circle at center, rgba(110,60,255,0.16) 0%, transparent 70%); top:35%; left:25%; filter:blur(65px); animation:drift3 19s ease-in-out infinite; }
+.blob-4 { width:40vw; height:40vw; background:radial-gradient(circle at center, rgba(0,180,255,0.12) 0%, transparent 70%); top:15%; right:5%; filter:blur(55px); animation:drift4 24s ease-in-out infinite; }
+@keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 30%{transform:translate(6vw,8vh) scale(1.06)} 65%{transform:translate(-4vw,12vh) scale(0.94)} }
+@keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 35%{transform:translate(-8vw,-6vh) scale(1.09)} 70%{transform:translate(5vw,7vh) scale(0.96)} }
+@keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-6vw,-8vh) scale(1.12)} }
+@keyframes drift4 { 0%,100%{transform:translate(0,0) scale(1)} 40%{transform:translate(4vw,6vh) scale(1.05)} 75%{transform:translate(-3vw,-4vh) scale(0.97)} }
+[data-theme="dark"] .blob-1 { background:radial-gradient(circle at center, rgba(0,82,255,0.35) 0%, transparent 70%); }
+[data-theme="dark"] .blob-2 { background:radial-gradient(circle at center, rgba(5,193,104,0.25) 0%, transparent 70%); }
+[data-theme="dark"] .blob-3 { background:radial-gradient(circle at center, rgba(120,60,255,0.28) 0%, transparent 70%); }
+[data-theme="dark"] .blob-4 { background:radial-gradient(circle at center, rgba(0,180,255,0.2) 0%, transparent 70%); }
+
+/* ── GLASSMORPHISM ── */
+body { background:var(--bg); }
+.hdr { background:var(--surface) !important; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border-bottom:1px solid var(--border) !important; }
+.tabbar { background:var(--surface) !important; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border-top:1px solid var(--border) !important; }
+.card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 4px 24px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6); }
+[data-theme="dark"] .card { box-shadow:0 4px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05); }
+.kpi { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 4px 24px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6); }
+[data-theme="dark"] .kpi { box-shadow:0 4px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05); }
+.modal-card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 20px 60px rgba(0,0,30,0.15), inset 0 1px 0 rgba(255,255,255,0.7); }
+[data-theme="dark"] .modal-card { box-shadow:0 20px 60px rgba(0,0,30,0.6), inset 0 1px 0 rgba(255,255,255,0.06); }
+.drawer { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border-top:1px solid var(--glass-border); box-shadow:0 -20px 60px rgba(0,0,30,0.1); }
+[data-theme="dark"] .drawer { border-top:1px solid var(--border); box-shadow:0 -20px 60px rgba(0,0,30,0.5); }
+.profile-menu { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 12px 40px rgba(0,0,30,0.12); }
+[data-theme="dark"] .profile-menu { box-shadow:0 12px 40px rgba(0,0,30,0.5); }
+.fdd-menu { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 8px 32px rgba(0,0,30,0.1); }
+[data-theme="dark"] .fdd-menu { box-shadow:0 8px 32px rgba(0,0,30,0.4); }
+.ema-tooltip { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 8px 32px rgba(0,0,30,0.12); }
+
+/* ── LIQUID BUTTONS ── */
+.start-btn, .home-start-btn {
+  background: linear-gradient(135deg, #0052ff, #0040cc);
+  box-shadow: 0 4px 24px rgba(0,82,255,0.4), inset 0 1px 0 rgba(255,255,255,0.25);
+  border-radius: var(--radius) !important;
+  letter-spacing: -0.01em;
+}
+.start-btn:active, .home-start-btn:active { box-shadow:0 2px 10px rgba(0,82,255,0.25); }
+.auth-btn { background:linear-gradient(135deg, #0052ff, #0040cc); box-shadow:0 4px 24px rgba(0,82,255,0.4), inset 0 1px 0 rgba(255,255,255,0.2); }
+
+/* ── LIQUID HOME BALANCE CARD ── */
+.home-balance-card { background:linear-gradient(135deg, #0052ff 0%, #2d7bff 40%, #0040cc 100%); box-shadow:0 8px 32px rgba(0,82,255,0.4); border-radius:var(--radius); position:relative; overflow:hidden; }
+.home-balance-card::before { content:''; position:absolute; top:-30%; right:-10%; width:60%; height:160%; background:radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 60%); pointer-events:none; }
+
+/* ── LIQUID SESSION BANNER ── */
+.sess-banner:not(.off) { background:linear-gradient(135deg, rgba(0,82,255,0.12), rgba(0,82,255,0.06)); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid rgba(0,82,255,0.25); box-shadow:0 4px 20px rgba(0,82,255,0.08); }
+
+/* ── LIQUID INPUT ── */
+input[type=number], input[type=text], input[type=password] { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); background:var(--surface2) !important; border-color:var(--border) !important; border-radius:var(--radius-sm) !important; }
+input[type=number]:focus, input[type=text]:focus, input[type=password]:focus { border-color:var(--blue) !important; box-shadow:0 0 0 3px rgba(0,82,255,0.12); }
+
+/* Auth card */
+.auth-card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border); box-shadow:0 20px 60px rgba(0,0,30,0.12); }
+[data-theme="dark"] .auth-card { box-shadow:0 20px 60px rgba(0,0,30,0.5); }
+
+/* Pos card */
+.pos-card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 4px 20px rgba(0,0,0,0.04); }
+[data-theme="dark"] .pos-card { box-shadow:0 4px 24px rgba(0,0,0,0.3); }
+
+/* Pages z-index to stay above liquid-bg */
+.pages, .hdr, .tabbar { z-index:10; position:relative; }
+.hdr { z-index:100; }
+.tabbar { z-index:100; }
+
+/* Slider thumb liquid */
+input[type=range]::-webkit-slider-thumb { box-shadow:0 0 0 4px rgba(0,82,255,0.18), 0 2px 8px rgba(0,82,255,0.3); }
+
+/* Auth screen background */
+#authScreen { background:transparent; }
 </style>
 </head>
 <body>
+
+<div class="liquid-bg" aria-hidden="true">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="blob blob-4"></div>
+</div>
 
 <!-- AUTH SCREEN -->
 <div id="authScreen">
