@@ -416,6 +416,8 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     atr_5m          = cd["atr_5m"]
     pullback_low_5m = cd["pullback_low_5m"]
     rsi_14          = cd.get("rsi_14", 50.0)
+    candle_body     = cd.get("candle_body", 0.0)
+    body_ratio      = cd.get("body_ratio", 0.0)
 
     # 1. Trend rialzista su 15min
     trend_ok = ema20_15m > ema50_15m
@@ -430,6 +432,9 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     # 4. RSI non ipercomprato
     rsi_ok = (rsi_min <= rsi_14 <= rsi_max) if rsi_filter else True
 
+    # 5. Candela 5m bullish con corpo solido (no entrata su candele rosse o doji)
+    body_ok = candle_body > 0 and body_ratio >= 0.30
+
     # Stop contestuale
     stop_from_low = pullback_low_5m
     stop_from_atr = current_price - atr_5m * 1.5 if atr_5m > 0 else 0.0
@@ -438,7 +443,7 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     R = (current_price - stop_price) / current_price if stop_price > 0 else 0.0
     stop_ok = min_r <= R <= max_stop_pct
 
-    signal = trend_ok and trend1h_ok and pullback_ok and rsi_ok and stop_ok
+    signal = trend_ok and trend1h_ok and pullback_ok and rsi_ok and body_ok and stop_ok
 
     if not trend1h_ok:
         reason = f"no trend 1h (EMA20 {ema20_1h:.4f} < EMA50 {ema50_1h:.4f})"
@@ -451,6 +456,8 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
             reason = f"no pullback (dist EMA20: {dist_from_ema20*100:.1f}% > {pullback_tolerance*100:.1f}%)"
     elif not rsi_ok:
         reason = f"RSI fuori range ({rsi_14:.1f}, range {rsi_min:.0f}-{rsi_max:.0f})"
+    elif not body_ok:
+        reason = f"candela ribassista o doji (corpo {body_ratio*100:.0f}% del range)" if candle_body <= 0 else f"corpo troppo piccolo ({body_ratio*100:.0f}% < 30%)"
     elif not stop_ok:
         if R > 0 and R < min_r:
             reason = f"R troppo piccolo ({R*100:.2f}% < {min_r*100:.1f}% min)"
@@ -462,7 +469,7 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         reason = (f"OK | EMA20/50 1h: {ema20_1h:.4f}/{ema50_1h:.4f} | "
                   f"EMA20/50 15m: {ema20_15m:.4f}/{ema50_15m:.4f} | "
                   f"dist EMA20: {dist_from_ema20*100:.2f}% | "
-                  f"RSI: {rsi_14:.1f} | R: {R*100:.2f}%")
+                  f"RSI: {rsi_14:.1f} | corpo: {body_ratio*100:.0f}% | R: {R*100:.2f}%")
 
     return {
         "signal":      signal,
