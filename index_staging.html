@@ -1523,6 +1523,40 @@ async function checkAuth() {
 let _watchlist = new Set();
 let _homeRealMode = false;
 
+// iOS PWA: env(safe-area-inset-bottom) è 0 al primo load e non si aggiorna.
+// Trucco: abilita temporaneamente l'overflow, scrolla di 1px per forzare
+// iOS a ricalcolare env(), poi misura il valore reale e lo applica via JS.
+function applyIOSSafeAreaFix() {
+  if (!window.navigator.standalone) return;
+  const tabbar = document.querySelector('.tabbar');
+  const pages  = document.querySelector('.pages');
+  if (!tabbar || !pages) return;
+
+  document.body.style.overflowY = 'auto';
+  window.scrollTo(0, 1);
+
+  setTimeout(() => {
+    window.scrollTo(0, 0);
+    document.body.style.overflowY = '';
+
+    // Misura il valore reale di env(safe-area-inset-bottom) dopo il trick
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;bottom:0;left:0;width:0;height:0;padding-bottom:env(safe-area-inset-bottom);pointer-events:none;z-index:-1;visibility:hidden';
+    document.body.appendChild(probe);
+    const safeB = probe.getBoundingClientRect().height;
+    document.body.removeChild(probe);
+
+    // Fallback: se env() è ancora 0 e lo schermo è >= 812pt → iPhone Face ID → 34px
+    const finalSafeB = safeB > 0 ? safeB : (window.screen.height >= 812 ? 34 : 0);
+    if (finalSafeB > 0) {
+      document.documentElement.style.setProperty('--safe-b', finalSafeB + 'px');
+      tabbar.style.height        = (68 + finalSafeB) + 'px';
+      tabbar.style.paddingBottom = finalSafeB + 'px';
+      pages.style.bottom         = (68 + finalSafeB) + 'px';
+    }
+  }, 80);
+}
+
 function initApp() {
   document.getElementById('homeUsername').textContent = _username;
   const t = localStorage.getItem('theme');
@@ -1535,6 +1569,7 @@ function initApp() {
   updateProfileMenu();
   loadUserProfile();
   startupSession();
+  applyIOSSafeAreaFix();
 }
 
 async function loadUserProfile() {
