@@ -2441,6 +2441,14 @@ async function startupSession() {
   } catch(e) {}
   restoreActiveTab();
   document.querySelector('.pages').classList.add('ready');
+  // iOS PWA: env(safe-area-inset-bottom) è 0 al primo render, si corregge
+  // solo dopo la prima interazione. Forza un repaint per anticiparlo.
+  if (window.navigator.standalone) {
+    requestAnimationFrame(() => {
+      document.body.style.opacity = '0.9999';
+      requestAnimationFrame(() => { document.body.style.opacity = ''; });
+    });
+  }
   startPolling();
 }
 
