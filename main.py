@@ -1384,8 +1384,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
     max_stop_pct  = cfg.get("maxStopPct", 0.05)
     trend1h_filter = cfg.get("trend1hFilter", True)
     rsi_filter    = cfg.get("rsiFilter", True)
-    rsi_min       = cfg.get("rsiMin", 40.0)
-    rsi_max       = cfg.get("rsiMax", 58.0)
+    rsi_min       = cfg.get("rsiMin", 35.0)
+    rsi_max       = cfg.get("rsiMax", 65.0)
     min_r         = cfg.get("minR", 0.01)
 
     # Se Revolut X: usa tutte le coin con candele disponibili (non filtriamo per _coinbase_products)
@@ -2278,7 +2278,6 @@ async def start_agent(body: dict, user_id: int = Depends(get_current_user)):
     vol    = float(cfg.get("minVolume", 0)) / 1_000_000
     mode   = "REALE" if real_mode else "SIMULAZIONE"
     ema_s  = "ON" if cfg.get("emaFilter", True) else "OFF"
-    ptol   = float(cfg.get("pullbackTolerance", 0.02)) * 100
     mt     = int(cfg.get("maxTrades", 0))
     mcl    = int(cfg.get("maxConsecutiveLosses", 3))
     tp1r   = float(cfg.get("tp1R", 2.0))
