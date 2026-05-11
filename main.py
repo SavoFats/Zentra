@@ -344,13 +344,18 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         ema20_5m_cur   = calc_ema(closes5[:-1], 20)   # su candele chiuse
         ema20_5m_prev3 = calc_ema(closes5[:-4], 20)   # EMA20 di 3 candele fa
 
+        # Slope EMA20 su 1h: confronta EMA20 attuale con EMA20 di 3 ore fa
+        ema20_1h_cur   = calc_ema(closes1h[:-1], 20)
+        ema20_1h_prev3 = calc_ema(closes1h[:-4], 20)  # EMA20 di 3 ore fa
+
         return {
             "ema20_5m":         ema20_5m_cur,
             "ema50_5m":         calc_ema(closes5[:-1], 50),
             "ema20_15m":        calc_ema(closes15[:-1], 20),
             "ema50_15m":        calc_ema(closes15[:-1], 50),
-            "ema20_1h":         calc_ema(closes1h[:-1], 20),
+            "ema20_1h":         ema20_1h_cur,
             "ema50_1h":         calc_ema(closes1h[:-1], 50),
+            "ema20_1h_prev3":   ema20_1h_prev3,
             "last_close_5m":    closes5[-2],   # ultimo close CONFERMATO (candela chiusa)
             "close_1h_ago":     closes1h[-2] if len(closes1h) >= 2 else 0.0,
             "atr_5m":           atr_5m,
@@ -427,12 +432,13 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     vol_avg_20      = cd.get("vol_avg_20", 0.0)
     vol_last        = cd.get("vol_last", 0.0)
     ema20_5m_prev3  = cd.get("ema20_5m_prev3", ema20_5m)
+    ema20_1h_prev3  = cd.get("ema20_1h_prev3", ema20_1h)
 
     # 1. Trend rialzista su 15min
     trend_ok = ema20_15m > ema50_15m
 
-    # 2. Trend rialzista su 1h
-    trend1h_ok = (ema20_1h > ema50_1h) if (trend1h_filter and ema20_1h > 0 and ema50_1h > 0) else True
+    # 2. Trend rialzista su 1h (EMA20 > EMA50 E in salita)
+    trend1h_ok = (ema20_1h > ema50_1h and ema20_1h > ema20_1h_prev3) if (trend1h_filter and ema20_1h > 0 and ema50_1h > 0) else True
 
     # 3. EMA20 5m in salita (slope positiva negli ultimi 15 minuti)
     slope_ok = ema20_5m > ema20_5m_prev3
@@ -465,7 +471,10 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     signal = trend_ok and trend1h_ok and slope_ok and pullback_ok and fresh_ok and rsi_ok and body_ok and vol_ok and stop_ok
 
     if not trend1h_ok:
-        reason = f"no trend 1h (EMA20 {ema20_1h:.4f} < EMA50 {ema50_1h:.4f})"
+        if ema20_1h <= ema50_1h:
+            reason = f"no trend 1h (EMA20 {ema20_1h:.4f} < EMA50 {ema50_1h:.4f})"
+        else:
+            reason = f"slope 1h negativa (EMA20 in discesa: {ema20_1h:.4f} < prev {ema20_1h_prev3:.4f})"
     elif not trend_ok:
         reason = f"no trend 15m (EMA20 {ema20_15m:.4f} < EMA50 {ema50_15m:.4f})"
     elif not slope_ok:
@@ -1141,7 +1150,10 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         state["consecutiveLosses"] = state.get("consecutiveLosses", 0) + 1
 
     cfg = state["config"]
-    state["cooldowns"][sym] = (datetime.now().timestamp() + cfg.get("cooldown", 1) * 3600) * 1000
+    # Dopo uno stop loss secco (senza TP1), cooldown più lungo per proteggere da re-entry su trend avverso
+    is_clean_stop = ("STOP" in reason) and not pos.get("tp1_hit", False)
+    cooldown_h = cfg.get("slCooldownHours", 4) if is_clean_stop else cfg.get("cooldown", 1)
+    state["cooldowns"][sym] = (datetime.now().timestamp() + cooldown_h * 3600) * 1000
     trade_record = {
         "symbol": sym, "reason": reason,
         "entryPrice": pos["entryPrice"], "exitPrice": cur,
