@@ -442,9 +442,12 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     ema20_5m_prev3   = cd.get("ema20_5m_prev3", ema20_5m)
     ema20_1h_prev3   = cd.get("ema20_1h_prev3", ema20_1h)
 
-    # 1. Crossover fresco su 15m: EMA20 ha appena superato EMA50 (finestra ≤45 min)
-    trend_ok     = ema20_15m > ema50_15m  # EMA20 sopra EMA50 ora
-    crossover_ok = trend_ok and (ema20_15m_prev3 <= ema50_15m_prev3)
+    # 1. Crossover fresco su 15m: EMA20 ha appena superato EMA50 (finestra ≤90 min)
+    #    + spread minimo 0.3% per escludere crossover deboli/falsi
+    trend_ok        = ema20_15m > ema50_15m
+    ema_spread_pct  = (ema20_15m - ema50_15m) / ema50_15m if ema50_15m > 0 else 0
+    min_cross_spread = 0.003  # 0.3%
+    crossover_ok    = trend_ok and (ema20_15m_prev3 <= ema50_15m_prev3) and (ema_spread_pct >= min_cross_spread)
 
     # 2. Trend rialzista su 1h (EMA20 > EMA50 E in salita)
     trend1h_ok = (ema20_1h > ema50_1h and ema20_1h > ema20_1h_prev3) if (trend1h_filter and ema20_1h > 0 and ema50_1h > 0) else True
@@ -483,8 +486,10 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     elif not crossover_ok:
         if not trend_ok:
             reason = f"no crossover (EMA20 {ema20_15m:.4f} < EMA50 {ema50_15m:.4f})"
+        elif ema_spread_pct < min_cross_spread:
+            reason = f"crossover debole (spread {ema_spread_pct*100:.2f}% < {min_cross_spread*100:.1f}% minimo)"
         else:
-            reason = f"crossover già vecchio (EMA20 > EMA50 da >45min | prev: {ema20_15m_prev3:.4f}/{ema50_15m_prev3:.4f})"
+            reason = f"crossover già vecchio (EMA20 > EMA50 da >90min | prev: {ema20_15m_prev3:.4f}/{ema50_15m_prev3:.4f})"
     elif not slope_ok:
         reason = f"EMA20 5m in discesa — momentum in indebolimento"
     elif not fresh_ok:
@@ -1327,6 +1332,13 @@ async def scan_and_trade(state: dict, user_id: int = None):
     if min_trade_size < 1.0 and cfg.get("realMode", False):
         if open_positions:
             # Capitale bloccato in posizioni aperte — aspetta che si chiudano
+            _update_pnl(state)
+            return
+        # Evita falso stop per settlement delay: se currentCapital è molto > saldo letto,
+        # il saldo è probabilmente in transito (RevX non ha ancora accreditato la vendita)
+        elif state.get("currentCapital", 0) > tradable_capital * 5:
+            add_log(state, "info", "INFO",
+                f"Saldo RevX in attesa settlement (${tradable_capital:.2f}) — attesa")
             _update_pnl(state)
             return
         else:
