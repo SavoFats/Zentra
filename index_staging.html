@@ -3511,9 +3511,19 @@ const EMA_DOT_INFO = {
     descOn:  "EMA20 ha appena superato EMA50 su 15min (nelle ultime 6 candele = 90 min). Segnale di momentum: il trend si sta formando ora.",
     descOff: "Nessun crossover fresco. O EMA20 è ancora sotto EMA50, oppure il crossover è avvenuto più di 90 min fa. L'ingresso sarebbe tardivo.",
   },
-  volume: {
+  expand: {
+    name: 'Espansione volatilità',
+    descOn:  "ATR delle ultime 6 candele ≥ 60% della media delle ultime 20 — il mercato si sta muovendo con forza. Crossover con momentum reale.",
+    descOff: "ATR recente troppo basso rispetto alla media — mercato piatto. Crossover senza espansione di volatilità è spesso un falso segnale.",
+  },
+  body: {
+    name: 'Candela direzionale',
+    descOn:  "L'ultima candela è rialzista con corpo ≥ 30% del range (high-low). Conferma la direzionalità del movimento.",
+    descOff: "Candela debole: corpo troppo piccolo o ribassista. Il crossover non è supportato da una candela direzionale chiara.",
+  },
+  vol: {
     name: 'Volume',
-    descOn:  "Volume sopra la media delle ultime 20 candele — il crossover ha momentum reale. Conferma la forza del movimento.",
+    descOn:  "Volume dell'ultima candela sopra la media delle ultime 20 — il crossover ha partecipazione reale.",
     descOff: "Volume basso sul crossover — il movimento non è sostenuto da partecipazione reale. Rischio di falso segnale.",
   },
   rsi: {
@@ -3536,7 +3546,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { trend1h: 'trend1h_ok', trend: 'trend', crossover: 'crossover', expand: 'expand_ok', volume: 'volume', rsi: 'rsi_ok', stop: 'stop' };
+  const keyMap = { trend1h: 'trend1h_ok', trend: 'trend', crossover: 'crossover', expand: 'expand_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
