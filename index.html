@@ -2465,9 +2465,9 @@ async function poll() {
       fetch(API + '/trades', { headers:authHeaders() }),
       fetch(API + '/market', { headers:authHeaders() }),
     ]);
-    // Se il cookie è scaduto, fai logout automatico
     if (sRes.status === 401) {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+      localStorage.removeItem('ca_token');
       localStorage.removeItem('ca_username');
       showAuthScreen();
       showLogin();
