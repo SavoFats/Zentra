@@ -255,7 +255,8 @@ user_sessions: dict = {}
 candle_data: dict = {}
 _candles_last_update: float = 0
 CANDLE_UPDATE_INTERVAL = 120  # secondi (2 minuti)
-CANDLE_UNIVERSE_SIZE   = 30   # top N coin per volume
+CANDLE_UNIVERSE_SIZE   = 12   # top N coin per volume (solo whitelist)
+COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}
 
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
@@ -320,6 +321,16 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             trs.append(max(h - l, abs(h - pc), abs(l - pc)))
         atr_5m = sum(trs[-14:]) / 14 if len(trs) >= 14 else 0.0
 
+        # ATR 15m: short (6 candele = 90 min) e long (20 candele = 5h)
+        highs15 = [float(k[2]) for k in klines15]
+        lows15   = [float(k[3]) for k in klines15]
+        trs15 = []
+        for i in range(1, len(klines15)):
+            h = highs15[i]; l = lows15[i]; pc = closes15[i-1]
+            trs15.append(max(h - l, abs(h - pc), abs(l - pc)))
+        atr_15m_long  = sum(trs15[-21:-1]) / 20 if len(trs15) >= 21 else 0.0
+        atr_15m_short = sum(trs15[-7:-1])  / 6  if len(trs15) >= 7  else 0.0
+
         # Minimo delle ultime 3 candele CHIUSE (escludi candela corrente aperta)
         pullback_low_5m = min(lows5[-4:-1]) if len(lows5) >= 4 else lows5[-2]
 
@@ -372,6 +383,8 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "candle_body":      candle_body,
             "body_ratio":       body_ratio,
             "ema20_5m_prev3":   ema20_5m_prev3,
+            "atr_15m_long":     atr_15m_long,
+            "atr_15m_short":    atr_15m_short,
             "updated_at":       time.time(),
         }
     except Exception as e:
@@ -382,9 +395,9 @@ async def fetch_all_candles():
     """Aggiorna candle_data per le top CANDLE_UNIVERSE_SIZE coin per volume."""
     global _candles_last_update
 
-    # Seleziona top coin per volume tra quelle con prezzo noto
+    # Seleziona top coin per volume tra quelle nella whitelist
     universe = sorted(
-        [(sym, d) for sym, d in market_data.items() if d["price"] > 0],
+        [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in COIN_WHITELIST],
         key=lambda x: x[1].get("volume24h", 0),
         reverse=True
     )[:CANDLE_UNIVERSE_SIZE]
@@ -441,6 +454,8 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     vol_last         = cd.get("vol_last", 0.0)
     ema20_5m_prev3   = cd.get("ema20_5m_prev3", ema20_5m)
     ema20_1h_prev3   = cd.get("ema20_1h_prev3", ema20_1h)
+    atr_15m_long     = cd.get("atr_15m_long", 0.0)
+    atr_15m_short    = cd.get("atr_15m_short", 0.0)
 
     # 1. Crossover fresco su 15m: EMA20 ha appena superato EMA50 (finestra ≤90 min)
     #    + spread minimo 0.3% per escludere crossover deboli/falsi
@@ -449,10 +464,10 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     min_cross_spread = 0.003  # 0.3%
     crossover_ok    = trend_ok and (ema20_15m_prev3 <= ema50_15m_prev3) and (ema_spread_pct >= min_cross_spread)
 
-    # 2. Trend rialzista su 1h (EMA20 > EMA50 E in salita)
-    trend1h_ok = (ema20_1h > ema50_1h and ema20_1h > ema20_1h_prev3) if (trend1h_filter and ema20_1h > 0 and ema50_1h > 0) else True
+    # 2. Trend rialzista su 1h (EMA20 > EMA50 — slope rimossa, troppo restrittiva)
+    trend1h_ok = (ema20_1h > ema50_1h) if (trend1h_filter and ema20_1h > 0 and ema50_1h > 0) else True
 
-    # 3. EMA20 5m in salita (slope positiva negli ultimi 15 minuti)
+    # 3. EMA20 5m in salita (informativo — non blocca il trade)
     slope_ok = ema20_5m > ema20_5m_prev3
 
     # 4. Prezzo live ancora vicino al close confermato (segnale non stantio, drift < 1%)
@@ -468,6 +483,10 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     # 7. Volume sopra la media: il crossover deve avere momentum (non scambio silenzioso)
     vol_ok = (vol_last >= vol_avg_20) if vol_avg_20 > 0 else True
 
+    # 8. Espansione volatilità: ATR 15m recente (90 min) >= 60% della media (5h)
+    #    Esclude crossover in mercati piatti dove il movimento non ha momentum reale
+    expand_ok = (atr_15m_short >= atr_15m_long * 0.60) if (atr_15m_long > 0 and atr_15m_short > 0) else True
+
     # Stop contestuale su minimi di candele chiuse
     stop_from_low = pullback_low_5m
     stop_from_atr = current_price - atr_5m * 1.5 if atr_5m > 0 else 0.0
@@ -476,13 +495,10 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
     R = (current_price - stop_price) / current_price if stop_price > 0 else 0.0
     stop_ok = min_r <= R <= max_stop_pct
 
-    signal = crossover_ok and trend1h_ok and slope_ok and fresh_ok and rsi_ok and body_ok and vol_ok and stop_ok
+    signal = crossover_ok and trend1h_ok and fresh_ok and rsi_ok and body_ok and vol_ok and expand_ok and stop_ok
 
     if not trend1h_ok:
-        if ema20_1h <= ema50_1h:
-            reason = f"no trend 1h (EMA20 {ema20_1h:.4f} < EMA50 {ema50_1h:.4f})"
-        else:
-            reason = f"slope 1h negativa (EMA20 in discesa: {ema20_1h:.4f} < prev {ema20_1h_prev3:.4f})"
+        reason = f"no trend 1h (EMA20 {ema20_1h:.4f} < EMA50 {ema50_1h:.4f})"
     elif not crossover_ok:
         if not trend_ok:
             reason = f"no crossover (EMA20 {ema20_15m:.4f} < EMA50 {ema50_15m:.4f})"
@@ -490,8 +506,6 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
             reason = f"crossover debole (spread {ema_spread_pct*100:.2f}% < {min_cross_spread*100:.1f}% minimo)"
         else:
             reason = f"crossover già vecchio (EMA20 > EMA50 da >90min | prev: {ema20_15m_prev3:.4f}/{ema50_15m_prev3:.4f})"
-    elif not slope_ok:
-        reason = f"EMA20 5m in discesa — momentum in indebolimento"
     elif not fresh_ok:
         direction = "salito" if current_price > last_close_5m else "sceso"
         reason = f"prezzo {direction} del {price_drift*100:.1f}% dal last close — segnale stantio"
@@ -501,6 +515,8 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         reason = f"candela ribassista o doji (corpo {body_ratio*100:.0f}% del range)" if candle_body <= 0 else f"corpo troppo piccolo ({body_ratio*100:.0f}% < 30%)"
     elif not vol_ok:
         reason = f"volume basso ({vol_last/vol_avg_20:.2f}x media) — crossover senza momentum"
+    elif not expand_ok:
+        reason = f"mercato piatto (ATR 90min {atr_15m_short:.5f} < {atr_15m_long*0.60:.5f} soglia) — crossover senza espansione"
     elif not stop_ok:
         if R > 0 and R < min_r:
             reason = f"R troppo piccolo ({R*100:.2f}% < {min_r*100:.1f}% min)"
@@ -528,6 +544,7 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         "rsi_ok":       rsi_ok,
         "body_ok":      body_ok,
         "vol_ok":       vol_ok,
+        "expand_ok":    expand_ok,
         "stop_ok":      stop_ok,
         "rsi":          rsi_14,
     }
@@ -1375,18 +1392,37 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     prices_ok = [sym for sym, d in market_data.items() if d["price"] > 0]
 
-    # Filtro BTC: deve essere sopra EMA20 su 1h con tolleranza 0.1%
-    # Evita falsi negativi quando BTC è praticamente sulla EMA (zona di contatto)
+    # Filtro orario: niente operazioni 00:00-07:00 UTC (liquidità bassa)
+    time_filter = cfg.get("timeFilter", True)
+    if time_filter:
+        utc_hour = datetime.utcnow().hour
+        if 0 <= utc_hour < 7:
+            add_log(state, "info", "PAUSA",
+                f"Filtro orario — bassa liquidità (UTC {utc_hour:02d}:xx, pausa 00:00-07:00)")
+            _update_pnl(state)
+            return
+
+    # Daily loss limit: pausa se perdita > 5% del capitale iniziale della sessione
+    if state["pnlHistory"]:
+        last_pnl = state["pnlHistory"][-1]["v"]
+        if last_pnl < -state["capital"] * 0.05:
+            add_log(state, "warning", "PAUSA",
+                f"Loss sessione {abs(last_pnl/state['capital']*100):.1f}% > 5% — agente in pausa per il resto della sessione")
+            _update_pnl(state)
+            return
+
+    # Filtro BTC: deve essere sopra EMA50 su 1h con tolleranza 0.3%
+    # EMA50 1h è più stabile di EMA20 — meno falsi blocchi durante pullback normali
     btc_cd = candle_data.get("BTC", {})
     btc_ema20_1h = btc_cd.get("ema20_1h", 0)
     btc_ema50_1h = btc_cd.get("ema50_1h", 0)
     btc_price    = market_data.get("BTC", {}).get("price", 0)
     btc_filter   = cfg.get("btcEmaFilter", True)
-    if btc_filter and btc_ema20_1h > 0 and btc_price > 0:
-        tolerance = btc_ema20_1h * 0.001  # 0.1% sotto EMA20 è ancora accettabile
-        if btc_price < btc_ema20_1h - tolerance:
+    if btc_filter and btc_ema50_1h > 0 and btc_price > 0:
+        tolerance = btc_ema50_1h * 0.003  # 0.3% sotto EMA50 è ancora accettabile
+        if btc_price < btc_ema50_1h - tolerance:
             add_log(state, "info", "PAUSA",
-                f"BTC sotto EMA20 1h (${btc_price:.0f} < ${btc_ema20_1h:.0f}) — agente in attesa")
+                f"BTC sotto EMA50 1h (${btc_price:.0f} < ${btc_ema50_1h:.0f}) — agente in attesa")
             _update_pnl(state)
             return
 
@@ -1407,6 +1443,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             {**d, "symbol": sym}
             for sym, d in market_data.items()
             if d["price"] > 0
+            and sym in COIN_WHITELIST
             and d.get("volume24h", 0) >= min_vol
             and sym not in open_syms
             and (use_revx_filter or sym in _coinbase_products)
@@ -1418,7 +1455,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     candidates  = []
     ema_skipped = 0
-    block_count = {"trend1h": 0, "cross": 0, "slope": 0, "fresh": 0, "rsi": 0, "body": 0, "vol": 0, "stop": 0}
+    block_count = {"trend1h": 0, "cross": 0, "fresh": 0, "rsi": 0, "body": 0, "vol": 0, "expand": 0, "stop": 0}
 
     for d in universe_sorted:
         sym = d["symbol"]
@@ -1429,11 +1466,11 @@ async def scan_and_trade(state: dict, user_id: int = None):
                 ema_skipped += 1
                 if not signal.get("trend1h_ok", True):      block_count["trend1h"] += 1
                 elif not signal.get("crossover_ok", True):  block_count["cross"] += 1
-                elif not signal.get("slope_ok", True):      block_count["slope"] += 1
                 elif not signal.get("fresh_ok", True):      block_count["fresh"] += 1
                 elif not signal.get("rsi_ok", True):        block_count["rsi"] += 1
                 elif not signal.get("body_ok", True):       block_count["body"] += 1
                 elif not signal.get("vol_ok", True):        block_count["vol"] += 1
+                elif not signal.get("expand_ok", True):     block_count["expand"] += 1
                 elif not signal["stop_ok"]:                  block_count["stop"] += 1
                 continue
             d["ema_reason"]  = signal["reason"]
@@ -2121,6 +2158,7 @@ async def get_market(user_id: int = Depends(get_current_user)):
             "trend1h_ok":   sig.get("trend1h_ok", True),
             "slope_ok":     sig.get("slope_ok", True),
             "crossover":    sig.get("crossover_ok", False),
+            "expand_ok":    sig.get("expand_ok", True),
             "rsi_ok":       sig["rsi_ok"],
             "body_ok":      sig.get("body_ok", True),
             "vol_ok":       sig.get("vol_ok", True),
