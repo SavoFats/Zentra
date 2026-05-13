@@ -133,9 +133,6 @@ async def send_telegram_to(chat_id: str, msg: str):
     """Invia un messaggio Telegram a uno specifico chat_id."""
     if not TELEGRAM_TOKEN or not chat_id:
         return
-    import traceback
-    caller = ''.join(traceback.format_stack()[-3:-1]).strip().replace('\n', ' | ')
-    print(f"[TG SEND] chat={chat_id} msg={msg[:60]!r} | from: {caller[-120:]}")
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             await client.post(
@@ -2116,7 +2113,10 @@ def check_rate_limit(request_or_ip, max_attempts: int = 10, window: int = 300, k
     key = f"{ip}:{key_suffix}" if key_suffix else ip
     now = time.time()
     attempts = [t for t in _rate_buckets[key] if now - t < window]
-    _rate_buckets[key] = attempts
+    if attempts:
+        _rate_buckets[key] = attempts
+    else:
+        del _rate_buckets[key]  # rimuove chiavi inattive per evitare memory leak
     if len(attempts) >= max_attempts:
         raise HTTPException(status_code=429, detail="Troppi tentativi — riprova tra qualche minuto")
     _rate_buckets[key].append(now)
@@ -2602,8 +2602,11 @@ async def stop_agent(request: Request, user_id: int = Depends(get_current_user))
 @app.post("/close_position/{symbol}")
 async def close_symbol(symbol: str, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=20, window=60, key_suffix="close")
+    sym = symbol.upper()
+    if not sym.isalnum() or len(sym) > 20:
+        raise HTTPException(status_code=400, detail="Simbolo non valido")
     state = get_session(user_id)
-    pos = next((p for p in state["positions"] if p["symbol"] == symbol), None)
+    pos = next((p for p in state["positions"] if p["symbol"] == sym), None)
     if not pos:
         return {"error": f"No position on {symbol}"}
     await exit_position(state, pos, "CHIUSURA MANUALE", user_id=user_id)
