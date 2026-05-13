@@ -1344,7 +1344,16 @@ body.auth-active .tabbar { display:none !important; }
 <script>
 const API = 'https://crypto-agent-back-production-87b2.up.railway.app';
 
-let _authToken = localStorage.getItem('ca_token') || '';
+// Aggiunge credentials: 'include' a tutte le chiamate verso il backend (cookie HttpOnly)
+const _origFetch = window.fetch.bind(window);
+window.fetch = function(url, opts = {}) {
+  if (typeof url === 'string' && url.startsWith(API)) {
+    opts = { ...opts, credentials: 'include' };
+  }
+  return _origFetch(url, opts);
+};
+
+let _authToken = '';  // flag in-memory, non più in localStorage
 let _username  = localStorage.getItem('ca_username') || '';
 let _emaFilter = true;
 let _hasApiKeys = false;
@@ -1357,7 +1366,7 @@ let _timerInterval = null;
 let _sessionEndTs = null;
 
 function authHeaders() {
-  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _authToken };
+  return { 'Content-Type': 'application/json' };
 }
 
 // ── AVATAR / PROFILO ─────────────────────────────────────────────────────────
@@ -1503,8 +1512,8 @@ async function doLogin() {
     const r = await fetch(API + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
     const d = await r.json();
     if (!r.ok) { showFieldError('loginPass','loginPassErr', d.detail || 'Username o password errati'); btn.disabled=false; btn.textContent='Accedi'; return; }
-    _authToken = d.token; _username = d.username;
-    localStorage.setItem('ca_token', _authToken); localStorage.setItem('ca_username', _username);
+    _authToken = '1'; _username = d.username;
+    localStorage.setItem('ca_username', _username);
     if (!d.has_api_keys) { showApiKeys(); return; }
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('loginPass','loginPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Accedi'; }
@@ -1524,8 +1533,8 @@ async function doRegister() {
     const r = await fetch(API + '/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
     const d = await r.json();
     if (!r.ok) { showFieldError('regUser','regUserErr', d.detail || 'Errore registrazione'); btn.disabled=false; btn.textContent='Registrati'; return; }
-    _authToken = d.token; _username = d.username;
-    localStorage.setItem('ca_token', _authToken); localStorage.setItem('ca_username', _username);
+    _authToken = '1'; _username = d.username;
+    localStorage.setItem('ca_username', _username);
     showApiKeys();
   } catch(e) { showFieldError('regPass','regPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Registrati'; }
 }
@@ -1541,8 +1550,8 @@ async function saveKeys() {
   } catch(e) { showAuthError('keysError', 'Errore di connessione'); }
 }
 function skipKeys() { hideAuthScreen(); initApp(); }
-function logout() {
-  localStorage.removeItem('ca_token');
+async function logout() {
+  await fetch(API + '/auth/logout', { method: 'POST' }).catch(() => {});
   localStorage.removeItem('ca_username');
   localStorage.removeItem('ca_avatar');
   localStorage.removeItem('ca_active_tab');
@@ -1550,19 +1559,21 @@ function logout() {
 }
 
 async function checkAuth() {
-  if (_authToken) {
+  // Nascondi authScreen subito se sembra già loggato (evita flash)
+  if (localStorage.getItem('ca_username')) {
     document.getElementById('authScreen').style.display = 'none';
   }
-  if (!_authToken) { showAuthScreen(); showLogin(); return; }
   try {
     const r = await fetch(API + '/auth/me', { headers: authHeaders() });
     if (!r.ok) {
-      localStorage.removeItem('ca_token');
+      localStorage.removeItem('ca_username');
       showAuthScreen();
       showLogin(); return;
     }
     const d = await r.json();
+    _authToken = '1';
     _username = d.username;
+    localStorage.setItem('ca_username', _username);
     if (!d.has_api_keys) {
       showAuthScreen();
       showApiKeys(); return;
@@ -2458,10 +2469,10 @@ async function poll() {
       fetch(API + '/trades', { headers:authHeaders() }),
       fetch(API + '/market', { headers:authHeaders() }),
     ]);
-    // Se il token è scaduto, fai logout automatico
+    // Se il cookie è scaduto, fai logout automatico
     if (sRes.status === 401) {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-      localStorage.removeItem('ca_token');
+      localStorage.removeItem('ca_username');
       showAuthScreen();
       showLogin();
       return;
