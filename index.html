@@ -9,51 +9,55 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
 (function(){
   const t = localStorage.getItem('theme');
   if(t === 'dark'){
     document.documentElement.setAttribute('data-theme','dark');
-    document.documentElement.style.background='#0a0b0d';
+    document.documentElement.style.background='#080c1a';
   } else {
-    // default: light
-    document.documentElement.style.background='#ffffff';
+    document.documentElement.style.background='#eef1ff';
   }
+  // Fix iOS PWA viewport: window.innerHeight è corretto anche al primo render,
+  // mentre 100dvh può essere sbagliato in standalone mode.
+  document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
 })();
 </script>
 <style>
 :root {
-  --bg: #ffffff;
-  --surface: #f7f8fa;
-  --surface2: #f0f2f5;
-  --surface3: #e8eaef;
-  --border: #ebebeb;
-  --border2: #d0d4e0;
+  --bg: #eef1ff;
+  --surface: rgba(255,255,255,0.68);
+  --surface2: rgba(255,255,255,0.48);
+  --surface3: rgba(240,243,255,0.55);
+  --border: rgba(180,195,255,0.38);
+  --border2: rgba(150,170,255,0.52);
   --blue: #0052ff;
-  --blue-dim: rgba(0,82,255,0.15);
-  --blue-glow: rgba(0,82,255,0.3);
+  --blue-dim: rgba(0,82,255,0.12);
+  --blue-glow: rgba(0,82,255,0.38);
   --green: #05c168;
   --green-dim: rgba(5,193,104,0.12);
   --red: #f6465d;
   --red-dim: rgba(246,70,93,0.12);
   --yellow: #f0b90b;
-  --text: #0a0b0d;
+  --text: #0d0f1e;
   --text2: #5a6480;
-  --text3: #9aa0b2;
+  --text3: #9aa0b8;
   --mono: 'SF Mono', 'Fira Code', monospace;
-  --sans: 'Inter', -apple-system, sans-serif;
+  --sans: 'DM Sans', -apple-system, sans-serif;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --tab-h: 68px;
   --hdr-h: 56px;
-  --radius: 16px;
-  --radius-sm: 10px;
+  --radius: 20px;
+  --radius-sm: 14px;
+  --blur: blur(24px) saturate(180%);
+  --glass-border: rgba(255,255,255,0.7);
 }
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100dvh; overflow:hidden; overflow-x:hidden; -webkit-font-smoothing:antialiased; }
-html { overflow-x:hidden; }
+html { overflow-x:hidden; height: -webkit-fill-available; }
+body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100dvh; height:var(--app-height,100dvh); overflow:hidden; overflow-x:hidden; -webkit-font-smoothing:antialiased; }
 .pages { visibility:hidden; }
 .pages.ready { visibility:visible; }
 ::-webkit-scrollbar { width:0; }
@@ -170,7 +174,8 @@ canvas { width:100%; height:100%; }
 .field-label span { font-size:14px; font-weight:700; color:var(--blue); }
 .field-hint { font-size:11px; color:var(--text3); margin-top:6px; font-weight:500; }
 
-input[type=range] { width:100%; height:4px; -webkit-appearance:none; background:var(--surface3); border-radius:2px; cursor:pointer; accent-color:var(--blue); }
+input[type=range] { width:100%; height:4px; -webkit-appearance:none; background:rgba(0,82,255,0.18); border-radius:2px; cursor:pointer; accent-color:var(--blue); }
+[data-theme="dark"] input[type=range] { background:rgba(255,255,255,0.14); }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px; border-radius:50%; background:var(--blue); box-shadow:0 0 0 4px rgba(0,82,255,0.2); cursor:pointer; }
 input[type=number] { width:100%; background:var(--surface2); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:13px 14px; color:var(--text); font-size:16px; font-weight:600; font-family:var(--sans); transition:border-color 0.15s; }
 input[type=number]:focus { outline:none; border-color:var(--blue); }
@@ -190,8 +195,8 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .mode-btn.active-real { border-color:var(--red); color:var(--red); background:var(--red-dim); box-shadow:0 0 20px rgba(246,70,93,0.1); }
 .mode-hint { font-size:12px; color:var(--text3); font-weight:500; text-align:center; min-height:18px; transition:color 0.2s; }
 
-.start-btn { width:100%; padding:17px; background:var(--blue); border:none; border-radius:var(--radius); color:#fff; font-size:16px; font-weight:700; cursor:pointer; margin-bottom:10px; font-family:var(--sans); letter-spacing:-0.01em; box-shadow:0 4px 20px rgba(0,82,255,0.3); transition:all 0.15s; }
-.start-btn:active { transform:scale(0.98); box-shadow:0 2px 10px rgba(0,82,255,0.2); }
+.start-btn { width:100%; padding:17px; background:rgba(255,255,255,0.38); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); border:1.5px solid rgba(200,215,255,0.7); border-radius:var(--radius); color:rgba(18,32,110,0.88); font-size:16px; font-weight:700; cursor:pointer; margin-bottom:10px; font-family:var(--sans); letter-spacing:-0.01em; box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.85),inset 0 -1px 0 rgba(100,130,220,0.1),0 6px 24px rgba(0,40,180,0.1),0 2px 6px rgba(0,0,0,0.04); transition:all 0.18s; }
+.start-btn:active { transform:scale(0.98); box-shadow:inset 0 1px 0 rgba(255,255,255,0.7),0 3px 12px rgba(0,40,180,0.08); }
 .start-btn:disabled { opacity:0.3; cursor:not-allowed; transform:none; box-shadow:none; }
 .reset-btn { width:100%; padding:14px; background:none; border:1.5px solid var(--border); border-radius:var(--radius); color:var(--text3); font-size:14px; font-weight:600; cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
 .reset-btn:active { border-color:var(--border2); color:var(--text); }
@@ -224,7 +229,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .mkt-right { text-align:right; }
 .mkt-price-val { font-size:15px; font-weight:700; margin-bottom:4px; font-variant-numeric:tabular-nums; }
 .mkt-chg-pill { font-size:11px; font-weight:700; padding:3px 7px; border-radius:6px; display:inline-block; }
-.ema-dots { display:flex; align-items:center; gap:6px; margin-top:7px; }
+.ema-dots { display:flex; align-items:center; gap:5px; margin-top:7px; flex-wrap:wrap; }
 .ema-dot-wrap { display:flex; align-items:center; gap:3px; }
 .ema-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; transition:all 0.3s; }
 .ema-dot.on { background:var(--green); box-shadow:0 0 6px rgba(5,193,104,0.6); animation:pulse 2s infinite; }
@@ -282,8 +287,8 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .watchlist-row:last-child { border-bottom:none; }
 .star-btn { width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text3); flex-shrink:0; transition:color 0.15s; border:none; background:none; }
 .star-btn.starred { color:var(--blue); }
-.home-start-btn { width:100%; padding:17px; background:var(--blue); border:none; border-radius:var(--radius); color:#fff; font-size:16px; font-weight:700; cursor:pointer; font-family:var(--sans); letter-spacing:-0.01em; box-shadow:0 4px 20px rgba(0,82,255,0.25); transition:all 0.15s; margin-top:8px; }
-.home-start-btn:active { transform:scale(0.98); }
+.home-start-btn { width:100%; padding:17px; background:rgba(255,255,255,0.38); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); border:1.5px solid rgba(200,215,255,0.7); border-radius:var(--radius); color:rgba(18,32,110,0.88); font-size:16px; font-weight:700; cursor:pointer; font-family:var(--sans); letter-spacing:-0.01em; box-shadow:inset 0 1.5px 0 rgba(255,255,255,0.85),inset 0 -1px 0 rgba(100,130,220,0.1),0 6px 24px rgba(0,40,180,0.1),0 2px 6px rgba(0,0,0,0.04); transition:all 0.18s; margin-top:8px; }
+.home-start-btn:active { transform:scale(0.98); box-shadow:inset 0 1px 0 rgba(255,255,255,0.7),0 3px 12px rgba(0,40,180,0.08); }
 
 /* Drawer config */
 .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:350; opacity:0; pointer-events:none; transition:opacity 0.25s; }
@@ -306,28 +311,142 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .fdd-btn.active { border-color:var(--blue); color:var(--blue); background:var(--blue-dim); }
 .fdd-btn svg { flex-shrink:0; transition:transform 0.15s; }
 .fdd-btn.open svg { transform:rotate(180deg); }
-.fdd-menu { position:fixed; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px; z-index:500; min-width:140px; box-shadow:0 8px 24px rgba(0,0,0,0.12); display:none; }
+.fdd-menu { position:absolute; top:calc(100% + 4px); left:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px; z-index:500; min-width:140px; box-shadow:0 8px 24px rgba(0,0,0,0.12); display:none; }
 .fdd-menu.open { display:block; }
 .fdd-item { padding:9px 12px; font-size:13px; font-weight:600; color:var(--text2); border-radius:8px; cursor:pointer; transition:background 0.1s; white-space:nowrap; }
 .fdd-item:hover, .fdd-item:active { background:var(--surface2); }
 .fdd-item.selected { color:var(--blue); }
 
-/* Mini-log agente nel monitor */
-.agent-msg { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); }
-.agent-msg:last-child { border-bottom:none; }
-.agent-msg-dot { width:6px; height:6px; border-radius:50%; margin-top:5px; flex-shrink:0; }
-.agent-msg-dot.buy { background:var(--green); }
-.agent-msg-dot.sell { background:var(--red); }
-.agent-msg-dot.info { background:var(--text3); }
-.agent-msg-text { font-size:12px; color:var(--text2); flex:1; line-height:1.5; font-weight:500; }
-.agent-msg-time { font-size:10px; color:var(--text3); flex-shrink:0; font-variant-numeric:tabular-nums; margin-top:1px; }
+/* Grafico mini coin nelle posizioni */
+.pos-chart-wrap { margin-top:10px; height:60px; position:relative; }
+.pos-chart-canvas { width:100%; height:60px; display:block; }
+
+/* Log agente — badge + chip */
+.agent-row { display:flex; align-items:flex-start; gap:8px; padding:9px 0; border-bottom:1px solid var(--border); }
+.agent-row:last-child { border-bottom:none; }
+.agent-badge { font-size:9px; font-weight:700; letter-spacing:0.04em; padding:3px 7px; border-radius:6px; flex-shrink:0; margin-top:1px; white-space:nowrap; text-transform:uppercase; }
+.agent-body { flex:1; min-width:0; }
+.agent-plain { font-size:12px; color:var(--text2); line-height:1.4; font-weight:500; word-break:break-word; }
+.agent-chips { display:flex; flex-wrap:wrap; gap:4px; }
+.agent-chip { font-size:10px; font-weight:600; padding:2px 7px; border-radius:5px; background:var(--surface2); border:1px solid var(--border); color:var(--text3); white-space:nowrap; }
+.agent-chip em { font-style:normal; color:var(--text2); }
+.agent-time { font-size:10px; color:var(--text3); flex-shrink:0; font-variant-numeric:tabular-nums; padding-top:3px; }
 .empty-icon { font-size:36px; margin-bottom:10px; opacity:0.5; }
 .empty-text { font-size:14px; font-weight:500; }
 
-[data-theme="dark"] { --bg:#0a0b0d; --surface:#141519; --surface2:#1c1e24; --surface3:#23262f; --border:#2a2d38; --border2:#353844; --text:#ffffff; --text2:#8a8fa8; --text3:#5a5f74; }
+[data-theme="dark"] {
+  --bg: #080c1a;
+  --surface: rgba(16,20,48,0.78);
+  --surface2: rgba(20,26,58,0.68);
+  --surface3: rgba(26,32,70,0.58);
+  --border: rgba(120,140,255,0.1);
+  --border2: rgba(140,160,255,0.16);
+  --text: #e8ecff;
+  --text2: #7a85aa;
+  --text3: #4a5272;
+  --glass-border: rgba(255,255,255,0.06);
+}
+
+/* ── LIQUID BACKGROUND ── */
+.liquid-bg { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+.blob { position:absolute; border-radius:50%; pointer-events:none; }
+.blob-1 { width:70vw; height:70vw; background:radial-gradient(circle at center, rgba(0,82,255,0.22) 0%, transparent 70%); top:-15%; left:-15%; filter:blur(60px); animation:drift1 22s ease-in-out infinite; }
+.blob-2 { width:60vw; height:60vw; background:radial-gradient(circle at center, rgba(5,193,104,0.18) 0%, transparent 70%); bottom:-18%; right:-12%; filter:blur(70px); animation:drift2 28s ease-in-out infinite; }
+.blob-3 { width:50vw; height:50vw; background:radial-gradient(circle at center, rgba(110,60,255,0.16) 0%, transparent 70%); top:35%; left:25%; filter:blur(65px); animation:drift3 19s ease-in-out infinite; }
+.blob-4 { width:40vw; height:40vw; background:radial-gradient(circle at center, rgba(0,180,255,0.12) 0%, transparent 70%); top:15%; right:5%; filter:blur(55px); animation:drift4 24s ease-in-out infinite; }
+@keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 30%{transform:translate(6vw,8vh) scale(1.06)} 65%{transform:translate(-4vw,12vh) scale(0.94)} }
+@keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 35%{transform:translate(-8vw,-6vh) scale(1.09)} 70%{transform:translate(5vw,7vh) scale(0.96)} }
+@keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-6vw,-8vh) scale(1.12)} }
+@keyframes drift4 { 0%,100%{transform:translate(0,0) scale(1)} 40%{transform:translate(4vw,6vh) scale(1.05)} 75%{transform:translate(-3vw,-4vh) scale(0.97)} }
+[data-theme="dark"] .blob-1 { background:radial-gradient(circle at center, rgba(0,82,255,0.35) 0%, transparent 70%); }
+[data-theme="dark"] .blob-2 { background:radial-gradient(circle at center, rgba(5,193,104,0.25) 0%, transparent 70%); }
+[data-theme="dark"] .blob-3 { background:radial-gradient(circle at center, rgba(120,60,255,0.28) 0%, transparent 70%); }
+[data-theme="dark"] .blob-4 { background:radial-gradient(circle at center, rgba(0,180,255,0.2) 0%, transparent 70%); }
+
+/* ── GLASSMORPHISM ── */
+body { background:var(--bg); }
+.hdr { background:var(--surface) !important; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border-bottom:1px solid var(--border) !important; }
+.tabbar { background:rgba(250,251,255,0.72) !important; backdrop-filter:blur(32px) saturate(200%) !important; -webkit-backdrop-filter:blur(32px) saturate(200%) !important; border-top:1px solid rgba(255,255,255,0.8) !important; box-shadow:0 -1px 0 rgba(0,0,0,0.04), 0 -16px 48px rgba(0,20,100,0.07); }
+[data-theme="dark"] .tabbar { background:rgba(10,13,32,0.88) !important; border-top:1px solid rgba(255,255,255,0.05) !important; box-shadow:0 -1px 0 rgba(0,0,0,0.5), 0 -16px 48px rgba(0,0,30,0.5) !important; }
+.tab { overflow:visible; }
+.tab::before { content:''; position:absolute; top:9px; left:50%; transform:translateX(-50%) scale(0.85); width:76px; height:46px; border-radius:23px; background:rgba(80,90,160,0.1); transition:transform 0.32s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s, background 0.2s; opacity:0; }
+.tab.active::before { transform:translateX(-50%) scale(1); opacity:1; }
+[data-theme="dark"] .tab::before { background:rgba(255,255,255,0.08); }
+[data-theme="dark"] .tab.active::before { background:rgba(255,255,255,0.09); }
+.tab::after { display:none; }
+.tab.active { color:rgba(55,70,160,0.82); }
+[data-theme="dark"] .tab.active { color:rgba(170,185,230,0.92); }
+.tab.active .tab-icon svg { stroke-width:2.2; }
+[data-theme="dark"] .tab:not(.active) { color:rgba(255,255,255,0.35); }
+.card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 4px 24px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6); }
+[data-theme="dark"] .card { box-shadow:0 4px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05); }
+.kpi { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 4px 24px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.6); }
+[data-theme="dark"] .kpi { box-shadow:0 4px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05); }
+.modal-card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 20px 60px rgba(0,0,30,0.15), inset 0 1px 0 rgba(255,255,255,0.7); }
+[data-theme="dark"] .modal-card { box-shadow:0 20px 60px rgba(0,0,30,0.6), inset 0 1px 0 rgba(255,255,255,0.06); }
+.drawer { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border-top:1px solid var(--glass-border); box-shadow:0 -20px 60px rgba(0,0,30,0.1); }
+[data-theme="dark"] .drawer { border-top:1px solid var(--border); box-shadow:0 -20px 60px rgba(0,0,30,0.5); }
+.profile-menu { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 12px 40px rgba(0,0,30,0.12); }
+[data-theme="dark"] .profile-menu { box-shadow:0 12px 40px rgba(0,0,30,0.5); }
+.fdd-menu { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 8px 32px rgba(0,0,30,0.1); }
+[data-theme="dark"] .fdd-menu { box-shadow:0 8px 32px rgba(0,0,30,0.4); }
+.ema-tooltip { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 8px 32px rgba(0,0,30,0.12); }
+[data-theme="dark"] .home-start-btn,
+[data-theme="dark"] .start-btn { background:rgba(160,185,255,0.12); border:1.5px solid rgba(160,190,255,0.2); color:rgba(200,218,255,0.92); box-shadow:inset 0 1px 0 rgba(220,235,255,0.18),inset 0 -1px 0 rgba(0,0,60,0.2),0 6px 28px rgba(60,90,220,0.2); }
+
+/* ── LIQUID BUTTONS ── */
+.start-btn, .home-start-btn {
+  background: linear-gradient(135deg, #0052ff, #0040cc);
+  box-shadow: 0 4px 24px rgba(0,82,255,0.4), inset 0 1px 0 rgba(255,255,255,0.25);
+  border-radius: var(--radius) !important;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.start-btn:active, .home-start-btn:active { box-shadow:0 2px 10px rgba(0,82,255,0.25); }
+.auth-btn { background:linear-gradient(135deg, #0052ff, #0040cc); box-shadow:0 4px 24px rgba(0,82,255,0.4), inset 0 1px 0 rgba(255,255,255,0.2); }
+
+/* ── LIQUID HOME BALANCE CARD ── */
+.home-balance-card { background:linear-gradient(135deg, #0052ff 0%, #2d7bff 40%, #0040cc 100%); box-shadow:0 8px 32px rgba(0,82,255,0.4); border-radius:var(--radius); position:relative; overflow:hidden; }
+.home-balance-card::before { content:''; position:absolute; top:-30%; right:-10%; width:60%; height:160%; background:radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 60%); pointer-events:none; }
+
+/* ── LIQUID SESSION BANNER ── */
+.sess-banner:not(.off) { background:linear-gradient(135deg, rgba(0,82,255,0.12), rgba(0,82,255,0.06)); backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid rgba(0,82,255,0.25); box-shadow:0 4px 20px rgba(0,82,255,0.08); }
+
+/* ── LIQUID INPUT ── */
+input[type=number], input[type=text], input[type=password] { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); background:var(--surface2) !important; border-color:var(--border) !important; border-radius:var(--radius-sm) !important; }
+input[type=number]:focus, input[type=text]:focus, input[type=password]:focus { border-color:var(--blue) !important; box-shadow:0 0 0 3px rgba(0,82,255,0.12); }
+
+/* Auth card */
+.auth-card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border); box-shadow:0 20px 60px rgba(0,0,30,0.12); }
+[data-theme="dark"] .auth-card { box-shadow:0 20px 60px rgba(0,0,30,0.5); }
+
+/* Pos card */
+.pos-card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border) !important; box-shadow:0 4px 20px rgba(0,0,0,0.04); }
+[data-theme="dark"] .pos-card { box-shadow:0 4px 24px rgba(0,0,0,0.3); }
+
+/* Pages z-index to stay above liquid-bg */
+.pages { z-index:10; }
+.hdr { z-index:100; }
+.tabbar { z-index:100; }
+
+/* Slider thumb liquid */
+input[type=range]::-webkit-slider-thumb { box-shadow:0 0 0 4px rgba(0,82,255,0.18), 0 2px 8px rgba(0,82,255,0.3); }
+
+/* Auth screen background */
+#authScreen { background:transparent; }
+/* Hide chrome (header + tabbar) while not authenticated */
+body.auth-active .hdr,
+body.auth-active .tabbar { display:none !important; }
 </style>
 </head>
-<body>
+<body class="auth-active">
+
+<div class="liquid-bg" aria-hidden="true">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="blob blob-4"></div>
+</div>
 
 <!-- AUTH SCREEN -->
 <div id="authScreen">
@@ -373,8 +492,8 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   </div>
   <div class="auth-card" id="apiKeysCard" style="display:none">
     <div class="auth-logo"><span class="auth-logo-dot"></span><span style="font-size:20px;font-weight:700">Zentra</span></div>
-    <div class="auth-title">Collega Coinbase</div>
-    <div class="auth-sub">Inserisci le tue API key di Coinbase Advanced per abilitare il trading reale</div>
+    <div class="auth-title">Collega Revolut X</div>
+    <div class="auth-sub">Inserisci le tue credenziali Revolut X per abilitare il trading reale</div>
     <div class="auth-error" id="keysError"></div>
     <div class="auth-field">
       <label>API Key</label>
@@ -407,9 +526,10 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <div class="profile-menu-user" id="pmUsername">--</div>
     <div class="profile-menu-sub" id="pmMode" style="display:none"></div>
   </div>
-  <div class="profile-menu-item" onclick="openApiKeysFromMenu()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-    Configura API Coinbase
+  <!-- Configura API Coinbase nascosto — fallback silenzioso -->
+  <div class="profile-menu-item" onclick="showRevxConfig()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+    Configura Revolut X
   </div>
   <div class="profile-menu-toggle" id="simModeRow" style="display:none">
     <div class="profile-menu-toggle-label">
@@ -443,13 +563,155 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 <div class="modal-overlay" id="confirmModal">
   <div class="modal-card">
     <div class="modal-title">&#9888;&#65039; Sessione Reale</div>
-    <div class="modal-body" id="confirmModalBody">Stai per avviare una sessione con denaro reale su Coinbase. Gli ordini verranno eseguiti immediatamente. Confermi?</div>
+    <div class="modal-body" id="confirmModalBody">Stai per avviare una sessione con denaro reale. Gli ordini verranno eseguiti immediatamente sul tuo account. Confermi?</div>
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeModal()">Annulla</button>
       <button class="modal-btn confirm-real" onclick="confirmRealStart()">Conferma</button>
     </div>
   </div>
 </div>
+
+<!-- Modal Revolut X config — wizard 3 step -->
+<div class="modal-overlay" id="revxModal" onclick="if(event.target===this)closeRevxModal()">
+  <div class="modal-card" style="max-width:420px;width:100%">
+
+    <!-- Header fisso -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="modal-title" style="margin-bottom:0">Collega Revolut X</div>
+      <button onclick="closeRevxModal()" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:4px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Stepper -->
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:20px">
+      <div class="revx-step-dot active" id="revxDot1"></div>
+      <div class="revx-step-line" id="revxLine1"></div>
+      <div class="revx-step-dot" id="revxDot2"></div>
+      <div class="revx-step-line" id="revxLine2"></div>
+      <div class="revx-step-dot" id="revxDot3"></div>
+      <div style="margin-left:8px;font-size:11px;font-weight:600;color:var(--text3)" id="revxStepLabel">Passo 1 di 3</div>
+    </div>
+
+    <!-- STEP 1: genera chiavi nel terminale -->
+    <div id="revxStep1">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Genera le chiavi sul tuo computer</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">Revolut X usa crittografia Ed25519 — devi generare tu le chiavi localmente con due comandi nel terminale.</div>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">1</div>
+          <div style="width:100%">
+            <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:8px"><strong style="color:var(--text)">macOS</strong> — apri il Terminale (Cmd+Spazio → cerca «Terminale») ed esegui questi comandi <strong>uno alla volta</strong>, nell'ordine:</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">① Installa Homebrew</div>
+            <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;word-break:break-all">
+              <span style="flex:1">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</span>
+              <button onclick="navigator.clipboard.writeText('/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">② Attiva Homebrew nella sessione corrente</div>
+            <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span>eval "$(/opt/homebrew/bin/brew shellenv zsh)"</span>
+              <button onclick="navigator.clipboard.writeText('eval \"$(/opt/homebrew/bin/brew shellenv zsh)\"');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">③ Installa OpenSSL</div>
+            <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <span>brew install openssl</span>
+              <button onclick="navigator.clipboard.writeText('brew install openssl');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;margin-top:4px">④ Vai sul Desktop e genera le chiavi</div>
+            <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span>cd ~/Desktop</span>
+              <button onclick="navigator.clipboard.writeText('cd ~/Desktop');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+            </div>
+            <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span>$(brew --prefix openssl)/bin/openssl genpkey -algorithm ed25519 -out private.pem</span>
+              <button onclick="navigator.clipboard.writeText('$(brew --prefix openssl)/bin/openssl genpkey -algorithm ed25519 -out private.pem');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+            </div>
+            <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between">
+              <span>$(brew --prefix openssl)/bin/openssl pkey -in private.pem -pubout -out public.pem</span>
+              <button onclick="navigator.clipboard.writeText('$(brew --prefix openssl)/bin/openssl pkey -in private.pem -pubout -out public.pem');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">2</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5">Trovi due file nuovi sul <strong style="color:var(--text)">Desktop</strong>: <strong style="color:var(--text)">private.pem</strong> e <strong style="color:var(--text)">public.pem</strong>. Tienili a portata di mano.</div>
+        </div>
+      </div>
+      <div style="background:rgba(246,70,93,0.08);border:1px solid rgba(246,70,93,0.2);border-radius:12px;padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:18px">
+        🔒 <strong style="color:var(--text)">private.pem è segreto.</strong> Non condividerlo mai. Zentra lo usa solo per firmare le richieste sul tuo dispositivo — non viene mai inviato ai nostri server in chiaro.
+      </div>
+      <div class="modal-actions" style="grid-template-columns:1fr 1fr">
+        <button class="modal-btn cancel" onclick="closeRevxModal()">Annulla</button>
+        <button class="modal-btn confirm-real" style="background:var(--blue)" onclick="revxGoStep(2)">Ho i file →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: registra su Revolut X e inserisci API Key -->
+    <div id="revxStep2" style="display:none">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Registra la chiave su Revolut X</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">1</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5">Vai su <strong style="color:var(--blue)">exchange.revolut.com</strong> → <strong style="color:var(--text)">Profile → API Keys</strong> (da browser, non dall'app)</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">2</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5">Apri <strong style="color:var(--text)">public.pem</strong> con un editor di testo (<b>tasto destro → Apri con → TextEdit</b> su Mac, <b>Blocco Note</b> su Windows) e incolla tutto il contenuto incluse le righe BEGIN/END</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">3</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5">Revolut genera il tuo <strong style="color:var(--text)">API Key</strong> — una stringa di 64 caratteri. Copiala e incollala qui sotto:</div>
+        </div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11px;font-family:monospace;color:var(--text3);margin-bottom:10px;word-break:break-all">
+        Es: <span style="color:var(--blue)">M1VKFtwB0M9C9QJO7goPlwrOytrJsSNE19txsmpsWIKz7xYu3f8aNucIyynAhYBy</span>
+      </div>
+      <input type="text" id="revxKeyId" placeholder="Incolla qui l'API Key (64 caratteri)" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;color:var(--text);font-size:13px;font-family:monospace;outline:none;box-sizing:border-box;margin-bottom:6px" oninput="revxValidateStep2()">
+      <div style="font-size:11px;color:var(--red);min-height:16px;margin-bottom:14px" id="revxKeyIdErr"></div>
+      <div class="modal-actions" style="grid-template-columns:1fr 1fr">
+        <button class="modal-btn cancel" onclick="revxGoStep(1)">← Indietro</button>
+        <button class="modal-btn confirm-real" style="background:var(--blue)" id="revxStep2Btn" onclick="revxGoStep(3)" disabled>Avanti →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: chiave privata -->
+    <div id="revxStep3" style="display:none">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Carica la chiave privata</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">Carica il file <strong>private.pem</strong> generato al passo 1, oppure incolla il contenuto manualmente.</div>
+
+      <!-- Upload file -->
+      <div id="revxDropZone" onclick="document.getElementById('revxFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--blue)';this.style.background='var(--blue-dim)'" ondragleave="this.style.borderColor='var(--border2)';this.style.background=''" ondrop="event.preventDefault();this.style.borderColor='var(--border2)';this.style.background='';revxLoadFile({target:{files:event.dataTransfer.files}})" style="border:2px dashed var(--border2);border-radius:14px;padding:20px;text-align:center;cursor:pointer;margin-bottom:12px;transition:border-color 0.2s,background 0.2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border2)'">
+        <div style="font-size:28px;margin-bottom:6px">📄</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Clicca per caricare <code>private_key.pem</code></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">oppure trascina il file qui</div>
+      </div>
+      <input type="file" id="revxFileInput" accept=".pem,.key,.txt" style="display:none" onchange="revxLoadFile(event)">
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <div style="font-size:11px;color:var(--text3);font-weight:600">oppure incolla</div>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+
+      <textarea id="revxPrivateKey" rows="5" placeholder="-----BEGIN PRIVATE KEY-----&#10;MIIEvQIBADA...&#10;-----END PRIVATE KEY-----" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);font-size:11px;font-family:monospace;outline:none;box-sizing:border-box;resize:none" oninput="revxValidateStep3()"></textarea>
+      <div style="font-size:11px;min-height:16px;margin-top:4px;margin-bottom:14px" id="revxPemStatus"></div>
+
+      <div class="modal-actions" style="grid-template-columns:1fr 1fr">
+        <button class="modal-btn cancel" onclick="revxGoStep(2)">← Indietro</button>
+        <button class="modal-btn confirm-real" style="background:var(--blue)" id="revxStep3Btn" onclick="saveRevxKeys()" disabled>Salva e connetti</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+.revx-step-dot { width:10px;height:10px;border-radius:50%;background:var(--border2);transition:background 0.2s,transform 0.2s;flex-shrink:0; }
+.revx-step-dot.active { background:var(--blue);transform:scale(1.2); }
+.revx-step-dot.done { background:var(--green); }
+.revx-step-line { flex:1;height:2px;background:var(--border);transition:background 0.3s; }
+.revx-step-line.done { background:var(--green); }
+</style>
 
 <!-- Modal Telegram linking -->
 <div class="modal-overlay" id="telegramModal">
@@ -489,7 +751,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 <div class="modal-overlay" id="sessionActiveModal">
   <div class="modal-card">
     <div class="modal-title">Sessione in corso</div>
-    <div class="modal-body">Non puoi cambiare modalità mentre una sessione è attiva. Interrompi prima la sessione dal Monitor, poi torna qui per effettuare il cambio.</div>
+    <div class="modal-body">Non puoi modificare la configurazione mentre una sessione è attiva. Interrompi prima la sessione dal Monitor, poi torna qui per effettuare le modifiche.</div>
     <div class="modal-actions" style="grid-template-columns:1fr">
       <button class="modal-btn cancel" style="text-align:center" onclick="document.getElementById('sessionActiveModal').classList.remove('open')">Chiudi</button>
     </div>
@@ -508,6 +770,109 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
   </div>
 </div>
 <input type="hidden" id="closeModalPending" value="">
+
+<!-- Modal legenda segnali -->
+<div class="modal-overlay" id="signalInfoModal" onclick="if(event.target===this)closeSignalInfo()">
+  <div class="modal-card" style="max-width:440px;width:100%;max-height:85vh;overflow-y:auto">
+    <div class="modal-title" style="margin-bottom:4px">Legenda segnali</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:18px;font-weight:500">I pallini colorati indicano le condizioni che l'agente verifica prima di aprire un trade.</div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">1H</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Trend 1h</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">EMA20 &gt; EMA50 sull'oraria. Struttura di trend delle ultime 50 ore. È il filtro principale: niente long contro il trend strutturale.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">15M</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Trend 15m</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">EMA20 &gt; EMA50 su 15 minuti. Conferma che il trend di medio termine è allineato con quello orario.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">EXP</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Espansione Volatilità</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">L'ATR delle ultime 6 candele su 15m è <strong style="color:var(--text)">almeno il 60% della media</strong> delle ultime 20 candele. Esclude crossover in mercati piatti — senza espansione di volatilità il movimento non ha momentum reale.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">CROSS</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Crossover 15m</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">EMA20 ha appena superato EMA50 su 15m <strong style="color:var(--text)">nelle ultime 6 candele (90 min)</strong>. Cattura il momentum all'inizio del movimento, non dopo che ha già corso. Crossover vecchi vengono scartati.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">RSI</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">RSI</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">RSI(14) in zona neutrale (40–65). Troppo alto = coin già ipercomprata post-crossover. Troppo basso = possibile falso segnale in downtrend.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">BODY</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Candela bullish</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">L'ultima candela chiusa è <strong style="color:var(--text)">verde e con corpo solido</strong> (almeno 30% del range totale). Esclude doji e candele rosse — segnali che il mercato non ha ancora deciso la direzione o sta scendendo.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">VOL</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Volume crossover</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">Il volume dell'ultima candela è <strong style="color:var(--text)">sopra la media delle ultime 20 candele</strong>. Un crossover con volume alto conferma che il movimento è reale — bassa partecipazione su un crossover è spesso un falso segnale.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="min-width:38px;height:22px;background:var(--surface3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text2);flex-shrink:0">R</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Rischio/Rendimento</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.55">Stop loss calcolato su <strong style="color:var(--text)">1.5× ATR</strong> e minimi recenti di candele chiuse. Se lo stop è troppo stretto o troppo largo rispetto ai limiti configurati, il trade viene scartato.</div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border)"></div>
+
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px">
+        <div style="font-size:12px;color:var(--text2);line-height:1.6">
+          <strong style="color:var(--green)">Verde</strong> = condizione soddisfatta &nbsp;·&nbsp; <strong style="color:var(--red)">Rosso</strong> = condizione non soddisfatta<br>
+          L'agente entra solo quando <strong style="color:var(--text)">tutti e 8 i segnali sono verdi</strong> contemporaneamente.
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-actions" style="margin-top:18px">
+      <button class="modal-btn confirm-real" style="background:var(--blue)" onclick="closeSignalInfo()">Chiudi</button>
+    </div>
+  </div>
+</div>
 
 <!-- Input nascosto per foto profilo -->
 <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="handleAvatarChange(event)">
@@ -588,7 +953,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <div class="field">
       <div class="field-label">Saldo totale disponibile</div>
       <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;font-size:16px;font-weight:700;color:var(--text3)" id="totalBalanceDisplay">--</div>
-      <div class="field-hint">Aggiornato in tempo reale da Coinbase / simulato</div>
+      <div class="field-hint" id="balanceSourceHint">Aggiornato in tempo reale da Revolut X</div>
     </div>
     <!-- elemento nascosto per compatibilità JS (dataset.total) -->
     <input type="hidden" id="capital">
@@ -656,7 +1021,22 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
           Disattivo
         </button>
       </div>
-      <div class="field-hint">Pausa se BTC è sotto la propria EMA20 su 1h — evita long in bear market</div>
+      <div class="field-hint">Pausa se BTC è sotto la propria EMA50 su 1h — filtro medio-termine più stabile, meno falsi blocchi</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Filtro Orario <span id="timeFilterLabel" style="color:var(--green);font-weight:700">ON</span></div>
+      <div class="ema-toggle-row">
+        <button class="ema-btn active" id="timeFilterOnBtn" onclick="setTimeFilter(true)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Attivo
+        </button>
+        <button class="ema-btn" id="timeFilterOffBtn" onclick="setTimeFilter(false)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Disattivo
+        </button>
+      </div>
+      <div class="field-hint">Pausa tra 00:00 e 07:00 UTC — liquidità bassa, movimenti imprevedibili</div>
     </div>
 
     <div class="field">
@@ -674,24 +1054,17 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div id="rsiRangeFields">
         <div class="field-label" style="font-size:12px">RSI min <span id="rsiMinVal">35</span></div>
         <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" oninput="updateRsiRange()">
-        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">70</span></div>
-        <input type="range" id="rsiMax" min="50" max="80" value="70" step="5" oninput="updateRsiRange()">
+        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">65</span></div>
+        <input type="range" id="rsiMax" min="50" max="80" value="65" step="5" oninput="updateRsiRange()">
       </div>
       <div class="field-hint" style="margin-top:6px">Entra solo con RSI in zona neutrale — evita ipercomprato e ipervenduto</div>
     </div>
 
-    <div class="field">
-      <div class="field-label">Pullback Tolerance <span id="pullbackVal">1.5%</span></div>
-      <input type="range" id="pullbackTolerance" min="0.1" max="3" value="1.5" step="0.1"
+    <div class="field" style="display:none">
+      <div class="field-label">Pullback Tolerance <span id="pullbackVal">2.0%</span></div>
+      <input type="range" id="pullbackTolerance" min="0.1" max="3" value="2.0" step="0.1"
         oninput="document.getElementById('pullbackVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
       <div class="field-hint">Distanza massima del prezzo da EMA20 per considerare un pullback valido</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Volume Multiplier <span id="volMultVal">1.2x</span></div>
-      <input type="range" id="volMultiplier" min="1.0" max="2.0" value="1.2" step="0.1"
-        oninput="document.getElementById('volMultVal').textContent=parseFloat(this.value).toFixed(1)+'x'">
-      <div class="field-hint">La candela di ingresso deve avere volume &ge; media 20 barre &times; questo valore</div>
     </div>
 
     <div class="section-label">Stop &amp; Take Profit</div>
@@ -700,7 +1073,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div class="field-label">Stop Loss massimo <span id="slVal">2.5%</span></div>
       <input type="range" id="stopLoss" min="0.5" max="5" value="2.5" step="0.1"
         oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Scarta il trade se lo stop contestuale (ATR / low pullback) supera questa soglia</div>
+      <div class="field-hint">Scarta il trade se lo stop contestuale (ATR / minimi recenti) supera questa soglia</div>
     </div>
 
     <div class="field">
@@ -711,14 +1084,21 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     </div>
 
     <div class="field">
-      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">2.5R</span></div>
-      <input type="range" id="tp2R" min="1.5" max="4" value="2.5" step="0.5"
+      <div class="field-label">TP1 target <span id="tp1RVal" style="color:var(--green);font-weight:700">2.0R</span></div>
+      <input type="range" id="tp1R" min="1" max="4" value="2.0" step="0.5"
+        oninput="document.getElementById('tp1RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
+      <div class="field-hint">Obiettivo prima metà — chiude 50% e attiva trailing stop ATR</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">4.0R</span></div>
+      <input type="range" id="tp2R" min="2" max="8" value="4.0" step="0.5"
         oninput="document.getElementById('tp2RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
       <div class="field-hint">Obiettivo del 50% rimanente dopo TP1 — più alto = meno frequente ma più profittevole</div>
     </div>
 
     <div class="field">
-      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="trailingPctVal" style="color:var(--blue);font-weight:700">50%</span></div>
+      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> <span style="color:var(--text3);font-size:11px;font-weight:500">(1.5× ATR)</span></div>
       <div class="ema-toggle-row" style="margin-bottom:10px">
         <button class="ema-btn active" id="trailingOnBtn" onclick="setTrailing(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -729,28 +1109,31 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
           Disattivo
         </button>
       </div>
-      <div id="trailingPctField">
-        <input type="range" id="trailingPct" min="10" max="90" value="50" step="10"
-          oninput="document.getElementById('trailingPctVal').textContent=this.value+'%'">
-        <div class="field-hint">Dopo TP1 lo stop segue il massimo − N% di R, invece di restare fisso a breakeven</div>
-      </div>
+      <div class="field-hint">Dopo TP1 lo stop segue il massimo − 1.5× ATR (volatilità reale della coin)</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">4h</span></div>
+      <input type="range" id="maxHoldHours" min="1" max="24" value="4" step="1"
+        oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
+      <div class="field-hint">Chiude la posizione automaticamente se aperta da troppo tempo</div>
     </div>
 
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
       <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Schema Take Profit</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">TP1 — 1R</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp1Label">TP1 — 2.0R</div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude 50%</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Trailing stop attivo</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Trailing ATR attivo</div>
         </div>
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp2Label">TP2 — 2.5R</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp2Label">TP2 — 4.0R</div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude tutto</div>
           <div style="font-size:10px;color:var(--text3);margin-top:3px">Posizione chiusa</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">R = distanza entry → stop contestuale (ATR / minimo pullback)</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">R = distanza entry → stop contestuale (1.5× ATR / minimi recenti)</div>
     </div>
 
     <div class="section-label">Gestione Rischio</div>
@@ -758,7 +1141,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <div class="field">
       <div class="field-label">Volume minimo universe <span id="volVal">$0M</span></div>
       <input type="range" id="minVolume" min="0" max="500" value="0" step="1"
-        oninput="document.getElementById('volVal').textContent='$'+this.value+'M'">
+        oninput="document.getElementById('volVal').textContent=getCurrSym()+this.value+'M'">
       <div class="field-hint">Coin con volume inferiore vengono escluse dall'universo</div>
     </div>
 
@@ -807,23 +1190,36 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
         </button>
       </div>
     </div>
-    <div class="kpi-grid">
-      <div class="kpi">
-        <div class="kpi-label">Capitale</div>
-        <div class="kpi-value up" id="kpiCapital">$0</div>
-        <div class="kpi-sub" id="kpiCapSub">simulato</div>
+    <!-- Widget capitale redesign -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="card" style="padding:14px 16px;margin:0">
+        <div class="card-label" style="margin-bottom:6px;font-size:10px">INVESTITO</div>
+        <div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums" id="kpiInvested">--</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px" id="kpiInvestedSub">in posizioni aperte</div>
       </div>
+      <div class="card" style="padding:14px 16px;margin:0">
+        <div class="card-label" style="margin-bottom:6px;font-size:10px">DISPONIBILE</div>
+        <div style="font-size:22px;font-weight:800;font-variant-numeric:tabular-nums" id="kpiCapital">--</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px" id="kpiCapSub">pronto per nuovi trade</div>
+      </div>
+    </div>
+    <div class="kpi-grid">
       <div class="kpi">
         <div class="kpi-label">Trade</div>
         <div class="kpi-value" id="kpiTrades">0</div>
         <div class="kpi-sub" id="kpiWR">Win rate: --</div>
       </div>
+      <div class="kpi">
+        <div class="kpi-label">P&amp;L sessione</div>
+        <div class="kpi-value" id="kpiPnl">--</div>
+        <div class="kpi-sub" id="kpiPnlSub">--</div>
+      </div>
     </div>
-    <!-- Mini-log agente -->
+    <!-- Log agente scrollabile -->
     <div id="agentActivityWrap" style="display:none;margin-bottom:12px">
       <div class="card" style="padding:14px 16px">
         <div class="card-label" style="margin-bottom:10px">Attivita agente</div>
-        <div id="agentActivityList"></div>
+        <div id="agentActivityList" style="max-height:240px;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
       </div>
     </div>
 
@@ -831,17 +1227,13 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
       <div class="card-label" id="posTitle">Posizioni aperte</div>
       <div id="positionsWrap"><div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div></div>
     </div>
-    <div class="card">
-      <div class="card-label">P&amp;L nel tempo</div>
-      <div class="chart-wrap"><canvas id="pnlChart"></canvas></div>
-    </div>
   </div>
 
   <!-- MERCATO -->
   <div class="page" id="page-market">
     <div class="ptr-indicator" id="ptr-page-market"><div class="ptr-spinner"></div></div>
     <div class="card" style="padding-bottom:8px">
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
         <div class="fdd" id="fddMktVar">
           <div class="fdd-btn active" onclick="toggleFdd('fddMktVar')" id="fddMktVarBtn">24h % <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="fdd-menu" id="fddMktVarMenu">
@@ -864,6 +1256,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
             <div class="fdd-item" onclick="selectFddMkt('fddMktDir','losers','Ribasso','dir')">Ribasso</div>
           </div>
         </div>
+        <button onclick="openSignalInfo()" style="margin-left:auto;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:serif" title="Legenda segnali">ⓘ</button>
       </div>
       <div style="position:relative;margin-bottom:12px">
         <input type="text" id="mktSearch" placeholder="Cerca coin..." oninput="renderMarket()"
@@ -898,10 +1291,10 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
     <!-- Filtri dropdown custom -->
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
       <div class="fdd" id="fddPeriod">
-        <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Sempre <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+        <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Oggi <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="fdd-menu" id="fddPeriodMenu">
-          <div class="fdd-item selected" onclick="selectFdd('fddPeriod','all','Sempre','period')">Sempre</div>
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','today','Oggi','period')">Oggi</div>
+          <div class="fdd-item" onclick="selectFdd('fddPeriod','all','Sempre','period')">Sempre</div>
+          <div class="fdd-item selected" onclick="selectFdd('fddPeriod','today','Oggi','period')">Oggi</div>
           <div class="fdd-item" onclick="selectFdd('fddPeriod','week','7 giorni','period')">7 giorni</div>
           <div class="fdd-item" onclick="selectFdd('fddPeriod','month','30 giorni','period')">30 giorni</div>
           <div class="fdd-item" onclick="selectFdd('fddPeriod','6m','6 mesi','period')">6 mesi</div>
@@ -915,15 +1308,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
           <div class="fdd-item" onclick="selectFdd('fddOutcome','loss','Perdita','outcome')">Perdita</div>
         </div>
       </div>
-      <div class="fdd" id="fddReason">
-        <div class="fdd-btn" onclick="toggleFdd('fddReason')" id="fddReasonBtn">Motivazione <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-        <div class="fdd-menu" id="fddReasonMenu">
-          <div class="fdd-item selected" onclick="selectFdd('fddReason','all','Motivazione','reason')">Tutte</div>
-          <div class="fdd-item" onclick="selectFdd('fddReason','sl','Stop Loss','reason')">Stop Loss</div>
-          <div class="fdd-item" onclick="selectFdd('fddReason','tp1','Take Profit','reason')">Take Profit</div>
-          <div class="fdd-item" onclick="selectFdd('fddReason','manual','Manuale','reason')">Manuale</div>
-        </div>
-      </div>
+
     </div>
 
     <!-- Lista -->
@@ -963,6 +1348,7 @@ let _username  = localStorage.getItem('ca_username') || '';
 let _emaFilter = true;
 let _hasApiKeys = false;
 let _simMode = true; // default simulazione
+let _hasRevxKeys = false;
 let _pendingStartCfg = null;
 let _newTradeCount = 0;
 let _lastSeenTradeCount = 0;
@@ -991,9 +1377,14 @@ function closeProfileOnOutside(e) {
   }
 }
 function openApiKeysFromMenu() {
+  if (S.running) {
+    document.getElementById('profileMenu').classList.remove('open');
+    document.getElementById('sessionActiveModal').classList.add('open');
+    return;
+  }
   document.getElementById('profileMenu').classList.remove('open');
   showApiKeys();
-  document.getElementById('authScreen').style.display = 'flex';
+  showAuthScreen();
 }
 function changeAvatar() {
   document.getElementById('profileMenu').classList.remove('open');
@@ -1045,7 +1436,7 @@ function showConfirmModal(cfg) {
   const capital = cfg.capital.toFixed(2);
   const capPct = Math.round((cfg.capitalPct || 1) * 100);
   document.getElementById('confirmModalBody').innerHTML =
-    'Stai per avviare una sessione <strong style="color:var(--red)">REALE</strong> con il <strong>' + capPct + '%</strong> del tuo saldo (<strong>$' + capital + '</strong>) su Coinbase.<br><br>Gli ordini verranno eseguiti con denaro vero. Confermi?';
+    'Stai per avviare una sessione <strong style="color:var(--red)">REALE</strong> con il <strong>' + capPct + '%</strong> del tuo saldo (<strong>' + getCurrSym() + capital + '</strong>) sul tuo exchange.<br><br>Gli ordini verranno eseguiti con denaro vero. Confermi?';
   document.getElementById('confirmModal').classList.add('open');
 }
 function closeModal() {
@@ -1091,6 +1482,11 @@ function hideAuthScreen() {
   s.style.opacity = '0';
   s.style.transition = 'opacity 0.2s';
   setTimeout(() => { s.style.display = 'none'; s.style.opacity = ''; }, 200);
+  document.body.classList.remove('auth-active');
+}
+function showAuthScreen() {
+  showAuthScreen();
+  document.body.classList.add('auth-active');
 }
 function showAuthError(id, msg) { const el=document.getElementById(id); el.textContent=msg; el.style.display=''; }
 
@@ -1156,29 +1552,63 @@ async function checkAuth() {
   if (_authToken) {
     document.getElementById('authScreen').style.display = 'none';
   }
-  if (!_authToken) { document.getElementById('authScreen').style.display = 'flex'; showLogin(); return; }
+  if (!_authToken) { showAuthScreen(); showLogin(); return; }
   try {
     const r = await fetch(API + '/auth/me', { headers: authHeaders() });
     if (!r.ok) {
       localStorage.removeItem('ca_token');
-      document.getElementById('authScreen').style.display = 'flex';
+      showAuthScreen();
       showLogin(); return;
     }
     const d = await r.json();
     _username = d.username;
     if (!d.has_api_keys) {
-      document.getElementById('authScreen').style.display = 'flex';
+      showAuthScreen();
       showApiKeys(); return;
     }
     hideAuthScreen(); initApp();
   } catch(e) {
-    document.getElementById('authScreen').style.display = 'flex';
+    showAuthScreen();
     showLogin();
   }
 }
 
 let _watchlist = new Set();
 let _homeRealMode = false;
+
+// iOS PWA: env(safe-area-inset-bottom) è 0 al primo load e non si aggiorna.
+// Trucco: abilita temporaneamente l'overflow, scrolla di 1px per forzare
+// iOS a ricalcolare env(), poi misura il valore reale e lo applica via JS.
+function applyIOSSafeAreaFix() {
+  if (!window.navigator.standalone) return;
+  const tabbar = document.querySelector('.tabbar');
+  const pages  = document.querySelector('.pages');
+  if (!tabbar || !pages) return;
+
+  document.body.style.overflowY = 'auto';
+  window.scrollTo(0, 1);
+
+  setTimeout(() => {
+    window.scrollTo(0, 0);
+    document.body.style.overflowY = '';
+
+    // Misura il valore reale di env(safe-area-inset-bottom) dopo il trick
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;bottom:0;left:0;width:0;height:0;padding-bottom:env(safe-area-inset-bottom);pointer-events:none;z-index:-1;visibility:hidden';
+    document.body.appendChild(probe);
+    const safeB = probe.getBoundingClientRect().height;
+    document.body.removeChild(probe);
+
+    // Fallback: se env() è ancora 0 e lo schermo è >= 812pt → iPhone Face ID → 34px
+    const finalSafeB = safeB > 0 ? safeB : (window.screen.height >= 812 ? 34 : 0);
+    if (finalSafeB > 0) {
+      document.documentElement.style.setProperty('--safe-b', finalSafeB + 'px');
+      tabbar.style.height        = (68 + finalSafeB) + 'px';
+      tabbar.style.paddingBottom = finalSafeB + 'px';
+      pages.style.bottom         = (68 + finalSafeB) + 'px';
+    }
+  }, 80);
+}
 
 function initApp() {
   document.getElementById('homeUsername').textContent = _username;
@@ -1192,6 +1622,7 @@ function initApp() {
   updateProfileMenu();
   loadUserProfile();
   startupSession();
+  applyIOSSafeAreaFix();
 }
 
 async function loadUserProfile() {
@@ -1204,8 +1635,9 @@ async function loadUserProfile() {
     const wl = await wlRes.json();
 
     _hasApiKeys = me.has_api_keys || false;
+    _hasRevxKeys = me.has_revx_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
-    window._realMode = _hasApiKeys && !_simMode;
+    window._realMode = (_hasApiKeys || _hasRevxKeys) && !_simMode;
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
     if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram ✓' : 'Collega Telegram';
@@ -1219,6 +1651,7 @@ async function loadUserProfile() {
 
     _watchlist = new Set(wl.symbols || []);
 
+    // Carica loghi dal server prima di renderizzare (così le coin senza logo locale le prendono dal backend)
     await loadServerLogos();
 
     // Aggiorna toggle sim nel menu profilo
@@ -1228,6 +1661,16 @@ async function loadUserProfile() {
   } catch(e) {
     applyAvatar(localStorage.getItem('ca_avatar'));
   }
+}
+
+function showRevxConfig() {
+  if (S.running) {
+    document.getElementById('profileMenu').classList.remove('open');
+    document.getElementById('sessionActiveModal').classList.add('open');
+    return;
+  }
+  document.getElementById('profileMenu').classList.remove('open');
+  document.getElementById('revxModal').classList.add('open');
 }
 
 function showTelegramConfig() {
@@ -1248,12 +1691,14 @@ function closeTelegramModal() {
 
 async function handleTelegramAction() {
   if (window._tgLinked) {
+    // Scollega
     await fetch(API + '/telegram/unlink', { method: 'DELETE', headers: authHeaders() });
     window._tgLinked = false;
     const pmTg = document.getElementById('pmTelegram');
     if (pmTg) pmTg.textContent = 'Collega Telegram';
     closeTelegramModal();
   } else {
+    // Genera codice
     const btn = document.getElementById('tgActionBtn');
     btn.textContent = 'Generazione...';
     btn.disabled = true;
@@ -1279,6 +1724,7 @@ async function handleTelegramAction() {
         if (secs <= 0) { clearInterval(timer); expEl.textContent = 'Codice scaduto'; return; }
         expEl.textContent = `Valido per ${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`;
       }, 1000);
+      // Polling: controlla se il collegamento è avvenuto
       const pollLink = setInterval(async () => {
         const r = await fetch(API + '/auth/me', { headers: authHeaders() });
         const me = await r.json();
@@ -1297,11 +1743,129 @@ async function handleTelegramAction() {
           ab.disabled = false;
         }
       }, 3000);
-      setTimeout(() => clearInterval(pollLink), 310000);
+      setTimeout(() => clearInterval(pollLink), 310000); // stop dopo 5m+10s
     } catch(e) {}
     btn.textContent = 'Genera codice';
     btn.disabled = false;
   }
+}
+
+function closeRevxModal() {
+  document.getElementById('revxModal').classList.remove('open');
+  revxGoStep(1);
+}
+
+function revxGoStep(n) {
+  [1, 2, 3].forEach(i => {
+    document.getElementById('revxStep' + i).style.display = i === n ? '' : 'none';
+  });
+  const labels = ['Passo 1 di 3', 'Passo 2 di 3', 'Passo 3 di 3'];
+  document.getElementById('revxStepLabel').textContent = labels[n - 1];
+
+  // Dot 1
+  const d1 = document.getElementById('revxDot1');
+  d1.className = 'revx-step-dot' + (n > 1 ? ' done' : n === 1 ? ' active' : '');
+  // Line 1
+  document.getElementById('revxLine1').className = 'revx-step-line' + (n > 1 ? ' done' : '');
+  // Dot 2
+  const d2 = document.getElementById('revxDot2');
+  d2.className = 'revx-step-dot' + (n === 2 ? ' active' : n > 2 ? ' done' : '');
+  // Line 2
+  document.getElementById('revxLine2').className = 'revx-step-line' + (n > 2 ? ' done' : '');
+  // Dot 3
+  const d3 = document.getElementById('revxDot3');
+  d3.className = 'revx-step-dot' + (n === 3 ? ' active' : '');
+}
+
+function revxValidateStep2() {
+  const val = document.getElementById('revxKeyId').value.trim();
+  const btn = document.getElementById('revxStep2Btn');
+  const err = document.getElementById('revxKeyIdErr');
+  if (val.length >= 32) {
+    btn.disabled = false;
+    err.textContent = '';
+  } else {
+    btn.disabled = true;
+    err.textContent = val.length > 0 ? `API Key troppo corta (${val.length} caratteri — ne servono almeno 32)` : '';
+  }
+}
+
+function revxValidateStep3() {
+  const pem = document.getElementById('revxPrivateKey').value.trim();
+  const btn = document.getElementById('revxStep3Btn');
+  const status = document.getElementById('revxPemStatus');
+  const valid = pem.includes('BEGIN') && pem.includes('END') && pem.length > 100;
+  btn.disabled = !valid;
+  if (!pem) {
+    status.textContent = '';
+    status.style.color = 'var(--text3)';
+  } else if (valid) {
+    status.textContent = '✓ Chiave privata valida';
+    status.style.color = 'var(--green)';
+  } else {
+    status.textContent = 'Formato non valido — assicurati di copiare tutto il contenuto del file .pem';
+    status.style.color = 'var(--red)';
+  }
+}
+
+function revxLoadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('revxPrivateKey').value = e.target.result;
+    revxValidateStep3();
+    const zone = document.getElementById('revxDropZone');
+    zone.innerHTML = '<div style="font-size:22px;margin-bottom:4px">✅</div><div style="font-size:13px;font-weight:600;color:var(--green)">' + file.name + ' caricato</div>';
+  };
+  reader.readAsText(file);
+}
+
+async function saveRevxKeys() {
+  const keyId = document.getElementById('revxKeyId').value.trim();
+  const privateKey = document.getElementById('revxPrivateKey').value.trim();
+  if (!keyId || !privateKey) {
+    alert('Inserisci sia il Key ID che la chiave privata');
+    return;
+  }
+  try {
+    const r = await fetch(API + '/auth/save_revx_keys', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ key_id: keyId, private_key: privateKey })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('revxModal').classList.remove('open');
+      // Test connessione
+      const tr = await fetch(API + '/test_revx', { headers: authHeaders() });
+      const td = await tr.json();
+      if (td.ok) {
+        const saldi = td.balances.length > 0
+          ? td.balances.map(b => parseFloat(b.available).toFixed(2) + ' ' + b.currency).join(' · ')
+          : 'nessun saldo disponibile';
+        showToast('Revolut X connesso — ' + saldi);
+      } else {
+        showToast('Chiavi salvate ma connessione fallita: ' + (td.error || 'errore sconosciuto'), true);
+      }
+    }
+  } catch(e) {
+    alert('Errore: ' + e.message);
+  }
+}
+
+function showToast(msg, isError = false) {
+  let t = document.getElementById('_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:calc(var(--tab-h) + env(safe-area-inset-bottom,0px) + 16px);left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:10px 20px;border-radius:20px;z-index:999;white-space:nowrap;transition:opacity 0.3s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = isError ? 'var(--red)' : 'var(--text)';
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
 }
 
 async function setSimMode(sim) {
@@ -1329,16 +1893,18 @@ async function setSimMode(sim) {
 function updateSimToggle() {
   const toggle = document.getElementById('simModeToggle');
   const row = document.getElementById('simModeRow');
-  if (row) row.style.display = _hasApiKeys ? 'flex' : 'none';
+  // Mostra toggle simulazione solo se ha almeno un exchange reale configurato
+  if (row) row.style.display = (_hasApiKeys || _hasRevxKeys) ? 'flex' : 'none';
   if (toggle) toggle.classList.toggle('on', _simMode);
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
   const badge = document.getElementById('cfgModeBadge');
-  const isReal = _hasApiKeys && !_simMode;
-  if (lbl) lbl.textContent = isReal ? 'Reale' : 'Simulazione';
+  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+  let modeLabel = 'Simulazione';
+  if (isReal) modeLabel = _hasRevxKeys ? 'Reale — Revolut X' : 'Reale — Coinbase';
+  if (lbl) lbl.textContent = modeLabel;
   if (lbl) lbl.style.color = isReal ? 'var(--red)' : 'var(--text2)';
   if (badge) badge.style.display = 'inline-flex';
-  // Aggiorna _realMode globale
   window._realMode = isReal;
 }
 
@@ -1497,6 +2063,7 @@ async function loadServerLogos() {
     const r = await fetch(API + '/logos', { headers: authHeaders() });
     const data = await r.json();
     _serverLogos = data;
+    // Se il server ha restituito solo pochi loghi (CoinGecko non ancora pronto), riprova dopo 5s
     if (Object.keys(data).length < 50) {
       setTimeout(async () => {
         try {
@@ -1570,7 +2137,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','minR','pullbackTolerance','volMultiplier','minVolume','maxTrades','maxConsecutiveLosses','cooldown','tp2R','trailingPct','rsiMin','rsiMax'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','minR','pullbackTolerance','minVolume','maxTrades','maxConsecutiveLosses','cooldown','tp1R','tp2R','maxHoldHours','rsiMin','rsiMax'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -1598,15 +2165,15 @@ function resetConfigToDefaults() {
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
   document.getElementById('stopLoss').value = 2.5; document.getElementById('slVal').textContent = '2.5%';
   document.getElementById('minR').value = 1.0; document.getElementById('minRVal').textContent = '1.0%';
-  document.getElementById('pullbackTolerance').value = 1.5; document.getElementById('pullbackVal').textContent = '1.5%';
-  document.getElementById('volMultiplier').value = 1.2; document.getElementById('volMultVal').textContent = '1.2x';
-  document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = '$0M';
+  document.getElementById('pullbackTolerance').value = 2.0; document.getElementById('pullbackVal').textContent = '2.0%';
+  document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = getCurrSym() + '0M';
   document.getElementById('maxTrades').value = 0; updateMaxTrades();
   document.getElementById('maxConsecutiveLosses').value = 3; updateMaxLoss();
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
-  document.getElementById('tp2R').value = 2.5; document.getElementById('tp2RVal').textContent = '2.5R'; updateTpSchema();
-  document.getElementById('trailingPct').value = 50; document.getElementById('trailingPctVal').textContent = '50%';
-  document.getElementById('rsiMin').value = 35; document.getElementById('rsiMax').value = 70; updateRsiRange();
+  document.getElementById('tp1R').value = 2.0; document.getElementById('tp1RVal').textContent = '2.0R';
+  document.getElementById('tp2R').value = 4.0; document.getElementById('tp2RVal').textContent = '4.0R'; updateTpSchema();
+  document.getElementById('maxHoldHours').value = 4; document.getElementById('maxHoldVal').textContent = '4h';
+  document.getElementById('rsiMin').value = 35; document.getElementById('rsiMax').value = 65; updateRsiRange();
   setEmaFilter(true); setTrend1h(true); setBtcEma(true); setRsiFilter(true); setTrailing(true);
   document.getElementById('modeRealBtn').classList.remove('active-real');
   document.getElementById('modeSimBtn').classList.remove('active-sim');
@@ -1629,21 +2196,22 @@ function restoreConfigFromStorage() {
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
   if (saved.minR !== undefined) { const mr=(saved.minR*100).toFixed(1); document.getElementById('minR').value=mr; document.getElementById('minRVal').textContent=mr+'%'; }
   if (saved.pullbackTolerance) { const pt=(saved.pullbackTolerance*100).toFixed(1); document.getElementById('pullbackTolerance').value=pt; document.getElementById('pullbackVal').textContent=pt+'%'; }
-  if (saved.volMultiplier) { document.getElementById('volMultiplier').value=saved.volMultiplier; document.getElementById('volMultVal').textContent=parseFloat(saved.volMultiplier).toFixed(1)+'x'; }
-  if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent='$'+mv+'M'; }
+  if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
   if (saved.cooldown !== undefined) { document.getElementById('cooldown').value=saved.cooldown; document.getElementById('cdVal').textContent=saved.cooldown+'h'; }
   if (saved.emaFilter !== undefined) setEmaFilter(saved.emaFilter);
   if (saved.trend1hFilter !== undefined) setTrend1h(saved.trend1hFilter);
   if (saved.btcEmaFilter !== undefined) setBtcEma(saved.btcEmaFilter);
+  if (saved.timeFilter !== undefined) setTimeFilter(saved.timeFilter);
   if (saved.rsiFilter !== undefined) setRsiFilter(saved.rsiFilter);
   if (saved.rsiMin) { document.getElementById('rsiMin').value=saved.rsiMin; }
   if (saved.rsiMax) { document.getElementById('rsiMax').value=saved.rsiMax; }
   updateRsiRange();
+  if (saved.tp1R) { document.getElementById('tp1R').value=saved.tp1R; document.getElementById('tp1RVal').textContent=parseFloat(saved.tp1R).toFixed(1)+'R'; }
   if (saved.tp2R) { document.getElementById('tp2R').value=saved.tp2R; document.getElementById('tp2RVal').textContent=parseFloat(saved.tp2R).toFixed(1)+'R'; updateTpSchema(); }
+  if (saved.maxHoldHours) { document.getElementById('maxHoldHours').value=saved.maxHoldHours; document.getElementById('maxHoldVal').textContent=saved.maxHoldHours+'h'; }
   if (saved.trailingStop !== undefined) setTrailing(saved.trailingStop);
-  if (saved.trailingPct) { document.getElementById('trailingPct').value=Math.round(saved.trailingPct*100); document.getElementById('trailingPctVal').textContent=Math.round(saved.trailingPct*100)+'%'; }
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
@@ -1654,12 +2222,23 @@ function restoreConfigFromStorage() {
   updateAlloc();
 }
 
+function getCurrSym() {
+  // Restituisce il simbolo valuta corretto basato sull'exchange attivo
+  return _hasRevxKeys && !_simMode ? '$' : '$';
+}
+
+function getFeePct() {
+  // Fee per lato: Revolut X 0.09% taker, Coinbase 0.6%
+  return _hasRevxKeys && !_simMode ? 0.0009 : 0.006;
+}
+
 function updateCapitalPct() {
   const pct = parseInt(document.getElementById('capitalPct').value);
   document.getElementById('capitalPctVal').textContent = pct + '%';
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const dollars = total > 0 ? (total * pct / 100) : 0;
-  document.getElementById('capitalDisplay').textContent = dollars > 0 ? '$' + dollars.toFixed(2) : '--';
+  const amount = total > 0 ? (total * pct / 100) : 0;
+  const sym = getCurrSym();
+  document.getElementById('capitalDisplay').textContent = amount > 0 ? sym + amount.toFixed(2) : '--';
   updateAlloc();
 }
 
@@ -1672,18 +2251,21 @@ function updateAlloc() {
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const tradable = total > 0 ? (total * pct / 100) : 0;
   const sizePerTrade = tradable * v / 100;
-  const slots = max; // slot massimi contemporanei
-  const feeReserve = sizePerTrade * 0.012 * slots; // 0.6% entrata + 0.6% uscita * n posizioni
+  const slots = max;
+  const feePct = getFeePct();
+  const feeReserve = sizePerTrade * feePct * 2 * slots; // entrata + uscita * n posizioni
   const netCapital = tradable - feeReserve;
   const netPerTrade = netCapital * v / 100;
+  const sym = getCurrSym();
+  const exchangeName = (_hasRevxKeys && !_simMode) ? 'Revolut X (0.09%)' : 'Coinbase (0.6%)';
 
   const hint = document.getElementById('allocHint');
   if (tradable > 0) {
     hint.innerHTML =
-      'Max ' + max + ' posizioni · <strong>$' + netPerTrade.toFixed(2) + '</strong> per trade' +
-      '<br><span style="color:var(--text3);font-size:10px">Capitale: $' + tradable.toFixed(2) +
-      ' · Fee stimate: <span style="color:var(--red)">−$' + feeReserve.toFixed(2) + '</span>' +
-      ' · Netto: $' + netCapital.toFixed(2) + '</span>';
+      'Max ' + max + ' posizioni · <strong>' + sym + netPerTrade.toFixed(2) + '</strong> per trade' +
+      '<br><span style="color:var(--text3);font-size:10px">Capitale: ' + sym + tradable.toFixed(2) +
+      ' · Fee ' + exchangeName + ': <span style="color:var(--red)">−' + sym + feeReserve.toFixed(2) + '</span>' +
+      ' · Netto: ' + sym + netCapital.toFixed(2) + '</span>';
   } else {
     hint.innerHTML = 'Max ' + max + ' posizioni · configura il capitale per vedere le fee';
   }
@@ -1694,6 +2276,7 @@ function onCapitalInput() { updateCapitalPct(); } // compat
 let _trend1hFilter = true;
 let _btcEmaFilter  = true;
 let _rsiFilter     = true;
+let _timeFilter    = true;
 let _trailingStop  = true;
 
 function setTrend1h(on) {
@@ -1718,6 +2301,13 @@ function setRsiFilter(on) {
   document.getElementById('rsiFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
   document.getElementById('rsiRangeFields').style.display = on ? '' : 'none';
 }
+function setTimeFilter(on) {
+  _timeFilter = on;
+  document.getElementById('timeFilterOnBtn').classList.toggle('active', on);
+  document.getElementById('timeFilterOffBtn').classList.toggle('active', !on);
+  document.getElementById('timeFilterLabel').textContent = on ? 'ON' : 'OFF';
+  document.getElementById('timeFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
+}
 function updateRsiRange() {
   const min = document.getElementById('rsiMin').value;
   const max = document.getElementById('rsiMax').value;
@@ -1731,10 +2321,11 @@ function setTrailing(on) {
   document.getElementById('trailingOffBtn').classList.toggle('active', !on);
   document.getElementById('trailingLabel').textContent = on ? 'ON' : 'OFF';
   document.getElementById('trailingLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
-  document.getElementById('trailingPctField').style.display = on ? '' : 'none';
 }
 function updateTpSchema() {
+  const tp1r = parseFloat(document.getElementById('tp1R').value).toFixed(1);
   const tp2r = parseFloat(document.getElementById('tp2R').value).toFixed(1);
+  document.getElementById('tp1Label').textContent = 'TP1 — ' + tp1r + 'R';
   document.getElementById('tp2Label').textContent = 'TP2 — ' + tp2r + 'R';
 }
 async function setMode(real) {
@@ -1745,30 +2336,30 @@ async function setMode(real) {
   const capitalInput = document.getElementById('capital');
   if (real) {
     simBtn.classList.remove('active-sim'); realBtn.classList.add('active-real');
-    hint.textContent = 'Recupero saldo Coinbase...'; hint.style.color = 'var(--yellow)';
+    hint.textContent = 'Recupero saldo...'; hint.style.color = 'var(--yellow)';
     capitalInput.disabled = false;
     try {
       const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
       const d = await r.json();
       if (d.ok) {
-        const usdc = d.balances.find(b => b.currency === 'USDC');
-        const bal = usdc ? parseFloat(usdc.available) : 0;
+        const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
+        const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
         const suggested = parseFloat((bal * 0.98).toFixed(2));
-        document.getElementById('totalBalanceDisplay').textContent = '$' + bal.toFixed(2) + ' USDC disponibili';
+        document.getElementById('totalBalanceDisplay').textContent = getCurrSym() + bal.toFixed(2) + ' disponibili';
         document.getElementById('totalBalanceDisplay').style.color = 'var(--green)';
         capitalInput.value = suggested; capitalInput.dataset.total = bal;
-        document.getElementById('capitalDisplay').textContent = '$' + suggested;
-        hint.textContent = 'Saldo USDC: $' + bal.toFixed(2) + ' — ordini reali su Coinbase';
+        document.getElementById('capitalDisplay').textContent = getCurrSym() + suggested;
+        hint.textContent = getCurrSym() + bal.toFixed(2) + ' disponibili';
         hint.style.color = 'var(--red)'; updateAlloc();
       } else {
-        hint.textContent = 'Errore Coinbase: ' + (d.error || 'sconosciuto'); hint.style.color = 'var(--red)';
+        hint.textContent = 'Errore connessione: ' + (d.error || 'sconosciuto'); hint.style.color = 'var(--red)';
       }
     } catch(e) { hint.textContent = 'Errore: ' + e.message; hint.style.color = 'var(--red)'; }
   } else {
     realBtn.classList.remove('active-real'); simBtn.classList.add('active-sim');
     hint.textContent = 'Nessun ordine reale verra eseguito'; hint.style.color = '';
     capitalInput.disabled = false; capitalInput.value = 1000; capitalInput.dataset.total = 0;
-    document.getElementById('capitalDisplay').textContent = '$1,000';
+    document.getElementById('capitalDisplay').textContent = '$1,000'; // simulazione
     document.getElementById('totalBalanceDisplay').textContent = 'Modalita simulazione';
     document.getElementById('totalBalanceDisplay').style.color = '';
     updateAlloc();
@@ -1787,8 +2378,8 @@ async function startAgent() {
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const isReal = _hasApiKeys && !_simMode;
   const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
-  if (isReal && capitalVal <= 0) { alert('Saldo Coinbase non ancora caricato. Attendi qualche secondo e riprova.'); return; }
-  if (capitalVal > 1000000) { alert('Capitale troppo alto (max $1,000,000).'); return; }
+  if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
+  if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
   const cfg = {
     capital:               capitalVal,
     capitalPct:            capitalPctVal / 100,
@@ -1797,7 +2388,6 @@ async function startAgent() {
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
     minR:                  parseFloat(document.getElementById('minR').value) / 100,
     pullbackTolerance:     parseFloat(document.getElementById('pullbackTolerance').value) / 100,
-    volMultiplier:         parseFloat(document.getElementById('volMultiplier').value),
     minVolume:             parseFloat(document.getElementById('minVolume').value) * 1000000,
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
@@ -1806,12 +2396,14 @@ async function startAgent() {
     realMode:              _hasApiKeys && !_simMode,
     trend1hFilter:         _trend1hFilter,
     btcEmaFilter:          _btcEmaFilter,
+    timeFilter:            _timeFilter,
     rsiFilter:             _rsiFilter,
     rsiMin:                parseFloat(document.getElementById('rsiMin').value),
     rsiMax:                parseFloat(document.getElementById('rsiMax').value),
+    tp1R:                  parseFloat(document.getElementById('tp1R').value),
     tp2R:                  parseFloat(document.getElementById('tp2R').value),
     trailingStop:          _trailingStop,
-    trailingPct:           parseFloat(document.getElementById('trailingPct').value) / 100,
+    maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
   };
   if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);
@@ -1869,7 +2461,7 @@ async function poll() {
     if (sRes.status === 401) {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
       localStorage.removeItem('ca_token');
-      document.getElementById('authScreen').style.display = 'flex';
+      showAuthScreen();
       showLogin();
       return;
     }
@@ -1958,6 +2550,17 @@ async function startupSession() {
   } catch(e) {}
   restoreActiveTab();
   document.querySelector('.pages').classList.add('ready');
+  // iOS PWA: aggiorna --app-height dopo che iOS ha finalizzato il layout
+  if (window.navigator.standalone) {
+    requestAnimationFrame(() => {
+      document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+    });
+  }
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+    }, 300);
+  });
   startPolling();
 }
 
@@ -1985,23 +2588,49 @@ function render() {
   // PnL banner
   const pnl = S.pnl || 0;
   const pnlEl = document.getElementById('sessPnl');
-  pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2);
+  pnlEl.textContent = (pnl >= 0 ? '+' : '') + getCurrSym() + pnl.toFixed(2);
   pnlEl.style.color = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--text3)';
 
-  // KPI capitale — il backend restituisce già pnl = total - capital
-  const cap = (S.capital||0) + pnl;
-  const capEl = document.getElementById('kpiCapital');
-  capEl.textContent = '$' + cap.toFixed(2);
-  capEl.className = 'kpi-value' + (pnl > 0 ? ' up' : pnl < 0 ? ' down' : '');
-  document.getElementById('kpiCapSub').textContent = window._realMode ? 'reale Coinbase' : 'simulato';
+  // Capitale allocato in posizioni aperte
+  const capitalTotal = S.capital || 0;       // capitale totale allocato alla sessione
+  const capitalFree = S.currentCapital || 0; // capitale rimasto libero
+  const capitalInvested = capitalTotal - capitalFree; // investito in posizioni
+
+  const investedEl = document.getElementById('kpiInvested');
+  const availEl = document.getElementById('kpiCapital');
+  if (investedEl) {
+    investedEl.textContent = capitalInvested > 0.01 ? getCurrSym() + capitalInvested.toFixed(2) : '--';
+    investedEl.style.color = capitalInvested > 0.01 ? 'var(--blue)' : 'var(--text3)';
+  }
+  if (availEl) {
+    availEl.textContent = getCurrSym() + capitalFree.toFixed(2);
+    availEl.style.color = capitalFree > 0.01 ? 'var(--green)' : 'var(--text3)';
+  }
+  const subInv = document.getElementById('kpiInvestedSub');
+  if (subInv) {
+    const nPos = (S.positions || []).length;
+    subInv.textContent = nPos > 0 ? nPos + (nPos === 1 ? ' posizione aperta' : ' posizioni aperte') : 'nessuna posizione';
+  }
+  document.getElementById('kpiCapSub').textContent = capitalFree < 0.5 ? 'capitale esaurito' : 'pronto per nuovi trade';
+
+  // KPI P&L
+  const kpiPnlEl = document.getElementById('kpiPnl');
+  const kpiPnlSub = document.getElementById('kpiPnlSub');
+  if (kpiPnlEl) {
+    kpiPnlEl.textContent = (pnl >= 0 ? '+' : '') + getCurrSym() + pnl.toFixed(2);
+    kpiPnlEl.style.color = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--text3)';
+  }
+  if (kpiPnlSub) {
+    const pct = capitalTotal > 0 ? (pnl / capitalTotal * 100) : 0;
+    kpiPnlSub.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '% sulla sessione';
+    kpiPnlSub.style.color = pct > 0 ? 'var(--green)' : pct < 0 ? 'var(--red)' : 'var(--text3)';
+  }
 
   // KPI trades
   document.getElementById('kpiTrades').textContent = S.tradeCount || 0;
   document.getElementById('kpiWR').textContent = S.tradeCount > 0 ? 'Win rate: ' + Math.round(S.winRate) + '%' : 'Win rate: --';
 
   renderPositions();
-  drawChart();
-
   // Mini-log agente nel monitor (ultime 4 righe, tono conversazionale)
   const logs = S.log || [];
   const actWrap = document.getElementById('agentActivityWrap');
@@ -2009,12 +2638,39 @@ function render() {
   if (actWrap) {
     if (logs.length > 0 && S.running) {
       actWrap.style.display = 'block';
-      actList.innerHTML = logs.slice(0, 4).map(l => {
+      const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      actList.innerHTML = logs.map(l => {
         const time = l.ts ? new Date(l.ts).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : (l.time || '');
-        return `<div class="agent-msg">
-          <div class="agent-msg-dot ${l.type}"></div>
-          <div class="agent-msg-text">${l.desc}</div>
-          <div class="agent-msg-time">${time}</div>
+        const label = l.label || '';
+        const desc = String(l.desc || '');
+        // Badge color
+        let bs;
+        if (l.type === 'buy') bs = 'background:var(--green-dim);color:var(--green)';
+        else if (l.type === 'sell') bs = 'background:var(--red-dim);color:var(--red)';
+        else if (/ERRORE|WARN/i.test(label)) bs = 'background:var(--red-dim);color:var(--red)';
+        else if (/SEGNALE/i.test(label)) bs = 'background:rgba(240,185,11,0.15);color:var(--yellow)';
+        else if (/STOP|FINE|PAUSA/i.test(label)) bs = 'background:var(--surface3);color:var(--text3)';
+        else bs = 'background:var(--blue-dim);color:var(--blue)';
+        // Body: chips if pipe-separated, plain text otherwise
+        let body;
+        if (desc.includes(' | ')) {
+          const chips = desc.split(' | ').map(p => {
+            const ci = p.indexOf(': ');
+            if (ci > -1) {
+              const k = esc(p.slice(0, ci));
+              const v = esc(p.slice(ci + 2));
+              return `<span class="agent-chip">${k}: <em>${v}</em></span>`;
+            }
+            return `<span class="agent-chip">${esc(p)}</span>`;
+          }).join('');
+          body = `<div class="agent-chips">${chips}</div>`;
+        } else {
+          body = `<div class="agent-plain">${esc(desc)}</div>`;
+        }
+        return `<div class="agent-row">
+          <span class="agent-badge" style="${bs}">${esc(label)}</span>
+          <div class="agent-body">${body}</div>
+          <span class="agent-time">${time}</span>
         </div>`;
       }).join('');
     } else {
@@ -2047,19 +2703,93 @@ function renderHomeSession() {
     const color = isPos ? 'var(--green)' : 'var(--red)';
     const logo = getLogo(p.symbol);
     const img = logo ? `<img src="${logo}" style="width:30px;height:30px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${p.symbol[0]}</div>`;
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;gap:10px">${img}
-        <div>
-          <div style="font-size:14px;font-weight:700">${p.symbol}</div>
-          <div style="font-size:11px;color:var(--text3)">$${p.currentPrice.toFixed(4)}</div>
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">${img}
+          <div>
+            <div style="font-size:14px;font-weight:700">${p.symbol}</div>
+            <div style="font-size:11px;color:var(--text3)">${getCurrSym()}${p.currentPrice.toFixed(4)}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
+          <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
         </div>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}$${pnl.toFixed(2)}</div>
-        <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
-      </div>
+      <div class="pos-chart-wrap"><canvas class="pos-chart-canvas" id="home-chart-${p.symbol}"></canvas></div>
     </div>`;
   }).join('');
+  // Carica grafici in background
+  pos.forEach(p => {
+    fetchMiniChart(p.symbol).then(closes => {
+      const canvas = document.getElementById('home-chart-' + p.symbol);
+      if (canvas && closes) drawMiniChart(canvas, closes, p.entryPrice);
+    });
+  });
+}
+
+function getPriceSym(pos) {
+  return '$';
+}
+
+// Cache grafici mini per non ricaricare ad ogni render
+const _miniChartCache = {};
+
+async function fetchMiniChart(sym) {
+  if (_miniChartCache[sym] && Date.now() - _miniChartCache[sym].ts < 60000) {
+    return _miniChartCache[sym].data;
+  }
+  try {
+    const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=5m&limit=48`);
+    const klines = await r.json();
+    if (!Array.isArray(klines)) return null;
+    const closes = klines.map(k => parseFloat(k[4]));
+    _miniChartCache[sym] = { data: closes, ts: Date.now() };
+    return closes;
+  } catch(e) { return null; }
+}
+
+function drawMiniChart(canvas, closes, entryPrice) {
+  if (!canvas || !closes || closes.length < 2) return;
+  const w = canvas.offsetWidth || 200;
+  const h = 60;
+  canvas.width = w * window.devicePixelRatio;
+  canvas.height = h * window.devicePixelRatio;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  const min = Math.min(...closes) * 0.9995;
+  const max = Math.max(...closes) * 1.0005;
+  const range = max - min || 1;
+  const px = (v) => h - ((v - min) / range) * h;
+  const lastClose = closes[closes.length - 1];
+  const isUp = lastClose >= entryPrice;
+  const color = isUp ? '#16c784' : '#ea3943';
+  // Linea entry price
+  const entryY = px(entryPrice);
+  ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = 'rgba(150,150,150,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, entryY); ctx.lineTo(w, entryY); ctx.stroke();
+  ctx.setLineDash([]);
+  // Gradiente riempimento
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, color + '33');
+  grad.addColorStop(1, color + '00');
+  const step = w / (closes.length - 1);
+  ctx.beginPath();
+  ctx.moveTo(0, px(closes[0]));
+  closes.forEach((v, i) => ctx.lineTo(i * step, px(v)));
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+  // Linea prezzo
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.moveTo(0, px(closes[0]));
+  closes.forEach((v, i) => ctx.lineTo(i * step, px(v)));
+  ctx.stroke();
 }
 
 function renderPositions() {
@@ -2094,24 +2824,32 @@ function renderPositions() {
           </div>
         </div>
         <div class="pos-pnl">
-          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':''}$${pnl.toFixed(2)}</div>
+          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
           <div class="pos-pnl-pct" style="color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
         </div>
       </div>
       <div class="pos-divider"></div>
       <div class="pos-data">
-        <div class="pos-cell"><div class="pos-cell-label">Entrata</div><div class="pos-cell-value">$${p.entryPrice.toFixed(4)}</div></div>
-        <div class="pos-cell"><div class="pos-cell-label">Corrente</div><div class="pos-cell-value">$${p.currentPrice.toFixed(4)}</div></div>
-        <div class="pos-cell" style="border-top:1px solid var(--border)"><div class="pos-cell-label">Stop${tp1Hit?' (BE)':''}</div><div class="pos-cell-value" style="color:var(--red)">$${p.stopPrice.toFixed(4)}</div></div>
-        <div class="pos-cell" style="border-top:1px solid var(--border)"><div class="pos-cell-label">${tp1Hit?'TP2':'TP1'}</div><div class="pos-cell-value" style="color:var(--green)">$${(tp1Hit?tp2Price:tp1Price).toFixed(4)}</div></div>
+        <div class="pos-cell"><div class="pos-cell-label">Entrata</div><div class="pos-cell-value">${getPriceSym(p)}${p.entryPrice.toFixed(4)}</div></div>
+        <div class="pos-cell"><div class="pos-cell-label">Corrente</div><div class="pos-cell-value">${getPriceSym(p)}${p.currentPrice.toFixed(4)}</div></div>
+        <div class="pos-cell" style="border-top:1px solid var(--border)"><div class="pos-cell-label">Stop${tp1Hit?' (BE)':''}</div><div class="pos-cell-value" style="color:var(--red)">${getPriceSym(p)}${p.stopPrice.toFixed(4)}</div></div>
+        <div class="pos-cell" style="border-top:1px solid var(--border)"><div class="pos-cell-label">${tp1Hit?'TP2':'TP1'}</div><div class="pos-cell-value" style="color:var(--green)">${getPriceSym(p)}${(tp1Hit?tp2Price:tp1Price).toFixed(4)}</div></div>
       </div>
       <div class="pos-progress-wrap">
         <div class="pos-progress-labels"><span>SL</span><span>${pct.toFixed(2)}%</span><span>${tp1Hit?'TP2':'TP1'}</span></div>
         <div class="pos-bar"><div class="pos-bar-fill" style="width:${progress}%;background:${barColor}"></div></div>
       </div>
+      <div class="pos-chart-wrap"><canvas class="pos-chart-canvas" id="chart-${p.symbol}"></canvas></div>
       <button class="close-btn" data-close-sym="${p.symbol}" onclick="closePosition(this.dataset.closeSym)">Chiudi posizione</button>
     </div>`;
   }).join('');
+  // Carica grafici mini in background
+  pos.forEach(p => {
+    fetchMiniChart(p.symbol).then(closes => {
+      const canvas = document.getElementById('chart-' + p.symbol);
+      if (canvas && closes) drawMiniChart(canvas, closes, p.entryPrice);
+    });
+  });
 }
 
 async function closePosition(symbol) {
@@ -2128,6 +2866,13 @@ function hideCloseModal() {
   document.getElementById('closeModal').classList.remove('open');
 }
 
+function openSignalInfo() {
+  document.getElementById('signalInfoModal').classList.add('open');
+}
+function closeSignalInfo() {
+  document.getElementById('signalInfoModal').classList.remove('open');
+}
+
 async function confirmClosePosition() {
   const symbol = document.getElementById('closeModalPending').value;
   hideCloseModal();
@@ -2135,7 +2880,7 @@ async function confirmClosePosition() {
 }
 
 // ── FILTRI TRANSAZIONI ───────────────────────────────────────────────────────
-const txFilters = { period: 'all', outcome: 'all', reason: 'all' };
+const txFilters = { period: 'today', outcome: 'all', reason: 'all' };
 
 function setTxDropdown(type, val) {
   txFilters[type] = val;
@@ -2198,7 +2943,7 @@ function renderTransazioni() {
   document.getElementById('txCount').textContent = filtered.length;
   document.getElementById('txWinRate').textContent = filtered.length > 0 ? wr + '%' : '--%';
   document.getElementById('txWinRate').style.color = wr >= 50 ? 'var(--green)' : wr > 0 ? 'var(--red)' : '';
-  document.getElementById('txPnl').textContent = 'P&L: ' + (totalPnl >= 0 ? '+' : '') + '$' + totalPnl.toFixed(2);
+  document.getElementById('txPnl').textContent = 'P&L: ' + (totalPnl >= 0 ? '+' : '') + getCurrSym() + totalPnl.toFixed(2);
   document.getElementById('txPnl').style.color = totalPnl > 0 ? 'var(--green)' : totalPnl < 0 ? 'var(--red)' : '';
   document.getElementById('txWinLoss').textContent = wins + ' vittorie · ' + losses + ' sconfitte';
 
@@ -2234,7 +2979,7 @@ function renderTransazioni() {
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-weight:700;font-size:15px;color:${color}">${isWin?'+':''}$${t.pnl.toFixed(2)}</div>
+          <div style="font-weight:700;font-size:15px;color:${color}">${isWin?'+':''}${getCurrSym()}${t.pnl.toFixed(2)}</div>
           <div style="font-size:12px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
         </div>
       </div>
@@ -2252,46 +2997,6 @@ function renderTransazioni() {
   }).join('');
 }
 
-function drawChart() {
-  const canvas = document.getElementById('pnlChart');
-  const wrap = canvas.parentElement;
-  const dpr = window.devicePixelRatio || 1;
-  const w = wrap.clientWidth, h = wrap.clientHeight;
-  if (!w || !h) return;
-  canvas.width = w*dpr; canvas.height = h*dpr;
-  const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
-  ctx.clearRect(0,0,w,h);
-  const data = S.pnlHistory || [];
-  if (data.length < 2) {
-    ctx.fillStyle = 'rgba(138,143,168,0.4)'; ctx.font = '12px Inter'; ctx.textAlign = 'center';
-    ctx.fillText('Avvia la sessione per vedere il P&L', w/2, h/2); return;
-  }
-  const vals = data.map(d => d.v);
-  const minV = Math.min(...vals, 0), maxV = Math.max(...vals, 0.01);
-  const range = maxV - minV || 1;
-  const pad = {t:10,r:8,b:20,l:52};
-  const iw = w-pad.l-pad.r, ih = h-pad.t-pad.b;
-  const toX = i => pad.l + (i/(data.length-1))*iw;
-  const toY = v => pad.t + ih - ((v-minV)/range)*ih;
-  const zy = toY(0);
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
-  ctx.beginPath(); ctx.moveTo(pad.l,zy); ctx.lineTo(pad.l+iw,zy); ctx.stroke(); ctx.setLineDash([]);
-  const last = vals[vals.length-1]; const isUp = last >= 0;
-  const lineColor = isUp ? '#05c168' : '#f6465d';
-  const grad = ctx.createLinearGradient(0,pad.t,0,pad.t+ih);
-  if (isUp) { grad.addColorStop(0,'rgba(5,193,104,0.25)'); grad.addColorStop(1,'rgba(5,193,104,0)'); }
-  else { grad.addColorStop(0,'rgba(246,70,93,0)'); grad.addColorStop(1,'rgba(246,70,93,0.25)'); }
-  ctx.beginPath(); ctx.moveTo(toX(0), toY(vals[0]));
-  data.forEach((d,i) => ctx.lineTo(toX(i), toY(d.v)));
-  ctx.lineTo(toX(data.length-1), h); ctx.lineTo(toX(0), h); ctx.closePath();
-  ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath(); ctx.moveTo(toX(0), toY(vals[0]));
-  data.forEach((d,i) => ctx.lineTo(toX(i), toY(d.v)));
-  ctx.strokeStyle = lineColor; ctx.lineWidth = 2.5; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '10px Inter'; ctx.textAlign = 'right';
-  [0,0.5,1].forEach(f => { const v=minV+f*range; ctx.fillText((v>=0?'+':'')+v.toFixed(2), pad.l-4, toY(v)+3); });
-}
-
 // ── MERCATO ───────────────────────────────────────────────────────────────────
 let mktData=[], mktSort='volume24h', mktFilter='all';
 const _emaCache = {};
@@ -2307,10 +3012,6 @@ function toggleFdd(id) {
   if (!isOpen) {
     menu.classList.add('open');
     btn.classList.add('open');
-    // Posiziona menu sotto il btn
-    const rect = btn.getBoundingClientRect();
-    menu.style.top = (rect.bottom + 4) + 'px';
-    menu.style.left = rect.left + 'px';
     setTimeout(() => document.addEventListener('click', closeFddOnOutside), 0);
   }
 }
@@ -2388,7 +3089,8 @@ function setMktFilterDropdown(val) {
 }
 
 function fmtVol(v) { if(v>=1e9) return (v/1e9).toFixed(1)+'B'; if(v>=1e6) return (v/1e6).toFixed(0)+'M'; return (v/1e3).toFixed(0)+'K'; }
-function fmtPrice(p) { if(p>=1000) return '$'+p.toLocaleString('en-US',{maximumFractionDigits:0}); if(p>=1) return '$'+p.toFixed(2); if(p>=0.01) return '$'+p.toFixed(4); return '$'+p.toFixed(6); }
+function fmtPrice(p, sym='$') { if(p>=1000) return sym+p.toLocaleString('en-US',{maximumFractionDigits:0}); if(p>=1) return sym+p.toFixed(2); if(p>=0.01) return sym+p.toFixed(4); return sym+p.toFixed(6); }
+
 
 function renderMarket() {
   let data = [...mktData];
@@ -2421,7 +3123,7 @@ function renderMarket() {
         ><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       };
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.trend1h_ok ?? true,'trend1h','1h')}${dot(ema.trend,'trend','15m')}${dot(ema.pullback,'pullback','pull')}${dot(ema.volume,'volume','vol')}${dot(ema.rsi_ok ?? true,'rsi','RSI')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots">${dot(ema.trend1h_ok ?? true,'trend1h','1H')}${dot(ema.trend,'trend','15M')}${dot(ema.crossover ?? false,'crossover','CROSS')}${dot(ema.expand_ok ?? true,'expand','EXP')}${dot(ema.rsi_ok ?? true,'rsi','RSI')}${dot(ema.body_ok ?? true,'body','BODY')}${dot(ema.vol_ok ?? true,'vol','VOL')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
     }
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
       <div class="mkt-row-main">
@@ -2430,7 +3132,7 @@ function renderMarket() {
             <img ${getLogo(c.symbol) ? `src="${getLogo(c.symbol)}"` : ''} class="mkt-logo" data-logo-sym="${c.symbol}" id="logo-img-${c.symbol}" ${!getLogo(c.symbol) ? 'style="display:none"' : ''} onerror="this.onerror=null;this.style.display='none';document.getElementById('logo-ph-${c.symbol}').style.display='flex'">
             <div class="mkt-icon-placeholder" id="logo-ph-${c.symbol}" style="${getLogo(c.symbol) ? 'display:none' : 'display:flex'}">${c.symbol[0]}</div>
           </div>
-          <div>
+          <div style="min-width:0;flex:1">
             <div class="mkt-name" style="display:flex;align-items:center;justify-content:space-between;width:100%">
               <span>${fullName}${isOpen?'<span class="mkt-in-badge">IN</span>':''}</span>
               <button class="star-btn ${_watchlist.has(c.symbol)?'starred':''}" data-star-sym="${c.symbol}" onclick="event.stopPropagation();toggleWatchlist('${c.symbol}')" style="margin-left:4px;width:24px;height:24px">
@@ -2438,10 +3140,9 @@ function renderMarket() {
               </button>
             </div>
             <div class="mkt-sym-sub">${c.symbol} &middot; Vol $${fmtVol(vol)}</div>
-            ${emaDots}
           </div>
         </div>
-        <div class="mkt-right">
+        <div class="mkt-right" style="flex-shrink:0">
           <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtPrice(c.price)}</div>
           <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:5px">
             <div style="text-align:center">
@@ -2455,6 +3156,7 @@ function renderMarket() {
           </div>
         </div>
       </div>
+      ${emaDots}
     </div>`;
   }).join('');
 }
@@ -2533,7 +3235,7 @@ async function loadHomeBalance() {
   const tagEl = document.getElementById('homeModeTag');
   if (!valEl) return;
 
-  const isReal = _hasApiKeys && !_simMode;
+  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
 
   if (tagEl) {
     tagEl.textContent = isReal ? 'Modalità Reale' : 'Simulazione';
@@ -2542,31 +3244,51 @@ async function loadHomeBalance() {
 
   if (isReal) {
     valEl.textContent = '...';
-    subEl.textContent = 'Recupero saldo Coinbase';
-    try {
-      const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
-      const d = await r.json();
-      if (d.ok) {
-        const usdc = d.balances.find(b => b.currency === 'USDC');
-        const bal = usdc ? parseFloat(usdc.available) : 0;
-        valEl.textContent = '$' + bal.toFixed(2);
-        subEl.textContent = 'USDC disponibili su Coinbase';
-        const tbd = document.getElementById('totalBalanceDisplay');
-        if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
-        // Salva il saldo totale come riferimento per lo slider capitalPct
-        const cap = document.getElementById('capital');
-        if (cap) cap.dataset.total = bal;
-        updateCapitalPct();
-      } else {
-        valEl.textContent = '--';
-        subEl.textContent = 'Errore Coinbase';
-      }
-    } catch(e) {
-      valEl.textContent = '--';
-      subEl.textContent = 'Connessione fallita';
+    if (_hasRevxKeys) {
+      // Revolut X ha la precedenza
+      subEl.textContent = 'Recupero saldo Revolut X';
+      try {
+        const r = await fetch(API + '/test_revx', { headers: authHeaders() });
+        const d = await r.json();
+        if (d.ok && d.balances && d.balances.length > 0) {
+          const usd = d.balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
+          const eur = d.balances.find(b => b.currency === 'EUR');
+          const best = usd || eur || d.balances[0];
+          const bal = parseFloat(best.available);
+          const sym = best.currency;
+          valEl.textContent = (sym === 'EUR' ? '€' : '$') + bal.toFixed(2);
+          subEl.textContent = sym + ' disponibili su Revolut X';
+          const tbd = document.getElementById('totalBalanceDisplay');
+          if (tbd) { tbd.textContent = bal.toFixed(2) + ' ' + sym + ' (Revolut X)'; tbd.style.color = 'var(--green)'; }
+          const cap = document.getElementById('capital');
+          if (cap) cap.dataset.total = bal;
+          updateCapitalPct();
+        } else {
+          valEl.textContent = '--'; subEl.textContent = 'Errore Revolut X';
+        }
+      } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
+    } else {
+      subEl.textContent = 'Recupero saldo...';
+      try {
+        const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
+        const d = await r.json();
+        if (d.ok) {
+          const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
+          const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
+          valEl.textContent = '$' + bal.toFixed(2); // Coinbase fallback
+          subEl.textContent = 'USDC disponibili';
+          const tbd = document.getElementById('totalBalanceDisplay');
+          if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
+          const cap = document.getElementById('capital');
+          if (cap) cap.dataset.total = bal;
+          updateCapitalPct();
+        } else {
+          valEl.textContent = '--'; subEl.textContent = 'Errore connessione';
+        }
+      } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
     }
   } else {
-    valEl.textContent = '$1,000';
+    valEl.textContent = '$1,000'; // simulazione
     subEl.textContent = 'Saldo simulato';
     const tbd = document.getElementById('totalBalanceDisplay');
     if (tbd) { tbd.textContent = 'Simulazione — $1,000'; tbd.style.color = ''; }
@@ -2784,15 +3506,25 @@ const EMA_DOT_INFO = {
     descOn:  "EMA20 > EMA50 su 15min — mercato in tendenza rialzista sul medio termine.",
     descOff: "EMA20 < EMA50 su 15min — nessuna tendenza rialzista chiara. L'agente aspetta che il trend si formi.",
   },
-  pullback: {
-    name: 'Pullback',
-    descOn:  "Il prezzo è tornato vicino a EMA20 su 5min (entro la soglia configurata). Momento ottimale: trend attivo e prezzo che ritraccia.",
-    descOff: "Il prezzo è troppo lontano da EMA20 su 5min. O è già salito troppo (FOMO) o è sceso sotto. Attesa del ritracciamento.",
+  crossover: {
+    name: 'Crossover 15m',
+    descOn:  "EMA20 ha appena superato EMA50 su 15min (nelle ultime 6 candele = 90 min). Segnale di momentum: il trend si sta formando ora.",
+    descOff: "Nessun crossover fresco. O EMA20 è ancora sotto EMA50, oppure il crossover è avvenuto più di 90 min fa. L'ingresso sarebbe tardivo.",
   },
-  volume: {
+  expand: {
+    name: 'Espansione volatilità',
+    descOn:  "ATR delle ultime 6 candele ≥ 60% della media delle ultime 20 — il mercato si sta muovendo con forza. Crossover con momentum reale.",
+    descOff: "ATR recente troppo basso rispetto alla media — mercato piatto. Crossover senza espansione di volatilità è spesso un falso segnale.",
+  },
+  body: {
+    name: 'Candela direzionale',
+    descOn:  "L'ultima candela è rialzista con corpo ≥ 30% del range (high-low). Conferma la direzionalità del movimento.",
+    descOff: "Candela debole: corpo troppo piccolo o ribassista. Il crossover non è supportato da una candela direzionale chiara.",
+  },
+  vol: {
     name: 'Volume',
-    descOn:  "Volume ultima candela 5min superiore alla media 20 candele x moltiplicatore impostato. Conferma partecipazione reale.",
-    descOff: "Volume insufficiente sull'ultima candela 5min. Un rimbalzo su volume basso è spesso falso — serve partecipazione reale.",
+    descOn:  "Volume dell'ultima candela sopra la media delle ultime 20 — il crossover ha partecipazione reale.",
+    descOff: "Volume basso sul crossover — il movimento non è sostenuto da partecipazione reale. Rischio di falso segnale.",
   },
   rsi: {
     name: 'RSI',
@@ -2801,7 +3533,7 @@ const EMA_DOT_INFO = {
   },
   stop: {
     name: 'R (Stop)',
-    descOn:  "Lo stop contestuale (minimo pullback o 1xATR) è dentro la soglia massima configurata. Rischio/rendimento favorevole.",
+    descOn:  "Lo stop contestuale (minimi recenti 5m o 1.5× ATR) è dentro la soglia massima configurata. Rischio/rendimento favorevole.",
     descOff: "Stop richiesto troppo largo rispetto alla soglia impostata. Rischio eccessivo — il trade viene scartato.",
   },
 };
@@ -2814,7 +3546,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback', volume: 'volume', rsi: 'rsi_ok', stop: 'stop' };
+  const keyMap = { trend1h: 'trend1h_ok', trend: 'trend', crossover: 'crossover', expand: 'expand_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
