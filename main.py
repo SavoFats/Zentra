@@ -1577,7 +1577,12 @@ async def handle_revx_wizard(chat_id: str, uid: int, event: str, data: str):
             if os_key == "mac":
                 msg = ("📂 <b>Apri il Terminale</b>\n\n"
                        "Vai in <b>Applicazioni → Utility → Terminale</b>\n"
-                       "oppure premi <b>Cmd+Spazio</b> e cerca <i>Terminale</i>.")
+                       "oppure premi <b>Cmd+Spazio</b> e cerca <i>Terminale</i>.\n\n"
+                       "⚠️ <b>Nota per macOS:</b> il sistema usa LibreSSL che non supporta Ed25519. "
+                       "Dovrai installare OpenSSL reale:\n"
+                       "<code>brew install openssl</code>\n\n"
+                       "Se non hai Homebrew:\n"
+                       "<code>/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"</code>")
             else:
                 msg = ("📂 <b>Apri PowerShell</b>\n\n"
                        "Premi <b>Win+X</b> → <b>Windows PowerShell</b>\n"
@@ -1589,21 +1594,31 @@ async def handle_revx_wizard(chat_id: str, uid: int, event: str, data: str):
 
         elif data == "revx_step_cmd1":
             _revx_wizard[chat_id]["step"] = "cmd1"
+            os_key = wizard.get("os", "mac")
+            if os_key == "mac":
+                cmd1 = "$(brew --prefix openssl)/bin/openssl genpkey -algorithm ed25519 -out private.pem"
+            else:
+                cmd1 = "openssl genpkey -algorithm ed25519 -out private.pem"
             await tg_send_keyboard(chat_id,
-                "1️⃣ <b>Genera la chiave privata</b>\n\n"
-                "Copia e incolla questo comando nel terminale, poi premi Invio:\n\n"
-                "<code>openssl genpkey -algorithm ed25519 -out private.pem</code>",
+                f"1️⃣ <b>Genera la chiave privata</b>\n\n"
+                f"Copia e incolla questo comando nel terminale, poi premi Invio:\n\n"
+                f"<code>{cmd1}</code>",
                 [[{"text": "✅  Fatto, continua →", "callback_data": "revx_step_cmd2"}]])
 
         elif data == "revx_step_cmd2":
             _revx_wizard[chat_id]["step"] = "cmd2"
+            os_key = wizard.get("os", "mac")
+            if os_key == "mac":
+                cmd2 = "$(brew --prefix openssl)/bin/openssl pkey -in private.pem -pubout -out public.pem"
+            else:
+                cmd2 = "openssl pkey -in private.pem -pubout -out public.pem"
             await tg_send_keyboard(chat_id,
-                "2️⃣ <b>Genera la chiave pubblica</b>\n\n"
-                "Ora esegui questo comando:\n\n"
-                "<code>openssl pkey -in private.pem -pubout -out public.pem</code>\n\n"
-                "Trovi ora due file nella cartella corrente:\n"
-                "📄 <b>private.pem</b>  —  chiave privata (tienila al sicuro)\n"
-                "📄 <b>public.pem</b>   —  chiave pubblica",
+                f"2️⃣ <b>Genera la chiave pubblica</b>\n\n"
+                f"Ora esegui questo comando:\n\n"
+                f"<code>{cmd2}</code>\n\n"
+                f"Trovi ora due file nella cartella corrente:\n"
+                f"📄 <b>private.pem</b>  —  chiave privata (tienila al sicuro)\n"
+                f"📄 <b>public.pem</b>   —  chiave pubblica",
                 [[{"text": "✅  Fatto, continua →", "callback_data": "revx_step_register"}]])
 
         elif data == "revx_step_register":
