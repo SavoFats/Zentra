@@ -2287,7 +2287,8 @@ class SimModeRequest(BaseModel):
     sim_mode: bool
 
 @app.post("/auth/sim_mode")
-async def set_sim_mode(req: SimModeRequest, user_id: int = Depends(get_current_user)):
+async def set_sim_mode(req: SimModeRequest, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=10, window=60, key_suffix="sim_mode")
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
@@ -2427,7 +2428,8 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
     return {"trades": mem_trades}
 
 @app.get("/telegram/bot_info")
-async def telegram_bot_info(user_id: int = Depends(get_current_user)):
+async def telegram_bot_info(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="tg_bot_info")
     return {
         "username": _tg_bot_username,
         "url": f"https://t.me/{_tg_bot_username}" if _tg_bot_username else "",
@@ -2457,7 +2459,8 @@ async def telegram_link_code(request: Request, user_id: int = Depends(get_curren
     }
 
 @app.delete("/telegram/unlink")
-async def telegram_unlink(user_id: int = Depends(get_current_user)):
+async def telegram_unlink(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="tg_unlink")
     """Rimuove il collegamento Telegram dell'utente."""
     if db_pool:
         async with db_pool.acquire() as conn:
@@ -2651,7 +2654,8 @@ async def chat(body: dict, request: Request, user_id: int = Depends(get_current_
 # ── DEBUG / UTILITY ENDPOINTS ──────────────────────────────────────────────────
 
 @app.get("/health")
-def health():
+def health(request: Request):
+    check_rate_limit(request, max_attempts=60, window=60, key_suffix="health")
     return {
         "status": "ok",
         "market_data": any(d["price"] > 0 for d in market_data.values()),
@@ -2661,6 +2665,8 @@ def health():
 
 @app.get("/logs")
 async def get_logs(request: Request, n: int = 50):
+    check_rate_limit(request, max_attempts=20, window=60, key_suffix="logs")
+    n = min(n, 500)
     """Restituisce gli ultimi N log — protetto da Authorization: Bearer <SECRET_KEY>"""
     auth = request.headers.get("Authorization", "")
     provided = auth.removeprefix("Bearer ").strip()
@@ -2717,7 +2723,8 @@ async def save_revx_keys(req: RevxKeysRequest, request: Request, user_id: int = 
     return {"ok": True}
 
 @app.get("/test_revx")
-async def test_revx(user_id: int = Depends(get_current_user)):
+async def test_revx(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="test_revx")
     if not db_pool:
         return {"ok": False, "error": "DB non disponibile"}
     async with db_pool.acquire() as conn:
@@ -2745,6 +2752,7 @@ async def test_revx(user_id: int = Depends(get_current_user)):
 @app.get("/debug_revx_ticker")
 async def debug_revx_ticker(request: Request, user_id: int = Depends(get_current_user)):
     """Tickers Revolut X — richiede X-Admin-Key: <SECRET_KEY>"""
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="debug_revx_ticker")
     if not SECRET_KEY or request.headers.get("X-Admin-Key", "") != SECRET_KEY:
         raise HTTPException(status_code=403, detail="Accesso negato")
     try:
@@ -2771,6 +2779,7 @@ async def debug_revx_ticker(request: Request, user_id: int = Depends(get_current
 @app.get("/debug_revx_candles")
 async def debug_revx_candles(request: Request, user_id: int = Depends(get_current_user)):
     """Candles Revolut X — richiede X-Admin-Key: <SECRET_KEY>"""
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="debug_revx_candles")
     if not SECRET_KEY or request.headers.get("X-Admin-Key", "") != SECRET_KEY:
         raise HTTPException(status_code=403, detail="Accesso negato")
     try:
@@ -2826,7 +2835,8 @@ async def test_coinbase(request: Request, user_id: int = Depends(get_current_use
         return {"ok": False, "error": str(e)}
 
 @app.get("/debug_coinbase")
-async def debug_coinbase(user_id: int = Depends(get_current_user)):
+async def debug_coinbase(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="debug_coinbase")
     """Mostra la risposta raw di Coinbase per debug saldi."""
     cb_key, cb_secret = _ENV_CB_KEY, _ENV_CB_SECRET
     if db_pool:
