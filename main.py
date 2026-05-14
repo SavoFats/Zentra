@@ -1829,7 +1829,17 @@ async def poll_telegram():
                 elif cmd == "/STOP":
                     if state and state.get("running"):
                         state["running"] = False
-                        await send_telegram_to(chat_id, "✅ Agente fermato")
+                        closed = [p["symbol"] for p in list(state["positions"])]
+                        for p in list(state["positions"]):
+                            await exit_position(state, p, "STOP MANUALE", user_id=uid)
+                        pnl = state["currentCapital"] - state["capital"]
+                        add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
+                        await persist_sessions()
+                        msg = "✅ Agente fermato"
+                        if closed:
+                            msg += f"\nPosizioni chiuse: {', '.join(closed)}"
+                        msg += f"\nP&L sessione: {pnl:+.2f}$"
+                        await send_telegram_to(chat_id, msg)
                     else:
                         await send_telegram_to(chat_id, "Nessuna sessione attiva")
 
