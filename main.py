@@ -5,6 +5,7 @@ import jwt
 import hashlib
 import json
 import secrets
+import stripe
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Depends, Request, Response
 from fastapi.responses import PlainTextResponse
@@ -58,6 +59,21 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 SECRET_KEY = os.environ.get("SECRET_KEY", "")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable non impostata — il server non può partire in modo sicuro")
+
+STRIPE_SECRET_KEY     = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_PRICE_ID       = os.environ.get("STRIPE_PRICE_ID", "")
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+
+# ── FREE PLAN LIMITS ──────────────────────────────────────────────────────────
+FREE_SESSIONS_PER_DAY  = 1
+FREE_MAX_SESSION_HOURS = 2
+FREE_MAX_POSITIONS     = 1
+FREE_ALLOC_PCT         = 0.50   # allocazione fissa 50%
+FREE_COINS             = {"BTC", "ETH", "SOL"}
+FREE_RSI_MIN           = 35.0
+FREE_RSI_MAX           = 65.0
 
 # ── ENCRYPTION (chiavi Coinbase) ──────────────────────────────────────────────
 def _get_fernet() -> Fernet:
@@ -744,6 +760,7 @@ def make_session() -> dict:
         "tradeCount": 0, "wins": 0, "trades": [], "log": [],
         "cb_key": "", "cb_secret": "",
         "consecutiveLosses": 0,
+        "plan": "free",
     }
 
 def get_session(user_id: int) -> dict:
@@ -1405,9 +1422,15 @@ async def scan_and_trade(state: dict, user_id: int = None):
         return
 
     # Numero massimo di posizioni aperte contemporaneamente
-    max_pos   = max(1, int(round(1 / alloc_pct)))
+    is_free = state.get("plan", "free") == "free"
+    max_pos   = FREE_MAX_POSITIONS if is_free else max(1, int(round(1 / alloc_pct)))
     open_syms = {p["symbol"] for p in state["positions"]}
     slots     = max_pos - len(state["positions"])
+    if is_free and slots <= 0:
+        add_log(state, "info", "PIANO FREE", "Limite di 1 posizione contemporanea raggiunto. Passa a Pro per aprire più posizioni.")
+        await notify(state, "⚠️ Piano Free: limite 1 posizione raggiunto.")
+        _update_pnl(state)
+        return
 
     # Sottrai le commissioni round-trip attese per tutte le posizioni apribili
     # fee_totale = size_per_trade * 1.2% * slot_disponibili
@@ -1485,6 +1508,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
             and sym in candle_data
             and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ]
+    if is_free:
+        universe = [d for d in universe if d["symbol"] in FREE_COINS]
     universe_sorted = sorted(universe, key=lambda d: d.get("volume24h", 0), reverse=True)
 
     candidates  = []
@@ -1976,6 +2001,11 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_key_id TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_private_key TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'free';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_session_date DATE;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_today INT DEFAULT 0;
                     CREATE TABLE IF NOT EXISTS trades_history (
                         id SERIAL PRIMARY KEY,
                         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -2310,14 +2340,23 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT username, display_name, cb_key, avatar_b64, sim_mode, revx_key_id, telegram_chat_id FROM users WHERE id = $1", user_id
+            "SELECT username, display_name, cb_key, avatar_b64, sim_mode, revx_key_id, telegram_chat_id, "
+            "plan, subscription_expires_at, last_session_date, sessions_today FROM users WHERE id = $1", user_id
         )
     has_keys = bool(row["cb_key"])
     sim = row["sim_mode"] if row["sim_mode"] is not None else True
-    # Se non ha API keys, forza sempre simulazione
     if not has_keys:
         sim = True
     dname = row["display_name"] or row["username"]
+    # Calcola piano effettivo (pro scade se subscription_expires_at è nel passato)
+    raw_plan = row["plan"] or "free"
+    exp = row["subscription_expires_at"]
+    if raw_plan == "pro" and exp and exp < datetime.utcnow():
+        raw_plan = "free"
+    # Sessioni usate oggi
+    today = datetime.utcnow().date()
+    last_date = row["last_session_date"]
+    sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
     return {
         "username": dname,
         "has_api_keys": has_keys,
@@ -2325,6 +2364,10 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         "sim_mode": sim,
         "has_revx_keys": bool(row.get("revx_key_id") or ""),
         "telegram_linked": bool(row["telegram_chat_id"] or ""),
+        "plan": raw_plan,
+        "sessions_today": sessions_today,
+        "sessions_per_day": FREE_SESSIONS_PER_DAY,
+        "subscription_expires_at": exp.isoformat() if exp else None,
     }
 
 class SimModeRequest(BaseModel):
@@ -2549,23 +2592,65 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
 
     cb_key, cb_secret, real_mode = "", "", False
     revx_key_id, revx_private_key, use_revx = "", "", False
+    user_plan = "free"
     row = None
     if db_pool:
         try:
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT cb_key, cb_secret, sim_mode, revx_key_id, revx_private_key, username, display_name, telegram_chat_id FROM users WHERE id = $1", user_id)
+                    "SELECT cb_key, cb_secret, sim_mode, revx_key_id, revx_private_key, username, display_name, "
+                    "telegram_chat_id, plan, subscription_expires_at, last_session_date, sessions_today "
+                    "FROM users WHERE id = $1", user_id)
                 if row:
                     cb_key    = decrypt_key(row["cb_key"] or "")
                     cb_secret = decrypt_key(row["cb_secret"] or "")
                     revx_key_id     = decrypt_key(row["revx_key_id"] or "")
                     revx_private_key = decrypt_key(row["revx_private_key"] or "")
                     sim = row["sim_mode"] if row["sim_mode"] is not None else True
-                    # Preferisci Revolut X se configurato
                     use_revx = bool(revx_key_id) and not sim
                     real_mode = (bool(cb_key) or use_revx) and not sim
+                    # Piano effettivo
+                    raw_plan = row["plan"] or "free"
+                    exp = row["subscription_expires_at"]
+                    if raw_plan == "pro" and exp and exp < datetime.utcnow():
+                        raw_plan = "free"
+                    user_plan = raw_plan
+                    # Gate sessione giornaliera (solo free)
+                    if user_plan == "free":
+                        today = datetime.utcnow().date()
+                        last_date = row["last_session_date"]
+                        sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
+                        if sessions_today >= FREE_SESSIONS_PER_DAY:
+                            return {
+                                "error": "session_limit",
+                                "message": f"Hai già usato la tua sessione gratuita di oggi. Torna domani o passa a Pro.",
+                                "plan": "free",
+                            }
+                        # Aggiorna contatore
+                        new_count = sessions_today + 1
+                        await conn.execute(
+                            "UPDATE users SET last_session_date = $1, sessions_today = $2 WHERE id = $3",
+                            today, new_count, user_id
+                        )
         except Exception as e:
             print(f"DB key fetch error: {e}")
+
+    # Override configurazione per utenti free
+    if user_plan == "free":
+        cfg["allocPct"]        = FREE_ALLOC_PCT
+        cfg["sessionDuration"] = min(int(cfg.get("sessionDuration", FREE_MAX_SESSION_HOURS)), FREE_MAX_SESSION_HOURS)
+        cfg["rsiMin"]          = FREE_RSI_MIN
+        cfg["rsiMax"]          = FREE_RSI_MAX
+        cfg["trend1hFilter"]   = True
+        cfg["btcEmaFilter"]    = True
+        cfg["trailingStop"]    = True
+        cfg["tp1R"]            = 2.0
+        cfg["tp2R"]            = 4.0
+        cfg["pullbackTolerance"] = 0.02
+        cfg["cooldown"]        = 1.0
+        cfg["maxTrades"]       = 0
+        cfg["maxHoldHours"]    = 4.0
+        cfg["minR"]            = 0.01
 
     state.update({
         "running": True,
@@ -2607,6 +2692,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         "consecutiveLosses": 0,
         "username": (row["display_name"] or row["username"]) if (db_pool and row) else "",
         "telegram_chat_id": (row["telegram_chat_id"] or "") if (db_pool and row) else "",
+        "plan": user_plan,
     })
     alloc  = float(cfg.get("allocPct", 0.20)) * 100
     capp   = float(cfg.get("capitalPct", 1.0)) * 100
@@ -2888,6 +2974,146 @@ async def get_logos(request: Request, user_id: int = Depends(get_current_user)):
         for sym in market_data
     }
     return result
+
+# ── BILLING ───────────────────────────────────────────────────────────────────
+
+@app.get("/billing/status")
+async def billing_status(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="billing_status")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT plan, subscription_expires_at, last_session_date, sessions_today FROM users WHERE id = $1", user_id)
+    raw_plan = row["plan"] or "free"
+    exp = row["subscription_expires_at"]
+    if raw_plan == "pro" and exp and exp < datetime.utcnow():
+        raw_plan = "free"
+    today = datetime.utcnow().date()
+    last_date = row["last_session_date"]
+    sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
+    return {
+        "plan": raw_plan,
+        "sessions_today": sessions_today,
+        "sessions_per_day": FREE_SESSIONS_PER_DAY,
+        "sessions_remaining": max(0, FREE_SESSIONS_PER_DAY - sessions_today) if raw_plan == "free" else 999,
+        "subscription_expires_at": exp.isoformat() if exp else None,
+        "stripe_enabled": bool(STRIPE_SECRET_KEY),
+    }
+
+@app.post("/billing/checkout")
+async def billing_checkout(body: dict, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="billing_checkout")
+    if not STRIPE_SECRET_KEY or not STRIPE_PRICE_ID:
+        raise HTTPException(status_code=503, detail="Pagamenti non configurati")
+    success_url = body.get("success_url", "")
+    cancel_url  = body.get("cancel_url", "")
+    if not success_url or not cancel_url:
+        raise HTTPException(status_code=400, detail="success_url e cancel_url obbligatori")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT username, display_name, stripe_customer_id FROM users WHERE id = $1", user_id)
+    customer_id = row["stripe_customer_id"] or ""
+    try:
+        # Crea o recupera customer Stripe
+        if not customer_id:
+            customer = stripe.Customer.create(
+                name=row["display_name"] or row["username"],
+                metadata={"user_id": str(user_id)},
+            )
+            customer_id = customer["id"]
+            async with db_pool.acquire() as conn:
+                await conn.execute("UPDATE users SET stripe_customer_id = $1 WHERE id = $2", customer_id, user_id)
+        session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=["card"],
+            line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+            mode="subscription",
+            success_url=success_url + "?upgraded=1",
+            cancel_url=cancel_url,
+        )
+        return {"url": session["url"]}
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e.user_message or e))
+
+@app.post("/billing/portal")
+async def billing_portal(body: dict, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="billing_portal")
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Pagamenti non configurati")
+    return_url = body.get("return_url", "")
+    if not return_url:
+        raise HTTPException(status_code=400, detail="return_url obbligatorio")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT stripe_customer_id FROM users WHERE id = $1", user_id)
+    customer_id = row["stripe_customer_id"] or ""
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="Nessun abbonamento attivo")
+    try:
+        portal = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url,
+        )
+        return {"url": portal["url"]}
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e.user_message or e))
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    if not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Webhook non configurato")
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Firma webhook non valida")
+    etype = event["type"]
+    data  = event["data"]["object"]
+    if etype == "checkout.session.completed":
+        customer_id = data.get("customer", "")
+        sub_id      = data.get("subscription", "")
+        if customer_id and db_pool:
+            # Recupera subscription per data scadenza
+            try:
+                sub = stripe.Subscription.retrieve(sub_id)
+                expires_at = datetime.utcfromtimestamp(sub["current_period_end"])
+            except Exception:
+                expires_at = None
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE users SET plan = 'pro', subscription_expires_at = $1 WHERE stripe_customer_id = $2",
+                    expires_at, customer_id
+                )
+            print(f"[BILLING] upgrade a pro: customer={customer_id}, scade={expires_at}")
+    elif etype == "invoice.payment_succeeded":
+        customer_id = data.get("customer", "")
+        sub_id      = data.get("subscription", "")
+        if customer_id and sub_id and db_pool:
+            try:
+                sub = stripe.Subscription.retrieve(sub_id)
+                expires_at = datetime.utcfromtimestamp(sub["current_period_end"])
+                async with db_pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE users SET plan = 'pro', subscription_expires_at = $1 WHERE stripe_customer_id = $2",
+                        expires_at, customer_id
+                    )
+                print(f"[BILLING] rinnovo pro: customer={customer_id}, scade={expires_at}")
+            except Exception as e:
+                print(f"[BILLING] errore rinnovo: {e}")
+    elif etype in ("customer.subscription.deleted", "customer.subscription.paused"):
+        customer_id = data.get("customer", "")
+        if customer_id and db_pool:
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE users SET plan = 'free', subscription_expires_at = NULL WHERE stripe_customer_id = $1",
+                    customer_id
+                )
+            print(f"[BILLING] downgrade a free: customer={customer_id}")
+    return {"ok": True}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

@@ -222,6 +222,12 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .mkt-name { font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; }
 .mkt-sym-sub { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
 .mkt-in-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:4px; padding:1px 5px; font-weight:700; margin-left:6px; vertical-align:middle; }
+.plan-badge { font-size:9px; font-weight:800; padding:2px 7px; border-radius:20px; letter-spacing:0.06em; margin-left:6px; vertical-align:middle; }
+.plan-badge.free { background:var(--surface3); color:var(--text3); }
+.plan-badge.pro  { background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
+.pro-locked { opacity:0.45; pointer-events:none; }
+.pro-lock-label { font-size:10px; font-weight:700; color:#f59e0b; background:rgba(245,158,11,0.12); border-radius:4px; padding:1px 5px; margin-left:6px; }
+#sessionsIndicator { font-size:12px; margin-top:4px; }
 .mkt-vol { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
 .mkt-row { padding:12px 0; border-bottom:1px solid var(--border); }
 .mkt-row:last-child { border-bottom:none; }
@@ -514,7 +520,8 @@ body.auth-active .tabbar { display:none !important; }
     <div class="hdr-logo-dot inactive" id="logoDot"></div>
     Zentra
   </div>
-  <div class="hdr-right">
+  <div class="hdr-right" style="display:flex;align-items:center;gap:8px">
+    <span id="planBadge" class="plan-badge free" style="display:none">FREE</span>
     <div class="avatar-btn" id="avatarBtn" onclick="toggleProfileMenu()">
       <span id="avatarInitial">?</span>
     </div>
@@ -553,6 +560,10 @@ body.auth-active .tabbar { display:none !important; }
       Tema chiaro
     </div>
     <div class="toggle-switch" id="themeToggle" onclick="toggleTheme()"></div>
+  </div>
+  <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? (_plan==='pro' ? manageSubscriptionClick() : (document.getElementById('profileMenu').classList.remove('open'), showPaywall())) : null" style="display:none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+    <span id="pmBillingLabel">Abbonamento</span>
   </div>
   <div class="profile-menu-item danger" onclick="logout()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -934,11 +945,12 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <!-- Avvia sessione -->
-    <div id="homeStartBtnWrap" style="display:flex;justify-content:center">
+    <div id="homeStartBtnWrap" style="display:flex;flex-direction:column;align-items:center;gap:6px">
       <button id="homeStartBtn" onclick="openDrawer()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,82,255,0.25);transition:all 0.15s;letter-spacing:-0.01em">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Avvia sessione
       </button>
+      <div id="sessionsIndicator" style="display:none;font-size:12px;color:var(--text3)"></div>
     </div>
     <!-- Widget sessione in corso -->
     <div class="card" id="homeSessionWidget" style="display:none;margin-top:12px">
@@ -986,12 +998,12 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint" id="capitalHint">Percentuale del saldo disponibile da mettere in gioco</div>
     </div>
     <div class="field">
-      <div class="field-label">Allocazione per trade <span id="allocVal">0%</span></div>
+      <div class="field-label">Allocazione per trade <span id="allocVal">0%</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="allocPct" min="0" max="100" value="0" step="5" oninput="updateAlloc()">
       <div class="field-hint" id="allocHint">Max 5 posizioni · $0 per trade</div>
     </div>
     <div class="field">
-      <div class="field-label">Durata sessione <span id="sessionVal">0h</span></div>
+      <div class="field-label">Durata sessione <span id="sessionVal">0h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="sessionDuration" min="0" max="24" value="0" step="1" oninput="document.getElementById('sessionVal').textContent=this.value+'h'">
     </div>
 
@@ -1014,7 +1026,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
-      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span></div>
+      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <div class="ema-toggle-row">
         <button class="ema-btn active" id="trend1hOnBtn" onclick="setTrend1h(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1029,7 +1041,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
-      <div class="field-label">Filtro BTC EMA1h <span id="btcEmaLabel" style="color:var(--green);font-weight:700">ON</span></div>
+      <div class="field-label">Filtro BTC EMA1h <span id="btcEmaLabel" style="color:var(--green);font-weight:700">ON</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <div class="ema-toggle-row">
         <button class="ema-btn active" id="btcEmaOnBtn" onclick="setBtcEma(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1059,7 +1071,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
-      <div class="field-label">Filtro RSI <span id="rsiFilterLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="rsiRangeVal" style="color:var(--blue);font-weight:700">35–70</span></div>
+      <div class="field-label">Filtro RSI <span id="rsiFilterLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="rsiRangeVal" style="color:var(--blue);font-weight:700">35–70</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <div class="ema-toggle-row" style="margin-bottom:10px">
         <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1096,28 +1108,28 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
-      <div class="field-label">R minimo per trade <span id="minRVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
+      <div class="field-label">R minimo per trade <span id="minRVal" style="color:var(--blue);font-weight:700">1.0%</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="minR" min="0.3" max="2" value="1.0" step="0.1"
         oninput="document.getElementById('minRVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
       <div class="field-hint">Scarta trade dove il rischio è troppo piccolo — le fee mangerebbero il profitto</div>
     </div>
 
     <div class="field">
-      <div class="field-label">TP1 target <span id="tp1RVal" style="color:var(--green);font-weight:700">2.0R</span></div>
+      <div class="field-label">TP1 target <span id="tp1RVal" style="color:var(--green);font-weight:700">2.0R</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="tp1R" min="1" max="4" value="2.0" step="0.5"
         oninput="document.getElementById('tp1RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
       <div class="field-hint">Obiettivo prima metà — chiude 50% e attiva trailing stop ATR</div>
     </div>
 
     <div class="field">
-      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">4.0R</span></div>
+      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">4.0R</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="tp2R" min="2" max="8" value="4.0" step="0.5"
         oninput="document.getElementById('tp2RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
       <div class="field-hint">Obiettivo del 50% rimanente dopo TP1 — più alto = meno frequente ma più profittevole</div>
     </div>
 
     <div class="field">
-      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> <span style="color:var(--text3);font-size:11px;font-weight:500">(1.5× ATR)</span></div>
+      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> <span style="color:var(--text3);font-size:11px;font-weight:500">(1.5× ATR)</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <div class="ema-toggle-row" style="margin-bottom:10px">
         <button class="ema-btn active" id="trailingOnBtn" onclick="setTrailing(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1132,7 +1144,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
-      <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">4h</span></div>
+      <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">4h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="maxHoldHours" min="1" max="24" value="4" step="1"
         oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
       <div class="field-hint">Chiude la posizione automaticamente se aperta da troppo tempo</div>
@@ -1165,7 +1177,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
-      <div class="field-label">Max trade per sessione <span id="maxTradesVal">Illimitato</span></div>
+      <div class="field-label">Max trade per sessione <span id="maxTradesVal">Illimitato</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="maxTrades" min="0" max="20" value="0" step="1"
         oninput="updateMaxTrades()">
       <div class="field-hint" id="maxTradesHint">Nessun limite — l'agente opera per tutta la durata</div>
@@ -1179,7 +1191,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
-      <div class="field-label">Cooldown post-uscita <span id="cdVal">0h</span></div>
+      <div class="field-label">Cooldown post-uscita <span id="cdVal">0h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="cooldown" min="0" max="6" value="0" step="0.5"
         oninput="document.getElementById('cdVal').textContent=this.value+'h'">
     </div>
@@ -1366,8 +1378,12 @@ let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
 let _emaFilter = true;
 let _hasApiKeys = false;
-let _simMode = true; // default simulazione
+let _simMode = true;
 let _hasRevxKeys = false;
+let _plan = 'free';
+let _sessionsToday = 0;
+let _sessionsPerDay = 1;
+let STRIPE_ENABLED = false;
 let _pendingStartCfg = null;
 let _newTradeCount = 0;
 let _lastSeenTradeCount = 0;
@@ -1587,6 +1603,9 @@ async function checkAuth() {
     }
     const d = await r.json();
     _username = d.username;
+    _plan = d.plan || 'free';
+    _sessionsToday = d.sessions_today || 0;
+    _sessionsPerDay = d.sessions_per_day || 1;
     localStorage.setItem('ca_username', _username);
     if (!d.has_api_keys) {
       showAuthScreen();
@@ -1653,12 +1672,20 @@ function initApp() {
 
 async function loadUserProfile() {
   try {
-    const [meRes, wlRes] = await Promise.all([
+    const [meRes, wlRes, billingRes] = await Promise.all([
       fetch(API + '/auth/me', { headers: authHeaders() }),
-      fetch(API + '/watchlist', { headers: authHeaders() })
+      fetch(API + '/watchlist', { headers: authHeaders() }),
+      fetch(API + '/billing/status', { headers: authHeaders() })
     ]);
     const me = await meRes.json();
     const wl = await wlRes.json();
+    if (billingRes.ok) {
+      const billing = await billingRes.json();
+      STRIPE_ENABLED    = billing.stripe_enabled || false;
+      _plan             = billing.plan || _plan;
+      _sessionsToday    = billing.sessions_today ?? _sessionsToday;
+      _sessionsPerDay   = billing.sessions_per_day ?? _sessionsPerDay;
+    }
 
     _hasApiKeys = me.has_api_keys || false;
     _hasRevxKeys = me.has_revx_keys || false;
@@ -1684,6 +1711,7 @@ async function loadUserProfile() {
     updateSimToggle();
     renderHome();
     renderMarketStars();
+    updatePlanUI();
   } catch(e) {
     applyAvatar(localStorage.getItem('ca_avatar'));
   }
@@ -2466,6 +2494,7 @@ async function doStartAgent(cfg) {
   try {
     const r = await fetch(API + '/start', { method:'POST', headers:authHeaders(), body:JSON.stringify({config:cfg}) });
     const d = await r.json();
+    if (d.error === 'session_limit') { showPaywall(d.message); return; }
     if (d.error) { alert(d.error); return; }
     saveConfigToStorage(cfg);
     document.getElementById('startBtn').disabled = true;
@@ -3643,6 +3672,119 @@ document.addEventListener('touchstart', e => {
   const tip = document.getElementById('emaTooltip');
   if (tip && !tip.contains(e.target)) tip.classList.remove('show');
 }, { passive: true });
+
+// ── BILLING / PAYWALL ─────────────────────────────────────────────────────────
+
+function showPaywall(msg) {
+  document.getElementById('paywallMsg').textContent = msg || 'Passa a Pro per sbloccare sessioni illimitate.';
+  document.getElementById('paywallModal').classList.add('open');
+}
+
+function closePaywall() {
+  document.getElementById('paywallModal').classList.remove('open');
+}
+
+async function upgradeToProClick() {
+  if (!STRIPE_ENABLED) { alert('Pagamenti non ancora configurati.'); return; }
+  try {
+    const r = await fetch(API + '/billing/checkout', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ success_url: location.href, cancel_url: location.href })
+    });
+    const d = await r.json();
+    if (d.url) { location.href = d.url; }
+    else { alert(d.detail || 'Errore checkout'); }
+  } catch(e) { alert('Errore: ' + e.message); }
+}
+
+async function manageSubscriptionClick() {
+  try {
+    const r = await fetch(API + '/billing/portal', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ return_url: location.href })
+    });
+    const d = await r.json();
+    if (d.url) { location.href = d.url; }
+    else { alert(d.detail || 'Nessun abbonamento attivo'); }
+  } catch(e) { alert('Errore: ' + e.message); }
+}
+
+// Aggiorna badge piano nell'header e sessioni home
+function updatePlanUI() {
+  const badge = document.getElementById('planBadge');
+  if (badge) {
+    badge.textContent = _plan === 'pro' ? 'PRO' : 'FREE';
+    badge.className = 'plan-badge ' + (_plan === 'pro' ? 'pro' : 'free');
+    badge.style.display = '';
+  }
+  const sesEl = document.getElementById('sessionsIndicator');
+  if (sesEl) {
+    if (_plan === 'free') {
+      const rem = Math.max(0, _sessionsPerDay - _sessionsToday);
+      sesEl.textContent = rem > 0 ? `${rem}/${_sessionsPerDay} sessione disponibile` : 'Sessione gratuita esaurita oggi';
+      sesEl.style.color = rem > 0 ? 'var(--text3)' : 'var(--red)';
+      sesEl.style.display = '';
+    } else {
+      sesEl.style.display = 'none';
+    }
+  }
+  // Show billing menu item when Stripe is configured
+  const pmBilling = document.getElementById('pmBillingItem');
+  if (pmBilling && STRIPE_ENABLED) {
+    pmBilling.style.display = '';
+    const lbl = document.getElementById('pmBillingLabel');
+    if (lbl) lbl.textContent = _plan === 'pro' ? 'Gestisci abbonamento' : 'Passa a Pro';
+  }
+  // Lock/unlock config pro features
+  applyPlanConfig();
+}
+
+function applyPlanConfig() {
+  const isFree = _plan === 'free';
+  const proIds = ['allocPct','sessionDuration','trend1hOnBtn','trend1hOffBtn','btcEmaOnBtn','btcEmaOffBtn',
+                  'pullbackTolerance','rsiMin','rsiMax','tp1R','tp2R',
+                  'trailingOnBtn','trailingOffBtn','cooldown','maxTrades','maxHoldHours','minR'];
+  proIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = isFree;
+    if (isFree) el.closest('.field-row, .field-group, div')?.classList?.add('pro-locked');
+  });
+  // Mostra/nascondi label PRO sui campi bloccati
+  document.querySelectorAll('.pro-lock-label').forEach(l => {
+    l.style.display = isFree ? 'inline' : 'none';
+  });
+}
+
+// Check ?upgraded=1 param al ritorno da Stripe
+(function() {
+  const p = new URLSearchParams(location.search);
+  if (p.get('upgraded') === '1') {
+    history.replaceState({}, '', location.pathname);
+    setTimeout(() => showToast('🎉 Benvenuto in Pro! Abbonamento attivato.'), 800);
+  }
+})();
 </script>
+
+<!-- PAYWALL MODAL -->
+<div class="modal-overlay" id="paywallModal" onclick="if(event.target===this)closePaywall()">
+  <div class="modal-card" style="max-width:360px;text-align:center;padding:32px 24px">
+    <div style="font-size:40px;margin-bottom:12px">🔒</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:8px">Piano Free</div>
+    <p id="paywallMsg" style="color:var(--text2);font-size:14px;margin-bottom:24px;line-height:1.5"></p>
+    <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:20px;text-align:left">
+      <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">✦ Zentra Pro — €9.99/mese</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.8">
+        ✓ Sessioni illimitate al giorno<br>
+        ✓ Posizioni multiple contemporaneamente<br>
+        ✓ Tutte le coin del mercato<br>
+        ✓ Filtri avanzati (Trend 1h, BTC EMA, TP custom)<br>
+        ✓ Allocazione personalizzabile
+      </div>
+    </div>
+    <button class="btn-primary" style="width:100%;padding:14px;font-size:16px;margin-bottom:10px" onclick="upgradeToProClick()">Passa a Pro</button>
+    <button onclick="closePaywall()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">Forse dopo</button>
+  </div>
+</div>
 </body>
 </html>
