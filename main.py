@@ -2786,58 +2786,6 @@ async def test_revx(request: Request, user_id: int = Depends(get_current_user)):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-@app.get("/debug_revx_ticker")
-async def debug_revx_ticker(request: Request, user_id: int = Depends(get_current_user)):
-    """Tickers Revolut X — richiede X-Admin-Key: <SECRET_KEY>"""
-    check_rate_limit(request, max_attempts=5, window=60, key_suffix="debug_revx_ticker")
-    if not SECRET_KEY or request.headers.get("X-Admin-Key", "") != SECRET_KEY:
-        raise HTTPException(status_code=403, detail="Accesso negato")
-    try:
-        async with db_pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
-        if not row or not row["revx_key_id"]:
-            return {"error": "Chiavi RevX non configurate"}
-        key_id = decrypt_key(row["revx_key_id"])
-        priv   = decrypt_key(row["revx_private_key"])
-        result = await revx_request("GET", "/api/1.0/tickers", key_id=key_id, private_key=priv, params={})
-        tickers = result if isinstance(result, list) else result.get("tickers", result.get("data", []))
-        eur = [t for t in (tickers if isinstance(tickers, list) else [])
-               if isinstance(t, dict) and str(t.get("symbol","")).endswith("/USD")][:3]
-        return {
-            "raw_type": type(result).__name__,
-            "raw_keys": list(result.keys()) if isinstance(result, dict) else "list",
-            "total": len(tickers) if isinstance(tickers, list) else 0,
-            "sample_eur": eur,
-            "first_2_raw": (tickers[:2] if isinstance(tickers, list) else [str(result)[:300]])
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/debug_revx_candles")
-async def debug_revx_candles(request: Request, user_id: int = Depends(get_current_user)):
-    """Candles Revolut X — richiede X-Admin-Key: <SECRET_KEY>"""
-    check_rate_limit(request, max_attempts=5, window=60, key_suffix="debug_revx_candles")
-    if not SECRET_KEY or request.headers.get("X-Admin-Key", "") != SECRET_KEY:
-        raise HTTPException(status_code=403, detail="Accesso negato")
-    try:
-        async with db_pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
-        if not row or not row["revx_key_id"]:
-            return {"error": "Chiavi RevX non configurate"}
-        key_id = decrypt_key(row["revx_key_id"])
-        priv   = decrypt_key(row["revx_private_key"])
-        # Candles: simbolo nel path, interval in minuti come query param
-        result = await revx_request("GET", "/api/1.0/candles/BTC/USD",
-                                    key_id=key_id, private_key=priv,
-                                    params={"interval": "5", "limit": "3"})
-        return {
-            "raw_type": type(result).__name__,
-            "raw_keys": list(result.keys()) if isinstance(result, dict) else "list",
-            "data": result
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
 @app.get("/test_coinbase")
 async def test_coinbase(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=10, window=60, key_suffix="test_coinbase")
@@ -2870,49 +2818,6 @@ async def test_coinbase(request: Request, user_id: int = Depends(get_current_use
         return {"ok": True, "balances": balances, "usdc_tradable": usdc_balance}
     except Exception as e:
         return {"ok": False, "error": str(e)}
-
-@app.get("/debug_coinbase")
-async def debug_coinbase(request: Request, user_id: int = Depends(get_current_user)):
-    check_rate_limit(request, max_attempts=5, window=60, key_suffix="debug_coinbase")
-    """Mostra la risposta raw di Coinbase per debug saldi."""
-    cb_key, cb_secret = _ENV_CB_KEY, _ENV_CB_SECRET
-    if db_pool:
-        try:
-            async with db_pool.acquire() as conn:
-                row = await conn.fetchrow("SELECT cb_key, cb_secret FROM users WHERE id = $1", user_id)
-                if row and row["cb_key"]:
-                    cb_key    = decrypt_key(row["cb_key"])
-                    cb_secret = decrypt_key(row["cb_secret"])
-        except Exception as e:
-            pass
-    if not cb_key:
-        return {"error": "no keys"}
-    try:
-        # Prova endpoint portfolios per trovare USDC
-        portfolios_result = await coinbase_request("GET", "/api/v3/brokerage/portfolios", cb_key=cb_key, cb_secret=cb_secret)
-
-        # Cerca UUID del portfolio default
-        portfolios = portfolios_result.get("portfolios", [])
-        default_uuid = None
-        for p in portfolios:
-            if p.get("type") == "DEFAULT" or p.get("name") in ("Default", "Portafoglio principale"):
-                default_uuid = p.get("uuid")
-                break
-        if not default_uuid and portfolios:
-            default_uuid = portfolios[0].get("uuid")
-
-        portfolio_balances = {}
-        if default_uuid:
-            bal_result = await coinbase_request("GET", f"/api/v3/brokerage/portfolios/{default_uuid}", cb_key=cb_key, cb_secret=cb_secret)
-            portfolio_balances = bal_result
-
-        return {
-            "portfolios": portfolios,
-            "default_uuid": default_uuid,
-            "portfolio_detail": portfolio_balances,
-        }
-    except Exception as e:
-        return {"error": str(e)}
 
 @app.get("/logos")
 async def get_logos(request: Request, user_id: int = Depends(get_current_user)):
