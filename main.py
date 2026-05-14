@@ -70,8 +70,7 @@ if STRIPE_SECRET_KEY:
 FREE_SESSIONS_PER_DAY  = 1
 FREE_MAX_SESSION_HOURS = 2
 FREE_MAX_POSITIONS     = 1
-FREE_ALLOC_PCT         = 0.50   # allocazione fissa 50%
-FREE_COINS             = {"BTC", "ETH", "SOL"}
+FREE_ALLOC_PCT         = 1.0    # allocazione fissa 100% — 1 posizione = tutto il capitale sessione
 FREE_RSI_MIN           = 35.0
 FREE_RSI_MAX           = 65.0
 
@@ -1508,8 +1507,6 @@ async def scan_and_trade(state: dict, user_id: int = None):
             and sym in candle_data
             and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
         ]
-    if is_free:
-        universe = [d for d in universe if d["symbol"] in FREE_COINS]
     universe_sorted = sorted(universe, key=lambda d: d.get("volume24h", 0), reverse=True)
 
     candidates  = []
