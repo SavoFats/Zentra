@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Zentra</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --blue: #0052ff;
+    --text: #0a0a0f;
+    --text2: #4a4a5a;
+    --text3: #8a8a9a;
+    --bg: #f5f6fa;
+    --surface: #ffffff;
+    --border: rgba(0,0,0,0.08);
+    --radius: 16px;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0 16px 80px;
+  }
+  header {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 0 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--blue);
+  }
+  .logo-name {
+    font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.02em;
+  }
+  .back {
+    margin-left: auto;
+    font-size: 13px; font-weight: 600; color: var(--blue);
+    text-decoration: none;
+  }
+  .card {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 40px 40px;
+    border: 1px solid var(--border);
+  }
+  @media (max-width: 600px) { .card { padding: 24px 20px; } }
+  .page-label {
+    font-size: 11px; font-weight: 700; color: var(--blue);
+    letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px;
+  }
+  h1 {
+    font-size: 28px; font-weight: 800; color: var(--text);
+    letter-spacing: -0.02em; margin-bottom: 8px;
+  }
+  .updated {
+    font-size: 13px; color: var(--text3); margin-bottom: 36px;
+  }
+  h2 {
+    font-size: 16px; font-weight: 700; color: var(--text);
+    margin: 36px 0 10px;
+  }
+  h2:first-of-type { margin-top: 0; }
+  p { font-size: 14px; color: var(--text2); margin-bottom: 12px; }
+  ul {
+    font-size: 14px; color: var(--text2);
+    padding-left: 20px; margin-bottom: 12px;
+  }
+  li { margin-bottom: 6px; }
+  a { color: var(--blue); text-decoration: none; }
+  .divider {
+    height: 1px; background: var(--border); margin: 32px 0;
+  }
+  .highlight {
+    background: rgba(0,82,255,0.06);
+    border-left: 3px solid var(--blue);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    font-size: 13px; color: var(--text2);
+    margin: 16px 0;
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo-dot"></div>
+  <span class="logo-name">Zentra</span>
+  <a href="https://zentra.trading" class="back">← Torna all'app</a>
+</header>
+
+<div class="card">
+  <div class="page-label">Documento legale</div>
+  <h1>Informativa sulla Privacy</h1>
+  <div class="updated">Ultimo aggiornamento: 16 maggio 2026</div>
+
+  <h2>1. Titolare del trattamento</h2>
+  <p>Il titolare del trattamento dei dati personali è <strong>Zentra</strong>, raggiungibile all'indirizzo email <a href="mailto:saveriograssi1@gmail.com">saveriograssi1@gmail.com</a>.</p>
+
+  <h2>2. Dati raccolti</h2>
+  <p>Raccogliamo le seguenti categorie di dati personali:</p>
+  <ul>
+    <li><strong>Dati di account:</strong> indirizzo email, nome utente, password (conservata in forma crittografata con bcrypt)</li>
+    <li><strong>Credenziali API exchange:</strong> chiavi API Revolut X o Coinbase, conservate crittografate con AES-256 nei nostri server; non vengono mai trasmesse in chiaro</li>
+    <li><strong>Dati di pagamento:</strong> gestiti interamente da Stripe. Non conserviamo numeri di carta o dati bancari. Riceviamo da Stripe un identificativo cliente (<code>customer_id</code>) e lo stato dell'abbonamento</li>
+    <li><strong>Dati Telegram:</strong> chat ID del tuo account Telegram, se scegli di collegarlo per le notifiche</li>
+    <li><strong>Dati di utilizzo:</strong> numero di sessioni di trading, configurazioni di sessione, log delle operazioni eseguite</li>
+    <li><strong>Dati tecnici:</strong> indirizzo IP (usato per rate limiting e sicurezza), log di accesso</li>
+  </ul>
+
+  <h2>3. Finalità del trattamento</h2>
+  <p>I tuoi dati vengono trattati esclusivamente per:</p>
+  <ul>
+    <li>Erogare il servizio di trading automatizzato</li>
+    <li>Gestire il tuo account e l'autenticazione</li>
+    <li>Processare i pagamenti degli abbonamenti tramite Stripe</li>
+    <li>Inviare notifiche di trading via Telegram (solo se collegato)</li>
+    <li>Garantire la sicurezza della piattaforma e prevenire abusi</li>
+    <li>Adempiere a obblighi legali</li>
+  </ul>
+
+  <h2>4. Base giuridica</h2>
+  <p>Il trattamento è basato su:</p>
+  <ul>
+    <li><strong>Esecuzione del contratto</strong> (art. 6.1.b GDPR): per erogare il servizio sottoscritto</li>
+    <li><strong>Legittimo interesse</strong> (art. 6.1.f GDPR): per la sicurezza della piattaforma e la prevenzione delle frodi</li>
+    <li><strong>Obbligo legale</strong> (art. 6.1.c GDPR): per adempiere a normative applicabili</li>
+  </ul>
+
+  <h2>5. Terze parti</h2>
+  <p>I tuoi dati possono essere condivisi con:</p>
+  <ul>
+    <li><strong>Stripe, Inc.</strong> — processore di pagamento. <a href="https://stripe.com/privacy" target="_blank">Privacy policy Stripe</a></li>
+    <li><strong>Railway Corp.</strong> — hosting del backend e del database. I server sono localizzati nell'UE o negli USA con garanzie adeguate</li>
+    <li><strong>Telegram Messenger</strong> — per le notifiche, se collegato. Solo il chat ID viene trasmesso</li>
+    <li><strong>Revolut / Coinbase</strong> — le richieste di trading vengono inviate alle API delle exchange tramite le tue credenziali</li>
+  </ul>
+  <p>Non vendiamo né cediamo i tuoi dati a terzi per finalità di marketing.</p>
+
+  <h2>6. Conservazione dei dati</h2>
+  <p>I dati vengono conservati per il tempo necessario all'erogazione del servizio. Alla cancellazione dell'account, i dati vengono eliminati entro 30 giorni, ad eccezione dei dati contabili che devono essere conservati per obblighi fiscali (10 anni).</p>
+
+  <h2>7. Sicurezza</h2>
+  <p>Adottiamo misure tecniche e organizzative adeguate per proteggere i tuoi dati, tra cui:</p>
+  <ul>
+    <li>Crittografia AES-256 per le chiavi API delle exchange</li>
+    <li>Hashing bcrypt delle password</li>
+    <li>Comunicazioni cifrate via HTTPS/TLS</li>
+    <li>Rate limiting e protezione contro attacchi brute force</li>
+    <li>Accesso ai dati limitato al personale autorizzato</li>
+  </ul>
+
+  <h2>8. I tuoi diritti (GDPR)</h2>
+  <p>In qualità di interessato, hai diritto a:</p>
+  <ul>
+    <li><strong>Accesso:</strong> ottenere conferma del trattamento e copia dei tuoi dati</li>
+    <li><strong>Rettifica:</strong> correggere dati inesatti o incompleti</li>
+    <li><strong>Cancellazione:</strong> richiedere l'eliminazione dei tuoi dati ("diritto all'oblio")</li>
+    <li><strong>Portabilità:</strong> ricevere i tuoi dati in formato strutturato e leggibile da macchina</li>
+    <li><strong>Opposizione:</strong> opporti al trattamento basato sul legittimo interesse</li>
+    <li><strong>Limitazione:</strong> richiedere la limitazione del trattamento in determinati casi</li>
+  </ul>
+  <p>Per esercitare i tuoi diritti, scrivi a <a href="mailto:saveriograssi1@gmail.com">saveriograssi1@gmail.com</a>. Risponderemo entro 30 giorni. Hai inoltre il diritto di proporre reclamo al Garante per la protezione dei dati personali (<a href="https://www.garanteprivacy.it" target="_blank">garanteprivacy.it</a>).</p>
+
+  <h2>9. Cookie</h2>
+  <p>Zentra non utilizza cookie di profilazione o di tracciamento di terze parti. Vengono utilizzati esclusivamente token di autenticazione locali (localStorage) necessari al funzionamento del servizio.</p>
+
+  <h2>10. Modifiche</h2>
+  <p>Ci riserviamo di aggiornare questa informativa. Le modifiche sostanziali verranno notificate tramite l'app. L'uso continuato del servizio dopo la notifica costituisce accettazione delle modifiche.</p>
+
+  <div class="divider"></div>
+  <div class="highlight">
+    Per qualsiasi domanda relativa al trattamento dei tuoi dati contatta: <a href="mailto:saveriograssi1@gmail.com">saveriograssi1@gmail.com</a>
+  </div>
+</div>
+</body>
+</html>
