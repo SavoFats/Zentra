@@ -3785,9 +3785,11 @@ function applyPlanConfig() {
   const p = new URLSearchParams(location.search);
   if (p.get('upgraded') === '1') {
     history.replaceState({}, '', location.pathname);
-    // Polling: webhook Stripe è asincrono, aspetta max 12s che il piano diventi pro
     setTimeout(async () => {
-      for (let i = 0; i < 6; i++) {
+      // Mostra overlay di caricamento subito
+      document.getElementById('upgradingOverlay').style.display = 'flex';
+      // Polling: webhook Stripe è asincrono, aspetta max 14s
+      for (let i = 0; i < 7; i++) {
         await new Promise(r => setTimeout(r, 2000));
         try {
           const r = await fetch(API + '/billing/status', { headers: authHeaders() });
@@ -3803,8 +3805,9 @@ function applyPlanConfig() {
           }
         } catch(e) {}
       }
+      document.getElementById('upgradingOverlay').style.display = 'none';
       showProWelcome();
-    }, 800);
+    }, 400);
   }
 })();
 
@@ -3816,6 +3819,12 @@ function closeProWelcome() {
   updatePlanUI();
 }
 </script>
+
+<!-- UPGRADING OVERLAY -->
+<div id="upgradingOverlay" style="display:none;position:fixed;inset:0;z-index:500;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);background:rgba(0,0,0,0.5);flex-direction:column;align-items:center;justify-content:center;gap:20px">
+  <div style="width:48px;height:48px;border:3px solid rgba(245,158,11,0.3);border-top-color:#f59e0b;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+  <div style="color:#fff;font-size:15px;font-weight:600;letter-spacing:-0.01em">Attivazione abbonamento…</div>
+</div>
 
 <!-- WELCOME PRO MODAL -->
 <div class="modal-overlay" id="proWelcomeModal">
