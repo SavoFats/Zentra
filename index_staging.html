@@ -1549,7 +1549,8 @@ function hideAuthScreen() {
   document.body.classList.remove('auth-active');
 }
 function showAuthScreen() {
-  showAuthScreen();
+  const s = document.getElementById('authScreen');
+  if (s) { s.style.display = 'flex'; s.style.opacity = '1'; }
   document.body.classList.add('auth-active');
 }
 function showAuthError(id, msg) { const el=document.getElementById(id); el.textContent=msg; el.style.display=''; }
