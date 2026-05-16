@@ -867,7 +867,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     # Fallback: stop fisso da config
     stop_price = sym_data.get("stop_price", 0.0)
     if stop_price <= 0 or stop_price >= price:
-        fallback_sl = cfg.get("stopLoss", 0.01)
+        fallback_sl = cfg.get("maxStopPct", 0.05)
         stop_price  = price * (1 - fallback_sl)
 
     R_pct = (price - stop_price) / price  # rischio in % per questa posizione
@@ -1227,7 +1227,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     cfg = state["config"]
     # Dopo uno stop loss secco (senza TP1), cooldown più lungo per proteggere da re-entry su trend avverso
     is_clean_stop = ("STOP" in reason) and not pos.get("tp1_hit", False)
-    cooldown_h = cfg.get("slCooldownHours", 4) if is_clean_stop else cfg.get("cooldown", 1)
+    cooldown_h = cfg.get("cooldown", 1)
     state["cooldowns"][sym] = (datetime.now().timestamp() + cooldown_h * 3600) * 1000
     trade_record = {
         "symbol": sym, "reason": reason,
