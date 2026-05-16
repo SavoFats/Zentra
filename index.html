@@ -3866,7 +3866,7 @@ function closeProWelcome() {
 </div>
 
 <!-- Banner informativa storage -->
-<div id="cookieBanner" style="display:none;position:fixed;bottom:calc(var(--tab-h,60px) + env(safe-area-inset-bottom,0px) + 12px);left:12px;right:12px;z-index:450;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.12);flex-direction:column;gap:10px">
+<div id="cookieBanner" style="display:none;position:fixed;bottom:calc(var(--tab-h,60px) + env(safe-area-inset-bottom,0px) + 12px);left:12px;right:12px;z-index:450;background:var(--surface);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--glass-border);border-radius:14px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.28);flex-direction:column;gap:10px">
   <div style="font-size:12px;color:var(--text2);line-height:1.5">
     Zentra utilizza token di autenticazione in memoria locale (<strong>localStorage</strong>) per mantenere la sessione attiva. Non usiamo cookie di profilazione o di terze parti.
     <a href="/privacy.html" style="color:var(--blue);font-weight:600">Privacy Policy</a> · <a href="/terms.html" style="color:var(--blue);font-weight:600">Termini</a>
