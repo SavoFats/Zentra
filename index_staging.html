@@ -1798,7 +1798,13 @@ async function handleTelegramAction() {
       const botBox = document.getElementById('tgBotLink');
       if (botBox) {
         if (data.bot_url) {
-          botBox.innerHTML = 'Apri il bot: <a href="' + data.bot_url + '" target="_blank" style="color:var(--blue);font-weight:700">@' + data.bot_username + '</a>';
+          const _a = document.createElement('a');
+          _a.href = data.bot_url;
+          _a.target = '_blank';
+          _a.style.cssText = 'color:var(--blue);font-weight:700';
+          _a.textContent = '@' + data.bot_username;
+          botBox.textContent = 'Apri il bot: ';
+          botBox.appendChild(_a);
           botBox.style.display = 'block';
         } else {
           botBox.style.display = 'none';
@@ -2767,8 +2773,10 @@ function renderHomeSession() {
     return;
   }
   cnt.innerHTML = pos.map(p => {
-    const pnl = (p.currentPrice - p.entryPrice) / p.entryPrice * (p.size_remaining || p.size);
-    const pct = (p.currentPrice - p.entryPrice) / p.entryPrice * 100;
+    const _ep = p.entryPrice || 0;
+    const _cp = p.currentPrice || _ep;
+    const pnl = _ep > 0 ? (_cp - _ep) / _ep * (p.size_remaining || p.size || 0) : 0;
+    const pct = _ep > 0 ? (_cp - _ep) / _ep * 100 : 0;
     const isPos = pnl >= 0;
     const color = isPos ? 'var(--green)' : 'var(--red)';
     const logo = getLogo(p.symbol);
@@ -2778,7 +2786,7 @@ function renderHomeSession() {
         <div style="display:flex;align-items:center;gap:10px">${img}
           <div>
             <div style="font-size:14px;font-weight:700">${p.symbol}</div>
-            <div style="font-size:11px;color:var(--text3)">${getCurrSym()}${p.currentPrice.toFixed(4)}</div>
+            <div style="font-size:11px;color:var(--text3)">${getCurrSym()}${_cp.toFixed(4)}</div>
           </div>
         </div>
         <div style="text-align:right">
@@ -2903,8 +2911,10 @@ function renderPositions() {
   const pos = S.positions || [];
   if (!pos.length) { wrap.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div>'; return; }
   wrap.innerHTML = pos.map(p => {
-    const pnl = (p.currentPrice - p.entryPrice) / p.entryPrice * (p.size_remaining || p.size);
-    const pct = (p.currentPrice - p.entryPrice) / p.entryPrice * 100;
+    const entryPrice = p.entryPrice || 0;
+    const currentPrice = p.currentPrice || entryPrice;
+    const pnl = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * (p.size_remaining || p.size || 0) : 0;
+    const pct = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100 : 0;
     const isPos = pnl >= 0;
     const color = isPos ? 'var(--green)' : 'var(--red)';
     const logo = getLogo(p.symbol);
@@ -2913,8 +2923,6 @@ function renderPositions() {
     const tp1Price = p.tp1Price || 0;
     const tp2Price = p.tp2Price || 0;
     const stopPrice = p.stopPrice || 0;
-    const entryPrice = p.entryPrice || 0;
-    const currentPrice = p.currentPrice || 0;
     const tp1Badge = tp1Hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:6px">TP1 ✓</span>' : '';
     // SL→TP bar
     let barHtml = '';

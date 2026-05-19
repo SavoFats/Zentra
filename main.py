@@ -112,9 +112,9 @@ async def get_db():
     return db_pool
 
 def create_token(user_id: int) -> str:
-    import base64
+    import base64, hmac as _hmac
     payload = f"{user_id}:{int(time.time()) + 86400 * 30}"
-    sig = hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:32]
+    sig = _hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return base64.urlsafe_b64encode(f"{payload}:{sig}".encode()).decode()
 
 def verify_token(token: str) -> int:
@@ -126,7 +126,7 @@ def verify_token(token: str) -> int:
         if int(time.time()) > expires:
             raise HTTPException(status_code=401, detail="Token scaduto")
         payload = f"{user_id}:{expires}"
-        expected = hashlib.sha256((payload + SECRET_KEY).encode()).hexdigest()[:32]
+        expected = _hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
         if not _hmac.compare_digest(sig, expected):
             raise HTTPException(status_code=401, detail="Token non valido")
         return user_id
@@ -293,6 +293,7 @@ async def coinbase_request(method: str, path: str, body: dict = None,
 
 market_data = {}  # sym -> {price, change1h, change24h, volume24h, icon}
 user_sessions: dict = {}
+_sessions_starting: set = set()  # user_id in avvio, evita doppi /start concorrenti
 
 # ── CANDLE DATA (nuovo) ───────────────────────────────────────────────────────
 # sym -> {
@@ -1890,7 +1891,11 @@ async def background_loop():
             sessions_snapshot = list(user_sessions.items())
             for uid, state in sessions_snapshot:
                 if state["running"]:
-                    await scan_and_trade(state, user_id=uid)
+                    try:
+                        await scan_and_trade(state, user_id=uid)
+                    except Exception as user_err:
+                        import traceback as _tb
+                        print(f"[scan_and_trade] user {uid}: {user_err}\n{_tb.format_exc()}")
 
             # Persisti sessioni ogni 30 secondi
             if time.time() - last_persist >= 30:
@@ -2212,6 +2217,8 @@ async def register(req: RegisterRequest, request: Request):
         return {"token": token, "username": req.username, "has_api_keys": False}
     except asyncpg.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Username già in uso")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Errore durante la registrazione")
 
 @app.post("/auth/logout")
 async def logout_user():
@@ -2552,12 +2559,23 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     state = get_session(user_id)
     if state["running"]:
         return {"error": "Already running"}
+    if user_id in _sessions_starting:
+        return {"error": "Already running"}
     cfg     = body.get("config", {})
-    capital = float(cfg.get("capital", 1000))
+    try:
+        capital = float(cfg.get("capital", 1000))
+    except (TypeError, ValueError):
+        return {"error": "Capitale non valido (min $1, max $1,000,000)"}
     if capital <= 0 or capital > 1_000_000:
         return {"error": "Capitale non valido (min $1, max $1,000,000)"}
-    if float(cfg.get("allocPct", 0.20)) <= 0 or float(cfg.get("allocPct", 0.20)) > 1:
+    try:
+        alloc_val = float(cfg.get("allocPct", 0.20))
+    except (TypeError, ValueError):
         return {"error": "Allocazione non valida (0-100%)"}
+    if alloc_val <= 0 or alloc_val > 1:
+        return {"error": "Allocazione non valida (0-100%)"}
+    # Tutto OK — guard concorrenza DOPO validazione sincrona, prima del primo await
+    _sessions_starting.add(user_id)
     # Validazione parametri config
     def _clamp(val, lo, hi, default):
         try: return max(lo, min(hi, float(val)))
@@ -2610,6 +2628,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
                         last_date = row["last_session_date"]
                         sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
                         if sessions_today >= FREE_SESSIONS_PER_DAY:
+                            _sessions_starting.discard(user_id)
                             return {
                                 "error": "session_limit",
                                 "message": f"Hai già usato la tua sessione gratuita di oggi. Torna domani o passa a Pro.",
@@ -2703,6 +2722,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         f"EMA: {ema_s} | Trend1h: {t1h_s} | RSI: {rsi_s} | "
         f"TP1: {tp1r}R | TP2: {tp2r}R | MaxHold: {mxh}h | MaxLoss: {mcl}"
     )
+    _sessions_starting.discard(user_id)
     return {"ok": True}
 
 @app.post("/stop")
