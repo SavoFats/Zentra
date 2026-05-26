@@ -1041,23 +1041,7 @@ body.auth-active .tabbar { display:none !important; }
       <input type="range" id="sessionDuration" min="0" max="24" value="0" step="1" oninput="document.getElementById('sessionVal').textContent=this.value+'h'">
     </div>
 
-    <div class="section-label">Strategia EMA</div>
-
-    <!-- EMA FILTER TOGGLE -->
-    <div class="field">
-      <div class="field-label">Filtro EMA <span id="emaFilterLabel" style="color:var(--green)">ON</span></div>
-      <div class="ema-toggle-row">
-        <button class="ema-btn active" id="emaOnBtn" onclick="setEmaFilter(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="emaOffBtn" onclick="setEmaFilter(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
-      </div>
-      <div class="field-hint">Usa EMA20/50 su 5min e 15min per filtrare gli ingressi</div>
-    </div>
+    <div class="section-label">Filtri</div>
 
     <div class="field" style="display:none">
       <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span></div>
@@ -1082,20 +1066,6 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Pausa se BTC è sotto la propria EMA50 su 1h — filtro medio-termine più stabile, meno falsi blocchi</div>
     </div>
 
-    <div class="field">
-      <div class="field-label">Filtro Orario <span id="timeFilterLabel" style="color:var(--green);font-weight:700">ON</span></div>
-      <div class="ema-toggle-row">
-        <button class="ema-btn active" id="timeFilterOnBtn" onclick="setTimeFilter(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="timeFilterOffBtn" onclick="setTimeFilter(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
-      </div>
-      <div class="field-hint">Pausa tra 00:00 e 07:00 UTC — liquidità bassa, movimenti imprevedibili</div>
-    </div>
 
     <div class="field" style="display:none">
       <div class="field-label">Filtro RSI <span id="rsiFilterLabel">ON</span></div>
@@ -1358,7 +1328,6 @@ const API = 'https://crypto-agent-back-production-87b2.up.railway.app';
 
 let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
-let _emaFilter = true;
 let _hasApiKeys = false;
 let _simMode = true;
 let _hasRevxKeys = false;
@@ -1997,14 +1966,6 @@ function toggleTheme() {
 }
 
 // ── EMA FILTER ────────────────────────────────────────────────────────────────
-function setEmaFilter(on) {
-  _emaFilter = on;
-  document.getElementById('emaOnBtn').classList.toggle('active', on);
-  document.getElementById('emaOffBtn').classList.toggle('active', !on);
-  document.getElementById('emaFilterLabel').textContent = on ? 'ON' : 'OFF';
-  document.getElementById('emaFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
-}
-
 // ── SLIDER HELPERS ────────────────────────────────────────────────────────────
 function updateMaxTrades() {
   const v = parseInt(document.getElementById('maxTrades').value);
@@ -2217,8 +2178,6 @@ function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
   document.getElementById('modeSimBtn').disabled = true;
   document.getElementById('modeRealBtn').disabled = true;
-  document.getElementById('emaOnBtn').disabled = true;
-  document.getElementById('emaOffBtn').disabled = true;
   document.getElementById('startBtn').style.display = 'none';
   document.getElementById('resetBtn').style.display = 'none';
 }
@@ -2226,8 +2185,6 @@ function unlockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=false; });
   document.getElementById('modeSimBtn').disabled = false;
   document.getElementById('modeRealBtn').disabled = false;
-  document.getElementById('emaOnBtn').disabled = false;
-  document.getElementById('emaOffBtn').disabled = false;
   document.getElementById('startBtn').style.display = '';
   document.getElementById('resetBtn').style.display = '';
 }
@@ -2244,7 +2201,7 @@ function resetConfigToDefaults() {
   document.getElementById('maxConsecutiveLosses').value = 3; updateMaxLoss();
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
   document.getElementById('maxHoldHours').value = 4; document.getElementById('maxHoldVal').textContent = '4h';
-  setEmaFilter(true); setBtcEma(true);
+  setBtcEma(true);
   document.getElementById('modeRealBtn').classList.remove('active-real');
   document.getElementById('modeSimBtn').classList.remove('active-sim');
   document.getElementById('modeHint').textContent = 'Seleziona la modalita per iniziare';
@@ -2269,9 +2226,7 @@ function restoreConfigFromStorage() {
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
   if (saved.cooldown !== undefined) { document.getElementById('cooldown').value=saved.cooldown; document.getElementById('cdVal').textContent=saved.cooldown+'h'; }
-  if (saved.emaFilter !== undefined) setEmaFilter(saved.emaFilter);
   if (saved.btcEmaFilter !== undefined) setBtcEma(saved.btcEmaFilter);
-  if (saved.timeFilter !== undefined) setTimeFilter(saved.timeFilter);
   if (saved.maxHoldHours) { document.getElementById('maxHoldHours').value=saved.maxHoldHours; document.getElementById('maxHoldVal').textContent=saved.maxHoldHours+'h'; }
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
@@ -2337,7 +2292,6 @@ function onCapitalInput() { updateCapitalPct(); } // compat
 let _trend1hFilter = true;
 let _btcEmaFilter  = true;
 let _rsiFilter     = true;
-let _timeFilter    = true;
 let _trailingStop  = true;
 
 function setTrend1h(on) {
@@ -2361,13 +2315,6 @@ function setRsiFilter(on) {
   document.getElementById('rsiFilterLabel').textContent = on ? 'ON' : 'OFF';
   document.getElementById('rsiFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
   document.getElementById('rsiRangeFields').style.display = on ? '' : 'none';
-}
-function setTimeFilter(on) {
-  _timeFilter = on;
-  document.getElementById('timeFilterOnBtn').classList.toggle('active', on);
-  document.getElementById('timeFilterOffBtn').classList.toggle('active', !on);
-  document.getElementById('timeFilterLabel').textContent = on ? 'ON' : 'OFF';
-  document.getElementById('timeFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
 }
 function updateRsiRange() {
   const minEl = document.getElementById('rsiMin');
@@ -2454,10 +2401,9 @@ async function startAgent() {
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
-    emaFilter:             _emaFilter,
     realMode:              _hasApiKeys && !_simMode,
     btcEmaFilter:          _btcEmaFilter,
-    timeFilter:            _timeFilter,
+    timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
   };
   if (isReal) { showConfirmModal(cfg); return; }
