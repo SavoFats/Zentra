@@ -1059,19 +1059,12 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Usa EMA20/50 su 5min e 15min per filtrare gli ingressi</div>
     </div>
 
-    <div class="field">
-      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
+    <div class="field" style="display:none">
+      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span></div>
       <div class="ema-toggle-row">
-        <button class="ema-btn active" id="trend1hOnBtn" onclick="setTrend1h(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="trend1hOffBtn" onclick="setTrend1h(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
+        <button class="ema-btn active" id="trend1hOnBtn" onclick="setTrend1h(true)">Attivo</button>
+        <button class="ema-btn" id="trend1hOffBtn" onclick="setTrend1h(false)">Disattivo</button>
       </div>
-      <div class="field-hint">EMA20 &gt; EMA50 su 1h — entra solo in trend superiore confermato</div>
     </div>
 
     <div class="field">
@@ -1104,25 +1097,14 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Pausa tra 00:00 e 07:00 UTC — liquidità bassa, movimenti imprevedibili</div>
     </div>
 
-    <div class="field">
-      <div class="field-label">Filtro RSI <span id="rsiFilterLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="rsiRangeVal" style="color:var(--blue);font-weight:700">35–70</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <div class="ema-toggle-row" style="margin-bottom:10px">
-        <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="rsiOffBtn" onclick="setRsiFilter(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
+    <div class="field" style="display:none">
+      <div class="field-label">Filtro RSI <span id="rsiFilterLabel">ON</span></div>
+      <div class="ema-toggle-row">
+        <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">Attivo</button>
+        <button class="ema-btn" id="rsiOffBtn" onclick="setRsiFilter(false)">Disattivo</button>
       </div>
-      <div id="rsiRangeFields">
-        <div class="field-label" style="font-size:12px">RSI min <span id="rsiMinVal">35</span></div>
-        <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" oninput="updateRsiRange()">
-        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">65</span></div>
-        <input type="range" id="rsiMax" min="50" max="80" value="65" step="5" oninput="updateRsiRange()">
-      </div>
-      <div class="field-hint" style="margin-top:6px">Entra solo con RSI in zona neutrale — evita ipercomprato e ipervenduto</div>
+      <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" style="display:none">
+      <input type="range" id="rsiMax" min="50" max="80" value="65" step="5" style="display:none">
     </div>
 
     <div class="field" style="display:none">
@@ -1136,45 +1118,25 @@ body.auth-active .tabbar { display:none !important; }
 
     <div class="field">
       <div class="field-label">Stop Loss massimo <span id="slVal">2.5%</span></div>
-      <input type="range" id="stopLoss" min="0.5" max="5" value="2.5" step="0.1"
-        oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Scarta il trade se lo stop contestuale (ATR / minimi recenti) supera questa soglia</div>
+      <input type="range" id="stopLoss" min="0.5" max="5" value="2.0" step="0.1"
+        oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%';updateTpSchema()">
+      <div class="field-hint">Stop fisso sotto il prezzo di entrata — protezione catastrofica, non si muove mai</div>
+    </div>
+
+    <div class="field" style="display:none">
+      <input type="range" id="minR" value="1.0" style="display:none">
+      <input type="range" id="tp1R" value="2.0" style="display:none">
+      <input type="range" id="tp2R" value="4.0" style="display:none">
+      <button id="trailingOnBtn" style="display:none"></button>
+      <button id="trailingOffBtn" style="display:none"></button>
+      <span id="trailingLabel" style="display:none"></span>
     </div>
 
     <div class="field">
-      <div class="field-label">R minimo per trade <span id="minRVal" style="color:var(--blue);font-weight:700">1.0%</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="minR" min="0.3" max="2" value="1.0" step="0.1"
-        oninput="document.getElementById('minRVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Scarta trade dove il rischio è troppo piccolo — le fee mangerebbero il profitto</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">TP1 target <span id="tp1RVal" style="color:var(--green);font-weight:700">2.0R</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="tp1R" min="1" max="4" value="2.0" step="0.5"
-        oninput="document.getElementById('tp1RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
-      <div class="field-hint">Obiettivo prima metà — chiude 50% e attiva trailing stop ATR</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">4.0R</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="tp2R" min="2" max="8" value="4.0" step="0.5"
-        oninput="document.getElementById('tp2RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
-      <div class="field-hint">Obiettivo del 50% rimanente dopo TP1 — più alto = meno frequente ma più profittevole</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> <span style="color:var(--text3);font-size:11px;font-weight:500">(1.5× ATR)</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <div class="ema-toggle-row" style="margin-bottom:10px">
-        <button class="ema-btn active" id="trailingOnBtn" onclick="setTrailing(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="trailingOffBtn" onclick="setTrailing(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
-      </div>
-      <div class="field-hint">Dopo TP1 lo stop segue il massimo − 1.5× ATR (volatilità reale della coin)</div>
+      <div class="field-label">Profit Tolerance <span id="profitTolVal" style="color:var(--blue);font-weight:700">20%</span></div>
+      <input type="range" id="profitTolerance" min="5" max="40" value="20" step="5"
+        oninput="document.getElementById('profitTolVal').textContent=this.value+'%';updateTpSchema()">
+      <div class="field-hint">Esce quando il profitto scende del X% dal picco — più basso = esce prima, più alto = lascia correre</div>
     </div>
 
     <div class="field">
@@ -1185,20 +1147,20 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Schema Take Profit</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Come funziona l'uscita</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp1Label">TP1 — 2.0R</div>
-          <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude 50%</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Trailing ATR attivo</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Hard Stop</div>
+          <div style="font-size:13px;font-weight:700;color:var(--red)">−<span id="tp1Label">2</span>%</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Protezione catastrofica</div>
         </div>
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp2Label">TP2 — 4.0R</div>
-          <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude tutto</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Posizione chiusa</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Trailing Profit</div>
+          <div style="font-size:13px;font-weight:700;color:var(--green)">−<span id="tp2Label">20</span>% dal picco</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Solo quando in profitto netto</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">R = distanza entry → stop contestuale (1.5× ATR / minimi recenti)</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">Il trailing profit si attiva solo dopo aver coperto le commissioni (~0.18% round-trip)</div>
     </div>
 
     <div class="section-label">Gestione Rischio</div>
@@ -2249,7 +2211,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','minR','pullbackTolerance','minVolume','maxTrades','maxConsecutiveLosses','cooldown','tp1R','tp2R','maxHoldHours','rsiMin','rsiMax'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','profitTolerance','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -2275,18 +2237,14 @@ function resetConfigToDefaults() {
   document.getElementById('capitalDisplay').textContent = '--';
   document.getElementById('allocPct').value = 0; document.getElementById('allocVal').textContent = '0%';
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
-  document.getElementById('stopLoss').value = 2.5; document.getElementById('slVal').textContent = '2.5%';
-  document.getElementById('minR').value = 1.0; document.getElementById('minRVal').textContent = '1.0%';
-  document.getElementById('pullbackTolerance').value = 2.0; document.getElementById('pullbackVal').textContent = '2.0%';
+  document.getElementById('stopLoss').value = 2.0; document.getElementById('slVal').textContent = '2.0%';
+  document.getElementById('profitTolerance').value = 20; document.getElementById('profitTolVal').textContent = '20%';
   document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = getCurrSym() + '0M';
   document.getElementById('maxTrades').value = 0; updateMaxTrades();
   document.getElementById('maxConsecutiveLosses').value = 3; updateMaxLoss();
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
-  document.getElementById('tp1R').value = 2.0; document.getElementById('tp1RVal').textContent = '2.0R';
-  document.getElementById('tp2R').value = 4.0; document.getElementById('tp2RVal').textContent = '4.0R'; updateTpSchema();
   document.getElementById('maxHoldHours').value = 4; document.getElementById('maxHoldVal').textContent = '4h';
-  document.getElementById('rsiMin').value = 35; document.getElementById('rsiMax').value = 65; updateRsiRange();
-  setEmaFilter(true); setTrend1h(true); setBtcEma(true); setRsiFilter(true); setTrailing(true);
+  setEmaFilter(true); setBtcEma(true);
   document.getElementById('modeRealBtn').classList.remove('active-real');
   document.getElementById('modeSimBtn').classList.remove('active-sim');
   document.getElementById('modeHint').textContent = 'Seleziona la modalita per iniziare';
@@ -2306,24 +2264,15 @@ function restoreConfigFromStorage() {
   if (saved.allocPct) { const p=Math.round(saved.allocPct*100); document.getElementById('allocPct').value=p; document.getElementById('allocVal').textContent=p+'%'; }
   if (saved.sessionDuration) { document.getElementById('sessionDuration').value=saved.sessionDuration; document.getElementById('sessionVal').textContent=saved.sessionDuration+'h'; }
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
-  if (saved.minR !== undefined) { const mr=(saved.minR*100).toFixed(1); document.getElementById('minR').value=mr; document.getElementById('minRVal').textContent=mr+'%'; }
-  if (saved.pullbackTolerance) { const pt=(saved.pullbackTolerance*100).toFixed(1); document.getElementById('pullbackTolerance').value=pt; document.getElementById('pullbackVal').textContent=pt+'%'; }
+  if (saved.profitTolerance !== undefined) { const pt=Math.round(saved.profitTolerance*100); document.getElementById('profitTolerance').value=pt; document.getElementById('profitTolVal').textContent=pt+'%'; }
   if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
   if (saved.cooldown !== undefined) { document.getElementById('cooldown').value=saved.cooldown; document.getElementById('cdVal').textContent=saved.cooldown+'h'; }
   if (saved.emaFilter !== undefined) setEmaFilter(saved.emaFilter);
-  if (saved.trend1hFilter !== undefined) setTrend1h(saved.trend1hFilter);
   if (saved.btcEmaFilter !== undefined) setBtcEma(saved.btcEmaFilter);
   if (saved.timeFilter !== undefined) setTimeFilter(saved.timeFilter);
-  if (saved.rsiFilter !== undefined) setRsiFilter(saved.rsiFilter);
-  if (saved.rsiMin) { document.getElementById('rsiMin').value=saved.rsiMin; }
-  if (saved.rsiMax) { document.getElementById('rsiMax').value=saved.rsiMax; }
-  updateRsiRange();
-  if (saved.tp1R) { document.getElementById('tp1R').value=saved.tp1R; document.getElementById('tp1RVal').textContent=parseFloat(saved.tp1R).toFixed(1)+'R'; }
-  if (saved.tp2R) { document.getElementById('tp2R').value=saved.tp2R; document.getElementById('tp2RVal').textContent=parseFloat(saved.tp2R).toFixed(1)+'R'; updateTpSchema(); }
   if (saved.maxHoldHours) { document.getElementById('maxHoldHours').value=saved.maxHoldHours; document.getElementById('maxHoldVal').textContent=saved.maxHoldHours+'h'; }
-  if (saved.trailingStop !== undefined) setTrailing(saved.trailingStop);
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
@@ -2421,11 +2370,13 @@ function setTimeFilter(on) {
   document.getElementById('timeFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
 }
 function updateRsiRange() {
-  const min = document.getElementById('rsiMin').value;
-  const max = document.getElementById('rsiMax').value;
-  document.getElementById('rsiMinVal').textContent = min;
-  document.getElementById('rsiMaxVal').textContent = max;
-  document.getElementById('rsiRangeVal').textContent = min + '–' + max;
+  const minEl = document.getElementById('rsiMin');
+  const maxEl = document.getElementById('rsiMax');
+  if (!minEl || !maxEl) return;
+  const min = minEl.value, max = maxEl.value;
+  const minV = document.getElementById('rsiMinVal'); if (minV) minV.textContent = min;
+  const maxV = document.getElementById('rsiMaxVal'); if (maxV) maxV.textContent = max;
+  const rv   = document.getElementById('rsiRangeVal'); if (rv) rv.textContent = min + '–' + max;
 }
 function setTrailing(on) {
   _trailingStop = on;
@@ -2435,10 +2386,10 @@ function setTrailing(on) {
   document.getElementById('trailingLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
 }
 function updateTpSchema() {
-  const tp1r = parseFloat(document.getElementById('tp1R').value).toFixed(1);
-  const tp2r = parseFloat(document.getElementById('tp2R').value).toFixed(1);
-  document.getElementById('tp1Label').textContent = 'TP1 — ' + tp1r + 'R';
-  document.getElementById('tp2Label').textContent = 'TP2 — ' + tp2r + 'R';
+  const sl  = parseFloat(document.getElementById('stopLoss').value || 2).toFixed(0);
+  const tol = parseFloat(document.getElementById('profitTolerance').value || 20).toFixed(0);
+  const l1 = document.getElementById('tp1Label'); if (l1) l1.textContent = sl;
+  const l2 = document.getElementById('tp2Label'); if (l2) l2.textContent = tol;
 }
 async function setMode(real) {
   _realMode = real; window._realMode = real;
@@ -2498,23 +2449,15 @@ async function startAgent() {
     allocPct:              allocVal / 100,
     sessionDuration:       parseInt(document.getElementById('sessionDuration').value),
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
-    minR:                  parseFloat(document.getElementById('minR').value) / 100,
-    pullbackTolerance:     parseFloat(document.getElementById('pullbackTolerance').value) / 100,
+    profitTolerance:       parseFloat(document.getElementById('profitTolerance').value) / 100,
     minVolume:             parseFloat(document.getElementById('minVolume').value) * 1000000,
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
     emaFilter:             _emaFilter,
     realMode:              _hasApiKeys && !_simMode,
-    trend1hFilter:         _trend1hFilter,
     btcEmaFilter:          _btcEmaFilter,
     timeFilter:            _timeFilter,
-    rsiFilter:             _rsiFilter,
-    rsiMin:                parseFloat(document.getElementById('rsiMin').value),
-    rsiMax:                parseFloat(document.getElementById('rsiMax').value),
-    tp1R:                  parseFloat(document.getElementById('tp1R').value),
-    tp2R:                  parseFloat(document.getElementById('tp2R').value),
-    trailingStop:          _trailingStop,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
   };
   if (isReal) { showConfirmModal(cfg); return; }
@@ -2925,30 +2868,29 @@ function renderPositions() {
     const color = isPos ? 'var(--green)' : 'var(--red)';
     const logo = getLogo(p.symbol);
     const img = logo ? `<img src="${logo}" class="pos-logo" onerror="this.style.display='none'">` : `<div class="pos-icon">${p.symbol[0]}</div>`;
-    const tp1Hit = p.tp1_hit || false;
-    const tp1Price = p.tp1Price || 0;
-    const tp2Price = p.tp2Price || 0;
-    const stopPrice = p.stopPrice || 0;
-    const tp1Badge = tp1Hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:6px">TP1 ✓</span>' : '';
-    // SL→TP bar
+    const stopPrice  = p.stopPrice  || 0;
+    const peakPrice  = p.peak_price || currentPrice;
+    // Trailing profit bar: SL → ENTRY → PEAK con livello trail
     let barHtml = '';
-    if (tp2Price > 0 && tp1Price > 0 && stopPrice > 0 && entryPrice > 0) {
-      const total = tp2Price - stopPrice;
+    if (stopPrice > 0 && entryPrice > 0) {
+      const headroom = Math.max(peakPrice - entryPrice, entryPrice - stopPrice) * 1.2;
+      const barMax   = entryPrice + headroom;
+      const total    = barMax - stopPrice;
       if (total > 0) {
-        const entryPct = Math.max(8, Math.min(88, (entryPrice - stopPrice) / total * 100));
-        const tp1Pct   = Math.max(8, Math.min(92, (tp1Price  - stopPrice) / total * 100));
+        const entryPct = Math.max(5, Math.min(90, (entryPrice  - stopPrice) / total * 100));
+        const peakPct  = Math.max(5, Math.min(97, (peakPrice   - stopPrice) / total * 100));
         const curPct   = Math.max(2, Math.min(98, (currentPrice - stopPrice) / total * 100));
-        const R = entryPrice - stopPrice;
-        const tp1R = R > 0 ? ((tp1Price - entryPrice) / R).toFixed(1) : '2.0';
-        const tp2R = R > 0 ? ((tp2Price - entryPrice) / R).toFixed(1) : '4.0';
-        const barCol = isPos ? 'var(--green)' : 'var(--red)';
+        const barCol   = isPos ? 'var(--green)' : 'var(--red)';
+        const peakLine = peakPrice > entryPrice
+          ? `<div style="position:absolute;left:${peakPct}%;top:0;bottom:0;width:2px;background:rgba(5,193,104,0.4);border-radius:1px"></div>
+             <span class="pos-rl-lbl" style="left:${peakPct}%;color:var(--green)">PEAK</span>`
+          : '';
         barHtml = `<div class="pos-rl-wrap"><div class="pos-rl-bar">
           <div class="pos-rl-fill" style="width:${curPct}%;background:${barCol}"></div>
           <div class="pos-rl-dot" style="left:${curPct}%;background:${barCol}"></div>
+          ${peakLine}
           <span class="pos-rl-lbl" style="left:2%;color:var(--red)">SL</span>
           <span class="pos-rl-lbl" style="left:${entryPct}%;color:var(--text3)">ENTRY</span>
-          <span class="pos-rl-lbl" style="left:${tp1Pct}%;color:var(--green)">TP1 ${tp1R}R</span>
-          <span class="pos-rl-lbl" style="left:98%;color:var(--green)">TP2 ${tp2R}R</span>
         </div></div>`;
       }
     }
@@ -3242,7 +3184,7 @@ function renderMarket() {
         ><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       };
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.trend1h_ok ?? true,'trend1h','1H')}${dot(ema.trend,'trend','15M')}${dot(ema.pullback_ok ?? false,'pullback','PULL')}${dot(ema.rsi_ok ?? true,'rsi','RSI')}${dot(ema.body_ok ?? true,'body','BODY')}${dot(ema.vol_ok ?? true,'vol','VOL')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'breakout','BREAK')}${dot(ema.vol_ok,'vol','VOL')}${signalDot}</div>`;
     }
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
       <div class="mkt-row-main">
@@ -3619,6 +3561,11 @@ let _tooltipTimeout = null;
 
 // Definizioni indicatori per tooltip
 const EMA_DOT_INFO = {
+  breakout: {
+    name: 'Breakout',
+    descOn:  "Prezzo rompe il massimo delle ultime 20 candele chiuse a 5m — il momentum è confermato.",
+    descOff: "Nessun breakout: il prezzo è ancora dentro il range delle ultime 20 candele. Aspetta il movimento.",
+  },
   trend1h: {
     name: 'Trend 1h',
     descOn:  "EMA20 > EMA50 su 1h — trend superiore confermato. Filtro aggiuntivo: evita long contro il trend principale.",
@@ -3641,8 +3588,8 @@ const EMA_DOT_INFO = {
   },
   vol: {
     name: 'Volume',
-    descOn:  "Volume dell'ultima candela sopra la media delle ultime 20 — il rimbalzo ha partecipazione reale.",
-    descOff: "Volume basso sul rimbalzo — il movimento non è sostenuto da partecipazione reale. Rischio di falso segnale.",
+    descOn:  "Volume ≥ 1.5× la media delle ultime 20 candele — il breakout ha partecipazione reale.",
+    descOff: "Volume insufficiente — il movimento non è sostenuto da partecipazione reale. Breakout a rischio di falso segnale.",
   },
   rsi: {
     name: 'RSI',
@@ -3664,7 +3611,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
+  const keyMap = { breakout: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
