@@ -304,9 +304,13 @@ _sessions_starting: set = set()  # user_id in avvio, evita doppi /start concorre
 # }
 candle_data: dict = {}
 _candles_last_update: float = 0
-CANDLE_UPDATE_INTERVAL = 120  # secondi (2 minuti)
-CANDLE_UNIVERSE_SIZE   = 12   # top N coin per volume (solo whitelist)
-COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}
+CANDLE_UPDATE_INTERVAL = 120   # secondi (2 minuti)
+CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
+COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
+
+_dynamic_universe: set = set(COIN_WHITELIST)  # aggiornato ogni 30 min
+_universe_last_update: float = 0
+UNIVERSE_UPDATE_INTERVAL = 1800  # 30 minuti
 
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
@@ -334,6 +338,40 @@ def calc_rsi(prices: list, period: int = 14) -> float:
         return 100.0
     rs = avg_gain / avg_loss
     return round(100 - (100 / (1 + rs)), 2)
+
+LEVERAGED_KEYWORDS = {"UP", "DOWN", "BULL", "BEAR", "3L", "3S", "2L", "2S"}
+
+async def fetch_dynamic_universe():
+    """Scarica top-50 coin per volume 24h da Binance. Aggiorna _dynamic_universe."""
+    global _dynamic_universe, _universe_last_update
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
+        if r.status_code != 200:
+            return
+        tickers = r.json()
+        candidates = []
+        for t in tickers:
+            sym_pair = t.get("symbol", "")
+            if not sym_pair.endswith("USDT"):
+                continue
+            sym = sym_pair[:-4]
+            if sym in STABLES:
+                continue
+            if any(kw in sym for kw in LEVERAGED_KEYWORDS):
+                continue
+            vol = float(t.get("quoteVolume", 0))
+            if vol < 10_000_000:
+                continue
+            candidates.append((sym, vol))
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        new_universe = {sym for sym, _ in candidates[:CANDLE_UNIVERSE_SIZE]}
+        if new_universe:
+            _dynamic_universe = new_universe
+            _universe_last_update = time.time()
+            print(f"Universo dinamico: {len(_dynamic_universe)} coin")
+    except Exception as e:
+        print(f"Errore fetch universo dinamico: {e}")
 
 async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict | None:
     """Scarica candele 5min, 15min e 1h da Binance. Calcola EMA20/50, RSI14, ATR."""
@@ -383,6 +421,9 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
 
         # Minimo delle ultime 3 candele CHIUSE (escludi candela corrente aperta)
         pullback_low_5m = min(lows5[-4:-1]) if len(lows5) >= 4 else lows5[-2]
+
+        # Massimo delle ultime 20 candele CHIUSE (escludi candela corrente) — usato per breakout
+        high20_5m = max(closes5[-21:-1]) if len(closes5) >= 21 else max(closes5[:-1])
 
         # Volume: usa solo candele chiuse ([-2] = ultima chiusa, [-21:-1] = 20 chiuse)
         vol_avg_20 = sum(volumes5[-21:-1]) / 20 if len(volumes5) >= 21 else 0.0
@@ -435,6 +476,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "ema20_5m_prev3":   ema20_5m_prev3,
             "atr_15m_long":     atr_15m_long,
             "atr_15m_short":    atr_15m_short,
+            "high20_5m":        high20_5m,
             "updated_at":       time.time(),
         }
     except Exception as e:
@@ -445,9 +487,9 @@ async def fetch_all_candles():
     """Aggiorna candle_data per le top CANDLE_UNIVERSE_SIZE coin per volume."""
     global _candles_last_update
 
-    # Seleziona top coin per volume tra quelle nella whitelist
+    # Seleziona top coin per volume tra quelle nell'universo dinamico
     universe = sorted(
-        [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in COIN_WHITELIST],
+        [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in _dynamic_universe],
         key=lambda x: x[1].get("volume24h", 0),
         reverse=True
     )[:CANDLE_UNIVERSE_SIZE]
@@ -590,6 +632,49 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         "vol_ok":       vol_ok,
         "stop_ok":      stop_ok,
         "rsi":          rsi_14,
+    }
+
+def get_momentum_signal(sym: str, current_price: float,
+                        max_stop_pct: float = 0.02,
+                        vol_multiplier: float = 1.5) -> dict:
+    """
+    Segnale momentum breakout: entra quando il prezzo rompe il massimo delle ultime 20
+    candele chiuse a 5m con volume sopra 1.5× la media.
+    """
+    cd = candle_data.get(sym)
+    if not cd:
+        return {"signal": False, "reason": "no candle data", "stop_price": 0.0,
+                "breakout_ok": False, "vol_ok": False}
+
+    high20_5m  = cd.get("high20_5m", 0.0)
+    last_close = cd.get("last_close_5m", 0.0)
+    vol_avg_20 = cd.get("vol_avg_20", 0.0)
+    vol_last   = cd.get("vol_last", 0.0)
+
+    breakout_ok = high20_5m > 0 and last_close > high20_5m
+    vol_ok      = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
+
+    stop_price = current_price * (1 - max_stop_pct)
+
+    signal = breakout_ok and vol_ok
+
+    if not breakout_ok:
+        dist = (last_close - high20_5m) / high20_5m * 100 if high20_5m > 0 else 0
+        reason = f"no breakout | close {last_close:.4f} vs max20 {high20_5m:.4f} ({dist:+.2f}%)"
+    elif not vol_ok:
+        ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
+        reason = f"volume basso ({ratio:.2f}x < {vol_multiplier}x richiesto)"
+    else:
+        pct   = (last_close - high20_5m) / high20_5m * 100
+        ratio = vol_last / vol_avg_20
+        reason = f"BREAKOUT +{pct:.2f}% | vol {ratio:.1f}x | SL -{max_stop_pct*100:.1f}%"
+
+    return {
+        "signal":      signal,
+        "reason":      reason,
+        "stop_price":  round(stop_price, 8),
+        "breakout_ok": breakout_ok,
+        "vol_ok":      vol_ok,
     }
 
 # ── rest of market data ───────────────────────────────────────────────────────
@@ -931,6 +1016,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
             pos = {
                 "symbol": sym, "icon": sym_data["icon"],
                 "entryPrice": actual_price, "currentPrice": actual_price, "highPrice": actual_price,
+                "peak_price": actual_price,
                 "size": size, "size_remaining": size, "tp1_hit": False,
                 "entryTime": datetime.utcnow().isoformat() + "Z",
                 "stopPrice": stop_price, "tp1Price": tp1_price, "tp2Price": tp2_price,
@@ -1023,6 +1109,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
         "entryPrice":    actual_price,
         "currentPrice":  actual_price,
         "highPrice":     actual_price,
+        "peak_price":    actual_price,
         "size":          size,
         "size_remaining": size,
         "tp1_hit":       False,
@@ -1308,13 +1395,12 @@ async def scan_and_trade(state: dict, user_id: int = None):
             add_log(state, "info", "STOP AUTO", f"Raggiunto limite di {max_trades} trade — sessione fermata")
             return
 
-    # Gestione posizioni aperte: max hold, TP1, TP2, trailing stop, stop loss
+    # Gestione posizioni aperte: hard stop + trailing profit stop
     for pos in list(state["positions"]):
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
 
-        trailing_stop    = cfg.get("trailingStop", True)
-        max_hold_hours   = cfg.get("maxHoldHours", 4)
+        max_hold_hours = cfg.get("maxHoldHours", 4)
 
         # Max hold time: chiude se la posizione è aperta da troppo
         if max_hold_hours > 0:
@@ -1323,37 +1409,29 @@ async def scan_and_trade(state: dict, user_id: int = None):
                 await exit_position(state, pos, "MAX TEMPO", user_id=user_id)
                 continue
 
-        if cur > pos.get("highPrice", cur):
+        # Aggiorna il picco di prezzo raggiunto dalla posizione
+        if cur > pos.get("peak_price", entry):
+            pos["peak_price"] = cur
+        if cur > pos.get("highPrice", entry):
             pos["highPrice"] = cur
 
-        # TP1: prima volta che tocca +tp1R
-        if not pos.get("tp1_hit", False) and cur >= pos["tp1Price"]:
-            await exit_position(state, pos, "TP1", partial=True, user_id=user_id)
+        # Hard stop fisso: protezione catastrofica, non si muove mai
+        if cur <= pos["stopPrice"]:
+            await exit_position(state, pos, "STOP LOSS", user_id=user_id)
             continue
 
-        # Dopo TP1: trailing ATR (respira con la volatilità reale)
-        if pos.get("tp1_hit", False):
-            if trailing_stop and pos.get("highPrice", 0) > 0:
-                atr = pos.get("atr_5m", 0.0)
-                if atr > 0:
-                    trail_price = pos["highPrice"] - atr * 1.5
-                else:
-                    trail_price = pos["highPrice"] * (1 - 0.015)  # fallback 1.5%
-                # Lo stop non può scendere sotto il breakeven
-                new_stop = max(trail_price, pos["entryPrice"])
-                if new_stop > pos["stopPrice"]:
-                    pos["stopPrice"] = new_stop
-
-            # TP2
-            if cur >= pos["tp2Price"]:
-                await exit_position(state, pos, "TP2", user_id=user_id)
+        # Trailing profit stop: si attiva solo quando la posizione è in profitto netto
+        # Profitto netto = profitto lordo - commissioni round-trip (entrata + uscita)
+        fee_rt      = pos.get("fee_pct", 0.0009) * 2  # round-trip
+        net_pnl_pct = (cur - entry) / entry - fee_rt
+        if net_pnl_pct > 0:
+            peak         = pos.get("peak_price", cur)
+            profit_move  = peak - entry
+            tolerance    = cfg.get("profitTolerance", 0.20)
+            trail_price  = peak - profit_move * tolerance
+            if cur <= trail_price:
+                await exit_position(state, pos, "TRAILING PROFIT", user_id=user_id)
                 continue
-
-        # Stop loss (include trailing/breakeven dopo TP1)
-        if cur <= pos["stopPrice"]:
-            reason = "STOP TRAILING" if pos.get("tp1_hit") else "STOP LOSS"
-            await exit_position(state, pos, reason, user_id=user_id)
-            continue  # evita re-entry nella stessa iterazione
 
     alloc_pct   = cfg.get("allocPct", 0.20)
     capital_pct = cfg.get("capitalPct", 1.0)
@@ -1476,74 +1554,52 @@ async def scan_and_trade(state: dict, user_id: int = None):
             _update_pnl(state)
             return
 
-    min_vol       = cfg.get("minVolume", 0)
-    ema_filter    = cfg.get("emaFilter", True)
-    pullback_tol  = cfg.get("pullbackTolerance", 0.02)
-    max_stop_pct  = cfg.get("maxStopPct", 0.05)
-    trend1h_filter = cfg.get("trend1hFilter", True)
-    rsi_filter    = cfg.get("rsiFilter", True)
-    rsi_min       = cfg.get("rsiMin", 35.0)
-    rsi_max       = cfg.get("rsiMax", 65.0)
-    min_r         = cfg.get("minR", 0.01)
+    min_vol      = cfg.get("minVolume", 0)
+    max_stop_pct = cfg.get("maxStopPct", 0.02)
+    vol_mult     = cfg.get("volMultiplier", 1.5)
 
-    # Se Revolut X: usa tutte le coin con candele disponibili (non filtriamo per _coinbase_products)
-    # Se Coinbase: filtra solo le coin con prodotto disponibile
     use_revx_filter = state.get("use_revx", False)
     universe = [
-            {**d, "symbol": sym}
-            for sym, d in market_data.items()
-            if d["price"] > 0
-            and sym in COIN_WHITELIST
-            and d.get("volume24h", 0) >= min_vol
-            and sym not in open_syms
-            and (use_revx_filter or sym in _coinbase_products)
-            and (not use_revx_filter or not _revx_pairs or sym in _revx_pairs)
-            and sym in candle_data
-            and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
-        ]
+        {**d, "symbol": sym}
+        for sym, d in market_data.items()
+        if d["price"] > 0
+        and sym in _dynamic_universe
+        and d.get("volume24h", 0) >= min_vol
+        and sym not in open_syms
+        and (not use_revx_filter or not _revx_pairs or sym in _revx_pairs)
+        and sym in candle_data
+        and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
+    ]
     universe_sorted = sorted(universe, key=lambda d: d.get("volume24h", 0), reverse=True)
 
-    candidates  = []
-    ema_skipped = 0
-    block_count = {"trend1h": 0, "trend15m": 0, "pull": 0, "fresh": 0, "rsi": 0, "body": 0, "vol": 0, "stop": 0}
+    candidates   = []
+    skipped      = 0
+    block_count  = {"breakout": 0, "vol": 0}
 
     for d in universe_sorted:
-        sym = d["symbol"]
-        if ema_filter:
-            signal = get_ema_signal(sym, d["price"], pullback_tol, max_stop_pct,
-                                    trend1h_filter, rsi_filter, rsi_min, rsi_max, min_r)
-            if not signal["signal"]:
-                ema_skipped += 1
-                if not signal.get("trend1h_ok", True):     block_count["trend1h"] += 1
-                elif not signal.get("trend_ok", True):     block_count["trend15m"] += 1
-                elif not signal.get("pullback_ok", True):  block_count["pull"] += 1
-                elif not signal.get("fresh_ok", True):     block_count["fresh"] += 1
-                elif not signal.get("rsi_ok", True):       block_count["rsi"] += 1
-                elif not signal.get("body_ok", True):      block_count["body"] += 1
-                elif not signal.get("vol_ok", True):       block_count["vol"] += 1
-                elif not signal["stop_ok"]:                 block_count["stop"] += 1
-                continue
-            d["ema_reason"]  = signal["reason"]
-            d["stop_price"]  = signal["stop_price"]
-            d["R_pct"]       = signal["R"]
+        sym    = d["symbol"]
+        signal = get_momentum_signal(sym, d["price"], max_stop_pct, vol_mult)
+        if not signal["signal"]:
+            skipped += 1
+            if not signal.get("breakout_ok"): block_count["breakout"] += 1
+            elif not signal.get("vol_ok"):    block_count["vol"] += 1
+            continue
+        d["ema_reason"] = signal["reason"]
+        d["stop_price"] = signal["stop_price"]
+        d["R_pct"]      = max_stop_pct
         candidates.append(d)
         if len(candidates) >= slots:
             break
 
-    # Trova il filtro che blocca di più
-    top_blocker = max(block_count, key=block_count.get) if ema_skipped > 0 else "-"
-    top_blocker_n = block_count.get(top_blocker, 0)
-
-    top3 = [(d["symbol"], round(d.get("volume24h", 0) / 1e6, 0)) for d in universe_sorted[:3]]
     add_log(state, "info", "SCAN",
         f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | "
-        f"Saltati: {ema_skipped} | Blocco: {top_blocker}({top_blocker_n}) | "
-        f"RSI range: {rsi_min:.0f}-{rsi_max:.0f} | Candele: {len(candle_data)}"
+        f"Saltati: {skipped} | no-breakout: {block_count['breakout']} | low-vol: {block_count['vol']} | "
+        f"Candele: {len(candle_data)}"
     )
 
     for d in candidates:
         sym = d["symbol"]
-        add_log(state, "info", "SEGNALE", f"{sym} | {d.get('ema_reason', 'EMA off')}")
+        add_log(state, "info", "SEGNALE", f"{sym} | {d.get('ema_reason', '')}")
         await enter_position(state, d, tradable_capital_net)
 
     _update_pnl(state)
@@ -1884,6 +1940,9 @@ async def background_loop():
     while True:
         try:
             await fetch_prices()
+
+            if time.time() - _universe_last_update >= UNIVERSE_UPDATE_INTERVAL:
+                await fetch_dynamic_universe()
 
             if time.time() - _candles_last_update >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_candles()
@@ -2436,13 +2495,8 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
     user_state = user_sessions.get(user_id, {})
     active_cfg = user_state.get("config", {})
 
-    pullback_tol   = active_cfg.get("pullbackTolerance", 0.02)
-    max_stop_pct   = active_cfg.get("maxStopPct", 0.05)
-    trend1h_filter = active_cfg.get("trend1hFilter", True)
-    rsi_filter     = active_cfg.get("rsiFilter", True)
-    rsi_min        = active_cfg.get("rsiMin", 35.0)
-    rsi_max        = active_cfg.get("rsiMax", 65.0)
-    min_r          = active_cfg.get("minR", 0.01)
+    max_stop_pct = active_cfg.get("maxStopPct", 0.02)
+    vol_mult     = active_cfg.get("volMultiplier", 1.5)
 
     for s, d in market_data.items():
         if d["price"] <= 0:
@@ -2450,20 +2504,12 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
         if s not in candle_data:
             continue
         item = {"symbol": s, **d}
-        sig = get_ema_signal(s, d["price"], pullback_tol, max_stop_pct,
-                             trend1h_filter, rsi_filter, rsi_min, rsi_max, min_r)
+        sig = get_momentum_signal(s, d["price"], max_stop_pct, vol_mult)
         item["ema"] = {
-            "trend":        sig["trend_ok"],
-            "trend1h_ok":   sig.get("trend1h_ok", True),
-            "slope_ok":     sig.get("slope_ok", True),
-            "pullback_ok":  sig.get("pullback_ok", False),
-            "rsi_ok":       sig["rsi_ok"],
-            "body_ok":      sig.get("body_ok", True),
-            "vol_ok":       sig.get("vol_ok", True),
-            "stop":         sig["stop_ok"],
-            "signal":       sig["signal"],
-            "rsi":          sig.get("rsi", 50),
-            "reason":       sig["reason"],
+            "breakout_ok": sig.get("breakout_ok", False),
+            "vol_ok":      sig.get("vol_ok", False),
+            "signal":      sig["signal"],
+            "reason":      sig["reason"],
         }
         items.append(item)
 
@@ -2833,7 +2879,7 @@ async def candles_status(request: Request, user_id: int = Depends(get_current_us
     sample = {}
     for sym in list(candle_data.keys())[:5]:
         price = market_data.get(sym, {}).get("price", 0)
-        sample[sym] = get_ema_signal(sym, price)
+        sample[sym] = get_momentum_signal(sym, price)
     return {
         "candles_count": len(candle_data),
         "last_update": datetime.fromtimestamp(_candles_last_update).isoformat() if _candles_last_update else None,
