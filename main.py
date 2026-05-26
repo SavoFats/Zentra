@@ -422,8 +422,8 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         # Minimo delle ultime 3 candele CHIUSE (escludi candela corrente aperta)
         pullback_low_5m = min(lows5[-4:-1]) if len(lows5) >= 4 else lows5[-2]
 
-        # Massimo delle ultime 20 candele CHIUSE (escludi candela corrente) — usato per breakout
-        high20_5m = max(closes5[-21:-1]) if len(closes5) >= 21 else max(closes5[:-1])
+        # Massimo delle ultime 10 candele CHIUSE (escludi candela corrente) — usato per breakout
+        high10_5m = max(closes5[-11:-1]) if len(closes5) >= 11 else max(closes5[:-1])
 
         # Volume: usa solo candele chiuse ([-2] = ultima chiusa, [-21:-1] = 20 chiuse)
         vol_avg_20 = sum(volumes5[-21:-1]) / 20 if len(volumes5) >= 21 else 0.0
@@ -476,7 +476,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "ema20_5m_prev3":   ema20_5m_prev3,
             "atr_15m_long":     atr_15m_long,
             "atr_15m_short":    atr_15m_short,
-            "high20_5m":        high20_5m,
+            "high10_5m":        high10_5m,
             "updated_at":       time.time(),
         }
     except Exception as e:
@@ -646,12 +646,12 @@ def get_momentum_signal(sym: str, current_price: float,
         return {"signal": False, "reason": "no candle data", "stop_price": 0.0,
                 "breakout_ok": False, "vol_ok": False}
 
-    high20_5m  = cd.get("high20_5m", 0.0)
+    high10_5m  = cd.get("high10_5m", 0.0)
     last_close = cd.get("last_close_5m", 0.0)
     vol_avg_20 = cd.get("vol_avg_20", 0.0)
     vol_last   = cd.get("vol_last", 0.0)
 
-    breakout_ok = high20_5m > 0 and last_close > high20_5m
+    breakout_ok = high10_5m > 0 and last_close > high10_5m
     vol_ok      = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
 
     stop_price = current_price * (1 - max_stop_pct)
@@ -659,13 +659,13 @@ def get_momentum_signal(sym: str, current_price: float,
     signal = breakout_ok and vol_ok
 
     if not breakout_ok:
-        dist = (last_close - high20_5m) / high20_5m * 100 if high20_5m > 0 else 0
-        reason = f"no breakout | close {last_close:.4f} vs max20 {high20_5m:.4f} ({dist:+.2f}%)"
+        dist = (last_close - high10_5m) / high10_5m * 100 if high10_5m > 0 else 0
+        reason = f"no breakout | close {last_close:.4f} vs max10 {high10_5m:.4f} ({dist:+.2f}%)"
     elif not vol_ok:
         ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
         reason = f"volume basso ({ratio:.2f}x < {vol_multiplier}x richiesto)"
     else:
-        pct   = (last_close - high20_5m) / high20_5m * 100
+        pct   = (last_close - high10_5m) / high10_5m * 100
         ratio = vol_last / vol_avg_20
         reason = f"BREAKOUT +{pct:.2f}% | vol {ratio:.1f}x | SL -{max_stop_pct*100:.1f}%"
 
