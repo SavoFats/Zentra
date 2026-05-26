@@ -1118,9 +1118,9 @@ body.auth-active .tabbar { display:none !important; }
 
     <div class="field">
       <div class="field-label">Stop Loss massimo <span id="slVal">2.5%</span></div>
-      <input type="range" id="stopLoss" min="0.5" max="5" value="2.5" step="0.1"
-        oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Scarta il trade se lo stop contestuale (ATR / minimi recenti) supera questa soglia</div>
+      <input type="range" id="stopLoss" min="0.5" max="5" value="2.0" step="0.1"
+        oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%';updateTpSchema()">
+      <div class="field-hint">Stop fisso sotto il prezzo di entrata — protezione catastrofica, non si muove mai</div>
     </div>
 
     <div class="field" style="display:none">
@@ -1135,7 +1135,7 @@ body.auth-active .tabbar { display:none !important; }
     <div class="field">
       <div class="field-label">Profit Tolerance <span id="profitTolVal" style="color:var(--blue);font-weight:700">20%</span></div>
       <input type="range" id="profitTolerance" min="5" max="40" value="20" step="5"
-        oninput="document.getElementById('profitTolVal').textContent=this.value+'%'">
+        oninput="document.getElementById('profitTolVal').textContent=this.value+'%';updateTpSchema()">
       <div class="field-hint">Esce quando il profitto scende del X% dal picco — più basso = esce prima, più alto = lascia correre</div>
     </div>
 
@@ -1160,7 +1160,7 @@ body.auth-active .tabbar { display:none !important; }
           <div style="font-size:10px;color:var(--text3);margin-top:3px">Solo quando in profitto netto</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">R = distanza entry → stop contestuale (1.5× ATR / minimi recenti)</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">Il trailing profit si attiva solo dopo aver coperto le commissioni (~0.18% round-trip)</div>
     </div>
 
     <div class="section-label">Gestione Rischio</div>
@@ -2386,10 +2386,10 @@ function setTrailing(on) {
   document.getElementById('trailingLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
 }
 function updateTpSchema() {
-  const tp1r = parseFloat(document.getElementById('tp1R').value).toFixed(1);
-  const tp2r = parseFloat(document.getElementById('tp2R').value).toFixed(1);
-  document.getElementById('tp1Label').textContent = 'TP1 — ' + tp1r + 'R';
-  document.getElementById('tp2Label').textContent = 'TP2 — ' + tp2r + 'R';
+  const sl  = parseFloat(document.getElementById('stopLoss').value || 2).toFixed(0);
+  const tol = parseFloat(document.getElementById('profitTolerance').value || 20).toFixed(0);
+  const l1 = document.getElementById('tp1Label'); if (l1) l1.textContent = sl;
+  const l2 = document.getElementById('tp2Label'); if (l2) l2.textContent = tol;
 }
 async function setMode(real) {
   _realMode = real; window._realMode = real;
@@ -3561,6 +3561,11 @@ let _tooltipTimeout = null;
 
 // Definizioni indicatori per tooltip
 const EMA_DOT_INFO = {
+  breakout: {
+    name: 'Breakout',
+    descOn:  "Prezzo rompe il massimo delle ultime 20 candele chiuse a 5m — il momentum è confermato.",
+    descOff: "Nessun breakout: il prezzo è ancora dentro il range delle ultime 20 candele. Aspetta il movimento.",
+  },
   trend1h: {
     name: 'Trend 1h',
     descOn:  "EMA20 > EMA50 su 1h — trend superiore confermato. Filtro aggiuntivo: evita long contro il trend principale.",
@@ -3583,8 +3588,8 @@ const EMA_DOT_INFO = {
   },
   vol: {
     name: 'Volume',
-    descOn:  "Volume dell'ultima candela sopra la media delle ultime 20 — il rimbalzo ha partecipazione reale.",
-    descOff: "Volume basso sul rimbalzo — il movimento non è sostenuto da partecipazione reale. Rischio di falso segnale.",
+    descOn:  "Volume ≥ 1.5× la media delle ultime 20 candele — il breakout ha partecipazione reale.",
+    descOff: "Volume insufficiente — il movimento non è sostenuto da partecipazione reale. Breakout a rischio di falso segnale.",
   },
   rsi: {
     name: 'RSI',
@@ -3606,7 +3611,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
+  const keyMap = { breakout: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
