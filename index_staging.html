@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production.up.railway.app https://crypto-agent-back-production-87b2.up.railway.app; img-src 'self' data: https://assets.coingecko.com https://bin.bnbstatic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production-87b2.up.railway.app https://api.binance.com; img-src 'self' data: https://assets.coingecko.com https://bin.bnbstatic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -1279,7 +1279,7 @@ body.auth-active .tabbar { display:none !important; }
 
 
     <!-- Filtri dropdown custom -->
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <div class="fdd" id="fddPeriod">
         <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Oggi <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="fdd-menu" id="fddPeriodMenu">
@@ -1298,6 +1298,10 @@ body.auth-active .tabbar { display:none !important; }
           <div class="fdd-item" onclick="selectFdd('fddOutcome','loss','Perdita','outcome')">Perdita</div>
         </div>
       </div>
+
+      <button onclick="clearTrades()" title="Cancella transazioni" style="margin-left:auto;background:none;border:none;padding:6px;cursor:pointer;color:var(--text3);display:flex;align-items:center;border-radius:8px;transition:color 0.15s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </button>
 
     </div>
 
@@ -1501,7 +1505,7 @@ async function doLogin() {
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
-    if (!d.has_api_keys) { showApiKeys(); return; }
+    if (!d.has_api_keys && !d.has_revx_keys) { showApiKeys(); return; }
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('loginPass','loginPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Accedi'; }
 }
@@ -1566,7 +1570,7 @@ async function checkAuth() {
     _sessionsToday = d.sessions_today || 0;
     _sessionsPerDay = d.sessions_per_day || 1;
     localStorage.setItem('ca_username', _username);
-    if (!d.has_api_keys) {
+    if (!d.has_api_keys && !d.has_revx_keys) {
       showAuthScreen();
       showApiKeys(); return;
     }
@@ -2150,6 +2154,18 @@ function restoreActiveTab() {
   if (tabs[idx]) showTab(saved, tabs[idx]);
 }
 
+async function clearTrades() {
+  if (!confirm('Cancellare tutte le transazioni? L\'operazione è irreversibile.')) return;
+  try {
+    await fetch(API + '/trades', { method: 'DELETE', headers: authHeaders() });
+    trades = [];
+    _newTradeCount = 0;
+    _lastSeenTradeCount = 0;
+    updateStoricoBadge();
+    renderTransazioni();
+  } catch(e) { alert('Errore: ' + e.message); }
+}
+
 function updateStoricoBadge() {
   const badge = document.getElementById('storicoBadge');
   if (_newTradeCount > 0) {
@@ -2395,7 +2411,7 @@ async function startAgent() {
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
   if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const isReal = _hasApiKeys && !_simMode;
+  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
   const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
   if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
   if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
@@ -2411,7 +2427,7 @@ async function startAgent() {
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
-    realMode:              _hasApiKeys && !_simMode,
+    realMode:              (_hasApiKeys || _hasRevxKeys) && !_simMode,
     btcEmaFilter:          _btcEmaFilter,
     timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
@@ -2684,7 +2700,7 @@ function render() {
     }
   }
 
-  if (document.getElementById('page-transazioni').classList.contains('active')) renderStorico();
+  if (document.getElementById('page-transazioni').classList.contains('active')) renderTransazioni();
   renderHomeSession();
 }
 
@@ -2810,10 +2826,11 @@ function drawHeroSparkline() {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
   if (data.length < 2) return;
-  const min = Math.min(...data), max = Math.max(...data);
+  const vals = data.map(p => p.v);
+  const min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || 1;
-  const pts = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * w,
+  const pts = vals.map((v, i) => ({
+    x: (i / (vals.length - 1)) * w,
     y: h - ((v - min) / range) * h * 0.75 - h * 0.12
   }));
   ctx.beginPath();
@@ -2910,7 +2927,10 @@ function closeSignalInfo() {
 async function confirmClosePosition() {
   const symbol = document.getElementById('closeModalPending').value;
   hideCloseModal();
-  await fetch(API + '/close_position/' + symbol, { method:'POST', headers:authHeaders() });
+  try {
+    const r = await fetch(API + '/close_position/' + symbol, { method:'POST', headers:authHeaders() });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); alert('Errore chiusura: ' + (d.detail || d.error || r.status)); }
+  } catch(e) { alert('Errore di connessione durante la chiusura.'); }
 }
 
 // ── FILTRI TRANSAZIONI ───────────────────────────────────────────────────────
@@ -3290,11 +3310,11 @@ async function loadHomeBalance() {
           if (d.ok && d.balances && d.balances.length > 0) {
             const usd = d.balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
             const eur = d.balances.find(b => b.currency === 'EUR');
-            const best = usd || eur || d.balances[0];
-            const bal = parseFloat(best.available);
-            const sym = best.currency;
+            const best = usd || eur;
+            const bal = best ? parseFloat(best.available) : 0;
+            const sym = best ? best.currency : 'USD';
             valEl.textContent = (sym === 'EUR' ? '€' : '$') + bal.toFixed(2);
-            subEl.textContent = sym + ' disponibili su Revolut X';
+            subEl.textContent = (sym === 'EUR' ? 'EUR' : 'USD') + ' disponibili su Revolut X';
             const tbd = document.getElementById('totalBalanceDisplay');
             if (tbd) { tbd.textContent = bal.toFixed(2) + ' ' + sym + ' (Revolut X)'; tbd.style.color = 'var(--green)'; }
             const cap = document.getElementById('capital');

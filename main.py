@@ -1148,6 +1148,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 
     # Dimensione effettiva da chiudere
     close_size = pos["size_remaining"] * 0.5 if partial else pos["size_remaining"]
+    qty_to_sell = round(pos.get("qty_purchased", 0.0) * (0.5 if partial else 1.0), 8)
 
     if pos.get("realMode", False):
         # ── REVOLUT X EXIT ────────────────────────────────────────────────────
@@ -2012,7 +2013,7 @@ async def persist_sessions():
     sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
         try:
-            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k != "log"}
+            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_exiting", "_stopping")}
             state_json = json.dumps(state_to_save, default=str)
             async with db_pool.acquire() as conn:
                 if state.get("running"):
@@ -2324,7 +2325,7 @@ async def login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, password_hash, cb_key FROM users WHERE username = $1",
+            "SELECT id, password_hash, cb_key, revx_key_id FROM users WHERE username = $1",
             req.username.lower()
         )
     if not row:
@@ -2332,7 +2333,7 @@ async def login(req: LoginRequest, request: Request):
     if not bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
         raise HTTPException(status_code=401, detail="Username o password errati")
     token = create_token(row["id"])
-    has_keys = bool(row["cb_key"])
+    has_keys = bool(row["cb_key"]) or bool(row.get("revx_key_id"))
     # Usa display_name se disponibile
     async with db_pool.acquire() as conn2:
         urow = await conn2.fetchrow("SELECT display_name FROM users WHERE id = $1", row["id"])
@@ -2433,7 +2434,7 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
             "SELECT username, display_name, cb_key, avatar_b64, sim_mode, revx_key_id, telegram_chat_id, "
             "plan, subscription_expires_at, last_session_date, sessions_today FROM users WHERE id = $1", user_id
         )
-    has_keys = bool(row["cb_key"])
+    has_keys = bool(row["cb_key"]) or bool(row.get("revx_key_id"))
     sim = row["sim_mode"] if row["sim_mode"] is not None else True
     if not has_keys:
         sim = True
@@ -2591,6 +2592,19 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
             print(f"DB trades fetch error: {e}")
     return {"trades": mem_trades}
 
+@app.delete("/trades")
+async def clear_trades(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=10, window=60, key_suffix="clear_trades")
+    state = get_session(user_id)
+    state["trades"] = []
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                await conn.execute("DELETE FROM trades_history WHERE user_id = $1", user_id)
+        except Exception as e:
+            print(f"DB clear trades error: {e}")
+    return {"ok": True}
+
 @app.get("/telegram/bot_info")
 async def telegram_bot_info(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=30, window=60, key_suffix="tg_bot_info")
@@ -2743,6 +2757,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
 
     state.update({
         "running": True,
+        "_exiting": set(),
         "capital": capital,
         "currentCapital": capital,
         "positions": [],
