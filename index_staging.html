@@ -2989,8 +2989,8 @@ function renderTransazioni() {
   const reasonLabel = r => {
     const rl = (r||'').toLowerCase();
     if (rl.includes('tp2') || rl.includes('tp1')) return 'Take Profit';
-    if (rl.includes('sl') || rl.includes('stop')) return 'Stop Loss';
     if (rl.includes('manual')) return 'Manuale';
+    if (rl.includes('sl') || rl.includes('stop')) return 'Stop Loss';
     return r.replace(' SIM','').replace(' REALE','');
   };
 
