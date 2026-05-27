@@ -1181,23 +1181,37 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                             break
                 except Exception as be:
                     print(f"[REVX SELL] errore lettura saldo: {be}")
-                order_body = {
-                    "client_order_id": str(_uuid.uuid4()),
-                    "symbol": symbol_pair,
-                    "side": "SELL",
-                    "order_configuration": {"market": {"base_size": str(qty_to_sell)}}
-                }
-                # Retry su errori di rete — max 2 tentativi
+                # Limit order IOC con slippage progressivo — evita slippage protection RevX
+                # Tre tentativi: -0.5%, -1.5%, -3% sotto prezzo corrente
+                SELL_SLIP_BUFFERS = [0.005, 0.015, 0.03]
                 result = None
-                for attempt in range(2):
+                for slip_attempt, slip_buf in enumerate(SELL_SLIP_BUFFERS):
+                    limit_price = round(cur * (1 - slip_buf), 8)
+                    order_body = {
+                        "client_order_id": str(_uuid.uuid4()),
+                        "symbol": symbol_pair,
+                        "side": "SELL",
+                        "order_configuration": {
+                            "limit": {
+                                "base_size": str(qty_to_sell),
+                                "limit_price": str(limit_price),
+                                "time_in_force": "IOC"
+                            }
+                        }
+                    }
+                    print(f"[REVX SELL] {sym} limit @ ${limit_price:.6f} (-{slip_buf*100:.1f}%) attempt {slip_attempt+1}/{len(SELL_SLIP_BUFFERS)}")
                     try:
                         result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
-                        break
+                        _d = result.get("data") or result
+                        if _d.get("state", "") != "cancelled":
+                            break
+                        if slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
+                            print(f"[REVX SELL] limit -{slip_buf*100:.1f}% cancelled, riprovo con spread più largo...")
+                            await asyncio.sleep(1)
                     except Exception as net_err:
-                        if attempt == 0:
-                            print(f"[REVX SELL] tentativo 1 fallito: {net_err}, riprovo...")
+                        if slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
+                            print(f"[REVX SELL] tentativo {slip_attempt+1} errore: {net_err}, riprovo...")
                             await asyncio.sleep(2)
-                            order_body["client_order_id"] = str(_uuid.uuid4())
                         else:
                             raise
                 print(f"[REVX SELL RESULT] {sym}: {result}")
