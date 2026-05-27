@@ -2826,6 +2826,7 @@ function renderPositions() {
     const img = logo ? `<img src="${logo}" class="pos-logo" onerror="this.style.display='none'">` : `<div class="pos-icon">${p.symbol[0]}</div>`;
     const stopPrice  = p.stopPrice  || 0;
     const peakPrice  = p.peak_price || currentPrice;
+    const tp1Badge   = p.tp1_hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px">TP1✓</span>' : '';
     // Trailing profit bar: SL → ENTRY → PEAK con livello trail
     let barHtml = '';
     if (stopPrice > 0 && entryPrice > 0) {
