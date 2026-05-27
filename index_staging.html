@@ -988,7 +988,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <!-- Widget sessione in corso -->
     <div class="card" id="homeSessionWidget" style="display:none;margin-top:12px">
-      <div class="card-label" style="margin-bottom:10px">Sessione in corso</div>
+      <div class="card-label" style="margin-bottom:10px">Posizioni in corso</div>
       <div id="homeSessionContent">
         <div class="empty" style="padding:16px 0"><div class="empty-text" style="color:var(--text3)">Nessuna sessione attiva</div></div>
       </div>
@@ -1283,7 +1283,7 @@ body.auth-active .tabbar { display:none !important; }
       <div class="fdd" id="fddPeriod">
         <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Oggi <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="fdd-menu" id="fddPeriodMenu">
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','all','Sempre','period')">Sempre</div>
+          <div class="fdd-item" onclick="selectFdd('fddPeriod','all','Tutte','period')">Tutte</div>
           <div class="fdd-item selected" onclick="selectFdd('fddPeriod','today','Oggi','period')">Oggi</div>
           <div class="fdd-item" onclick="selectFdd('fddPeriod','week','7 giorni','period')">7 giorni</div>
           <div class="fdd-item" onclick="selectFdd('fddPeriod','month','30 giorni','period')">30 giorni</div>
@@ -2459,6 +2459,9 @@ async function stopAgent() {
     updateStoricoBadge();
   } catch(e) {}
   if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  // Svuota S immediatamente — le posizioni sono chiuse, non aspettare il prossimo poll
+  S.running = false;
+  S.positions = [];
   localStorage.removeItem('ca_session');
   document.getElementById('startBtn').disabled = false;
   document.getElementById('stopBtn').disabled = true;
@@ -2708,8 +2711,7 @@ function renderHomeSession() {
     const color = isPos ? 'var(--green)' : 'var(--red)';
     const logo = getLogo(p.symbol);
     const img = logo ? `<img src="${logo}" style="width:30px;height:30px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${p.symbol[0]}</div>`;
-    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;justify-content:space-between">
+    return `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:10px">${img}
           <div>
             <div style="font-size:14px;font-weight:700">${p.symbol}</div>
@@ -2720,17 +2722,8 @@ function renderHomeSession() {
           <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
           <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
         </div>
-      </div>
-      <div class="pos-chart-wrap"><canvas class="pos-chart-canvas" id="home-chart-${p.symbol}"></canvas></div>
     </div>`;
   }).join('');
-  // Carica grafici in background
-  pos.forEach(p => {
-    fetchMiniChart(p.symbol).then(closes => {
-      const canvas = document.getElementById('home-chart-' + p.symbol);
-      if (canvas && closes) drawMiniChart(canvas, closes, p.entryPrice);
-    });
-  });
 }
 
 function getPriceSym(pos) {
