@@ -1388,7 +1388,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 # ── main loop ─────────────────────────────────────────────────────────────────
 
 async def scan_and_trade(state: dict, user_id: int = None):
-    if not state["running"]:
+    if not state["running"] or state.get("_stopping"):
         return
     cfg = state["config"]
 
@@ -2800,9 +2800,11 @@ async def stop_agent(request: Request, user_id: int = Depends(get_current_user))
     state = get_session(user_id)
     if not state["running"]:
         return {"error": "Not running"}
-    state["running"] = False
+    state["_stopping"] = True  # blocca nuovi trade senza nascondere posizioni al poll
     for p in list(state["positions"]):
         await exit_position(state, p, "STOP MANUALE", user_id=user_id)
+    state["running"] = False  # solo dopo aver chiuso tutto
+    del state["_stopping"]
     pnl = state["currentCapital"] - state["capital"]
     add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
     await persist_sessions()  # rimuovi dal DB

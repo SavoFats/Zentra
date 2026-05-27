@@ -2438,6 +2438,16 @@ async function doStartAgent(cfg) {
 
 async function stopAgent() {
   await fetch(API + '/stop', { method:'POST', headers:authHeaders() });
+  // Fetch finale: aggiorna trades prima di spegnere il poll
+  try {
+    const tRes = await fetch(API + '/trades', { headers: authHeaders() });
+    const td = await tRes.json();
+    trades = td.trades || [];
+    _lastSeenTradeCount = trades.length;
+    _newTradeCount = 0;
+    updateStoricoBadge();
+  } catch(e) {}
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
   localStorage.removeItem('ca_session');
   document.getElementById('startBtn').disabled = false;
   document.getElementById('stopBtn').disabled = true;
@@ -2445,6 +2455,7 @@ async function stopAgent() {
   _sessionEndTs = null;
   window._lastStatus = null;
   unlockConfig();
+  render();
 }
 
 function resetAgent() {
