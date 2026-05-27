@@ -1203,8 +1203,10 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 print(f"[REVX SELL RESULT] {sym}: {result}")
                 data = result.get("data") or result
                 order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
-                if not order_id:
-                    err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
+                order_state = data.get("state", "")
+                sell_failed = not order_id or order_state == "cancelled"
+                if sell_failed:
+                    err_msg = f"ordine {order_state}" if order_state == "cancelled" else (result.get("message") or result.get("error") or result.get("detail") or str(result))
                     # Conta tentativi falliti consecutivi
                     pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
                     add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
