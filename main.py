@@ -1138,6 +1138,12 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 
     cur  = pos["currentPrice"]
     sym  = pos["symbol"]
+
+    # Evita doppia vendita concorrente sullo stesso simbolo
+    _exiting = state.setdefault("_exiting", set())
+    if sym in _exiting:
+        return
+    _exiting.add(sym)
     dur  = (datetime.utcnow() - datetime.fromisoformat(pos["entryTime"].replace("Z", ""))).total_seconds() / 60
 
     # Dimensione effettiva da chiudere
@@ -1151,7 +1157,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
             qty_purchased = pos.get("qty_purchased", 0.0)
             if qty_purchased <= 0:
                 add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} RevX — vendita annullata")
-                return
+                _exiting.discard(sym); return
             try:
                 import uuid as _uuid
                 qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
@@ -1194,7 +1200,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                         "order_configuration": {
                             "limit": {
                                 "base_size": str(qty_to_sell),
-                                "limit_price": str(limit_price),
+                                "price": str(limit_price),
                                 "time_in_force": "IOC"
                             }
                         }
@@ -1203,11 +1209,14 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     try:
                         result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
                         _d = result.get("data") or result
-                        if _d.get("state", "") != "cancelled":
-                            break
-                        if slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
+                        _state = _d.get("state", "")
+                        if _state in ("filled", "partially_filled"):
+                            break  # successo
+                        if _state == "cancelled" and slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
                             print(f"[REVX SELL] limit -{slip_buf*100:.1f}% cancelled, riprovo con spread più largo...")
                             await asyncio.sleep(1)
+                        else:
+                            break  # errore API o ultimo tentativo
                     except Exception as net_err:
                         if slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
                             print(f"[REVX SELL] tentativo {slip_attempt+1} errore: {net_err}, riprovo...")
@@ -1231,7 +1240,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                         await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
                         # Non fare return — lascia che il codice dopo rimuova la posizione
                     else:
-                        return
+                        _exiting.discard(sym); return
                 filled_price = float(data.get("average_price") or data.get("price") or cur)
                 if filled_price > 0:
                     cur = filled_price
@@ -1240,7 +1249,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     pos["qty_purchased"] = qty_purchased - qty_to_sell
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"RevX exit error: {e}")
-                return
+                _exiting.discard(sym); return
         # ── COINBASE EXIT ─────────────────────────────────────────────────────
         else:
             cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
@@ -1249,7 +1258,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 qty_purchased = pos.get("qty_purchased", 0.0)
                 if qty_purchased <= 0:
                     add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} — vendita annullata")
-                    return
+                    _exiting.discard(sym); return
                 qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
                 product_id  = pos.get("product_id", f"{sym}-USDC")
                 body = {
@@ -1263,7 +1272,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     err_msg = err.get("message") or err.get("error_details") or str(result)
                     add_log(state, "info", "ERRORE", f"Vendita {sym} fallita [{product_id}]: {err_msg}")
                     await notify(state, f"ERRORE VENDITA {sym}: {err_msg[:100]}")
-                    return
+                    _exiting.discard(sym); return
                 filled = result.get("success_response", {})
                 cur = float(filled.get("average_filled_price", cur)) or cur
                 add_log(state, "info", "VENDUTO", f"{sym} qty: {qty_to_sell:.6f} @ {_fp(cur)}")
@@ -1271,7 +1280,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     pos["qty_purchased"] = qty_purchased - qty_to_sell
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"Coinbase exit error: {sanitize_error(e, cb_key, cb_secret)}")
-                return
+                _exiting.discard(sym); return
 
     pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
@@ -1303,6 +1312,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 "TP1 SIM\n" + sym + " 50% @ $" + f"{cur:.4f}" +
                 "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
             )
+        _exiting.discard(sym)
         return  # posizione resta aperta per TP2
 
     # Chiusura totale
@@ -1353,6 +1363,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         except Exception as e:
             print(f"DB trade save error: {e}")
     state["positions"] = [p for p in state["positions"] if p is not pos]
+    _exiting.discard(sym)
     mode = "REALE" if pos.get("realMode") else "SIM"
     add_log(state, "sell", f"{reason} {mode}",
         f"{sym} @ {_fp(cur)} | {total_pnl:+.2f}$ ({total_pct:+.2f}%) | fee: ${exit_fee:.2f} | {dur:.0f} min")
