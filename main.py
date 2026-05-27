@@ -422,8 +422,8 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         # Minimo delle ultime 3 candele CHIUSE (escludi candela corrente aperta)
         pullback_low_5m = min(lows5[-4:-1]) if len(lows5) >= 4 else lows5[-2]
 
-        # Massimo delle ultime 10 candele CHIUSE (escludi candela corrente) — usato per breakout
-        high10_5m = max(closes5[-11:-1]) if len(closes5) >= 11 else max(closes5[:-1])
+        # Prezzo chiuso 10 candele fa (50 min fa) — usato per calcolo momentum %
+        close_10_ago = closes5[-11] if len(closes5) >= 11 else closes5[0]
 
         # Volume: usa solo candele chiuse ([-2] = ultima chiusa, [-21:-1] = 20 chiuse)
         vol_avg_20 = sum(volumes5[-21:-1]) / 20 if len(volumes5) >= 21 else 0.0
@@ -476,7 +476,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "ema20_5m_prev3":   ema20_5m_prev3,
             "atr_15m_long":     atr_15m_long,
             "atr_15m_short":    atr_15m_short,
-            "high10_5m":        high10_5m,
+            "close_10_ago":     close_10_ago,
             "updated_at":       time.time(),
         }
     except Exception as e:
@@ -634,40 +634,41 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         "rsi":          rsi_14,
     }
 
+MOMENTUM_THRESHOLD = 0.01  # +1% in 50 minuti per considerare un coin "in momentum"
+
 def get_momentum_signal(sym: str, current_price: float,
                         max_stop_pct: float = 0.02,
-                        vol_multiplier: float = 1.5) -> dict:
+                        vol_multiplier: float = 1.2) -> dict:
     """
-    Segnale momentum breakout: entra quando il prezzo rompe il massimo delle ultime 20
-    candele chiuse a 5m con volume sopra 1.5× la media.
+    Segnale momentum: entra quando il prezzo è salito >= 1% rispetto a 50 minuti fa
+    (10 candele 5m) con volume sopra 1.2× la media delle ultime 20 candele.
     """
     cd = candle_data.get(sym)
     if not cd:
         return {"signal": False, "reason": "no candle data", "stop_price": 0.0,
                 "breakout_ok": False, "vol_ok": False}
 
-    high10_5m  = cd.get("high10_5m", 0.0)
-    last_close = cd.get("last_close_5m", 0.0)
-    vol_avg_20 = cd.get("vol_avg_20", 0.0)
-    vol_last   = cd.get("vol_last", 0.0)
+    close_10_ago = cd.get("close_10_ago", 0.0)
+    last_close   = cd.get("last_close_5m", 0.0)
+    vol_avg_20   = cd.get("vol_avg_20", 0.0)
+    vol_last     = cd.get("vol_last", 0.0)
 
-    breakout_ok = high10_5m > 0 and last_close > high10_5m
-    vol_ok      = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
+    momentum_pct = (last_close - close_10_ago) / close_10_ago if close_10_ago > 0 else 0.0
+    breakout_ok  = momentum_pct >= MOMENTUM_THRESHOLD
+    vol_ok       = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
 
     stop_price = current_price * (1 - max_stop_pct)
 
     signal = breakout_ok and vol_ok
 
     if not breakout_ok:
-        dist = (last_close - high10_5m) / high10_5m * 100 if high10_5m > 0 else 0
-        reason = f"no breakout | close {last_close:.4f} vs max10 {high10_5m:.4f} ({dist:+.2f}%)"
+        reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{MOMENTUM_THRESHOLD*100:.0f}%)"
     elif not vol_ok:
         ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
         reason = f"volume basso ({ratio:.2f}x < {vol_multiplier}x richiesto)"
     else:
-        pct   = (last_close - high10_5m) / high10_5m * 100
         ratio = vol_last / vol_avg_20
-        reason = f"BREAKOUT +{pct:.2f}% | vol {ratio:.1f}x | SL -{max_stop_pct*100:.1f}%"
+        reason = f"MOMENTUM +{momentum_pct*100:.2f}% in 50min | vol {ratio:.1f}x | SL -{max_stop_pct*100:.1f}%"
 
     return {
         "signal":      signal,
@@ -1556,7 +1557,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     min_vol      = cfg.get("minVolume", 0)
     max_stop_pct = cfg.get("maxStopPct", 0.02)
-    vol_mult     = cfg.get("volMultiplier", 1.5)
+    vol_mult     = cfg.get("volMultiplier", 1.2)
 
     use_revx_filter = state.get("use_revx", False)
     universe = [
@@ -2496,7 +2497,7 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
     active_cfg = user_state.get("config", {})
 
     max_stop_pct = active_cfg.get("maxStopPct", 0.02)
-    vol_mult     = active_cfg.get("volMultiplier", 1.5)
+    vol_mult     = active_cfg.get("volMultiplier", 1.2)
 
     for s, d in market_data.items():
         if d["price"] <= 0:
