@@ -1470,7 +1470,13 @@ async def scan_and_trade(state: dict, user_id: int = None):
     open_positions = state["positions"]
     if min_trade_size < 1.0 and cfg.get("realMode", False):
         if open_positions:
-            # Capitale bloccato in posizioni aperte — aspetta che si chiudano
+            _now = time.time()
+            if _now - state.get("_last_monitor_log", 0) >= 60:
+                state["_last_monitor_log"] = _now
+                n = len(open_positions)
+                pos_label = "posizioni aperte" if n > 1 else "posizione aperta"
+                add_log(state, "info", "MONITOR",
+                    f"{n} {pos_label} — saldo libero ${tradable_capital:.2f} | monitoring attivo")
             _update_pnl(state)
             return
         # Evita falso stop per settlement delay: se currentCapital è molto > saldo letto,
@@ -2755,20 +2761,19 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     capp   = float(cfg.get("capitalPct", 1.0)) * 100
     vol    = float(cfg.get("minVolume", 0)) / 1_000_000
     mode   = "REALE" if real_mode else "SIMULAZIONE"
-    ema_s  = "ON" if cfg.get("emaFilter", True) else "OFF"
-    mt     = int(cfg.get("maxTrades", 0))
-    mcl    = int(cfg.get("maxConsecutiveLosses", 3))
-    tp1r   = float(cfg.get("tp1R", 2.0))
-    tp2r   = float(cfg.get("tp2R", 4.0))
-    mxh    = float(cfg.get("maxHoldHours", 4.0))
-    rsi_s  = f"{cfg.get('rsiMin',35):.0f}-{cfg.get('rsiMax',65):.0f}" if cfg.get("rsiFilter", True) else "OFF"
-    t1h_s  = "ON" if cfg.get("trend1hFilter", True) else "OFF"
-    curr_sym = "$"
+    mt           = int(cfg.get("maxTrades", 0))
+    mcl          = int(cfg.get("maxConsecutiveLosses", 3))
+    mxh          = float(cfg.get("maxHoldHours", 4.0))
+    mom_thr_pct  = float(cfg.get("momentumPct", 0.01)) * 100
+    vol_mult_s   = float(cfg.get("volMultiplier", 1.2))
+    max_stop_pct_s = float(cfg.get("maxStopPct", 0.02)) * 100
+    btc_filt_s   = "ON" if cfg.get("btcEmaFilter", True) else "OFF"
+    curr_sym     = "$"
     exchange_name = "Revolut X" if (use_revx and real_mode) else ("Coinbase" if (cb_key and real_mode) else "SIM")
     add_log(state, "info", "AVVIO",
         f"{curr_sym}{capital:.0f} | {mode} [{exchange_name}] | Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | "
-        f"EMA: {ema_s} | Trend1h: {t1h_s} | RSI: {rsi_s} | "
-        f"TP1: {tp1r}R | TP2: {tp2r}R | MaxHold: {mxh}h | MaxLoss: {mcl}"
+        f"Momentum: +{mom_thr_pct:.1f}% | Vol: {vol_mult_s}x | Stop: -{max_stop_pct_s:.1f}% | "
+        f"BTC: {btc_filt_s} | MaxHold: {mxh}h | MaxLoss: {mcl}"
     )
     _sessions_starting.discard(user_id)
     return {"ok": True}
