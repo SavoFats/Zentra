@@ -2437,7 +2437,18 @@ async function doStartAgent(cfg) {
 }
 
 async function stopAgent() {
-  await fetch(API + '/stop', { method:'POST', headers:authHeaders() });
+  let data;
+  try {
+    const res = await fetch(API + '/stop', { method:'POST', headers:authHeaders() });
+    data = await res.json();
+  } catch(e) { alert('Errore di rete: ' + e.message); return; }
+
+  // Se alcune posizioni non sono state vendute, la sessione rimane aperta
+  if (data.error && !data.ok) {
+    alert('⚠️ ' + data.error);
+    return;
+  }
+
   // Fetch finale: aggiorna trades prima di spegnere il poll
   try {
     const tRes = await fetch(API + '/trades', { headers: authHeaders() });

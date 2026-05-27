@@ -2803,8 +2803,15 @@ async def stop_agent(request: Request, user_id: int = Depends(get_current_user))
     state["_stopping"] = True  # blocca nuovi trade senza nascondere posizioni al poll
     for p in list(state["positions"]):
         await exit_position(state, p, "STOP MANUALE", user_id=user_id)
-    state["running"] = False  # solo dopo aver chiuso tutto
-    del state["_stopping"]
+    # Se alcune posizioni non sono state vendute, non chiudere la sessione
+    remaining = state.get("positions", [])
+    if remaining:
+        state.pop("_stopping", None)
+        syms = ", ".join(p["symbol"] for p in remaining)
+        add_log(state, "info", "ERRORE", f"Stop annullato: vendita fallita per {syms} — riprova")
+        return {"error": f"Vendita fallita per: {syms}. Sessione non fermata.", "remaining": [p["symbol"] for p in remaining]}
+    state["running"] = False
+    state.pop("_stopping", None)
     pnl = state["currentCapital"] - state["capital"]
     add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
     await persist_sessions()  # rimuovi dal DB
