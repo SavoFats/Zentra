@@ -634,11 +634,10 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
         "rsi":          rsi_14,
     }
 
-MOMENTUM_THRESHOLD = 0.01  # +1% in 50 minuti per considerare un coin "in momentum"
-
 def get_momentum_signal(sym: str, current_price: float,
                         max_stop_pct: float = 0.02,
-                        vol_multiplier: float = 1.2) -> dict:
+                        vol_multiplier: float = 1.2,
+                        momentum_threshold: float = 0.01) -> dict:
     """
     Segnale momentum: entra quando il prezzo è salito >= 1% rispetto a 50 minuti fa
     (10 candele 5m) con volume sopra 1.2× la media delle ultime 20 candele.
@@ -654,7 +653,7 @@ def get_momentum_signal(sym: str, current_price: float,
     vol_last     = cd.get("vol_last", 0.0)
 
     momentum_pct = (last_close - close_10_ago) / close_10_ago if close_10_ago > 0 else 0.0
-    breakout_ok  = momentum_pct >= MOMENTUM_THRESHOLD
+    breakout_ok  = momentum_pct >= momentum_threshold
     vol_ok       = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
 
     stop_price = current_price * (1 - max_stop_pct)
@@ -662,7 +661,7 @@ def get_momentum_signal(sym: str, current_price: float,
     signal = breakout_ok and vol_ok
 
     if not breakout_ok:
-        reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{MOMENTUM_THRESHOLD*100:.0f}%)"
+        reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{momentum_threshold*100:.0f}%)"
     elif not vol_ok:
         ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
         reason = f"volume basso ({ratio:.2f}x < {vol_multiplier}x richiesto)"
@@ -1556,8 +1555,9 @@ async def scan_and_trade(state: dict, user_id: int = None):
             return
 
     min_vol      = cfg.get("minVolume", 0)
-    max_stop_pct = cfg.get("maxStopPct", 0.02)
-    vol_mult     = cfg.get("volMultiplier", 1.2)
+    max_stop_pct   = cfg.get("maxStopPct", 0.02)
+    vol_mult       = cfg.get("volMultiplier", 1.2)
+    momentum_thr   = cfg.get("momentumPct", 0.01)
 
     use_revx_filter = state.get("use_revx", False)
     universe = [
@@ -1579,7 +1579,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     for d in universe_sorted:
         sym    = d["symbol"]
-        signal = get_momentum_signal(sym, d["price"], max_stop_pct, vol_mult)
+        signal = get_momentum_signal(sym, d["price"], max_stop_pct, vol_mult, momentum_thr)
         if not signal["signal"]:
             skipped += 1
             if not signal.get("breakout_ok"): block_count["breakout"] += 1
@@ -2496,8 +2496,9 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
     user_state = user_sessions.get(user_id, {})
     active_cfg = user_state.get("config", {})
 
-    max_stop_pct = active_cfg.get("maxStopPct", 0.02)
-    vol_mult     = active_cfg.get("volMultiplier", 1.2)
+    max_stop_pct  = active_cfg.get("maxStopPct", 0.02)
+    vol_mult      = active_cfg.get("volMultiplier", 1.2)
+    momentum_thr  = active_cfg.get("momentumPct", 0.01)
 
     for s, d in market_data.items():
         if d["price"] <= 0:
@@ -2505,7 +2506,7 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
         if s not in candle_data:
             continue
         item = {"symbol": s, **d}
-        sig = get_momentum_signal(s, d["price"], max_stop_pct, vol_mult)
+        sig = get_momentum_signal(s, d["price"], max_stop_pct, vol_mult, momentum_thr)
         item["ema"] = {
             "breakout_ok": sig.get("breakout_ok", False),
             "vol_ok":      sig.get("vol_ok", False),

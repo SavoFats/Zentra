@@ -1084,6 +1084,13 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Distanza massima del prezzo da EMA20 per considerare un pullback valido</div>
     </div>
 
+    <div class="field">
+      <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
+      <input type="range" id="momentumPct" min="0.5" max="3" value="1" step="0.5"
+        oninput="document.getElementById('momentumPctVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+      <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
+    </div>
+
     <div class="section-label">Stop &amp; Take Profit</div>
 
     <div class="field">
@@ -2172,7 +2179,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','profitTolerance','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','momentumPct','stopLoss','profitTolerance','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -2194,6 +2201,7 @@ function resetConfigToDefaults() {
   document.getElementById('capitalDisplay').textContent = '--';
   document.getElementById('allocPct').value = 0; document.getElementById('allocVal').textContent = '0%';
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
+  document.getElementById('momentumPct').value = 1; document.getElementById('momentumPctVal').textContent = '1.0%';
   document.getElementById('stopLoss').value = 2.0; document.getElementById('slVal').textContent = '2.0%';
   document.getElementById('profitTolerance').value = 20; document.getElementById('profitTolVal').textContent = '20%';
   document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = getCurrSym() + '0M';
@@ -2220,6 +2228,7 @@ function restoreConfigFromStorage() {
   if (saved.capitalPct !== undefined) { const p=Math.round(saved.capitalPct*100); document.getElementById('capitalPct').value=p; document.getElementById('capitalPctVal').textContent=p+'%'; }
   if (saved.allocPct) { const p=Math.round(saved.allocPct*100); document.getElementById('allocPct').value=p; document.getElementById('allocVal').textContent=p+'%'; }
   if (saved.sessionDuration) { document.getElementById('sessionDuration').value=saved.sessionDuration; document.getElementById('sessionVal').textContent=saved.sessionDuration+'h'; }
+  if (saved.momentumPct !== undefined) { const mp=(saved.momentumPct*100).toFixed(1); document.getElementById('momentumPct').value=parseFloat(mp); document.getElementById('momentumPctVal').textContent=mp+'%'; }
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
   if (saved.profitTolerance !== undefined) { const pt=Math.round(saved.profitTolerance*100); document.getElementById('profitTolerance').value=pt; document.getElementById('profitTolVal').textContent=pt+'%'; }
   if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
@@ -2395,6 +2404,7 @@ async function startAgent() {
     capitalPct:            capitalPctVal / 100,
     allocPct:              allocVal / 100,
     sessionDuration:       parseInt(document.getElementById('sessionDuration').value),
+    momentumPct:           parseFloat(document.getElementById('momentumPct').value) / 100,
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
     profitTolerance:       parseFloat(document.getElementById('profitTolerance').value) / 100,
     minVolume:             parseFloat(document.getElementById('minVolume').value) * 1000000,
