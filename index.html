@@ -2200,6 +2200,7 @@ function getLogo(sym) {
 let S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
 let trades = [];
 let pollInterval = null;
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function showTab(name, el) {
@@ -2738,7 +2739,6 @@ function render() {
   const logs = S.log || [];
   if (actList) {
     if (logs.length > 0) {
-      const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       actList.innerHTML = logs.map(l => {
         const time = l.ts ? new Date(l.ts).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : (l.time || '');
         const label = l.label || '';
