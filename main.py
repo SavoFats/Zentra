@@ -276,6 +276,8 @@ _dynamic_universe: set = set(COIN_WHITELIST)  # aggiornato ogni 30 min
 _universe_last_update: float = 0
 UNIVERSE_UPDATE_INTERVAL = 1800  # 30 minuti
 
+_cg_price_last_fetch: float = 0  # throttle fallback CoinGecko prezzi
+
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
     if len(prices) < period:
@@ -697,16 +699,73 @@ async def fetch_revx_market_data(key_id: str = "", private_key: str = "") -> dic
         print(f"[REVX TICKER] error: {e}")
     return result
 
+async def fetch_prices_coingecko():
+    """Fallback CoinGecko quando Binance è bloccato (451). Throttlato a 1 fetch/60s."""
+    global _cg_price_last_fetch
+    if time.time() - _cg_price_last_fetch < 60:
+        return
+    _cg_price_last_fetch = time.time()
+    try:
+        fetched = 0
+        async with httpx.AsyncClient(timeout=20) as client:
+            for page in (1, 2):
+                r = await client.get(
+                    "https://api.coingecko.com/api/v3/coins/markets",
+                    params={
+                        "vs_currency": "usdt",
+                        "order": "volume_desc",
+                        "per_page": 250,
+                        "page": page,
+                        "price_change_percentage": "1h,24h",
+                    }
+                )
+                if r.status_code != 200:
+                    print(f"[CG] fetch_prices HTTP {r.status_code}")
+                    break
+                coins = r.json()
+                if not isinstance(coins, list):
+                    break
+                for coin in coins:
+                    sym = (coin.get("symbol") or "").upper()
+                    if not sym or not sym.isalpha() or sym in STABLES:
+                        continue
+                    price = coin.get("current_price") or 0.0
+                    if price <= 0:
+                        continue
+                    change24h = coin.get("price_change_percentage_24h") or 0.0
+                    change1h  = coin.get("price_change_percentage_1h_in_currency") or 0.0
+                    vol_usd   = coin.get("total_volume") or 0.0
+                    if sym not in market_data:
+                        market_data[sym] = {"price": 0.0, "change1h": 0.0, "change24h": 0.0, "volume24h": 0.0, "icon": sym[0]}
+                    market_data[sym]["price"]     = float(price)
+                    market_data[sym]["change1h"]  = float(change1h)
+                    market_data[sym]["change24h"] = float(change24h)
+                    market_data[sym]["volume24h"] = float(vol_usd)
+                    for state in list(user_sessions.values()):
+                        for pos in list(state["positions"]):
+                            if pos["symbol"] == sym:
+                                pos["currentPrice"] = float(price)
+                                if float(price) > pos["highPrice"]:
+                                    pos["highPrice"] = float(price)
+                    fetched += 1
+                await asyncio.sleep(1.5)
+        print(f"[CG] fetch_prices fallback: {fetched} coin aggiornate")
+    except Exception as e:
+        print(f"[CG] fetch_prices error: {e}")
+
+
 async def fetch_prices():
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
         if r.status_code != 200:
             print(f"[BINANCE] fetch_prices HTTP {r.status_code}: {r.text[:200]}")
+            await fetch_prices_coingecko()
             return
         tickers = r.json()
         if not isinstance(tickers, list):
             print(f"[BINANCE] fetch_prices risposta non-lista: {str(tickers)[:200]}")
+            await fetch_prices_coingecko()
             return
 
         for t in tickers:
