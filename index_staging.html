@@ -1109,6 +1109,13 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
+      <div class="field-label">Profit Activation <span id="profitActVal" style="color:var(--blue);font-weight:700">0.3%</span></div>
+      <input type="range" id="profitActivation" min="0" max="2" value="0.3" step="0.1"
+        oninput="document.getElementById('profitActVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+      <div class="field-hint">Il trailing scatta solo dopo questo profitto netto — più alto = lascia respirare la posizione, meno uscite precoci</div>
+    </div>
+
+    <div class="field">
       <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">4h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="maxHoldHours" min="1" max="24" value="4" step="1"
         oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
@@ -2152,7 +2159,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','momentumPct','stopLoss','profitTolerance','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','momentumPct','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -2177,6 +2184,7 @@ function resetConfigToDefaults() {
   document.getElementById('momentumPct').value = 1; document.getElementById('momentumPctVal').textContent = '1.0%';
   document.getElementById('stopLoss').value = 2.0; document.getElementById('slVal').textContent = '2.0%';
   document.getElementById('profitTolerance').value = 20; document.getElementById('profitTolVal').textContent = '20%';
+  document.getElementById('profitActivation').value = 0.3; document.getElementById('profitActVal').textContent = '0.3%';
   document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = getCurrSym() + '0M';
   document.getElementById('maxTrades').value = 0; updateMaxTrades();
   document.getElementById('maxConsecutiveLosses').value = 3; updateMaxLoss();
@@ -2204,6 +2212,7 @@ function restoreConfigFromStorage() {
   if (saved.momentumPct !== undefined) { const mp=(saved.momentumPct*100).toFixed(1); document.getElementById('momentumPct').value=parseFloat(mp); document.getElementById('momentumPctVal').textContent=mp+'%'; }
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
   if (saved.profitTolerance !== undefined) { const raw=saved.profitTolerance; const pt=Math.min(40,Math.max(5,raw>1?Math.round(raw):Math.round(raw*100))); document.getElementById('profitTolerance').value=pt; document.getElementById('profitTolVal').textContent=pt+'%'; }
+  if (saved.profitActivation !== undefined) { const pa=(saved.profitActivation*100).toFixed(1); document.getElementById('profitActivation').value=parseFloat(pa); document.getElementById('profitActVal').textContent=pa+'%'; }
   if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
@@ -2379,6 +2388,7 @@ async function startAgent() {
     momentumPct:           parseFloat(document.getElementById('momentumPct').value) / 100,
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
     profitTolerance:       parseFloat(document.getElementById('profitTolerance').value) / 100,
+    profitActivation:      parseFloat(document.getElementById('profitActivation').value) / 100,
     minVolume:             parseFloat(document.getElementById('minVolume').value) * 1000000,
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
