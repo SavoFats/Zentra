@@ -441,6 +441,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "atr_15m_long":     atr_15m_long,
             "atr_15m_short":    atr_15m_short,
             "close_10_ago":     close_10_ago,
+            "sparkline":        closes1h[-25:-1],
             "updated_at":       time.time(),
         }
     except Exception as e:
@@ -2341,6 +2342,7 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "signal":      sig["signal"],
             "reason":      sig["reason"],
         }
+        item["sparkline"] = candle_data.get(s, {}).get("sparkline", [])
         items.append(item)
 
     # Filtra sempre alle coin RevX se disponibili — sim e reale mostrano le stesse coin

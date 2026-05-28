@@ -221,12 +221,12 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .trade-row.loss { border-left-color:var(--red); }
 
 .mkt-coin { display:flex; align-items:center; gap:12px; }
-.mkt-logo { width:34px; height:34px; border-radius:50%; }
-.mkt-icon-placeholder { width:34px; height:34px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; color:var(--text2); flex-shrink:0; }
-.mkt-logo-wrap { position:relative; width:34px; height:34px; flex-shrink:0; }
-.mkt-name { font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; }
+.mkt-logo { width:48px; height:48px; border-radius:50%; flex-shrink:0; }
+.mkt-icon-placeholder { width:48px; height:48px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; color:var(--text2); flex-shrink:0; }
+.mkt-logo-wrap { position:relative; width:48px; height:48px; flex-shrink:0; }
+.mkt-name { font-size:14px; font-weight:700; display:flex; align-items:center; gap:4px; }
 .mkt-sym-sub { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
-.mkt-in-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:4px; padding:1px 5px; font-weight:700; margin-left:6px; vertical-align:middle; }
+.mkt-in-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:4px; padding:1px 5px; font-weight:700; margin-left:4px; vertical-align:middle; }
 .plan-badge { font-size:9px; font-weight:800; padding:2px 7px; border-radius:20px; letter-spacing:0.06em; margin-left:6px; vertical-align:middle; }
 .plan-badge.free { background:var(--surface3); color:var(--text3); }
 .plan-badge.pro  { background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
@@ -234,14 +234,14 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .pro-lock-label { font-size:10px; font-weight:800; color:#1a1200; background:#f59e0b; border-radius:4px; padding:2px 6px; margin-left:6px; letter-spacing:0.04em; }
 #sessionsIndicator { font-size:12px; margin-top:4px; }
 .mkt-vol { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
-.mkt-row { padding:12px 0; border-bottom:1px solid var(--border); }
+.mkt-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); }
 .mkt-row:last-child { border-bottom:none; }
-.mkt-row-open { background:rgba(0,82,255,0.05); border-radius:10px; padding:10px 10px; margin:0 -10px; }
-.mkt-row-main { display:flex; align-items:center; justify-content:space-between; }
-.mkt-right { text-align:right; }
-.mkt-price-val { font-size:15px; font-weight:700; margin-bottom:4px; font-variant-numeric:tabular-nums; }
-.mkt-chg-pill { font-size:11px; font-weight:700; padding:3px 7px; border-radius:6px; display:inline-block; }
-.ema-dots { display:flex; align-items:center; gap:5px; margin-top:7px; flex-wrap:wrap; }
+.mkt-row-open { background:rgba(0,82,255,0.05); border-radius:12px; padding:12px 10px; margin:0 -10px; }
+.mkt-row-info { flex:1; min-width:0; }
+.mkt-row-right { text-align:right; flex-shrink:0; }
+.mkt-price-val { font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
+.mkt-chg-pill { font-size:12px; font-weight:700; padding:4px 9px; border-radius:8px; display:inline-block; }
+.ema-dots { display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap; }
 .ema-dot-wrap { display:flex; align-items:center; gap:3px; }
 .ema-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; transition:all 0.3s; }
 .ema-dot.on { background:var(--green); box-shadow:0 0 6px rgba(5,193,104,0.6); animation:pulse 2s infinite; }
@@ -3134,6 +3134,19 @@ function fmtMoney(v) { const a = Math.abs(v); return a > 0 && a < 0.01 ? v.toFix
 function fmtPrice(p, sym='$') { if(p>=1000) return sym+p.toLocaleString('en-US',{maximumFractionDigits:0}); if(p>=1) return sym+p.toFixed(2); if(p>=0.01) return sym+p.toFixed(4); return sym+p.toFixed(6); }
 
 
+function renderSparkline(closes, color) {
+  if (!closes || closes.length < 2) return '<svg width="72" height="36"></svg>';
+  const W = 72, H = 36;
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const range = max - min || 1;
+  const pts = closes.map((v, i) => {
+    const x = (i / (closes.length - 1)) * W;
+    const y = H - 2 - ((v - min) / range) * (H - 4);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="flex-shrink:0;display:block"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/></svg>`;
+}
+
 function renderMarket() {
   let data = [...mktData];
   // Filtra sul campo correntemente selezionato per il sort
@@ -3149,56 +3162,36 @@ function renderMarket() {
     const chg24=c.change24h||0, chg1h=c.change1h||0, vol=c.volume24h||0;
     const c24=chg24>=0?'var(--green)':'var(--red)'; const c1h=chg1h>=0?'var(--green)':'var(--red)';
     const isOpen = S.running && (S.positions||[]).some(p=>p.symbol===c.symbol);
-    const bg24=chg24>=0?'rgba(5,193,104,0.12)':'rgba(246,70,93,0.12)';
+    const bg24=chg24>=0?'rgba(5,193,104,0.15)':'rgba(246,70,93,0.15)';
     const fullName=getCoinName(c.symbol);
     const ema = c.ema;
     let emaDots = '';
     if (ema) {
       const emaId = 'ema_' + c.symbol;
       _emaCache[emaId] = ema;
-      const dot = (on, key, label) => {
-        return `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}"
-          onmouseenter="showDotTooltip(this)"
-          onmouseleave="hideEmaTooltip()"
-          ontouchstart="showDotTooltip(this);event.stopPropagation()"
-          style="cursor:pointer"
-        ><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
-      };
+      const dot = (on, key, label) => `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}" onmouseenter="showDotTooltip(this)" onmouseleave="hideEmaTooltip()" ontouchstart="showDotTooltip(this);event.stopPropagation()" style="cursor:pointer"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
       emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'breakout','BREAK')}${dot(ema.vol_ok,'vol','VOL')}${signalDot}</div>`;
     }
+    const starred = _watchlist.has(c.symbol);
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
-      <div class="mkt-row-main">
-        <div class="mkt-coin">
-          <div class="mkt-logo-wrap">
-            <img ${getLogo(c.symbol) ? `src="${getLogo(c.symbol)}"` : ''} class="mkt-logo" data-logo-sym="${c.symbol}" id="logo-img-${c.symbol}" ${!getLogo(c.symbol) ? 'style="display:none"' : ''} onerror="this.onerror=null;this.style.display='none';document.getElementById('logo-ph-${c.symbol}').style.display='flex'">
-            <div class="mkt-icon-placeholder" id="logo-ph-${c.symbol}" style="${getLogo(c.symbol) ? 'display:none' : 'display:flex'}">${c.symbol[0]}</div>
-          </div>
-          <div style="min-width:0;flex:1">
-            <div class="mkt-name" style="display:flex;align-items:center;justify-content:space-between;width:100%">
-              <span>${fullName}${isOpen?'<span class="mkt-in-badge">IN</span>':''}</span>
-              <button class="star-btn ${_watchlist.has(c.symbol)?'starred':''}" data-star-sym="${c.symbol}" onclick="event.stopPropagation();toggleWatchlist('${c.symbol}')" style="margin-left:4px;width:24px;height:24px">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="${_watchlist.has(c.symbol)?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              </button>
-            </div>
-            <div class="mkt-sym-sub">${c.symbol} &middot; Vol $${fmtVol(vol)}</div>
-          </div>
+      <img src="${getLogo(c.symbol)}" class="mkt-logo" data-logo-sym="${c.symbol}" id="logo-img-${c.symbol}" onerror="coinImgErr(this,'${esc(c.symbol[0])}',48)">
+      <div class="mkt-row-info">
+        <div class="mkt-name">
+          <span>${esc(fullName)}${isOpen?'<span class="mkt-in-badge">IN</span>':''}</span>
+          <button class="star-btn ${starred?'starred':''}" data-star-sym="${c.symbol}" onclick="event.stopPropagation();toggleWatchlist('${c.symbol}')" style="width:22px;height:22px;margin-left:2px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="${starred?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </button>
         </div>
-        <div class="mkt-right" style="flex-shrink:0">
-          <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtPrice(c.price)}</div>
-          <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:5px">
-            <div style="text-align:center">
-              <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">24H</div>
-              <div class="mkt-chg-pill" id="mkt-chg24-${c.symbol}" style="background:${bg24};color:${c24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</div>
-            </div>
-            <div style="text-align:center">
-              <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">1H</div>
-              <div class="mkt-chg-pill" id="mkt-chg1h-${c.symbol}" style="background:rgba(138,143,168,0.08);color:${c1h}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}%</div>
-            </div>
-          </div>
-        </div>
+        <div class="mkt-sym-sub">${esc(c.symbol)} &middot; Vol $${fmtVol(vol)}</div>
+        ${emaDots}
       </div>
-      ${emaDots}
+      ${renderSparkline(c.sparkline, chg24>=0?'var(--green)':'var(--red)')}
+      <div class="mkt-row-right">
+        <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtPrice(c.price)}</div>
+        <div style="margin-top:5px"><span class="mkt-chg-pill" id="mkt-chg24-${c.symbol}" style="background:${bg24};color:${c24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</span></div>
+        <div style="font-size:11px;font-weight:600;color:${c1h};margin-top:3px" id="mkt-chg1h-${c.symbol}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}% 1h</div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -3401,11 +3394,11 @@ function updateMarketPricesInPlace() {
       const chg = c.change24h || 0;
       chg24El.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
       chg24El.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
-      chg24El.style.background = chg >= 0 ? 'rgba(5,193,104,0.12)' : 'rgba(246,70,93,0.12)';
+      chg24El.style.background = chg >= 0 ? 'rgba(5,193,104,0.15)' : 'rgba(246,70,93,0.15)';
     }
     if (chg1hEl) {
       const chg = c.change1h || 0;
-      chg1hEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      chg1hEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '% 1h';
       chg1hEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
     }
   }
