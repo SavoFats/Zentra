@@ -2324,8 +2324,6 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
     for s, d in market_data.items():
         if d["price"] <= 0:
             continue
-        if s not in candle_data:
-            continue
         item = {"symbol": s, **d}
         sig = get_momentum_signal(s, d["price"], max_stop_pct, vol_mult, momentum_thr)
         item["ema"] = {
