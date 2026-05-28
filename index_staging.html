@@ -1262,23 +1262,24 @@ body.auth-active .tabbar { display:none !important; }
     <div class="ptr-indicator" id="ptr-page-transazioni"><div class="ptr-spinner"></div></div>
 
     <!-- Stats -->
-    <div class="kpi-grid" style="margin-bottom:12px">
-      <div class="kpi">
-        <div class="kpi-label">Trade</div>
-        <div class="kpi-value" id="txCount">0</div>
-        <div class="kpi-sub" id="txPnl">P&L: --</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--blue);border-radius:16px;padding:16px 18px">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">P&L Oggi</div>
+        <div id="txPnl" style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.02em">--</div>
+        <div id="txCount" style="font-size:12px;color:rgba(255,255,255,0.65);margin-top:4px">-- trade</div>
       </div>
-      <div class="kpi">
-        <div class="kpi-label">Win Rate</div>
-        <div class="kpi-value" id="txWinRate">--%</div>
-        <div class="kpi-sub" id="txWinLoss">-- vittorie · -- sconfitte</div>
+      <div style="background:var(--surface2);border-radius:16px;padding:16px 18px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Win Rate</div>
+        <div id="txWinRate" style="font-size:26px;font-weight:800;letter-spacing:-0.02em">--%</div>
+        <div id="txDotBar" style="display:flex;gap:3px;margin:8px 0 5px;flex-wrap:wrap"></div>
+        <div id="txWinLoss" style="font-size:11px;color:var(--text3)">-- vittorie · -- sconfitte</div>
       </div>
     </div>
 
 
 
     <!-- Filtri dropdown custom -->
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;justify-content:space-between">
       <div class="fdd" id="fddPeriod">
         <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Oggi <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="fdd-menu" id="fddPeriodMenu">
@@ -1298,9 +1299,12 @@ body.auth-active .tabbar { display:none !important; }
         </div>
       </div>
 
-      <button onclick="clearTrades()" title="Cancella transazioni" style="margin-left:auto;background:none;border:none;padding:6px;cursor:pointer;color:var(--text3);display:flex;align-items:center;border-radius:8px;transition:color 0.15s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">
+      <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+      <span id="txFilterCount" style="font-size:12px;color:var(--text3);font-weight:500"></span>
+      <button onclick="clearTrades()" title="Cancella transazioni" style="background:none;border:none;padding:6px;cursor:pointer;color:var(--text3);display:flex;align-items:center;border-radius:8px;transition:color 0.15s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
       </button>
+      </div>
 
     </div>
 
@@ -2961,10 +2965,12 @@ function renderTransazioni() {
   const list = document.getElementById('transazioniList');
   if (!trades.length) {
     list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna transazione</div></div>';
-    document.getElementById('txCount').textContent = '0';
+    document.getElementById('txCount').textContent = '-- trade';
     document.getElementById('txWinRate').textContent = '--%';
-    document.getElementById('txPnl').textContent = 'P&L: --';
+    document.getElementById('txPnl').textContent = '--';
     document.getElementById('txWinLoss').textContent = '-- vittorie · -- sconfitte';
+    document.getElementById('txDotBar').innerHTML = '';
+    const fc = document.getElementById('txFilterCount'); if (fc) fc.textContent = '';
     return;
   }
   const filtered = applyTxFilters([...trades].sort((a, b) => new Date(b.time) - new Date(a.time)));
@@ -2973,12 +2979,15 @@ function renderTransazioni() {
   const losses = filtered.filter(t => t.pnl < 0).length;
   const totalPnl = filtered.reduce((a, t) => a + t.pnl, 0);
   const wr = filtered.length > 0 ? Math.round(wins / filtered.length * 100) : 0;
-  document.getElementById('txCount').textContent = filtered.length;
+  document.getElementById('txCount').textContent = filtered.length + ' trade';
   document.getElementById('txWinRate').textContent = filtered.length > 0 ? wr + '%' : '--%';
   document.getElementById('txWinRate').style.color = wr >= 50 ? 'var(--green)' : wr > 0 ? 'var(--red)' : '';
-  document.getElementById('txPnl').textContent = 'P&L: ' + (totalPnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(totalPnl);
-  document.getElementById('txPnl').style.color = totalPnl > 0 ? 'var(--green)' : totalPnl < 0 ? 'var(--red)' : '';
+  document.getElementById('txPnl').textContent = (totalPnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(totalPnl);
   document.getElementById('txWinLoss').textContent = wins + ' vittorie · ' + losses + ' sconfitte';
+  document.getElementById('txDotBar').innerHTML = [...filtered].reverse().map(t =>
+    `<div style="width:7px;height:7px;border-radius:50%;background:${t.pnl>=0?'var(--green)':'var(--red)'}"></div>`
+  ).join('');
+  const fc = document.getElementById('txFilterCount'); if (fc) fc.textContent = filtered.length + ' operazioni';
 
   if (!filtered.length) {
     list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna transazione</div></div>';
@@ -2998,42 +3007,33 @@ function renderTransazioni() {
     return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
   };
 
+  const fmtP = p => p >= 1000 ? p.toFixed(1) : p >= 1 ? p.toFixed(2) : p.toFixed(4);
+  const reasonBadge = r => {
+    const rl = (r||'').toLowerCase();
+    if (rl.includes('stop')) return 'background:rgba(246,70,93,0.15);color:var(--red)';
+    return 'background:rgba(5,193,104,0.15);color:var(--green)';
+  };
   list.innerHTML = filtered.map(t => {
     const isWin = t.pnl >= 0;
     const color = isWin ? 'var(--green)' : 'var(--red)';
     const dt = new Date(t.time);
-    const ds = dt.toLocaleDateString('it-IT', {day:'2-digit', month:'short'}) + ' ' + dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
-    const tp1Badge = t.tp1_hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px">TP1+TP2</span>' : '';
-    return `<div class="trade-row ${isWin?'win':'loss'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <img src="${getLogo(t.symbol)}" style="width:28px;height:28px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(t.symbol[0])}',28)">
-          <div>
-            <div style="font-weight:700;font-size:15px;display:flex;align-items:center">${esc(t.symbol)}${tp1Badge}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
-              <span style="font-size:11px;color:var(--text3);font-weight:500">${ds} · ${t.durationMin} min</span>
-              <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--surface3);color:var(--text2)">${reasonLabel(t.reason)}</span>
-            </div>
-          </div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-weight:700;font-size:15px;color:${color}">${isWin?'+':''}${getCurrSym()}${fmtMoney(t.pnl)}</div>
-          <div style="font-size:12px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
-        </div>
+    const timeStr = dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid ${color};margin-bottom:8px">
+      <img src="${getLogo(t.symbol)}" style="width:40px;height:40px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(t.symbol[0])}',40)">
+      <div style="flex:0 0 auto;min-width:80px">
+        <div style="font-weight:700;font-size:14px;letter-spacing:0.01em">${esc(t.symbol)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${timeStr} · ${t.durationMin} min</div>
       </div>
-      ${(() => { const qty = t.entryPrice > 0 ? t.size / t.entryPrice : 0; const qf = qty >= 1000 ? qty.toFixed(0) : qty >= 1 ? qty.toFixed(3) : qty.toFixed(6); return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <div style="background:var(--surface3);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">COMPRATE</div>
-          <div style="font-size:12px;font-weight:600">${qf} ${esc(t.symbol)}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">@ $${t.entryPrice.toFixed(4)}</div>
-        </div>
-        <div style="background:var(--surface3);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">VENDUTE</div>
-          <div style="font-size:12px;font-weight:600">${qf} ${esc(t.symbol)}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">@ $${t.exitPrice.toFixed(4)}</div>
-        </div>
+      <div style="flex:1;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--text2)">
+        $${fmtP(t.entryPrice)}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        $${fmtP(t.exitPrice)}
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px;padding:0 2px">Investito <strong style="color:var(--text2)">${getCurrSym()}${fmtMoney(t.size)}</strong></div>`; })()}
+      <span style="flex:0 0 auto;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;${reasonBadge(t.reason)}">${reasonLabel(t.reason)}</span>
+      <div style="flex:0 0 auto;text-align:right;min-width:64px">
+        <div style="font-weight:700;font-size:14px;color:${color}">${isWin?'+':''}${getCurrSym()}${fmtMoney(t.pnl)}</div>
+        <div style="font-size:11px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
+      </div>
     </div>`;
   }).join('');
 }
