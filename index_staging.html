@@ -534,17 +534,9 @@ body.auth-active .tabbar { display:none !important; }
   <div class="auth-card" id="apiKeysCard" style="display:none">
     <div class="auth-logo"><span class="auth-logo-dot"></span><span style="font-size:20px;font-weight:700">Zentra</span></div>
     <div class="auth-title">Collega Revolut X</div>
-    <div class="auth-sub">Inserisci le tue credenziali Revolut X per abilitare il trading reale</div>
+    <div class="auth-sub">Collega il tuo account Revolut X per abilitare il trading reale</div>
     <div class="auth-error" id="keysError"></div>
-    <div class="auth-field">
-      <label>API Key</label>
-      <input type="text" id="cbKey" placeholder="organizations/xxx/apiKeys/xxx">
-    </div>
-    <div class="auth-field">
-      <label>API Secret</label>
-      <input type="password" id="cbSecret" placeholder="-----BEGIN EC PRIVATE KEY-----">
-    </div>
-    <button class="auth-btn" onclick="saveKeys()">Salva e continua</button>
+    <button class="auth-btn" onclick="saveKeys()">Configura Revolut X</button>
     <div class="auth-switch"><a onclick="skipKeys()">Salta per ora — usa solo simulazione</a></div>
   </div>
 </div>
@@ -568,7 +560,7 @@ body.auth-active .tabbar { display:none !important; }
     <div class="profile-menu-user" id="pmUsername">--</div>
     <div class="profile-menu-sub" id="pmMode" style="display:none"></div>
   </div>
-  <!-- Configura API Coinbase nascosto — fallback silenzioso -->
+  <!-- Configura Revolut X -->
   <div class="profile-menu-item" onclick="showRevxConfig()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
     Configura Revolut X
@@ -1531,15 +1523,9 @@ async function doRegister() {
   } catch(e) { showFieldError('regPass','regPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Registrati'; }
 }
 
-async function saveKeys() {
-  const cb_key = document.getElementById('cbKey').value.trim();
-  const cb_secret = document.getElementById('cbSecret').value.trim();
-  if (!cb_key || !cb_secret) return showAuthError('keysError', 'Inserisci entrambe le chiavi');
-  try {
-    const r = await fetch(API + '/auth/save_keys', { method:'POST', headers:authHeaders(), body:JSON.stringify({cb_key, cb_secret}) });
-    if (!r.ok) return showAuthError('keysError', 'Errore salvataggio chiavi');
-    hideAuthScreen(); initApp();
-  } catch(e) { showAuthError('keysError', 'Errore di connessione'); }
+function saveKeys() {
+  hideAuthScreen(); initApp();
+  setTimeout(() => showRevxConfig(), 600);
 }
 function skipKeys() { hideAuthScreen(); initApp(); }
 async function logout() {
@@ -1952,7 +1938,7 @@ function updateSimToggle() {
   const badge = document.getElementById('cfgModeBadge');
   const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
   let modeLabel = 'Simulazione';
-  if (isReal) modeLabel = _hasRevxKeys ? 'Reale — Revolut X' : 'Reale — Coinbase';
+  if (isReal) modeLabel = 'Reale — Revolut X';
   if (lbl) lbl.textContent = modeLabel;
   if (lbl) lbl.style.color = isReal ? 'var(--red)' : 'var(--text2)';
   if (badge) badge.style.display = 'inline-flex';
@@ -2269,8 +2255,7 @@ function getCurrSym() {
 }
 
 function getFeePct() {
-  // Fee per lato: Revolut X 0.09% taker, Coinbase 0.6%
-  return _hasRevxKeys && !_simMode ? 0.0009 : 0.006;
+  return 0.0009; // RevX taker fee 0.09%
 }
 
 function updateCapitalPct() {
@@ -2298,7 +2283,7 @@ function updateAlloc() {
   const netCapital = tradable - feeReserve;
   const netPerTrade = netCapital * v / 100;
   const sym = getCurrSym();
-  const exchangeName = (_hasRevxKeys && !_simMode) ? 'Revolut X (0.09%)' : 'Coinbase (0.6%)';
+  const exchangeName = 'Revolut X (0.09%)';
 
   const hint = document.getElementById('allocHint');
   if (tradable > 0) {
@@ -2374,11 +2359,13 @@ async function setMode(real) {
     hint.textContent = 'Recupero saldo...'; hint.style.color = 'var(--yellow)';
     capitalInput.disabled = false;
     try {
-      const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
+      const r = await fetch(API + '/test_revx', { headers: authHeaders() });
       const d = await r.json();
       if (d.ok) {
-        const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
-        const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
+        const usd = d.balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
+        const eur = d.balances.find(b => b.currency === 'EUR');
+        const best = usd || eur;
+        const bal = best ? parseFloat(best.available) : 0;
         const suggested = parseFloat((bal * 0.98).toFixed(2));
         document.getElementById('totalBalanceDisplay').textContent = getCurrSym() + bal.toFixed(2) + ' disponibili';
         document.getElementById('totalBalanceDisplay').style.color = 'var(--green)';
@@ -3327,24 +3314,7 @@ async function loadHomeBalance() {
         }
       } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
     } else {
-      subEl.textContent = 'Recupero saldo...';
-      try {
-        const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
-        const d = await r.json();
-        if (d.ok) {
-          const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
-          const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
-          valEl.textContent = '$' + bal.toFixed(2); // Coinbase fallback
-          subEl.textContent = 'USDC disponibili';
-          const tbd = document.getElementById('totalBalanceDisplay');
-          if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
-          const cap = document.getElementById('capital');
-          if (cap) cap.dataset.total = bal;
-          updateCapitalPct();
-        } else {
-          valEl.textContent = '--'; subEl.textContent = 'Errore connessione';
-        }
-      } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
+      valEl.textContent = '--'; subEl.textContent = 'Chiavi Revolut X non configurate';
     }
   } else {
     valEl.textContent = '$1,000'; // simulazione
