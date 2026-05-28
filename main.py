@@ -1213,6 +1213,27 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                         _state = _d.get("state", "")
                         if _state in ("filled", "partially_filled"):
                             break  # successo
+                        if _state == "new":
+                            # IOC returned 'new' — RevX still processing; poll for final state
+                            _oid = _d.get("venue_order_id") or _d.get("order_id")
+                            if _oid:
+                                for _pi in range(5):
+                                    await asyncio.sleep(1)
+                                    try:
+                                        _pr = await revx_request("GET", f"/api/1.0/orders/{_oid}", None, key_id=revx_key_id, private_key=revx_priv)
+                                        _pd = _pr.get("data") or _pr
+                                        _ps = _pd.get("state", "")
+                                        print(f"[REVX SELL] {sym} poll {_pi+1}/5 order {_oid[:8]}: state={_ps}")
+                                        if _ps in ("filled", "partially_filled"):
+                                            result = _pr; _state = _ps; break
+                                        if _ps in ("cancelled", "expired", "rejected"):
+                                            _state = _ps; break
+                                    except Exception as _pe:
+                                        print(f"[REVX SELL] {sym} poll error: {_pe}"); break
+                            if _state in ("filled", "partially_filled"):
+                                break
+                            # Still unresolved — treat as cancelled for retry
+                            _state = "cancelled"
                         if _state == "cancelled" and slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
                             print(f"[REVX SELL] limit -{slip_buf*100:.1f}% cancelled, riprovo con spread più largo...")
                             await asyncio.sleep(1)
