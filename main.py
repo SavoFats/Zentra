@@ -847,12 +847,13 @@ def get_session(user_id: int) -> dict:
     return user_sessions[user_id]
 
 def add_log(state: dict, type_: str, label: str, desc: str):
-    state["log"].insert(0, {
+    log = state.setdefault("log", [])
+    log.insert(0, {
         "type": type_, "label": label, "desc": desc,
         "ts": int(time.time() * 1000)
     })
-    if len(state["log"]) > 200:
-        state["log"].pop()
+    if len(log) > 200:
+        log.pop()
 
 def unrealized_pnl(state: dict) -> float:
     total = 0.0

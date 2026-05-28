@@ -3033,7 +3033,7 @@ function renderTransazioni() {
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-weight:700;font-size:15px;color:${color}">${isWin?'+':''}${getCurrSym()}${t.pnl.toFixed(2)}</div>
+          <div style="font-weight:700;font-size:15px;color:${color}">${isWin?'+':''}${getCurrSym()}${fmtMoney(t.pnl)}</div>
           <div style="font-size:12px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
         </div>
       </div>
@@ -3143,6 +3143,7 @@ function setMktFilterDropdown(val) {
 }
 
 function fmtVol(v) { if(v>=1e9) return (v/1e9).toFixed(1)+'B'; if(v>=1e6) return (v/1e6).toFixed(0)+'M'; return (v/1e3).toFixed(0)+'K'; }
+function fmtMoney(v) { const a = Math.abs(v); return a > 0 && a < 0.01 ? v.toFixed(3) : v.toFixed(2); }
 function fmtPrice(p, sym='$') { if(p>=1000) return sym+p.toLocaleString('en-US',{maximumFractionDigits:0}); if(p>=1) return sym+p.toFixed(2); if(p>=0.01) return sym+p.toFixed(4); return sym+p.toFixed(6); }
 
 
