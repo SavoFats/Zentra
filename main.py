@@ -1,7 +1,6 @@
 import asyncio
 import os
 import time
-import jwt
 import hashlib
 import json
 import secrets
@@ -125,6 +124,8 @@ def verify_token(token: str) -> int:
         user_id, expires, sig = int(parts[0]), int(parts[1]), parts[2]
         if int(time.time()) > expires:
             raise HTTPException(status_code=401, detail="Token scaduto")
+        if token in _revoked_tokens:
+            raise HTTPException(status_code=401, detail="Token revocato")
         payload = f"{user_id}:{expires}"
         expected = _hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
         if not _hmac.compare_digest(sig, expected):
@@ -256,6 +257,7 @@ async def revx_request(method: str, path: str, body: dict = None,
 market_data = {}  # sym -> {price, change1h, change24h, volume24h, icon}
 user_sessions: dict = {}
 _sessions_starting: set = set()  # user_id in avvio, evita doppi /start concorrenti
+_revoked_tokens: set = set()     # token revocati al logout
 
 # ── CANDLE DATA (nuovo) ───────────────────────────────────────────────────────
 # sym -> {
@@ -729,8 +731,8 @@ async def fetch_prices():
             market_data[sym]["change24h"] = change24h
             market_data[sym]["volume24h"] = vol_usd
 
-            for state in user_sessions.values():
-                for pos in state["positions"]:
+            for state in list(user_sessions.values()):
+                for pos in list(state["positions"]):
                     if pos["symbol"] == sym:
                         pos["currentPrice"] = price
                         if price > pos["highPrice"]:
@@ -1083,7 +1085,10 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 
     fee_pct = pos.get("fee_pct", 0.0009)
     exit_fee = close_size * fee_pct
-    pnl -= exit_fee  # riduce il PnL netto
+    pnl -= exit_fee
+    if pos.get("realMode", False):
+        # In reale la fee d'entrata è già stata detratta dal saldo RevX: corretta nel PnL display
+        pnl -= close_size * fee_pct
 
     if partial:
         # TP1: restituisce metà capitale, aggiorna size_remaining
@@ -1918,12 +1923,22 @@ async def startup():
 
         except Exception as e:
             print(f"Database error: {e}")
-    asyncio.create_task(background_loop())
-    asyncio.create_task(load_global_revx_keys())
-    asyncio.create_task(load_telegram_bot_info())
-    asyncio.create_task(fetch_coingecko_logos())
-    await _skip_old_telegram_updates()  # aspetta offset corretto prima di iniziare il polling
-    asyncio.create_task(telegram_loop())
+    def _on_task_done(t: asyncio.Task):
+        if not t.cancelled() and t.exception():
+            print(f"[TASK CRASH] {t.get_name()}: {t.exception()}", file=sys.stderr)
+
+    for _name, _coro in [
+        ("background_loop",      background_loop()),
+        ("load_global_revx_keys", load_global_revx_keys()),
+        ("load_telegram_bot_info", load_telegram_bot_info()),
+        ("fetch_coingecko_logos", fetch_coingecko_logos()),
+        ("cleanup_rate_buckets",  _cleanup_rate_buckets()),
+    ]:
+        _t = asyncio.create_task(_coro, name=_name)
+        _t.add_done_callback(_on_task_done)
+    await _skip_old_telegram_updates()
+    _t = asyncio.create_task(telegram_loop(), name="telegram_loop")
+    _t.add_done_callback(_on_task_done)
 
 async def load_global_revx_keys():
     """Carica le chiavi RevX e le coppie USD disponibili all'avvio."""
@@ -2034,6 +2049,14 @@ async def restore_sessions_from_db(pool):
 from collections import defaultdict
 _rate_buckets: dict = defaultdict(list)  # key -> [timestamps]
 
+async def _cleanup_rate_buckets():
+    while True:
+        await asyncio.sleep(300)
+        now = time.time()
+        stale = [k for k, ts in list(_rate_buckets.items()) if not any(now - t < 600 for t in ts)]
+        for k in stale:
+            _rate_buckets.pop(k, None)
+
 def _get_client_ip(request: Request) -> str:
     """Estrae l'IP reale del client, gestendo il reverse proxy di Railway.
     Prende l'ULTIMO IP dalla catena X-Forwarded-For: è quello aggiunto dal proxy
@@ -2087,14 +2110,17 @@ async def register(req: RegisterRequest, request: Request):
                 req.username.lower(), pw_hash, req.username
             )
         token = create_token(row["id"])
-        return {"token": token, "username": req.username, "has_api_keys": False}
+        return {"token": token, "username": req.username, "has_revx_keys": False}
     except asyncpg.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Username già in uso")
     except Exception:
         raise HTTPException(status_code=500, detail="Errore durante la registrazione")
 
 @app.post("/auth/logout")
-async def logout_user():
+async def logout_user(request: Request):
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        _revoked_tokens.add(auth[7:])
     return {"ok": True}
 
 @app.post("/auth/login")
@@ -2104,7 +2130,7 @@ async def login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, password_hash, revx_key_id FROM users WHERE username = $1",
+            "SELECT id, password_hash, revx_key_id, display_name FROM users WHERE username = $1",
             req.username.lower()
         )
     if not row:
@@ -2113,11 +2139,8 @@ async def login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=401, detail="Username o password errati")
     token = create_token(row["id"])
     has_keys = bool(row.get("revx_key_id"))
-    # Usa display_name se disponibile
-    async with db_pool.acquire() as conn2:
-        urow = await conn2.fetchrow("SELECT display_name FROM users WHERE id = $1", row["id"])
-    dname = (urow["display_name"] or req.username) if urow else req.username
-    return {"token": token, "username": dname, "has_api_keys": has_keys}
+    dname = row["display_name"] or req.username
+    return {"token": token, "username": dname, "has_revx_keys": has_keys}
 
 
 # ── WATCHLIST ─────────────────────────────────────────────────────────────────
@@ -2214,7 +2237,7 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
     sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
     return {
         "username": dname,
-        "has_api_keys": has_keys,
+        "has_revx_keys": has_keys,
         "avatar_b64": row["avatar_b64"] or "",
         "sim_mode": sim,
         "has_revx_keys": bool(row.get("revx_key_id") or ""),
@@ -2852,6 +2875,12 @@ async def billing_checkout(body: dict, request: Request, user_id: int = Depends(
     cancel_url  = body.get("cancel_url", "")
     if not success_url or not cancel_url:
         raise HTTPException(status_code=400, detail="success_url e cancel_url obbligatori")
+    _allowed = tuple(o for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip().startswith("https://"))
+    if _allowed:
+        if not any(success_url.startswith(o.strip()) for o in _allowed):
+            raise HTTPException(status_code=400, detail="success_url non autorizzata")
+        if not any(cancel_url.startswith(o.strip()) for o in _allowed):
+            raise HTTPException(status_code=400, detail="cancel_url non autorizzata")
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:

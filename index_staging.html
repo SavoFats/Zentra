@@ -1331,7 +1331,6 @@ const API = 'https://crypto-agent-back-production-87b2.up.railway.app';
 
 let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
-let _hasApiKeys = false;
 let _simMode = true;
 let _hasRevxKeys = false;
 let _plan = 'free';
@@ -1366,16 +1365,6 @@ function closeProfileOnOutside(e) {
     m.classList.remove('open');
     document.removeEventListener('click', closeProfileOnOutside);
   }
-}
-function openApiKeysFromMenu() {
-  if (S.running) {
-    document.getElementById('profileMenu').classList.remove('open');
-    document.getElementById('sessionActiveModal').classList.add('open');
-    return;
-  }
-  document.getElementById('profileMenu').classList.remove('open');
-  showApiKeys();
-  showAuthScreen();
 }
 function changeAvatar() {
   document.getElementById('profileMenu').classList.remove('open');
@@ -1497,7 +1486,7 @@ async function doLogin() {
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
-    if (!d.has_api_keys && !d.has_revx_keys) { showApiKeys(); return; }
+    if (!d.has_revx_keys) { showApiKeys(); return; }
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('loginPass','loginPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Accedi'; }
 }
@@ -1556,7 +1545,7 @@ async function checkAuth() {
     _sessionsToday = d.sessions_today || 0;
     _sessionsPerDay = d.sessions_per_day || 1;
     localStorage.setItem('ca_username', _username);
-    if (!d.has_api_keys && !d.has_revx_keys) {
+    if (!d.has_revx_keys) {
       showAuthScreen();
       showApiKeys(); return;
     }
@@ -1637,10 +1626,9 @@ async function loadUserProfile() {
       _sessionsPerDay   = billing.sessions_per_day ?? _sessionsPerDay;
     }
 
-    _hasApiKeys = me.has_api_keys || false;
     _hasRevxKeys = me.has_revx_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
-    window._realMode = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+    window._realMode = _hasRevxKeys && !_simMode;
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
     if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram ✓' : 'Collega Telegram';
@@ -1915,7 +1903,7 @@ async function setSimMode(sim) {
     return;
   }
   _simMode = sim;
-  window._realMode = _hasApiKeys && !sim;
+  window._realMode = _hasRevxKeys && !sim;
   try {
     await fetch(API + '/auth/sim_mode', {
       method: 'POST', headers: authHeaders(),
@@ -1931,12 +1919,12 @@ function updateSimToggle() {
   const toggle = document.getElementById('simModeToggle');
   const row = document.getElementById('simModeRow');
   // Mostra toggle simulazione solo se ha almeno un exchange reale configurato
-  if (row) row.style.display = (_hasApiKeys || _hasRevxKeys) ? 'flex' : 'none';
+  if (row) row.style.display = _hasRevxKeys ? 'flex' : 'none';
   if (toggle) toggle.classList.toggle('on', _simMode);
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
   const badge = document.getElementById('cfgModeBadge');
-  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+  const isReal = _hasRevxKeys && !_simMode;
   let modeLabel = 'Simulazione';
   if (isReal) modeLabel = 'Reale — Revolut X';
   if (lbl) lbl.textContent = modeLabel;
@@ -2046,20 +2034,6 @@ const LOGO_URLS = {
   SEI:'https://assets.coingecko.com/coins/images/28205/small/Sei_Logo_-_Transparent.png',
   TAO:'https://assets.coingecko.com/coins/images/28452/small/ARUsPeNQ_400x400.jpeg',
   XLM:'https://assets.coingecko.com/coins/images/100/small/Stellar_symbol_black_RGB.png',
-  DOT:'https://assets.coingecko.com/coins/images/12171/small/polkadot.png',
-  LINK:'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
-  MATIC:'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
-  UNI:'https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png',
-  NEAR:'https://assets.coingecko.com/coins/images/10365/small/near_icon.png',
-  INJ:'https://assets.coingecko.com/coins/images/12882/small/Secondary_Symbol.png',
-  APT:'https://assets.coingecko.com/coins/images/26455/small/aptos_round.png',
-  ARB:'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
-  OP:'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
-  ATOM:'https://assets.coingecko.com/coins/images/1481/small/cosmos_hub.png',
-  TRX:'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
-  HBAR:'https://assets.coingecko.com/coins/images/3688/small/hbar.png',
-  AAVE:'https://assets.coingecko.com/coins/images/12645/small/AAVE.png',
-  GRT:'https://assets.coingecko.com/coins/images/13397/small/Graph_Token.png',
   // Coin mancanti o con ID errato
   CHZ:'https://assets.coingecko.com/coins/images/8834/small/CHZ_Token_updated.png',
   BIO:'https://assets.coingecko.com/coins/images/31069/small/bio.png',
@@ -2075,13 +2049,9 @@ const LOGO_URLS = {
   ASTER:'https://assets.coingecko.com/coins/images/35276/small/aster.png',
   XPL:'https://assets.coingecko.com/coins/images/38444/small/xpl.png',
   CAKE:'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
-  XPL:'https://assets.coingecko.com/coins/images/38444/small/xpl.png',
   PLUME:'https://assets.coingecko.com/coins/images/39352/small/plume.jpg',
   SIGN:'https://assets.coingecko.com/coins/images/37900/small/sign.png',
   DASH:'https://assets.coingecko.com/coins/images/19/small/dash-logo.png',
-  BARD:'https://assets.coingecko.com/coins/images/38900/small/bard.jpg',
-  TRUMP:'https://assets.coingecko.com/coins/images/39307/small/trump.jpg',
-  ASTER:'https://assets.coingecko.com/coins/images/35276/small/aster.png',
   PAXG:'https://assets.coingecko.com/coins/images/9519/small/paxg.PNG',
   ZEC:'https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png',
   TREE:'https://assets.coingecko.com/coins/images/39972/small/tree.jpg',
@@ -2232,7 +2202,7 @@ function restoreConfigFromStorage() {
   if (saved.sessionDuration) { document.getElementById('sessionDuration').value=saved.sessionDuration; document.getElementById('sessionVal').textContent=saved.sessionDuration+'h'; }
   if (saved.momentumPct !== undefined) { const mp=(saved.momentumPct*100).toFixed(1); document.getElementById('momentumPct').value=parseFloat(mp); document.getElementById('momentumPctVal').textContent=mp+'%'; }
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
-  if (saved.profitTolerance !== undefined) { const pt=Math.round(saved.profitTolerance*100); document.getElementById('profitTolerance').value=pt; document.getElementById('profitTolVal').textContent=pt+'%'; }
+  if (saved.profitTolerance !== undefined) { const raw=saved.profitTolerance; const pt=Math.min(40,Math.max(5,raw>1?Math.round(raw):Math.round(raw*100))); document.getElementById('profitTolerance').value=pt; document.getElementById('profitTolVal').textContent=pt+'%'; }
   if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
@@ -2249,10 +2219,7 @@ function restoreConfigFromStorage() {
   updateAlloc();
 }
 
-function getCurrSym() {
-  // Restituisce il simbolo valuta corretto basato sull'exchange attivo
-  return _hasRevxKeys && !_simMode ? '$' : '$';
-}
+function getCurrSym() { return '$'; }
 
 function getFeePct() {
   return 0.0009; // RevX taker fee 0.09%
@@ -2324,7 +2291,8 @@ function setRsiFilter(on) {
   document.getElementById('rsiOffBtn').classList.toggle('active', !on);
   document.getElementById('rsiFilterLabel').textContent = on ? 'ON' : 'OFF';
   document.getElementById('rsiFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
-  document.getElementById('rsiRangeFields').style.display = on ? '' : 'none';
+  const rsiRangeFields = document.getElementById('rsiRangeFields');
+  if (rsiRangeFields) rsiRangeFields.style.display = on ? '' : 'none';
 }
 function updateRsiRange() {
   const minEl = document.getElementById('rsiMin');
@@ -2398,7 +2366,7 @@ async function startAgent() {
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
   if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+  const isReal = _hasRevxKeys && !_simMode;
   const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
   if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
   if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
@@ -2414,7 +2382,7 @@ async function startAgent() {
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
-    realMode:              (_hasApiKeys || _hasRevxKeys) && !_simMode,
+    realMode:              _hasRevxKeys && !_simMode,
     btcEmaFilter:          _btcEmaFilter,
     timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
@@ -2632,7 +2600,7 @@ function render() {
   // Hero P&L
   const pnl = S.pnl || 0;
   const heroPnlEl = document.getElementById('heroPnl');
-  if (heroPnlEl) heroPnlEl.textContent = (pnl >= 0 ? '+' : '') + getCurrSym() + pnl.toFixed(2);
+  if (heroPnlEl) heroPnlEl.textContent = (pnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(pnl);
 
   // Hero stats
   const heroTrades = document.getElementById('heroTrades');
@@ -2713,16 +2681,16 @@ function renderHomeSession() {
     const isPos = pnl >= 0;
     const color = isPos ? 'var(--green)' : 'var(--red)';
     const logo = getLogo(p.symbol);
-    const img = logo ? `<img src="${logo}" style="width:30px;height:30px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${p.symbol[0]}</div>`;
+    const img = logo ? `<img src="${logo}" style="width:30px;height:30px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${esc(p.symbol[0])}</div>`;
     return `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:10px">${img}
           <div>
-            <div style="font-size:14px;font-weight:700">${p.symbol}</div>
+            <div style="font-size:14px;font-weight:700">${esc(p.symbol)}</div>
             <div style="font-size:11px;color:var(--text3)">${getCurrSym()}${_cp.toFixed(4)}</div>
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
+          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}${getCurrSym()}${fmtMoney(pnl)}</div>
           <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
         </div>
     </div>`;
@@ -2842,7 +2810,7 @@ function renderPositions() {
     const isPos = pnl >= 0;
     const color = isPos ? 'var(--green)' : 'var(--red)';
     const logo = getLogo(p.symbol);
-    const img = logo ? `<img src="${logo}" class="pos-logo" onerror="this.style.display='none'">` : `<div class="pos-icon">${p.symbol[0]}</div>`;
+    const img = logo ? `<img src="${logo}" class="pos-logo" onerror="this.style.display='none'">` : `<div class="pos-icon">${esc(p.symbol[0])}</div>`;
     const stopPrice  = p.stopPrice  || 0;
     const peakPrice  = p.peak_price || currentPrice;
     const tp1Badge   = p.tp1_hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px">TP1✓</span>' : '';
@@ -2880,8 +2848,8 @@ function renderPositions() {
           </div>
         </div>
         <div class="pos-pnl">
-          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
-          <div class="pos-pnl-pct" style="color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
+          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':''}${getCurrSym()}${fmtMoney(pnl)}</div>
+          <div class="pos-pnl-pct" style="color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
         </div>
       </div>
       ${barHtml}
@@ -2984,7 +2952,7 @@ function renderTransazioni() {
   document.getElementById('txCount').textContent = filtered.length;
   document.getElementById('txWinRate').textContent = filtered.length > 0 ? wr + '%' : '--%';
   document.getElementById('txWinRate').style.color = wr >= 50 ? 'var(--green)' : wr > 0 ? 'var(--red)' : '';
-  document.getElementById('txPnl').textContent = 'P&L: ' + (totalPnl >= 0 ? '+' : '') + getCurrSym() + totalPnl.toFixed(2);
+  document.getElementById('txPnl').textContent = 'P&L: ' + (totalPnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(totalPnl);
   document.getElementById('txPnl').style.color = totalPnl > 0 ? 'var(--green)' : totalPnl < 0 ? 'var(--red)' : '';
   document.getElementById('txWinLoss').textContent = wins + ' vittorie · ' + losses + ' sconfitte';
 
@@ -2995,10 +2963,15 @@ function renderTransazioni() {
 
   const reasonLabel = r => {
     const rl = (r||'').toLowerCase();
-    if (rl.includes('tp2') || rl.includes('tp1')) return 'Take Profit';
-    if (rl.includes('manual')) return 'Manuale';
-    if (rl.includes('sl') || rl.includes('stop')) return 'Stop Loss';
-    return r.replace(' SIM','').replace(' REALE','');
+    if (rl.includes('tp2') || rl.includes('tp1')) return 'Take profit';
+    if (rl.includes('trailing'))                  return 'Trailing profit';
+    if (rl.includes('stop loss') || rl.includes('sl')) return 'Stop loss';
+    if (rl.includes('chiusura manuale') || rl.includes('stop manuale') || rl.includes('manual')) return 'Chiusura manuale';
+    if (rl.includes('sessione scaduta'))           return 'Sessione scaduta';
+    if (rl.includes('max tempo'))                  return 'Max tempo';
+    if (rl.includes('telegram'))                   return 'Telegram';
+    const clean = (r||'').replace(/ SIM$/,'').replace(/ REALE$/,'');
+    return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
   };
 
   list.innerHTML = filtered.map(t => {
@@ -3012,7 +2985,7 @@ function renderTransazioni() {
         <div style="display:flex;align-items:center;gap:10px">
           <img src="${getLogo(t.symbol)||''}" style="width:28px;height:28px;border-radius:50%" onerror="this.style.display='none'">
           <div>
-            <div style="font-weight:700;font-size:15px;display:flex;align-items:center">${t.symbol}${tp1Badge}</div>
+            <div style="font-weight:700;font-size:15px;display:flex;align-items:center">${esc(t.symbol)}${tp1Badge}</div>
             <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
               <span style="font-size:11px;color:var(--text3);font-weight:500">${ds} · ${t.durationMin} min</span>
               <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--surface3);color:var(--text2)">${reasonLabel(t.reason)}</span>
@@ -3277,7 +3250,7 @@ async function loadHomeBalance() {
   const tagEl = document.getElementById('homeModeTag');
   if (!valEl) return;
 
-  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+  const isReal = _hasRevxKeys && !_simMode;
 
   if (tagEl) {
     tagEl.textContent = isReal ? 'Modalità Reale' : 'Simulazione';
