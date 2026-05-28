@@ -1190,7 +1190,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     print(f"[REVX SELL] errore lettura saldo: {be}")
                 # Limit order IOC con slippage progressivo — evita slippage protection RevX
                 # Tre tentativi: -0.5%, -1.5%, -3% sotto prezzo corrente
-                SELL_SLIP_BUFFERS = [0.005, 0.015, 0.03]
+                SELL_SLIP_BUFFERS = [0.001, 0.005, 0.015]
                 result = None
                 for slip_attempt, slip_buf in enumerate(SELL_SLIP_BUFFERS):
                     limit_price = round(cur * (1 - slip_buf), 8)
@@ -1242,7 +1242,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                         # Non fare return — lascia che il codice dopo rimuova la posizione
                     else:
                         _exiting.discard(sym); return
-                filled_price = float(data.get("average_price") or data.get("price") or cur)
+                filled_price = float(data.get("average_price") or data.get("price") or limit_price)
                 if filled_price > 0:
                     cur = filled_price
                 add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f}")
@@ -1449,9 +1449,10 @@ async def scan_and_trade(state: dict, user_id: int = None):
             continue
 
         # Trailing profit stop: si attiva solo quando la posizione è in profitto netto
-        # Profitto netto = profitto lordo - commissioni round-trip (entrata + uscita)
+        # Profitto netto = profitto lordo - commissioni round-trip - slippage IOC sell
         fee_rt      = pos.get("fee_pct", 0.0009) * 2  # round-trip
-        net_pnl_pct = (cur - entry) / entry - fee_rt
+        ioc_slip    = 0.001 if (state.get("use_revx") and pos.get("realMode")) else 0
+        net_pnl_pct = (cur - entry) / entry - fee_rt - ioc_slip
         if net_pnl_pct > 0:
             peak         = pos.get("peak_price", cur)
             profit_move  = peak - entry
