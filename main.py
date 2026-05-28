@@ -1317,7 +1317,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     # Numero massimo di posizioni aperte contemporaneamente
     is_free = state.get("plan", "free") == "free"
-    max_pos   = FREE_MAX_POSITIONS if is_free else max(1, int(round(1 / alloc_pct)))
+    max_pos   = FREE_MAX_POSITIONS if is_free else max(1, int(1 / alloc_pct))
     open_syms = {p["symbol"] for p in state["positions"]}
     slots     = max_pos - len(state["positions"])
     if is_free and slots <= 0:
