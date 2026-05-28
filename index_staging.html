@@ -2090,6 +2090,12 @@ let S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0
 let trades = [];
 let pollInterval = null;
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function coinImgErr(el, initial, size) {
+  const d = document.createElement('div');
+  d.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0`;
+  d.textContent = initial;
+  el.replaceWith(d);
+}
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function showTab(name, el) {
@@ -2692,7 +2698,7 @@ function renderHomeSession() {
     const isNeg = pnl < -0.005;
     const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
-    const img = logo ? `<div style="position:relative;width:30px;height:30px;flex-shrink:0"><img src="${logo}" style="width:30px;height:30px;border-radius:50%" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div style="display:none;width:30px;height:30px;border-radius:50%;background:var(--surface3);align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${esc(p.symbol[0])}</div></div>` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${esc(p.symbol[0])}</div>`;
+    const img = `<img src="${logo}" style="width:30px;height:30px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(p.symbol[0])}',30)">`;
     return `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:10px">${img}
           <div>
@@ -2822,7 +2828,7 @@ function renderPositions() {
     const isNeg = pnl < -0.005;
     const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
-    const img = logo ? `<div style="position:relative;width:36px;height:36px;flex-shrink:0"><img src="${logo}" class="pos-logo" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="pos-icon" style="display:none">${esc(p.symbol[0])}</div></div>` : `<div class="pos-icon">${esc(p.symbol[0])}</div>`;
+    const img = `<img src="${logo}" class="pos-logo" onerror="coinImgErr(this,'${esc(p.symbol[0])}',36)">`;
     const stopPrice  = p.stopPrice  || 0;
     const peakPrice  = p.peak_price || currentPrice;
     const tp1Badge   = p.tp1_hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px">TP1✓</span>' : '';
@@ -3001,7 +3007,7 @@ function renderTransazioni() {
     return `<div class="trade-row ${isWin?'win':'loss'}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:10px">
-          ${getLogo(t.symbol) ? `<div style="position:relative;width:28px;height:28px;flex-shrink:0"><img src="${getLogo(t.symbol)}" style="width:28px;height:28px;border-radius:50%" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div style="display:none;width:28px;height:28px;border-radius:50%;background:var(--surface3);align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${esc(t.symbol[0])}</div></div>` : `<div style="width:28px;height:28px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${esc(t.symbol[0])}</div>`}
+          <img src="${getLogo(t.symbol)}" style="width:28px;height:28px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(t.symbol[0])}',28)">
           <div>
             <div style="font-weight:700;font-size:15px;display:flex;align-items:center">${esc(t.symbol)}${tp1Badge}</div>
             <div style="display:flex;align-items:center;gap:6px;margin-top:3px">

@@ -701,6 +701,8 @@ async def fetch_prices():
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
             tickers = r.json()
+            if not isinstance(tickers, list):
+                return
 
         for t in tickers:
             pair = t.get("symbol", "")
