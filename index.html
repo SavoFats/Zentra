@@ -1570,7 +1570,7 @@ async function doLogin() {
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
-    if (!d.has_api_keys) { showApiKeys(); return; }
+    if (!d.has_revx_keys) { showApiKeys(); return; }
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('loginPass','loginPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Accedi'; }
 }
@@ -1635,7 +1635,7 @@ async function checkAuth() {
     _sessionsToday = d.sessions_today || 0;
     _sessionsPerDay = d.sessions_per_day || 1;
     localStorage.setItem('ca_username', _username);
-    if (!d.has_api_keys) {
+    if (!d.has_revx_keys) {
       showAuthScreen();
       showApiKeys(); return;
     }
@@ -1995,7 +1995,7 @@ async function setSimMode(sim) {
     return;
   }
   _simMode = sim;
-  window._realMode = _hasApiKeys && !sim;
+  window._realMode = (_hasApiKeys || _hasRevxKeys) && !sim;
   try {
     await fetch(API + '/auth/sim_mode', {
       method: 'POST', headers: authHeaders(),
@@ -2497,7 +2497,7 @@ async function startAgent() {
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
   if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const isReal = _hasApiKeys && !_simMode;
+  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
   const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
   if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
   if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
@@ -2514,7 +2514,7 @@ async function startAgent() {
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
     emaFilter:             _emaFilter,
-    realMode:              _hasApiKeys && !_simMode,
+    realMode:              (_hasApiKeys || _hasRevxKeys) && !_simMode,
     trend1hFilter:         _trend1hFilter,
     btcEmaFilter:          _btcEmaFilter,
     timeFilter:            _timeFilter,
