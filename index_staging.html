@@ -2678,8 +2678,9 @@ function renderHomeSession() {
     const _cp = p.currentPrice || _ep;
     const pnl = _ep > 0 ? (_cp - _ep) / _ep * (p.size_remaining || p.size || 0) : 0;
     const pct = _ep > 0 ? (_cp - _ep) / _ep * 100 : 0;
-    const isPos = pnl >= 0;
-    const color = isPos ? 'var(--green)' : 'var(--red)';
+    const isPos = pnl > 0.005;
+    const isNeg = pnl < -0.005;
+    const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
     const img = logo ? `<img src="${logo}" style="width:30px;height:30px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${esc(p.symbol[0])}</div>`;
     return `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
@@ -2690,8 +2691,8 @@ function renderHomeSession() {
           </div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}${getCurrSym()}${fmtMoney(pnl)}</div>
-          <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
+          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':isNeg?'-':''}${getCurrSym()}${fmtMoney(Math.abs(pnl))}</div>
+          <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':isNeg?'-':''}${Math.abs(pct).toFixed(2)}%</div>
         </div>
     </div>`;
   }).join('');
@@ -2807,8 +2808,9 @@ function renderPositions() {
     const currentPrice = p.currentPrice || entryPrice;
     const pnl = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * (p.size_remaining || p.size || 0) : 0;
     const pct = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100 : 0;
-    const isPos = pnl >= 0;
-    const color = isPos ? 'var(--green)' : 'var(--red)';
+    const isPos = pnl > 0.005;
+    const isNeg = pnl < -0.005;
+    const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
     const img = logo ? `<img src="${logo}" class="pos-logo" onerror="this.style.display='none'">` : `<div class="pos-icon">${esc(p.symbol[0])}</div>`;
     const stopPrice  = p.stopPrice  || 0;
@@ -2848,8 +2850,8 @@ function renderPositions() {
           </div>
         </div>
         <div class="pos-pnl">
-          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':''}${getCurrSym()}${fmtMoney(pnl)}</div>
-          <div class="pos-pnl-pct" style="color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
+          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':isNeg?'-':''}${getCurrSym()}${fmtMoney(Math.abs(pnl))}</div>
+          <div class="pos-pnl-pct" style="color:${color}">${isPos?'+':isNeg?'-':''}${Math.abs(pct).toFixed(2)}%</div>
         </div>
       </div>
       ${barHtml}
