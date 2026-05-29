@@ -229,6 +229,8 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .mkt-sym-sub { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
 .mkt-in-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:4px; padding:1px 5px; font-weight:700; margin-left:4px; vertical-align:middle; }
 .plan-badge { font-size:9px; font-weight:800; padding:2px 7px; border-radius:20px; letter-spacing:0.06em; margin-left:6px; vertical-align:middle; }
+.btn-primary { background:var(--blue); color:#fff; border:none; border-radius:var(--radius-sm); font-weight:700; font-family:var(--sans); box-shadow:0 4px 16px rgba(0,82,255,0.3); transition:opacity 0.15s; }
+.btn-primary:active { opacity:0.85; }
 .plan-badge.free { background:var(--surface3); color:var(--text3); }
 .plan-badge.pro  { background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
 .pro-locked { opacity:0.45; pointer-events:none; }
@@ -596,6 +598,7 @@ body.auth-active .tabbar { display:none !important; }
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:8px">
     <span id="planBadge" class="plan-badge free" style="display:none">FREE</span>
+    <span id="liveBadge" class="live-badge" style="display:none"><span class="live-dot"></span>LIVE</span>
     <div class="avatar-btn" id="avatarBtn" onclick="toggleProfileMenu()">
       <span id="avatarInitial">?</span>
     </div>
@@ -1616,7 +1619,7 @@ function saveKeys() {
 }
 function skipKeys() { hideAuthScreen(); initApp(); }
 async function logout() {
-  await fetch(API + '/auth/logout', { method: 'POST' }).catch(() => {});
+  await fetch(API + '/auth/logout', { method: 'POST', headers: authHeaders() }).catch(() => {});
   localStorage.removeItem('ca_token');
   localStorage.removeItem('ca_username');
   localStorage.removeItem('ca_avatar');
