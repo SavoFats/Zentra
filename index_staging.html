@@ -995,7 +995,7 @@ body.auth-active .tabbar { display:none !important; }
       <div class="home-hero-title">Avvia il tuo<br>agente</div>
       <div class="home-hero-pills">
         <span class="home-hero-pill" id="heroPillDuration">Durata --</span>
-        <span class="home-hero-pill" id="heroPillStrategy">Strategia EMA</span>
+        <span class="home-hero-pill" id="heroPillStrategy">Stop Loss --</span>
         <span class="home-hero-pill" id="heroPillCapital">Capitale --</span>
       </div>
       <button class="home-hero-btn" id="homeStartBtn" onclick="openDrawer()">
@@ -3428,10 +3428,15 @@ function renderHome() {
 
 function renderHomeHeroPills() {
   const durEl = document.getElementById('heroPillDuration');
+  const slEl  = document.getElementById('heroPillStrategy');
   const capEl = document.getElementById('heroPillCapital');
   if (durEl) {
     const dur = parseInt(document.getElementById('sessionDuration')?.value || 0);
     durEl.textContent = dur > 0 ? `Durata ${dur}h` : 'Durata --';
+  }
+  if (slEl) {
+    const sl = parseFloat(document.getElementById('stopLoss')?.value || 0);
+    slEl.textContent = sl > 0 ? `Stop Loss ${sl.toFixed(1)}%` : 'Stop Loss --';
   }
   if (capEl) {
     const capDisp = document.getElementById('capitalDisplay')?.textContent || '';
