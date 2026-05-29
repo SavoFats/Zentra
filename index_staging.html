@@ -478,6 +478,31 @@ input[type=range]::-webkit-slider-thumb { box-shadow:0 0 0 4px rgba(0,82,255,0.1
 body.auth-active .hdr,
 body.auth-active .tabbar { display:none !important; }
 
+/* ── MONITOR POSITION CARDS ── */
+.pos-card-new { background:var(--surface); border:1px solid var(--glass-border); border-radius:var(--radius); margin-bottom:12px; padding:18px 16px 14px; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); box-shadow:0 4px 20px rgba(0,0,0,0.04),inset 0 1px 0 rgba(255,255,255,0.6); }
+[data-theme="dark"] .pos-card-new { box-shadow:0 4px 24px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.05); }
+.pos-head-new { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+.pos-coin-new { display:flex; align-items:center; gap:12px; }
+.pos-logo-new { width:44px; height:44px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+.pos-icon-new { width:44px; height:44px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:var(--text2); flex-shrink:0; }
+.pos-sym-new { font-size:18px; font-weight:800; letter-spacing:-0.01em; line-height:1.1; }
+.pos-sub-new { font-size:11px; color:var(--text3); font-weight:500; margin-top:3px; }
+.pos-pnl-new { text-align:right; }
+.pos-pnl-val-new { font-size:18px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
+.pos-pnl-pct-new { font-size:12px; font-weight:700; margin-top:2px; }
+.pos-grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px; margin-bottom:14px; }
+.pos-g4-cell { background:var(--surface3); border-radius:10px; padding:9px 10px; }
+.pos-g4-label { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:4px; }
+.pos-g4-val { font-size:13px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+.pos-sl-bar-wrap { margin-bottom:16px; }
+.pos-sl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:20px 0 18px; }
+.pos-sl-fill { position:absolute; top:0; left:0; height:100%; border-radius:2px; }
+.pos-sl-dot { position:absolute; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; border:3px solid var(--bg); }
+.pos-sl-price { position:absolute; top:-18px; transform:translateX(-50%); font-size:9px; font-weight:700; white-space:nowrap; }
+.pos-sl-lbl { position:absolute; bottom:-16px; font-size:9px; font-weight:700; color:var(--text3); white-space:nowrap; }
+.pos-close-btn { display:inline-flex; align-items:center; gap:6px; padding:10px 18px; background:transparent; border:1.5px solid rgba(246,70,93,0.4); border-radius:var(--radius-sm); color:var(--red); font-size:13px; font-weight:700; cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
+.pos-close-btn:active { background:rgba(246,70,93,0.08); }
+
 /* ── HOME REDESIGN ── */
 .home-mode-badge { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:5px 11px; border-radius:20px; flex-shrink:0; margin-top:4px; }
 .home-mode-badge.sim { background:rgba(240,185,11,0.15); color:#b8860b; border:1px solid rgba(240,185,11,0.35); }
@@ -1244,21 +1269,18 @@ body.auth-active .tabbar { display:none !important; }
     <!-- Hero P&L card -->
     <div class="hero-card off" id="heroCard">
       <canvas class="hero-sparkline" id="heroSparkline"></canvas>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div class="hero-label">P&amp;L sessione</div>
-        <div class="live-badge" id="liveBadge" style="display:none"><div class="live-dot"></div>LIVE</div>
-      </div>
-      <div class="hero-pnl" id="heroPnl">$0.00</div>
-      <div class="hero-stats">
-        <div class="hero-stat">Trade <strong id="heroTrades">0</strong></div>
-        <div class="hero-stat">Win rate <strong id="heroWR">--%</strong></div>
-        <div class="hero-stat" id="heroRemainingWrap" style="display:none">Rimanente <strong id="heroRemaining">--</strong></div>
-      </div>
       <button id="stopBtn" onclick="stopAgent()" disabled
-        style="display:none;position:absolute;bottom:14px;right:16px;padding:6px 12px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);align-items:center;gap:6px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-        <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><rect width="8" height="8" rx="1.5"/></svg>
+        style="display:none;position:absolute;top:14px;right:16px;padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+        <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
         Ferma
       </button>
+      <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
+      <div class="hero-pnl" id="heroPnl">$0.00</div>
+      <div class="hero-stats" style="margin-top:10px">
+        <div class="hero-stat">Trade <strong id="heroTrades">0</strong></div>
+        <div class="hero-stat">Win rate <strong id="heroWR">--%</strong></div>
+        <div class="hero-stat" id="heroRemainingWrap">Rimanente <strong id="heroRemaining">--</strong></div>
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -2221,14 +2243,12 @@ function startFluidTimer() {
     const wrap = document.getElementById('heroRemainingWrap');
     if (!S.running || !_sessionEndTs) {
       if (el) el.textContent = '--';
-      if (wrap) wrap.style.display = 'none';
       return;
     }
     const remaining = Math.max(0, _sessionEndTs - Date.now());
     const s = Math.floor(remaining / 1000);
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
     if (el) el.textContent = h > 0 ? h + 'h ' + m + 'm' : m + 'm';
-    if (wrap) wrap.style.display = '';
   }, 1000);
 }
 
@@ -2903,64 +2923,69 @@ function renderPositions() {
   const pos = S.positions || [];
   if (!pos.length) { wrap.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div>'; return; }
   wrap.innerHTML = pos.map(p => {
-    const entryPrice = p.entryPrice || 0;
+    const entryPrice   = p.entryPrice || 0;
     const currentPrice = p.currentPrice || entryPrice;
-    const pnl = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * (p.size_remaining || p.size || 0) : 0;
-    const pct = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100 : 0;
-    const isPos = pnl > 0.005;
-    const isNeg = pnl < -0.005;
+    const size         = p.size_remaining || p.size || 0;
+    const pnl  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * size : 0;
+    const pct  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100 : 0;
+    const isPos = pnl > 0.005, isNeg = pnl < -0.005;
     const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
-    const img = `<img src="${logo}" class="pos-logo" onerror="coinImgErr(this,'${esc(p.symbol[0])}',36)">`;
-    const stopPrice  = p.stopPrice  || 0;
-    const peakPrice  = p.peak_price || currentPrice;
-    const tp1Badge   = p.tp1_hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px">TP1✓</span>' : '';
-    // Trailing profit bar: SL → ENTRY → PEAK con livello trail
+    const img  = logo
+      ? `<img src="${logo}" class="pos-logo-new" onerror="coinImgErr(this,'${esc(p.symbol[0])}',44)">`
+      : `<div class="pos-icon-new">${p.symbol[0]}</div>`;
+    const stopPrice  = p.stopPrice || 0;
+    const posQty     = p.qty_purchased > 0 ? p.qty_purchased : (entryPrice > 0 ? size / entryPrice : 0);
+    const posQtyFmt  = posQty >= 1000 ? posQty.toFixed(0) : posQty >= 1 ? posQty.toFixed(3) : posQty.toFixed(6);
+    const curVal     = currentPrice * posQty;
+    const durMin     = Math.round((Date.now() - new Date(p.entryTime || Date.now()).getTime()) / 60000);
+    const durFmt     = durMin < 60 ? `${durMin}m` : `${Math.floor(durMin/60)}h ${durMin%60}m`;
+
+    // SL bar: SL (sinistra) → prezzo corrente (dot) → ENTRY (destra)
     let barHtml = '';
     if (stopPrice > 0 && entryPrice > 0) {
-      const headroom = Math.max(peakPrice - entryPrice, entryPrice - stopPrice) * 1.2;
-      const barMax   = entryPrice + headroom;
-      const total    = barMax - stopPrice;
+      const barMax  = entryPrice + (entryPrice - stopPrice) * 0.6;
+      const total   = barMax - stopPrice;
       if (total > 0) {
-        const entryPct = Math.max(5, Math.min(90, (entryPrice  - stopPrice) / total * 100));
-        const peakPct  = Math.max(5, Math.min(97, (peakPrice   - stopPrice) / total * 100));
-        const curPct   = Math.max(2, Math.min(98, (currentPrice - stopPrice) / total * 100));
+        const entryPct = Math.max(10, Math.min(90, (entryPrice  - stopPrice) / total * 100));
+        const curPct   = Math.max(2,  Math.min(97, (currentPrice - stopPrice) / total * 100));
         const barCol   = isPos ? 'var(--green)' : 'var(--red)';
-        const peakClose = peakPrice > entryPrice && (peakPct - entryPct) < 10;
-        const peakLine = peakPrice > entryPrice
-          ? `<div style="position:absolute;left:${peakPct}%;top:0;bottom:0;width:2px;background:rgba(5,193,104,0.4);border-radius:1px"></div>
-             <span class="pos-rl-lbl" style="left:${peakPct}%;top:${peakClose ? '-28px' : '-15px'};color:var(--green)">PEAK</span>`
-          : '';
-        barHtml = `<div class="pos-rl-wrap"><div class="pos-rl-bar">
-          <div class="pos-rl-fill" style="width:${curPct}%;background:${barCol}"></div>
-          <div class="pos-rl-dot" style="left:${curPct}%;background:${barCol}"></div>
-          ${peakLine}
-          <span class="pos-rl-lbl" style="left:2%;color:var(--red)">SL</span>
-          <span class="pos-rl-lbl" style="left:${entryPct}%;color:var(--text3)">ENTRY</span>
+        barHtml = `<div class="pos-sl-bar-wrap"><div class="pos-sl-bar">
+          <div class="pos-sl-fill" style="width:${curPct}%;background:${barCol}"></div>
+          <div class="pos-sl-dot" style="left:${curPct}%;background:${barCol}"></div>
+          <span class="pos-sl-price" style="left:${curPct}%;color:${barCol}">${getCurrSym()}${fmtPrice(currentPrice)}</span>
+          <span class="pos-sl-lbl" style="left:0">SL ${getCurrSym()}${fmtPrice(stopPrice)}</span>
+          <span class="pos-sl-lbl" style="left:${entryPct}%;transform:translateX(-50%)">ENTRY</span>
         </div></div>`;
       }
     }
-    const posQty = p.qty_purchased > 0 ? p.qty_purchased : (entryPrice > 0 ? p.size / entryPrice : 0);
-    const posQtyFmt = posQty >= 1000 ? posQty.toFixed(0) : posQty >= 1 ? posQty.toFixed(3) : posQty.toFixed(6);
-    return `<div class="pos-card">
-      <div class="pos-header">
-        <div class="pos-coin">${img}
+
+    return `<div class="pos-card-new">
+      <div class="pos-head-new">
+        <div class="pos-coin-new">${img}
           <div>
-            <div class="pos-name">${p.symbol}${tp1Badge}</div>
-            <div class="pos-time">entry · ${getPriceSym(p)}${entryPrice.toLocaleString('en-US',{maximumFractionDigits:4})}</div>
+            <div class="pos-sym-new">${esc(p.symbol)}</div>
+            <div class="pos-sub-new">ora ${getCurrSym()}${fmtPrice(currentPrice)} · entry ${getCurrSym()}${fmtPrice(entryPrice)}</div>
           </div>
         </div>
-        <div class="pos-pnl">
-          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':isNeg?'-':''}${getCurrSym()}${fmtMoney(Math.abs(pnl))}</div>
-          <div class="pos-pnl-pct" style="color:${color}">${isPos?'+':isNeg?'-':''}${Math.abs(pct).toFixed(2)}%</div>
+        <div class="pos-pnl-new">
+          <div class="pos-pnl-val-new" style="color:${color}">${isPos?'+':isNeg?'-':''}${getCurrSym()}${fmtMoney(Math.abs(pnl))}</div>
+          <div class="pos-pnl-pct-new" style="color:${color}">${isPos?'+':isNeg?'-':''}${Math.abs(pct).toFixed(2)}%</div>
         </div>
       </div>
-      <div style="display:flex;gap:16px;font-size:11px;color:var(--text3);margin:4px 0 6px;padding:0 2px">
-        <span>Investito <strong style="color:var(--text2)">${getCurrSym()}${fmtMoney(p.size)}</strong></span>
-        ${posQty > 0 ? `<span>${posQtyFmt} ${esc(p.symbol)} @ ${getPriceSym(p)}${entryPrice.toLocaleString('en-US',{maximumFractionDigits:4})}</span>` : ''}
+      <div class="pos-grid4">
+        <div class="pos-g4-cell"><div class="pos-g4-label">Investito</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(size)}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Quantità</div><div class="pos-g4-val">${posQtyFmt}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Valore ora</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(curVal)}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val">${durFmt}</div></div>
       </div>
       ${barHtml}
-      <button class="close-btn" data-close-sym="${p.symbol}" onclick="closePosition(this.dataset.closeSym)">Chiudi posizione</button>
+      <div style="display:flex;justify-content:flex-end">
+        <button class="pos-close-btn" data-close-sym="${p.symbol}" onclick="closePosition(this.dataset.closeSym)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Chiudi
+        </button>
+      </div>
     </div>`;
   }).join('');
 }
