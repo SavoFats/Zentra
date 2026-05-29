@@ -1032,9 +1032,6 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     fee_pct = pos.get("fee_pct", 0.0009)
     exit_fee = close_size * fee_pct
     pnl -= exit_fee
-    if pos.get("realMode", False):
-        # In reale la fee d'entrata è già stata detratta dal saldo RevX: corretta nel PnL display
-        pnl -= close_size * fee_pct
 
     if partial:
         # TP1: restituisce metà capitale, aggiorna size_remaining
@@ -1271,7 +1268,11 @@ async def scan_and_trade(state: dict, user_id: int = None):
         _update_pnl(state)
         return
 
-    if slots <= 0 or tradable_capital < state["capital"] * alloc_pct * capital_pct * 0.5:
+    if slots <= 0:
+        _update_pnl(state)
+        return
+    if tradable_capital < state["capital"] * alloc_pct * capital_pct * 0.5:
+        add_log(state, "info", "SCAN", "Capitale insufficiente per nuovi trade")
         _update_pnl(state)
         return
 
@@ -1658,10 +1659,10 @@ async def poll_telegram():
 
                 elif cmd == "/STOP":
                     if state and state.get("running"):
-                        state["running"] = False
                         closed = [p["symbol"] for p in list(state["positions"])]
                         for p in list(state["positions"]):
                             await exit_position(state, p, "STOP MANUALE", user_id=uid)
+                        state["running"] = False
                         pnl = state["currentCapital"] - state["capital"]
                         add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
                         await persist_sessions()
@@ -2174,7 +2175,6 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         "has_revx_keys": has_keys,
         "avatar_b64": row["avatar_b64"] or "",
         "sim_mode": sim,
-        "has_revx_keys": bool(row.get("revx_key_id") or ""),
         "telegram_linked": bool(row["telegram_chat_id"] or ""),
         "plan": raw_plan,
         "sessions_today": sessions_today,
@@ -2412,7 +2412,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     cfg["capitalPct"]         = _clamp(cfg.get("capitalPct", 1.0), 0.01, 1.0, 1.0)
     cfg["maxTrades"]          = _clamp_int(cfg.get("maxTrades", 0), 0, 100, 0)
     cfg["maxConsecutiveLosses"] = _clamp_int(cfg.get("maxConsecutiveLosses", 3), 1, 20, 3)
-    cfg["sessionDuration"]    = _clamp_int(cfg.get("sessionDuration", 8), 1, 48, 8)
+    cfg["sessionDuration"]    = _clamp_int(cfg.get("sessionDuration", 8), 0, 48, 8)
 
     real_mode = False
     revx_key_id, revx_private_key, use_revx = "", "", False

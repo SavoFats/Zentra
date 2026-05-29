@@ -108,6 +108,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--sans); height:
 .modal-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .modal-btn { padding:14px; border-radius:var(--radius-sm); font-size:14px; font-weight:700; cursor:pointer; font-family:var(--sans); border:none; transition:all 0.15s; }
 .modal-btn.cancel { background:var(--surface2); color:var(--text2); }
+.modal-btn.confirm { background:var(--blue); color:#fff; box-shadow:0 4px 16px rgba(0,82,255,0.3); }
 .modal-btn.confirm-real { background:var(--red); color:#fff; box-shadow:0 4px 16px rgba(246,70,93,0.3); }
 .modal-btn:active { transform:scale(0.97); }
 
@@ -1312,23 +1313,23 @@ body.auth-active .tabbar { display:none !important; }
         <div class="fdd" id="fddMktVar">
           <div class="fdd-btn active" onclick="toggleFdd('fddMktVar')" id="fddMktVarBtn">24h % <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="fdd-menu" id="fddMktVarMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt('fddMktVar','change24h','24h %','var')">24h %</div>
-            <div class="fdd-item" onclick="selectFddMkt('fddMktVar','change1h','1h %','var')">1h %</div>
+            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktVar','change24h','24h %','var')">24h %</div>
+            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktVar','change1h','1h %','var')">1h %</div>
           </div>
         </div>
         <div class="fdd" id="fddMktMetric">
           <div class="fdd-btn" onclick="toggleFdd('fddMktMetric')" id="fddMktMetricBtn">Volume <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="fdd-menu" id="fddMktMetricMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt('fddMktMetric','volume24h','Volume','metric')">Volume</div>
-            <div class="fdd-item" onclick="selectFddMkt('fddMktMetric','price','Prezzo','metric')">Prezzo</div>
+            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktMetric','volume24h','Volume','metric')">Volume</div>
+            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktMetric','price','Prezzo','metric')">Prezzo</div>
           </div>
         </div>
         <div class="fdd" id="fddMktDir">
           <div class="fdd-btn" onclick="toggleFdd('fddMktDir')" id="fddMktDirBtn">Tutti <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="fdd-menu" id="fddMktDirMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt('fddMktDir','all','Tutti','dir')">Tutti</div>
-            <div class="fdd-item" onclick="selectFddMkt('fddMktDir','gainers','Rialzo','dir')">Rialzo</div>
-            <div class="fdd-item" onclick="selectFddMkt('fddMktDir','losers','Ribasso','dir')">Ribasso</div>
+            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktDir','all','Tutti','dir')">Tutti</div>
+            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktDir','gainers','Rialzo','dir')">Rialzo</div>
+            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktDir','losers','Ribasso','dir')">Ribasso</div>
           </div>
         </div>
         <button onclick="openSignalInfo()" style="margin-left:auto;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:serif" title="Legenda segnali">ⓘ</button>
@@ -1369,19 +1370,19 @@ body.auth-active .tabbar { display:none !important; }
       <div class="fdd" id="fddPeriod">
         <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Oggi <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="fdd-menu" id="fddPeriodMenu">
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','all','Tutte','period')">Tutte</div>
-          <div class="fdd-item selected" onclick="selectFdd('fddPeriod','today','Oggi','period')">Oggi</div>
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','week','7 giorni','period')">7 giorni</div>
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','month','30 giorni','period')">30 giorni</div>
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','6m','6 mesi','period')">6 mesi</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','all','Tutte','period')">Tutte</div>
+          <div class="fdd-item selected" onclick="selectFdd(this,'fddPeriod','today','Oggi','period')">Oggi</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','week','7 giorni','period')">7 giorni</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','month','30 giorni','period')">30 giorni</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','6m','6 mesi','period')">6 mesi</div>
         </div>
       </div>
       <div class="fdd" id="fddOutcome">
         <div class="fdd-btn" onclick="toggleFdd('fddOutcome')" id="fddOutcomeBtn">Esito <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="fdd-menu" id="fddOutcomeMenu">
-          <div class="fdd-item selected" onclick="selectFdd('fddOutcome','all','Esito','outcome')">Tutti</div>
-          <div class="fdd-item" onclick="selectFdd('fddOutcome','win','Profitto','outcome')">Profitto</div>
-          <div class="fdd-item" onclick="selectFdd('fddOutcome','loss','Perdita','outcome')">Perdita</div>
+          <div class="fdd-item selected" onclick="selectFdd(this,'fddOutcome','all','Esito','outcome')">Tutti</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddOutcome','win','Profitto','outcome')">Profitto</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddOutcome','loss','Perdita','outcome')">Perdita</div>
         </div>
       </div>
 
@@ -2291,7 +2292,7 @@ function resetConfigToDefaults() {
   document.getElementById('modeHint').style.color = '';
   document.getElementById('totalBalanceDisplay').textContent = 'Modalita simulazione';
   document.getElementById('totalBalanceDisplay').style.color = '';
-  _realMode = false; window._realMode = false;
+  _simMode = true; window._realMode = false;
   updateProfileMenu();
 }
 
@@ -2773,7 +2774,8 @@ function render() {
   if (kpiWr) kpiWr.textContent = S.tradeCount > 0 ? Math.round(S.winRate) + '%' : '--%';
   if (kpiSaldo && !(_hasRevxKeys && !_simMode)) {
     const pnl = S.pnl || 0;
-    kpiSaldo.textContent = '$' + (1000 + pnl).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const base = S.capital || 1000;
+    kpiSaldo.textContent = '$' + (base + pnl).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
   }
 }
 
@@ -3169,14 +3171,14 @@ function closeFddOnOutside(e) {
   }
 }
 
-function selectFdd(fddId, val, label, filterType) {
+function selectFdd(el, fddId, val, label, filterType) {
   // Aggiorna label bottone
   const btn = document.getElementById(fddId + 'Btn');
   const chevron = btn.querySelector('svg').outerHTML;
   btn.innerHTML = label + ' ' + chevron;
   // Marca selected
   document.querySelectorAll('#' + fddId + 'Menu .fdd-item').forEach(i => i.classList.remove('selected'));
-  event.target.classList.add('selected');
+  el.classList.add('selected');
   // Chiudi menu
   document.getElementById(fddId + 'Menu').classList.remove('open');
   btn.classList.remove('open');
@@ -3189,12 +3191,12 @@ function selectFdd(fddId, val, label, filterType) {
   renderTransazioni();
 }
 
-function selectFddMkt(fddId, val, label, type) {
+function selectFddMkt(el, fddId, val, label, type) {
   const btn = document.getElementById(fddId + 'Btn');
   const chevron = btn.querySelector('svg').outerHTML;
   btn.innerHTML = label + ' ' + chevron;
   document.querySelectorAll('#' + fddId + 'Menu .fdd-item').forEach(i => i.classList.remove('selected'));
-  event.target.classList.add('selected');
+  el.classList.add('selected');
   document.getElementById(fddId + 'Menu').classList.remove('open');
   btn.classList.remove('open');
   document.removeEventListener('click', closeFddOnOutside);
@@ -3349,6 +3351,9 @@ function renderMarket() {
       try {
         if (active === 'monitor' || active === 'config') {
           await poll();
+        } else if (active === 'home') {
+          await poll();
+          renderHome();
         } else if (active === 'market') {
           await refreshMarket();
         } else if (active === 'transazioni') {
@@ -3419,12 +3424,12 @@ async function loadHomeBalance() {
     }
   } else {
     // Calcola saldo simulato corrente (capitale base + P&L sessione)
-    const base = 1000;
+    const base = S.capital || 1000;
     const pnl = S.pnl || 0;
     const current = base + pnl;
     if (kpiSaldo) kpiSaldo.textContent = '$' + current.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
     const tbd = document.getElementById('totalBalanceDisplay');
-    if (tbd) { tbd.textContent = 'Simulazione — $1,000'; tbd.style.color = ''; }
+    if (tbd) { tbd.textContent = 'Simulazione — $' + base.toLocaleString('en-US', {maximumFractionDigits:0}); tbd.style.color = ''; }
     const cap = document.getElementById('capital');
     if (cap) cap.dataset.total = base;
     updateCapitalPct();
