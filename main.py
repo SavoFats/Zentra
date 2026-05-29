@@ -2198,6 +2198,10 @@ async def set_sim_mode(req: SimModeRequest, request: Request, user_id: int = Dep
             "UPDATE users SET sim_mode = $1 WHERE id = $2",
             req.sim_mode, user_id
         )
+    # Reset session state so stale data from the previous mode doesn't show up
+    state = user_sessions.get(user_id)
+    if state and not state.get("running"):
+        user_sessions[user_id] = make_session()
     return {"ok": True, "sim_mode": req.sim_mode}
 
 # ── TRADES HISTORY ─────────────────────────────────────────────────────────────

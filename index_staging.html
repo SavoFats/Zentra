@@ -2005,6 +2005,7 @@ async function setSimMode(sim) {
   }
   _simMode = sim;
   window._realMode = _hasRevxKeys && !sim;
+  S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
   try {
     await fetch(API + '/auth/sim_mode', {
       method: 'POST', headers: authHeaders(),
@@ -2012,6 +2013,7 @@ async function setSimMode(sim) {
     });
   } catch(e) {}
   updateSimToggle();
+  render();
   renderHome();
   renderTransazioni();
 }
