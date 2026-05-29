@@ -3125,6 +3125,8 @@ function renderTransazioni() {
     const color = isWin ? 'var(--green)' : 'var(--red)';
     const dt = new Date(t.time);
     const timeStr = dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+    const totalFee = (t.buyFee || 0) + (t.sellFee || 0);
+    const feeStr = totalFee > 0 ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">fee $${totalFee.toFixed(2)}</div>` : '';
     return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid ${color};margin-bottom:8px">
       <img src="${getLogo(t.symbol)}" style="width:40px;height:40px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(t.symbol[0])}',40)">
       <div style="flex:0 0 auto;min-width:80px">
@@ -3140,6 +3142,7 @@ function renderTransazioni() {
       <div style="flex:0 0 auto;text-align:right;min-width:64px">
         <div style="font-weight:700;font-size:14px;color:${color}">${isWin?'+':''}${getCurrSym()}${fmtMoney(t.pnl)}</div>
         <div style="font-size:11px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
+        ${feeStr}
       </div>
     </div>`;
   }).join('');

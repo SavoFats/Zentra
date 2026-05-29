@@ -252,6 +252,23 @@ async def revx_request(method: str, path: str, body: dict = None,
     return r.json()
 
 
+async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -> dict:
+    """GET /api/1.0/orders/{id} — ritorna prezzi e fee reali del fill."""
+    try:
+        await asyncio.sleep(1)
+        result = await revx_request("GET", f"/api/1.0/orders/{order_id}", key_id=key_id, private_key=private_key)
+        d = result.get("data") or result
+        return {
+            "average_fill_price": float(d.get("average_fill_price") or 0),
+            "filled_quantity":    float(d.get("filled_quantity") or 0),
+            "filled_amount":      float(d.get("filled_amount") or 0),
+            "total_fee":          float(d.get("total_fee") or 0),
+            "fee_currency":       d.get("fee_currency", "USD"),
+        }
+    except Exception as e:
+        print(f"[REVX ORDER DETAILS] errore per {order_id}: {e}")
+        return {}
+
 # ── market data ───────────────────────────────────────────────────────────────
 
 market_data = {}  # sym -> {price, change1h, change24h, volume24h, icon}
@@ -812,11 +829,15 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                     add_log(state, "info", "ERRORE", f"Ordine RevX {sym} fallito: {err_msg}")
                     await notify(state, f"ERRORE ORDINE RevX {sym}: {err_msg[:100]}")
                     return
-                # Tutto in USD: qty = size_usd / price_usd (Binance)
-                # Coerente con currentPrice, stopPrice, tp1Price che sono tutti USD
-                actual_price = price  # prezzo Binance USD al momento dell'ordine
-                qty_purchased = size / actual_price if actual_price > 0 else 0.0
-                print(f"[REVX BUY] qty={qty_purchased:.6f} @ ${actual_price:.4f} USD size=${size:.2f}")
+                # Fetch dati reali del fill per P&L accurato
+                od = await get_revx_order_details(order_id, revx_key_id, revx_priv)
+                actual_price = od.get("average_fill_price") or price
+                qty_purchased = od.get("filled_quantity") or (size / actual_price if actual_price > 0 else 0.0)
+                # Fee buy in base currency → converti in USD
+                buy_fee = od.get("total_fee", 0.0)
+                buy_fee_currency = od.get("fee_currency", "USD")
+                buy_fee_usd = buy_fee * actual_price if buy_fee_currency != "USD" else buy_fee
+                print(f"[REVX BUY] qty={qty_purchased:.6f} @ ${actual_price:.4f} USD size=${size:.2f} fee={buy_fee} {buy_fee_currency}")
                 stop_price  = actual_price * (1 - R_pct)
                 tp1_price   = actual_price * (1 + R_pct * tp1_multiplier)
                 tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
@@ -839,7 +860,8 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
                 "realMode": True, "fee_pct": 0.0009,
                 "qty_purchased": qty_purchased, "exchange": "revx", "symbol_pair": symbol_revx,
-                "entry_usd": round(size, 2),  # USD effettivamente spesi su RevX
+                "entry_usd": round(size, 2),
+                "buy_fee_usd": round(buy_fee_usd, 4),
             }
             state["positions"].append(pos)
             return
@@ -993,9 +1015,12 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                             fb_state = fb_data.get("state", "")
                             if fb_id and fb_state not in ("cancelled", "rejected", ""):
                                 # fallback riuscito
-                                filled_price = float(fb_data.get("average_price") or fb_data.get("price") or limit_price)
+                                fb_od = await get_revx_order_details(fb_id, revx_key_id, revx_priv)
+                                filled_price = fb_od.get("average_fill_price") or float(fb_data.get("average_price") or fb_data.get("price") or limit_price)
                                 if filled_price > 0: cur = filled_price
-                                add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f} (IOC fallback)")
+                                fb_fee_usd = fb_od.get("total_fee", 0.0) if fb_od.get("fee_currency", "USD") == "USD" else fb_od.get("total_fee", 0.0) * cur
+                                pos["sell_fee_usd"] = pos.get("sell_fee_usd", 0.0) + fb_fee_usd
+                                add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f} fee=${fb_fee_usd:.4f} (IOC fallback)")
                                 if partial:
                                     pos["qty_purchased"] = qty_purchased - qty_to_sell
                             else:
@@ -1022,10 +1047,13 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                             else:
                                 _exiting.discard(sym); return
                     if not sold_externally and order_id and not market_cancelled:
-                        filled_price = float(data.get("average_price") or data.get("price") or cur)
+                        od = await get_revx_order_details(order_id, revx_key_id, revx_priv)
+                        filled_price = od.get("average_fill_price") or float(data.get("average_price") or data.get("price") or cur)
                         if filled_price > 0:
                             cur = filled_price
-                        add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f}")
+                        sell_fee_usd = od.get("total_fee", 0.0) if od.get("fee_currency", "USD") == "USD" else od.get("total_fee", 0.0) * cur
+                        pos["sell_fee_usd"] = pos.get("sell_fee_usd", 0.0) + sell_fee_usd
+                        add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f} fee=${sell_fee_usd:.4f}")
                         if partial:
                             pos["qty_purchased"] = qty_purchased - qty_to_sell
                 if sold_externally:
@@ -1040,7 +1068,13 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 
     fee_pct = pos.get("fee_pct", 0.0009)
     exit_fee = close_size * fee_pct
-    pnl -= exit_fee
+    # Per real mode usa fee reali da RevX, altrimenti stima
+    if pos.get("realMode") and pos.get("exchange") == "revx":
+        sell_fee_real = pos.get("sell_fee_usd", exit_fee)
+        pnl = pnl - sell_fee_real + exit_fee - pos.get("buy_fee_usd", 0.0)
+        exit_fee = sell_fee_real
+    else:
+        pnl -= exit_fee
 
     if partial:
         # TP1: restituisce metà capitale, aggiorna size_remaining
@@ -1075,6 +1109,8 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     is_clean_stop = ("STOP" in reason) and not pos.get("tp1_hit", False)
     cooldown_h = cfg.get("cooldown", 1)
     state["cooldowns"][sym] = (datetime.now().timestamp() + cooldown_h * 3600) * 1000
+    buy_fee_usd  = pos.get("buy_fee_usd", 0.0)
+    sell_fee_usd = pos.get("sell_fee_usd", exit_fee)
     trade_record = {
         "symbol": sym, "reason": reason,
         "entryPrice": pos["entryPrice"], "exitPrice": cur,
@@ -1082,6 +1118,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         "entryTime": pos["entryTime"], "durationMin": round(dur, 1),
         "size": pos["size"], "realMode": pos.get("realMode", False),
         "tp1_hit": pos.get("tp1_hit", False),
+        "buyFee": round(buy_fee_usd, 4), "sellFee": round(sell_fee_usd, 4),
     }
     state["trades"].append(trade_record)
     if db_pool and user_id:
@@ -1090,14 +1127,16 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 await conn.execute("""
                     INSERT INTO trades_history
                     (user_id, symbol, entry_price, exit_price, size, pnl, pct,
-                     reason, tp1_hit, duration_min, entry_time, exit_time, mode)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                     reason, tp1_hit, duration_min, entry_time, exit_time, mode,
+                     buy_fee, sell_fee)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
                 """, user_id, sym,
                     float(pos["entryPrice"]), float(cur),
                     float(pos["size"]), float(total_pnl), float(total_pct),
                     reason, bool(pos.get("tp1_hit", False)), float(round(dur, 1)),
                     pos["entryTime"], datetime.utcnow().isoformat() + "Z",
-                    "real" if pos.get("realMode") else "sim"
+                    "real" if pos.get("realMode") else "sim",
+                    float(buy_fee_usd), float(sell_fee_usd)
                 )
         except Exception as e:
             print(f"DB trade save error: {e}")
@@ -1860,6 +1899,11 @@ async def startup():
                     );
                     DELETE FROM tg_updates WHERE processed_at < NOW() - INTERVAL '7 days'
                 """)
+                # Migrazione colonne fee (idempotente)
+                await conn.execute("""
+                    ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS buy_fee FLOAT DEFAULT 0;
+                    ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_fee FLOAT DEFAULT 0;
+                """)
             print("Database connesso e schema creato")
 
             # Ripristina sessioni attive dopo riavvio
@@ -2317,6 +2361,8 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
                 "time": r["exit_time"],
                 "realMode": r["mode"] == "real",
                 "size": r["size"],
+                "buyFee": float(r["buy_fee"] or 0),
+                "sellFee": float(r["sell_fee"] or 0),
             } for r in rows]
             # Merge: DB ha tutto, mem ha solo sessione corrente
             # Usa entryTime come chiave — è identico in memoria e nel DB
