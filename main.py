@@ -712,7 +712,7 @@ async def fetch_prices_coingecko():
                 r = await client.get(
                     "https://api.coingecko.com/api/v3/coins/markets",
                     params={
-                        "vs_currency": "usdt",
+                        "vs_currency": "usd",
                         "order": "volume_desc",
                         "per_page": 250,
                         "page": page,
