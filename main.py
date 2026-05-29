@@ -942,7 +942,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
                 add_log(state, "buy", "ACQUISTO REALE (RevX)",
                     f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | Qty: {qty_purchased:.6f} | "
-                    f"SL: ${stop_price:.4f} | TP1: ${tp1_price:.4f} | TP2: ${tp2_price:.4f} | R: {R_pct*100:.2f}%")
+                    f"SL: ${stop_price:.4f}")
                 await notify(state, f"ACQUISTO REALE RevX\n{sym} @ ${actual_price:.4f}\nSize: ${size:.2f}")
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"RevX error: {e}")
@@ -967,7 +967,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
         actual_price = price
         add_log(state, "buy", "ACQUISTO SIM",
             f"{sym} @ {fmt_price(actual_price)} | Size: ${size:.0f} | Fee: ${entry_fee:.2f} | "
-            f"SL: {fmt_price(stop_price)} | TP1: {fmt_price(tp1_price)} | TP2: {fmt_price(tp2_price)} | R: {R_pct*100:.2f}%")
+            f"SL: {fmt_price(stop_price)}")
         await notify(state,
             "ACQUISTO SIM\n" + sym + " @ " + fmt_price(actual_price) +
             "\nSize: $" + f"{size:.0f}" +
