@@ -295,7 +295,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .home-balance-label { font-size:11px; font-weight:600; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; }
 .home-balance-val { font-size:32px; font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
 .home-balance-sub { font-size:12px; opacity:0.7; margin-top:4px; font-weight:500; }
-.watchlist-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
+.watchlist-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
 .watchlist-row:last-child { border-bottom:none; }
 .star-btn { width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text3); flex-shrink:0; transition:color 0.15s; border:none; background:none; }
 .star-btn.starred { color:var(--blue); }
@@ -2782,7 +2782,7 @@ function renderHomeSession() {
     const img = `<img src="${logo}" style="width:40px;height:40px;border-radius:50%;flex-shrink:0;object-fit:cover" onerror="coinImgErr(this,'${esc(p.symbol[0])}',40)">`;
     const d = mktData.find(c => c.symbol === p.symbol);
     const spark = renderSparkline(d ? d.sparkline : [], color);
-    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
         ${img}
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:700">${esc(p.symbol)}</div>
