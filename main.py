@@ -962,12 +962,56 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                                 raise
                     print(f"[REVX SELL RESULT] {sym}: {result}")
                     data = result.get("data") or result
-                    order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
-                    if not order_id:
+                    order_id    = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+                    order_state = data.get("state", "")
+                    market_cancelled = order_state in ("cancelled", "rejected")
+                    if not order_id or market_cancelled:
                         err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
                         if "insufficient" in str(err_msg).lower():
                             add_log(state, "info", "WARN", f"{sym}: Insufficient balance — venduto esternamente, registro trade")
                             sold_externally = True
+                        elif market_cancelled:
+                            # RevX slippage protection: market order rifiutato — fallback IOC limit -2%
+                            print(f"[REVX SELL] {sym} market cancelled (slippage), fallback IOC limit -5%")
+                            limit_price = round(cur * 0.95, 8)
+                            fb_body = {
+                                "client_order_id": str(_uuid.uuid4()),
+                                "symbol": symbol_pair,
+                                "side": "SELL",
+                                "order_configuration": {
+                                    "limit": {
+                                        "base_size": str(qty_to_sell),
+                                        "price": str(limit_price),
+                                        "time_in_force": "IOC"
+                                    }
+                                }
+                            }
+                            fb_result = await revx_request("POST", "/api/1.0/orders", fb_body, key_id=revx_key_id, private_key=revx_priv)
+                            print(f"[REVX SELL FALLBACK] {sym}: {fb_result}")
+                            fb_data = fb_result.get("data") or fb_result
+                            fb_id    = fb_data.get("venue_order_id") or fb_data.get("order_id") or fb_data.get("id", "")
+                            fb_state = fb_data.get("state", "")
+                            if fb_id and fb_state not in ("cancelled", "rejected", ""):
+                                # fallback riuscito
+                                filled_price = float(fb_data.get("average_price") or fb_data.get("price") or limit_price)
+                                if filled_price > 0: cur = filled_price
+                                add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f} (IOC fallback)")
+                                if partial:
+                                    pos["qty_purchased"] = qty_purchased - qty_to_sell
+                            else:
+                                fb_err = fb_result.get("message") or fb_result.get("error") or str(fb_result)
+                                if "insufficient" in str(fb_err).lower():
+                                    add_log(state, "info", "WARN", f"{sym}: Insufficient balance (fallback) — venduto esternamente")
+                                    sold_externally = True
+                                else:
+                                    pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
+                                    add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): market+IOC entrambi cancellati")
+                                    await notify(state, f"ERRORE VENDITA RevX {sym}: slippage protection attiva, riprovando...")
+                                    if pos.get("_sell_failures", 0) >= 3:
+                                        add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite")
+                                        await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
+                                    else:
+                                        _exiting.discard(sym); return
                         else:
                             pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
                             add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
@@ -977,7 +1021,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                                 await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
                             else:
                                 _exiting.discard(sym); return
-                    if not sold_externally:
+                    if not sold_externally and order_id and not market_cancelled:
                         filled_price = float(data.get("average_price") or data.get("price") or cur)
                         if filled_price > 0:
                             cur = filled_price
