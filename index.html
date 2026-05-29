@@ -2957,8 +2957,8 @@ function renderPositions() {
         barHtml = `<div class="pos-sl-bar-wrap"><div class="pos-sl-bar">
           <div class="pos-sl-fill" style="width:${curPct}%;background:${barCol}"></div>
           <div class="pos-sl-dot" style="left:${curPct}%;background:${barCol}"></div>
-          <span class="pos-sl-price" style="left:${curPct}%;color:${barCol}">${getCurrSym()}${fmtPrice(currentPrice)}</span>
-          <span class="pos-sl-lbl" style="left:0">SL ${getCurrSym()}${fmtPrice(stopPrice)}</span>
+          <span class="pos-sl-price" style="left:${curPct}%;color:${barCol}">${fmtPrice(currentPrice)}</span>
+          <span class="pos-sl-lbl" style="left:0">SL ${fmtPrice(stopPrice)}</span>
           <span class="pos-sl-lbl" style="left:${entryPct}%;transform:translateX(-50%)">ENTRY</span>
         </div></div>`;
       }
@@ -2967,8 +2967,9 @@ function renderPositions() {
     return `<div class="pos-card-new">
       <div class="pos-head-new">
         <div class="pos-coin-new">${img}
-          <div>
+          <div style="display:flex;align-items:center;gap:7px">
             <div class="pos-sym-new">${esc(p.symbol)}</div>
+            ${p.trailingActive ? '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;background:rgba(5,193,104,0.15);color:var(--green);white-space:nowrap;letter-spacing:0.03em">Trailing attivo</span>' : ''}
           </div>
         </div>
         <div class="pos-pnl-new">
@@ -2978,7 +2979,7 @@ function renderPositions() {
       </div>
       <div class="pos-grid4">
         <div class="pos-g4-cell"><div class="pos-g4-label">Investito</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(size)}</div></div>
-        <div class="pos-g4-cell"><div class="pos-g4-label">Quantità</div><div class="pos-g4-val">${posQtyFmt}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Quantità</div><div class="pos-g4-val">${posQtyFmt} ${esc(p.symbol)}</div></div>
         <div class="pos-g4-cell"><div class="pos-g4-label">Valore ora</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(curVal)}</div></div>
         <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val">${durFmt}</div></div>
       </div>
@@ -3115,10 +3116,9 @@ function renderTransazioni() {
   };
 
   const fmtP = p => p >= 1000 ? p.toFixed(1) : p >= 1 ? p.toFixed(2) : p.toFixed(4);
-  const reasonBadge = r => {
-    const rl = (r||'').toLowerCase();
-    if (rl.includes('stop')) return 'background:rgba(246,70,93,0.15);color:var(--red)';
-    return 'background:rgba(5,193,104,0.15);color:var(--green)';
+  const reasonBadge = (r, pnl) => {
+    if (pnl >= 0) return 'background:rgba(5,193,104,0.15);color:var(--green)';
+    return 'background:rgba(246,70,93,0.15);color:var(--red)';
   };
   list.innerHTML = filtered.map(t => {
     const isWin = t.pnl >= 0;
@@ -3138,7 +3138,7 @@ function renderTransazioni() {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         $${fmtP(t.exitPrice)}
       </div>
-      <span style="flex:0 0 auto;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;${reasonBadge(t.reason)}">${reasonLabel(t.reason)}</span>
+      <span style="flex:0 0 auto;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;${reasonBadge(t.reason,t.pnl)}">${reasonLabel(t.reason)}</span>
       <div style="flex:0 0 auto;text-align:right;min-width:64px">
         <div style="font-weight:700;font-size:14px;color:${color}">${isWin?'+':''}${getCurrSym()}${fmtMoney(t.pnl)}</div>
         <div style="font-size:11px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>

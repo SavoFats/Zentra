@@ -1231,6 +1231,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         ioc_slip    = 0.001 if (state.get("use_revx") and pos.get("realMode")) else 0
         net_pnl_pct = (cur - entry) / entry - fee_rt - ioc_slip
         profit_activation = cfg.get("profitActivation", 0.003)
+        pos["trailingActive"] = net_pnl_pct > profit_activation
         if net_pnl_pct > profit_activation:
             peak         = pos.get("peak_price", cur)
             profit_move  = peak - entry
