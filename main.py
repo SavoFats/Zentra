@@ -919,6 +919,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 # Normalizza: usa sempre formato "SYM-USD" non "SYM/USD"
                 symbol_pair = symbol_pair.replace("/", "-")
                 print(f"[REVX SELL] {sym} symbol_pair={symbol_pair} qty_purchased={qty_purchased}")
+                sold_externally = False
                 # Leggi saldo reale da RevX per evitare "Insufficient balance"
                 try:
                     balances = await revx_request("GET", "/api/1.0/balances",
@@ -934,94 +935,113 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                                 qty_to_sell = qty_to_sell_real
                                 pos["qty_purchased"] = real_qty
                             else:
-                                add_log(state, "info", "WARN", f"{sym}: saldo RevX = 0, posizione rimossa")
-                                if pos in state["positions"]:
-                                    state["positions"].remove(pos)
-                                return
+                                # Saldo 0: venduto esternamente in precedenza
+                                add_log(state, "info", "WARN", f"{sym}: saldo RevX = 0 — venduto esternamente, registro trade")
+                                sold_externally = True
                             break
                 except Exception as be:
                     print(f"[REVX SELL] errore lettura saldo: {be}")
-                # Limit order IOC con slippage progressivo — evita slippage protection RevX
-                # Tre tentativi: -0.5%, -1.5%, -3% sotto prezzo corrente
-                SELL_SLIP_BUFFERS = [0.001, 0.005, 0.015]
-                result = None
-                for slip_attempt, slip_buf in enumerate(SELL_SLIP_BUFFERS):
-                    limit_price = round(cur * (1 - slip_buf), 8)
-                    order_body = {
-                        "client_order_id": str(_uuid.uuid4()),
-                        "symbol": symbol_pair,
-                        "side": "SELL",
-                        "order_configuration": {
-                            "limit": {
-                                "base_size": str(qty_to_sell),
-                                "price": str(limit_price),
-                                "time_in_force": "IOC"
+                if not sold_externally:
+                    # Limit order IOC con slippage progressivo — evita slippage protection RevX
+                    # Tre tentativi: -0.1%, -0.5%, -1.5% sotto prezzo corrente
+                    SELL_SLIP_BUFFERS = [0.001, 0.005, 0.015]
+                    result = None
+                    for slip_attempt, slip_buf in enumerate(SELL_SLIP_BUFFERS):
+                        limit_price = round(cur * (1 - slip_buf), 8)
+                        order_body = {
+                            "client_order_id": str(_uuid.uuid4()),
+                            "symbol": symbol_pair,
+                            "side": "SELL",
+                            "order_configuration": {
+                                "limit": {
+                                    "base_size": str(qty_to_sell),
+                                    "price": str(limit_price),
+                                    "time_in_force": "IOC"
+                                }
                             }
                         }
-                    }
-                    print(f"[REVX SELL] {sym} limit @ ${limit_price:.6f} (-{slip_buf*100:.1f}%) attempt {slip_attempt+1}/{len(SELL_SLIP_BUFFERS)}")
-                    try:
-                        result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
-                        _d = result.get("data") or result
-                        _state = _d.get("state", "")
-                        if _state in ("filled", "partially_filled"):
-                            break  # successo
-                        if _state == "new":
-                            # IOC returned 'new' — RevX still processing; poll for final state
-                            _oid = _d.get("venue_order_id") or _d.get("order_id")
-                            if _oid:
-                                for _pi in range(5):
-                                    await asyncio.sleep(1)
-                                    try:
-                                        _pr = await revx_request("GET", f"/api/1.0/orders/{_oid}", None, key_id=revx_key_id, private_key=revx_priv)
-                                        _pd = _pr.get("data") or _pr
-                                        _ps = _pd.get("state", "")
-                                        print(f"[REVX SELL] {sym} poll {_pi+1}/5 order {_oid[:8]}: state={_ps}")
-                                        if _ps in ("filled", "partially_filled"):
-                                            result = _pr; _state = _ps; break
-                                        if _ps in ("cancelled", "expired", "rejected"):
-                                            _state = _ps; break
-                                    except Exception as _pe:
-                                        print(f"[REVX SELL] {sym} poll error: {_pe}"); break
+                        print(f"[REVX SELL] {sym} limit @ ${limit_price:.6f} (-{slip_buf*100:.1f}%) attempt {slip_attempt+1}/{len(SELL_SLIP_BUFFERS)}")
+                        try:
+                            result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                            _d = result.get("data") or result
+                            _state = _d.get("state", "")
                             if _state in ("filled", "partially_filled"):
-                                break
-                            # Still unresolved — treat as cancelled for retry
-                            _state = "cancelled"
-                        if _state == "cancelled" and slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
-                            print(f"[REVX SELL] limit -{slip_buf*100:.1f}% cancelled, riprovo con spread più largo...")
-                            await asyncio.sleep(1)
-                        else:
-                            break  # errore API o ultimo tentativo
-                    except Exception as net_err:
-                        if slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
-                            print(f"[REVX SELL] tentativo {slip_attempt+1} errore: {net_err}, riprovo...")
-                            await asyncio.sleep(2)
-                        else:
-                            raise
-                print(f"[REVX SELL RESULT] {sym}: {result}")
-                data = result.get("data") or result
-                order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
-                order_state = data.get("state", "")
-                sell_failed = not order_id or order_state == "cancelled"
-                if sell_failed:
-                    err_msg = f"ordine {order_state}" if order_state == "cancelled" else (result.get("message") or result.get("error") or result.get("detail") or str(result))
-                    # Conta tentativi falliti consecutivi
-                    pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
-                    add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
-                    await notify(state, f"ERRORE VENDITA RevX {sym}: {err_msg[:100]}")
-                    # Dopo 3 fallimenti: rimuovi posizione dalla memoria (l'ordine non esiste su RevX)
-                    if pos.get("_sell_failures", 0) >= 3:
-                        add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — verifica su RevX")
-                        await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
-                        # Non fare return — lascia che il codice dopo rimuova la posizione
-                    else:
-                        _exiting.discard(sym); return
-                filled_price = float(data.get("average_price") or data.get("price") or limit_price)
-                if filled_price > 0:
-                    cur = filled_price
-                add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f}")
-                if partial:
-                    pos["qty_purchased"] = qty_purchased - qty_to_sell
+                                break  # successo
+                            if _state == "new":
+                                # IOC returned 'new' — RevX still processing; poll for final state
+                                _oid = _d.get("venue_order_id") or _d.get("order_id")
+                                if _oid:
+                                    for _pi in range(5):
+                                        await asyncio.sleep(1)
+                                        try:
+                                            _pr = await revx_request("GET", f"/api/1.0/orders/{_oid}", None, key_id=revx_key_id, private_key=revx_priv)
+                                            _pd = _pr.get("data") or _pr
+                                            _ps = _pd.get("state", "")
+                                            print(f"[REVX SELL] {sym} poll {_pi+1}/5 order {_oid[:8]}: state={_ps}")
+                                            if _ps in ("filled", "partially_filled"):
+                                                result = _pr; _state = _ps; break
+                                            if _ps in ("cancelled", "expired", "rejected"):
+                                                _state = _ps; break
+                                        except Exception as _pe:
+                                            print(f"[REVX SELL] {sym} poll error: {_pe}"); break
+                                if _state in ("filled", "partially_filled"):
+                                    break
+                                # Polling inconclusivo — controlla saldo prima di riprovare
+                                if _state not in ("cancelled", "expired", "rejected"):
+                                    try:
+                                        _bals = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
+                                        _bl = _bals if isinstance(_bals, list) else _bals.get("balances", [])
+                                        _bc = next((float(b.get("available", 0) or 0) for b in _bl if b.get("currency") == sym), -1.0)
+                                        if _bc == 0.0:
+                                            add_log(state, "info", "WARN", f"{sym}: saldo 0 dopo polling — venduto esternamente, registro trade")
+                                            sold_externally = True
+                                    except Exception:
+                                        pass
+                                if sold_externally:
+                                    break
+                                _state = "cancelled"
+                            if _state == "cancelled" and slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
+                                print(f"[REVX SELL] limit -{slip_buf*100:.1f}% cancelled, riprovo con spread più largo...")
+                                await asyncio.sleep(1)
+                            else:
+                                break  # errore API o ultimo tentativo
+                        except Exception as net_err:
+                            if slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
+                                print(f"[REVX SELL] tentativo {slip_attempt+1} errore: {net_err}, riprovo...")
+                                await asyncio.sleep(2)
+                            else:
+                                raise
+                    if not sold_externally:
+                        print(f"[REVX SELL RESULT] {sym}: {result}")
+                        data = result.get("data") or result
+                        order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+                        order_state = data.get("state", "")
+                        sell_failed = not order_id or order_state == "cancelled"
+                        if sell_failed:
+                            err_msg = f"ordine {order_state}" if order_state == "cancelled" else (result.get("message") or result.get("error") or result.get("detail") or str(result))
+                            if "insufficient" in str(err_msg).lower():
+                                # Saldo insufficiente = ordine precedente già eseguito su RevX
+                                add_log(state, "info", "WARN", f"{sym}: Insufficient balance — venduto esternamente, registro trade")
+                                sold_externally = True
+                            else:
+                                pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
+                                add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
+                                await notify(state, f"ERRORE VENDITA RevX {sym}: {err_msg[:100]}")
+                                if pos.get("_sell_failures", 0) >= 3:
+                                    add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — verifica su RevX")
+                                    await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
+                                else:
+                                    _exiting.discard(sym); return
+                        if not sold_externally:
+                            filled_price = float(data.get("average_price") or data.get("price") or limit_price)
+                            if filled_price > 0:
+                                cur = filled_price
+                            add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f}")
+                            if partial:
+                                pos["qty_purchased"] = qty_purchased - qty_to_sell
+                if sold_externally:
+                    add_log(state, "info", "VENDUTO RevX (ext)", f"{sym} venduto esternamente @ ${cur:.4f} (prezzo stimato)")
+                    await notify(state, f"WARN: {sym} venduto esternamente su RevX. Trade registrato al prezzo corrente.")
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"RevX exit error: {e}")
                 _exiting.discard(sym); return
