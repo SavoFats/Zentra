@@ -238,15 +238,23 @@ async def revx_request(method: str, path: str, body: dict = None,
                         key_id: str = None, private_key: str = None,
                         params: dict = None) -> dict:
     """Esegue una richiesta autenticata a Revolut X."""
+    from urllib.parse import urlsplit, urlencode
     body_str = json.dumps(body, separators=(',', ':')) if body else ""
-    # Costruisci query string per la firma (deve essere nell'ordine corretto)
-    query_str = ""
+    # Separa path e query string per la firma (RevX non vuole il '?' nel messaggio)
+    parsed = urlsplit(path)
+    clean_path = parsed.path
     if params:
-        query_str = "&".join(f"{k}={v}" for k, v in params.items())
-    headers = make_revx_signature(key_id, private_key, method, path, query_str, body_str)
+        query_str = urlencode(params)
+    elif parsed.query:
+        query_str = parsed.query
+    else:
+        query_str = ""
+    headers = make_revx_signature(key_id, private_key, method, clean_path, query_str, body_str)
     async with httpx.AsyncClient(timeout=30) as client:
         if method == "GET":
             r = await client.get(f"{REVX_BASE}{path}", headers=headers, params=params or {})
+        elif method == "DELETE":
+            r = await client.delete(f"{REVX_BASE}{path}", headers=headers)
         else:
             r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
     return r.json()
