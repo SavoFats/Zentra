@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production.up.railway.app; img-src 'self' data: https://assets.coingecko.com https://bin.bnbstatic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production.up.railway.app https://api.binance.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -21,18 +21,11 @@
   } else {
     document.documentElement.style.background='#eef1ff';
   }
-  // In standalone (PWA): usa screen.height che è sempre l'altezza fisica dello schermo.
-  // window.innerHeight al primo render può essere inferiore allo schermo reale (bug iOS),
-  // causando un layout viewport corto e lasciando area vuota sotto la tabbar.
-  // In browser mode: usa innerHeight (viewport senza chrome del browser).
   var _initH = window.navigator.standalone ? window.screen.height : window.innerHeight;
   document.documentElement.style.setProperty('--app-height', _initH + 'px');
-  // In browser mode, env(safe-area-inset-bottom) causa padding extra: il viewport
-  // si ferma già sopra la chrome del browser, quindi non serve il safe area offset.
   if (!window.navigator.standalone) {
     document.documentElement.style.setProperty('--safe-b', '0px');
   }
-  // Aggiorna --app-height al resize (es. Safari nasconde/mostra barra indirizzi)
   window.addEventListener('resize', function() {
     document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
   });
@@ -115,6 +108,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--sans); height:
 .modal-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .modal-btn { padding:14px; border-radius:var(--radius-sm); font-size:14px; font-weight:700; cursor:pointer; font-family:var(--sans); border:none; transition:all 0.15s; }
 .modal-btn.cancel { background:var(--surface2); color:var(--text2); }
+.modal-btn.confirm { background:var(--blue); color:#fff; box-shadow:0 4px 16px rgba(0,82,255,0.3); }
 .modal-btn.confirm-real { background:var(--red); color:#fff; box-shadow:0 4px 16px rgba(246,70,93,0.3); }
 .modal-btn:active { transform:scale(0.97); }
 
@@ -228,27 +222,29 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .trade-row.loss { border-left-color:var(--red); }
 
 .mkt-coin { display:flex; align-items:center; gap:12px; }
-.mkt-logo { width:34px; height:34px; border-radius:50%; }
-.mkt-icon-placeholder { width:34px; height:34px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; color:var(--text2); flex-shrink:0; }
-.mkt-logo-wrap { position:relative; width:34px; height:34px; flex-shrink:0; }
-.mkt-name { font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; }
+.mkt-logo { width:48px; height:48px; border-radius:50%; flex-shrink:0; }
+.mkt-icon-placeholder { width:48px; height:48px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; color:var(--text2); flex-shrink:0; }
+.mkt-logo-wrap { position:relative; width:48px; height:48px; flex-shrink:0; }
+.mkt-name { font-size:14px; font-weight:700; display:flex; align-items:center; gap:4px; }
 .mkt-sym-sub { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
-.mkt-in-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:4px; padding:1px 5px; font-weight:700; margin-left:6px; vertical-align:middle; }
+.mkt-in-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:4px; padding:1px 5px; font-weight:700; margin-left:4px; vertical-align:middle; }
 .plan-badge { font-size:9px; font-weight:800; padding:2px 7px; border-radius:20px; letter-spacing:0.06em; margin-left:6px; vertical-align:middle; }
+.btn-primary { background:var(--blue); color:#fff; border:none; border-radius:var(--radius-sm); font-weight:700; font-family:var(--sans); box-shadow:0 4px 16px rgba(0,82,255,0.3); transition:opacity 0.15s; }
+.btn-primary:active { opacity:0.85; }
 .plan-badge.free { background:var(--surface3); color:var(--text3); }
 .plan-badge.pro  { background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
 .pro-locked { opacity:0.45; pointer-events:none; }
 .pro-lock-label { font-size:10px; font-weight:800; color:#1a1200; background:#f59e0b; border-radius:4px; padding:2px 6px; margin-left:6px; letter-spacing:0.04em; }
 #sessionsIndicator { font-size:12px; margin-top:4px; }
 .mkt-vol { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
-.mkt-row { padding:12px 0; border-bottom:1px solid var(--border); }
+.mkt-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); }
 .mkt-row:last-child { border-bottom:none; }
-.mkt-row-open { background:rgba(0,82,255,0.05); border-radius:10px; padding:10px 10px; margin:0 -10px; }
-.mkt-row-main { display:flex; align-items:center; justify-content:space-between; }
-.mkt-right { text-align:right; }
-.mkt-price-val { font-size:15px; font-weight:700; margin-bottom:4px; font-variant-numeric:tabular-nums; }
-.mkt-chg-pill { font-size:11px; font-weight:700; padding:3px 7px; border-radius:6px; display:inline-block; }
-.ema-dots { display:flex; align-items:center; gap:5px; margin-top:7px; flex-wrap:wrap; }
+.mkt-row-open { background:rgba(0,82,255,0.05); border-radius:12px; padding:12px 10px; margin:0 -10px; }
+.mkt-row-info { flex:1; min-width:0; }
+.mkt-row-right { text-align:right; flex-shrink:0; }
+.mkt-price-val { font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
+.mkt-chg-pill { font-size:12px; font-weight:700; padding:4px 9px; border-radius:8px; display:inline-block; }
+.ema-dots { display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap; }
 .ema-dot-wrap { display:flex; align-items:center; gap:3px; }
 .ema-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; transition:all 0.3s; }
 .ema-dot.on { background:var(--green); box-shadow:0 0 6px rgba(5,193,104,0.6); animation:pulse 2s infinite; }
@@ -302,7 +298,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .home-balance-label { font-size:11px; font-weight:600; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; }
 .home-balance-val { font-size:32px; font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
 .home-balance-sub { font-size:12px; opacity:0.7; margin-top:4px; font-weight:500; }
-.watchlist-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
+.watchlist-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
 .watchlist-row:last-child { border-bottom:none; }
 .star-btn { width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text3); flex-shrink:0; transition:color 0.15s; border:none; background:none; }
 .star-btn.starred { color:var(--blue); }
@@ -484,6 +480,53 @@ input[type=range]::-webkit-slider-thumb { box-shadow:0 0 0 4px rgba(0,82,255,0.1
 /* Hide chrome (header + tabbar) while not authenticated */
 body.auth-active .hdr,
 body.auth-active .tabbar { display:none !important; }
+
+/* ── MONITOR POSITION CARDS ── */
+.pos-card-new { background:var(--surface); border:1px solid var(--glass-border); border-radius:var(--radius); margin-bottom:12px; padding:18px 16px 14px; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); box-shadow:0 4px 20px rgba(0,0,0,0.04),inset 0 1px 0 rgba(255,255,255,0.6); }
+[data-theme="dark"] .pos-card-new { box-shadow:0 4px 24px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.05); }
+.pos-head-new { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+.pos-coin-new { display:flex; align-items:center; gap:12px; }
+.pos-logo-new { width:44px; height:44px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+.pos-icon-new { width:44px; height:44px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:var(--text2); flex-shrink:0; }
+.pos-sym-new { font-size:18px; font-weight:800; letter-spacing:-0.01em; line-height:1.1; }
+.pos-sub-new { font-size:11px; color:var(--text3); font-weight:500; margin-top:3px; }
+.pos-pnl-new { text-align:right; }
+.pos-pnl-val-new { font-size:18px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
+.pos-pnl-pct-new { font-size:12px; font-weight:700; margin-top:2px; }
+.pos-grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px; margin-bottom:14px; }
+.pos-g4-cell { background:var(--surface3); border-radius:10px; padding:9px 10px; }
+.pos-g4-label { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:4px; }
+.pos-g4-val { font-size:13px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+.pos-sl-bar-wrap { margin-bottom:16px; }
+.pos-sl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:20px 0 18px; }
+.pos-sl-fill { position:absolute; top:0; left:0; height:100%; border-radius:2px; }
+.pos-sl-dot { position:absolute; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; border:3px solid var(--bg); }
+.pos-sl-price { position:absolute; top:-18px; transform:translateX(-50%); font-size:9px; font-weight:700; white-space:nowrap; }
+.pos-sl-lbl { position:absolute; bottom:-16px; font-size:9px; font-weight:700; color:var(--text3); white-space:nowrap; }
+.pos-close-btn { display:inline-flex; align-items:center; gap:6px; padding:10px 18px; background:transparent; border:1.5px solid rgba(246,70,93,0.4); border-radius:var(--radius-sm); color:var(--red); font-size:13px; font-weight:700; cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
+.pos-close-btn:active { background:rgba(246,70,93,0.08); }
+
+/* ── HOME REDESIGN ── */
+.home-mode-badge { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:5px 11px; border-radius:20px; flex-shrink:0; margin-top:4px; }
+.home-mode-badge.sim { background:rgba(240,185,11,0.15); color:#b8860b; border:1px solid rgba(240,185,11,0.35); }
+.home-mode-badge.real { background:rgba(246,70,93,0.12); color:var(--red); border:1px solid rgba(246,70,93,0.3); }
+[data-theme="dark"] .home-mode-badge.sim { color:#f0c040; }
+.home-hero { background:linear-gradient(135deg,#0052ff 0%,#1a70ff 55%,#003dd6 100%); border-radius:var(--radius); padding:22px 20px 22px; margin-bottom:10px; position:relative; overflow:hidden; }
+.home-hero-circles { position:absolute; right:-28px; top:50%; transform:translateY(-50%); pointer-events:none; }
+.home-hero-label { font-size:10px; font-weight:700; color:rgba(255,255,255,0.6); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:10px; }
+.home-hero-title { font-size:26px; font-weight:800; color:#fff; letter-spacing:-0.03em; line-height:1.15; margin-bottom:14px; }
+.home-hero-pills { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
+.home-hero-pill { font-size:11px; font-weight:600; color:rgba(255,255,255,0.9); background:rgba(255,255,255,0.13); border:1px solid rgba(255,255,255,0.2); border-radius:20px; padding:5px 11px; white-space:nowrap; }
+.home-hero-btn { display:inline-flex; align-items:center; gap:8px; padding:12px 22px; background:rgba(255,255,255,0.95); border:none; border-radius:var(--radius-sm); color:#0040cc; font-size:14px; font-weight:700; cursor:pointer; font-family:var(--sans); transition:all 0.15s; letter-spacing:-0.01em; }
+.home-hero-btn:active { transform:scale(0.97); }
+.home-hero-btn:disabled { opacity:0.45; cursor:not-allowed; transform:none; }
+.home-kpi-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+.home-kpi-sm { background:var(--surface); border:1px solid var(--glass-border); border-radius:var(--radius-sm); padding:12px 12px 10px; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); box-shadow:0 4px 16px rgba(0,0,0,0.04),inset 0 1px 0 rgba(255,255,255,0.6); }
+[data-theme="dark"] .home-kpi-sm { box-shadow:0 4px 20px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.05); }
+.home-kpi-sm-label { font-size:9px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.home-kpi-sm-val { font-size:16px; font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; color:var(--text); }
+.home-pos-label { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px; }
+.home-pos-dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 6px rgba(5,193,104,0.6); animation:pulse 2s infinite; flex-shrink:0; }
 </style>
 </head>
 <body class="auth-active">
@@ -541,17 +584,9 @@ body.auth-active .tabbar { display:none !important; }
   <div class="auth-card" id="apiKeysCard" style="display:none">
     <div class="auth-logo"><span class="auth-logo-dot"></span><span style="font-size:20px;font-weight:700">Zentra</span></div>
     <div class="auth-title">Collega Revolut X</div>
-    <div class="auth-sub">Inserisci le tue credenziali Revolut X per abilitare il trading reale</div>
+    <div class="auth-sub">Collega il tuo account Revolut X per abilitare il trading reale</div>
     <div class="auth-error" id="keysError"></div>
-    <div class="auth-field">
-      <label>API Key</label>
-      <input type="text" id="cbKey" placeholder="organizations/xxx/apiKeys/xxx">
-    </div>
-    <div class="auth-field">
-      <label>API Secret</label>
-      <input type="password" id="cbSecret" placeholder="-----BEGIN EC PRIVATE KEY-----">
-    </div>
-    <button class="auth-btn" onclick="saveKeys()">Salva e continua</button>
+    <button class="auth-btn" onclick="saveKeys()">Configura Revolut X</button>
     <div class="auth-switch"><a onclick="skipKeys()">Salta per ora — usa solo simulazione</a></div>
   </div>
 </div>
@@ -575,7 +610,7 @@ body.auth-active .tabbar { display:none !important; }
     <div class="profile-menu-user" id="pmUsername">--</div>
     <div class="profile-menu-sub" id="pmMode" style="display:none"></div>
   </div>
-  <!-- Configura API Coinbase nascosto — fallback silenzioso -->
+  <!-- Configura Revolut X -->
   <div class="profile-menu-item" onclick="showRevxConfig()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
     Configura Revolut X
@@ -965,19 +1000,56 @@ body.auth-active .tabbar { display:none !important; }
   <div class="page" id="page-home">
     <div class="ptr-indicator" id="ptr-page-home"><div class="ptr-spinner"></div></div>
 
-    <div class="home-welcome" style="padding:24px 0 20px">
-      <div class="home-welcome-sub">Benvenuto</div>
-      <div class="home-username" id="homeUsername">--</div>
+    <!-- Welcome + mode badge -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:20px 0 16px">
+      <div>
+        <div class="home-welcome-sub">Benvenuto</div>
+        <div class="home-username" id="homeUsername">--</div>
+      </div>
+      <div class="home-mode-badge sim" id="homeModeBadge">
+        <span id="homeModeDot" style="width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;animation:pulse 2s infinite"></span>
+        <span id="homeModeText">SIMULAZIONE</span>
+      </div>
     </div>
 
-    <!-- Bilancio -->
-    <div class="card" id="homeBalanceCard">
-      <div id="homeModeTag" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;color:var(--text3)">Capitale disponibile</div>
-      <div style="font-size:28px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;margin-bottom:4px" id="homeBalanceVal">--</div>
-      <div style="font-size:12px;color:var(--text3);font-weight:500" id="homeBalanceSub">Caricamento...</div>
+    <!-- Hero card — nascosta quando sessione attiva -->
+    <div class="home-hero" id="homeHeroCard">
+      <svg class="home-hero-circles" width="160" height="160" viewBox="0 0 160 160" fill="none" aria-hidden="true">
+        <circle cx="80" cy="80" r="72" stroke="white" stroke-width="1" opacity="0.2"/>
+        <circle cx="80" cy="80" r="52" stroke="white" stroke-width="1" opacity="0.15"/>
+        <circle cx="80" cy="80" r="32" stroke="white" stroke-width="1" opacity="0.1"/>
+      </svg>
+      <div class="home-hero-label">PRONTO A PARTIRE</div>
+      <div class="home-hero-title">Avvia il tuo<br>agente</div>
+      <div class="home-hero-pills">
+        <span class="home-hero-pill" id="heroPillDuration">Durata --</span>
+        <span class="home-hero-pill" id="heroPillStrategy">Stop Loss --</span>
+        <span class="home-hero-pill" id="heroPillCapital">Capitale --</span>
+      </div>
+      <button class="home-hero-btn" id="homeStartBtn" onclick="openDrawer()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Avvia sessione
+      </button>
+      <div id="sessionsIndicator" style="display:none;font-size:11px;color:rgba(255,255,255,0.65);margin-top:10px"></div>
     </div>
 
-    <!-- Watchlist -->
+    <!-- 3 KPI -->
+    <div class="home-kpi-row">
+      <div class="home-kpi-sm">
+        <div class="home-kpi-sm-label" id="homeKpiSaldoLabel">Saldo simulato</div>
+        <div class="home-kpi-sm-val" id="homeKpiSaldo">--</div>
+      </div>
+      <div class="home-kpi-sm">
+        <div class="home-kpi-sm-label">P&amp;L sessione</div>
+        <div class="home-kpi-sm-val" id="homeKpiPnl">--</div>
+      </div>
+      <div class="home-kpi-sm">
+        <div class="home-kpi-sm-label">Win rate</div>
+        <div class="home-kpi-sm-val" id="homeKpiWr" style="color:var(--blue)">--%</div>
+      </div>
+    </div>
+
+    <!-- Preferiti -->
     <div class="card" style="padding-bottom:0">
       <div class="card-label">Preferiti</div>
       <div id="homeWatchlist">
@@ -985,20 +1057,25 @@ body.auth-active .tabbar { display:none !important; }
       </div>
     </div>
 
-    <!-- Avvia sessione -->
-    <div id="homeStartBtnWrap" style="display:flex;flex-direction:column;align-items:center;gap:6px">
-      <button id="homeStartBtn" onclick="openDrawer()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:0 4px 20px rgba(0,82,255,0.25);transition:all 0.15s;letter-spacing:-0.01em">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Avvia sessione
-      </button>
-      <div id="sessionsIndicator" style="display:none;font-size:12px;color:var(--text3)"></div>
-    </div>
-    <!-- Widget sessione in corso -->
-    <div class="card" id="homeSessionWidget" style="display:none;margin-top:12px">
-      <div class="card-label" style="margin-bottom:10px">Sessione in corso</div>
-      <div id="homeSessionContent">
-        <div class="empty" style="padding:16px 0"><div class="empty-text" style="color:var(--text3)">Nessuna sessione attiva</div></div>
+    <!-- Posizioni in corso (sessione attiva) -->
+    <div id="homeSessionWidget" style="display:none;margin-top:12px">
+      <div class="card" style="padding-bottom:0">
+        <div class="home-pos-label">
+          <span class="home-pos-dot"></span>
+          Posizioni in corso
+        </div>
+        <div id="homeSessionContent">
+          <div class="empty" style="padding:16px 0"><div class="empty-text" style="color:var(--text3)">Scan mercato in corso</div></div>
+        </div>
       </div>
+    </div>
+
+    <!-- elementi nascosti per compatibilità -->
+    <div style="display:none">
+      <div id="homeModeTag"></div>
+      <div id="homeBalanceVal"></div>
+      <div id="homeBalanceSub"></div>
+      <div id="homeStartBtnWrap"></div>
     </div>
 
     <div style="height:8px"></div>
@@ -1048,37 +1125,14 @@ body.auth-active .tabbar { display:none !important; }
       <input type="range" id="sessionDuration" min="0" max="24" value="0" step="1" oninput="document.getElementById('sessionVal').textContent=this.value+'h'">
     </div>
 
-    <div class="section-label">Strategia EMA</div>
+    <div class="section-label">Filtri</div>
 
-    <!-- EMA FILTER TOGGLE -->
-    <div class="field">
-      <div class="field-label">Filtro EMA <span id="emaFilterLabel" style="color:var(--green)">ON</span></div>
+    <div class="field" style="display:none">
+      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span></div>
       <div class="ema-toggle-row">
-        <button class="ema-btn active" id="emaOnBtn" onclick="setEmaFilter(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="emaOffBtn" onclick="setEmaFilter(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
+        <button class="ema-btn active" id="trend1hOnBtn" onclick="setTrend1h(true)">Attivo</button>
+        <button class="ema-btn" id="trend1hOffBtn" onclick="setTrend1h(false)">Disattivo</button>
       </div>
-      <div class="field-hint">Usa EMA20/50 su 5min e 15min per filtrare gli ingressi</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <div class="ema-toggle-row">
-        <button class="ema-btn active" id="trend1hOnBtn" onclick="setTrend1h(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="trend1hOffBtn" onclick="setTrend1h(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
-      </div>
-      <div class="field-hint">EMA20 &gt; EMA50 su 1h — entra solo in trend superiore confermato</div>
     </div>
 
     <div class="field">
@@ -1096,40 +1150,15 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Pausa se BTC è sotto la propria EMA50 su 1h — filtro medio-termine più stabile, meno falsi blocchi</div>
     </div>
 
-    <div class="field">
-      <div class="field-label">Filtro Orario <span id="timeFilterLabel" style="color:var(--green);font-weight:700">ON</span></div>
-      <div class="ema-toggle-row">
-        <button class="ema-btn active" id="timeFilterOnBtn" onclick="setTimeFilter(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="timeFilterOffBtn" onclick="setTimeFilter(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
-      </div>
-      <div class="field-hint">Pausa tra 00:00 e 07:00 UTC — liquidità bassa, movimenti imprevedibili</div>
-    </div>
 
-    <div class="field">
-      <div class="field-label">Filtro RSI <span id="rsiFilterLabel" style="color:var(--green);font-weight:700">ON</span> &nbsp;<span id="rsiRangeVal" style="color:var(--blue);font-weight:700">35–70</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <div class="ema-toggle-row" style="margin-bottom:10px">
-        <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="rsiOffBtn" onclick="setRsiFilter(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
+    <div class="field" style="display:none">
+      <div class="field-label">Filtro RSI <span id="rsiFilterLabel">ON</span></div>
+      <div class="ema-toggle-row">
+        <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">Attivo</button>
+        <button class="ema-btn" id="rsiOffBtn" onclick="setRsiFilter(false)">Disattivo</button>
       </div>
-      <div id="rsiRangeFields">
-        <div class="field-label" style="font-size:12px">RSI min <span id="rsiMinVal">35</span></div>
-        <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" oninput="updateRsiRange()">
-        <div class="field-label" style="font-size:12px;margin-top:10px">RSI max <span id="rsiMaxVal">65</span></div>
-        <input type="range" id="rsiMax" min="50" max="80" value="65" step="5" oninput="updateRsiRange()">
-      </div>
-      <div class="field-hint" style="margin-top:6px">Entra solo con RSI in zona neutrale — evita ipercomprato e ipervenduto</div>
+      <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" style="display:none">
+      <input type="range" id="rsiMax" min="50" max="80" value="65" step="5" style="display:none">
     </div>
 
     <div class="field" style="display:none">
@@ -1139,49 +1168,43 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Distanza massima del prezzo da EMA20 per considerare un pullback valido</div>
     </div>
 
+    <div class="field">
+      <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
+      <input type="range" id="momentumPct" min="0.5" max="3" value="1" step="0.5"
+        oninput="document.getElementById('momentumPctVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+      <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
+    </div>
+
     <div class="section-label">Stop &amp; Take Profit</div>
 
     <div class="field">
       <div class="field-label">Stop Loss massimo <span id="slVal">2.5%</span></div>
-      <input type="range" id="stopLoss" min="0.5" max="5" value="2.5" step="0.1"
-        oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Scarta il trade se lo stop contestuale (ATR / minimi recenti) supera questa soglia</div>
+      <input type="range" id="stopLoss" min="0.5" max="5" value="2.0" step="0.1"
+        oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%';updateTpSchema()">
+      <div class="field-hint">Stop fisso sotto il prezzo di entrata — protezione catastrofica, non si muove mai</div>
+    </div>
+
+    <div class="field" style="display:none">
+      <input type="range" id="minR" value="1.0" style="display:none">
+      <input type="range" id="tp1R" value="2.0" style="display:none">
+      <input type="range" id="tp2R" value="4.0" style="display:none">
+      <button id="trailingOnBtn" style="display:none"></button>
+      <button id="trailingOffBtn" style="display:none"></button>
+      <span id="trailingLabel" style="display:none"></span>
     </div>
 
     <div class="field">
-      <div class="field-label">R minimo per trade <span id="minRVal" style="color:var(--blue);font-weight:700">1.0%</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="minR" min="0.3" max="2" value="1.0" step="0.1"
-        oninput="document.getElementById('minRVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Scarta trade dove il rischio è troppo piccolo — le fee mangerebbero il profitto</div>
+      <div class="field-label">Profit Tolerance <span id="profitTolVal" style="color:var(--blue);font-weight:700">20%</span></div>
+      <input type="range" id="profitTolerance" min="5" max="40" value="20" step="5"
+        oninput="document.getElementById('profitTolVal').textContent=this.value+'%';updateTpSchema()">
+      <div class="field-hint">Esce quando il profitto scende del X% dal picco — più basso = esce prima, più alto = lascia correre</div>
     </div>
 
     <div class="field">
-      <div class="field-label">TP1 target <span id="tp1RVal" style="color:var(--green);font-weight:700">2.0R</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="tp1R" min="1" max="4" value="2.0" step="0.5"
-        oninput="document.getElementById('tp1RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
-      <div class="field-hint">Obiettivo prima metà — chiude 50% e attiva trailing stop ATR</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">TP2 target <span id="tp2RVal" style="color:var(--green);font-weight:700">4.0R</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="tp2R" min="2" max="8" value="4.0" step="0.5"
-        oninput="document.getElementById('tp2RVal').textContent=parseFloat(this.value).toFixed(1)+'R'; updateTpSchema()">
-      <div class="field-hint">Obiettivo del 50% rimanente dopo TP1 — più alto = meno frequente ma più profittevole</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Trailing Stop <span id="trailingLabel" style="color:var(--green);font-weight:700">ON</span> <span style="color:var(--text3);font-size:11px;font-weight:500">(1.5× ATR)</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <div class="ema-toggle-row" style="margin-bottom:10px">
-        <button class="ema-btn active" id="trailingOnBtn" onclick="setTrailing(true)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Attivo
-        </button>
-        <button class="ema-btn" id="trailingOffBtn" onclick="setTrailing(false)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          Disattivo
-        </button>
-      </div>
-      <div class="field-hint">Dopo TP1 lo stop segue il massimo − 1.5× ATR (volatilità reale della coin)</div>
+      <div class="field-label">Profit Activation <span id="profitActVal" style="color:var(--blue);font-weight:700">0.3%</span></div>
+      <input type="range" id="profitActivation" min="0" max="2" value="0.3" step="0.1"
+        oninput="document.getElementById('profitActVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+      <div class="field-hint">Il trailing scatta solo dopo questo profitto netto — più alto = lascia respirare la posizione, meno uscite precoci</div>
     </div>
 
     <div class="field">
@@ -1192,20 +1215,20 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Schema Take Profit</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Come funziona l'uscita</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp1Label">TP1 — 2.0R</div>
-          <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude 50%</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Trailing ATR attivo</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Hard Stop</div>
+          <div style="font-size:13px;font-weight:700;color:var(--red)">−<span id="tp1Label">2</span>%</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Protezione catastrofica</div>
         </div>
         <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px" id="tp2Label">TP2 — 4.0R</div>
-          <div style="font-size:13px;font-weight:700;color:var(--green)">Chiude tutto</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Posizione chiusa</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Trailing Profit</div>
+          <div style="font-size:13px;font-weight:700;color:var(--green)">−<span id="tp2Label">20</span>% dal picco</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">Solo quando in profitto netto</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">R = distanza entry → stop contestuale (1.5× ATR / minimi recenti)</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">Il trailing profit si attiva solo dopo aver coperto le commissioni (~0.18% round-trip)</div>
     </div>
 
     <div class="section-label">Gestione Rischio</div>
@@ -1249,21 +1272,18 @@ body.auth-active .tabbar { display:none !important; }
     <!-- Hero P&L card -->
     <div class="hero-card off" id="heroCard">
       <canvas class="hero-sparkline" id="heroSparkline"></canvas>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div class="hero-label">P&amp;L sessione</div>
-        <div class="live-badge" id="liveBadge" style="display:none"><div class="live-dot"></div>LIVE</div>
-      </div>
-      <div class="hero-pnl" id="heroPnl">$0.00</div>
-      <div class="hero-stats">
-        <div class="hero-stat">Trade <strong id="heroTrades">0</strong></div>
-        <div class="hero-stat">Win rate <strong id="heroWR">--%</strong></div>
-        <div class="hero-stat" id="heroRemainingWrap" style="display:none">Rimanente <strong id="heroRemaining">--</strong></div>
-      </div>
       <button id="stopBtn" onclick="stopAgent()" disabled
-        style="display:none;position:absolute;bottom:14px;right:16px;padding:6px 12px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);align-items:center;gap:6px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-        <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><rect width="8" height="8" rx="1.5"/></svg>
+        style="display:none;position:absolute;top:14px;right:16px;padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+        <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
         Ferma
       </button>
+      <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
+      <div class="hero-pnl" id="heroPnl">$0.00</div>
+      <div class="hero-stats" style="margin-top:10px">
+        <div class="hero-stat">Trade <strong id="heroTrades">0</strong></div>
+        <div class="hero-stat">Win rate <strong id="heroWR">--%</strong></div>
+        <div class="hero-stat" id="heroRemainingWrap">Rimanente <strong id="heroRemaining">--</strong></div>
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -1295,26 +1315,25 @@ body.auth-active .tabbar { display:none !important; }
         <div class="fdd" id="fddMktVar">
           <div class="fdd-btn active" onclick="toggleFdd('fddMktVar')" id="fddMktVarBtn">24h % <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="fdd-menu" id="fddMktVarMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt('fddMktVar','change24h','24h %','var')">24h %</div>
-            <div class="fdd-item" onclick="selectFddMkt('fddMktVar','change1h','1h %','var')">1h %</div>
+            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktVar','change24h','24h %','var')">24h %</div>
+            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktVar','change1h','1h %','var')">1h %</div>
           </div>
         </div>
         <div class="fdd" id="fddMktMetric">
           <div class="fdd-btn" onclick="toggleFdd('fddMktMetric')" id="fddMktMetricBtn">Volume <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="fdd-menu" id="fddMktMetricMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt('fddMktMetric','volume24h','Volume','metric')">Volume</div>
-            <div class="fdd-item" onclick="selectFddMkt('fddMktMetric','price','Prezzo','metric')">Prezzo</div>
+            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktMetric','volume24h','Volume','metric')">Volume</div>
+            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktMetric','price','Prezzo','metric')">Prezzo</div>
           </div>
         </div>
         <div class="fdd" id="fddMktDir">
           <div class="fdd-btn" onclick="toggleFdd('fddMktDir')" id="fddMktDirBtn">Tutti <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
           <div class="fdd-menu" id="fddMktDirMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt('fddMktDir','all','Tutti','dir')">Tutti</div>
-            <div class="fdd-item" onclick="selectFddMkt('fddMktDir','gainers','Rialzo','dir')">Rialzo</div>
-            <div class="fdd-item" onclick="selectFddMkt('fddMktDir','losers','Ribasso','dir')">Ribasso</div>
+            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktDir','all','Tutti','dir')">Tutti</div>
+            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktDir','gainers','Rialzo','dir')">Rialzo</div>
+            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktDir','losers','Ribasso','dir')">Ribasso</div>
           </div>
         </div>
-        <button onclick="openSignalInfo()" style="margin-left:auto;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:serif" title="Legenda segnali">ⓘ</button>
       </div>
       <div style="position:relative;margin-bottom:12px">
         <input type="text" id="mktSearch" placeholder="Cerca coin..." oninput="renderMarket()"
@@ -1331,40 +1350,48 @@ body.auth-active .tabbar { display:none !important; }
     <div class="ptr-indicator" id="ptr-page-transazioni"><div class="ptr-spinner"></div></div>
 
     <!-- Stats -->
-    <div class="kpi-grid" style="margin-bottom:12px">
-      <div class="kpi">
-        <div class="kpi-label">Trade</div>
-        <div class="kpi-value" id="txCount">0</div>
-        <div class="kpi-sub" id="txPnl">P&L: --</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--blue);border-radius:16px;padding:16px 18px">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">P&L Oggi</div>
+        <div id="txPnl" style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.02em">--</div>
+        <div id="txCount" style="font-size:12px;color:rgba(255,255,255,0.65);margin-top:4px">-- trade</div>
       </div>
-      <div class="kpi">
-        <div class="kpi-label">Win Rate</div>
-        <div class="kpi-value" id="txWinRate">--%</div>
-        <div class="kpi-sub" id="txWinLoss">-- vittorie · -- sconfitte</div>
+      <div style="background:var(--surface2);border-radius:16px;padding:16px 18px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Win Rate</div>
+        <div id="txWinRate" style="font-size:26px;font-weight:800;letter-spacing:-0.02em">--%</div>
+        <div id="txDotBar" style="display:flex;gap:3px;margin:8px 0 5px;flex-wrap:wrap"></div>
+        <div id="txWinLoss" style="font-size:11px;color:var(--text3)">-- vittorie · -- sconfitte</div>
       </div>
     </div>
 
 
 
     <!-- Filtri dropdown custom -->
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;justify-content:space-between">
       <div class="fdd" id="fddPeriod">
         <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Oggi <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="fdd-menu" id="fddPeriodMenu">
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','all','Sempre','period')">Sempre</div>
-          <div class="fdd-item selected" onclick="selectFdd('fddPeriod','today','Oggi','period')">Oggi</div>
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','week','7 giorni','period')">7 giorni</div>
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','month','30 giorni','period')">30 giorni</div>
-          <div class="fdd-item" onclick="selectFdd('fddPeriod','6m','6 mesi','period')">6 mesi</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','all','Tutte','period')">Tutte</div>
+          <div class="fdd-item selected" onclick="selectFdd(this,'fddPeriod','today','Oggi','period')">Oggi</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','week','7 giorni','period')">7 giorni</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','month','30 giorni','period')">30 giorni</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','6m','6 mesi','period')">6 mesi</div>
         </div>
       </div>
       <div class="fdd" id="fddOutcome">
         <div class="fdd-btn" onclick="toggleFdd('fddOutcome')" id="fddOutcomeBtn">Esito <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
         <div class="fdd-menu" id="fddOutcomeMenu">
-          <div class="fdd-item selected" onclick="selectFdd('fddOutcome','all','Esito','outcome')">Tutti</div>
-          <div class="fdd-item" onclick="selectFdd('fddOutcome','win','Profitto','outcome')">Profitto</div>
-          <div class="fdd-item" onclick="selectFdd('fddOutcome','loss','Perdita','outcome')">Perdita</div>
+          <div class="fdd-item selected" onclick="selectFdd(this,'fddOutcome','all','Esito','outcome')">Tutti</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddOutcome','win','Profitto','outcome')">Profitto</div>
+          <div class="fdd-item" onclick="selectFdd(this,'fddOutcome','loss','Perdita','outcome')">Perdita</div>
         </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+      <span id="txFilterCount" style="font-size:12px;color:var(--text3);font-weight:500"></span>
+      <button onclick="clearTrades()" title="Cancella transazioni" style="background:none;border:none;padding:6px;cursor:pointer;color:var(--text3);display:flex;align-items:center;border-radius:8px;transition:color 0.15s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </button>
       </div>
 
     </div>
@@ -1403,8 +1430,6 @@ const API = 'https://crypto-agent-back-production.up.railway.app';
 
 let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
-let _emaFilter = true;
-let _hasApiKeys = false;
 let _simMode = true;
 let _hasRevxKeys = false;
 let _plan = 'free';
@@ -1439,16 +1464,6 @@ function closeProfileOnOutside(e) {
     m.classList.remove('open');
     document.removeEventListener('click', closeProfileOnOutside);
   }
-}
-function openApiKeysFromMenu() {
-  if (S.running) {
-    document.getElementById('profileMenu').classList.remove('open');
-    document.getElementById('sessionActiveModal').classList.add('open');
-    return;
-  }
-  document.getElementById('profileMenu').classList.remove('open');
-  showApiKeys();
-  showAuthScreen();
 }
 function changeAvatar() {
   document.getElementById('profileMenu').classList.remove('open');
@@ -1570,7 +1585,7 @@ async function doLogin() {
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
-    if (!d.has_api_keys) { showApiKeys(); return; }
+    if (!d.has_revx_keys) { showApiKeys(); return; }
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('loginPass','loginPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Accedi'; }
 }
@@ -1596,19 +1611,13 @@ async function doRegister() {
   } catch(e) { showFieldError('regPass','regPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Registrati'; }
 }
 
-async function saveKeys() {
-  const cb_key = document.getElementById('cbKey').value.trim();
-  const cb_secret = document.getElementById('cbSecret').value.trim();
-  if (!cb_key || !cb_secret) return showAuthError('keysError', 'Inserisci entrambe le chiavi');
-  try {
-    const r = await fetch(API + '/auth/save_keys', { method:'POST', headers:authHeaders(), body:JSON.stringify({cb_key, cb_secret}) });
-    if (!r.ok) return showAuthError('keysError', 'Errore salvataggio chiavi');
-    hideAuthScreen(); initApp();
-  } catch(e) { showAuthError('keysError', 'Errore di connessione'); }
+function saveKeys() {
+  hideAuthScreen(); initApp();
+  setTimeout(() => showRevxConfig(), 600);
 }
 function skipKeys() { hideAuthScreen(); initApp(); }
 async function logout() {
-  await fetch(API + '/auth/logout', { method: 'POST' }).catch(() => {});
+  await fetch(API + '/auth/logout', { method: 'POST', headers: authHeaders() }).catch(() => {});
   localStorage.removeItem('ca_token');
   localStorage.removeItem('ca_username');
   localStorage.removeItem('ca_avatar');
@@ -1635,7 +1644,7 @@ async function checkAuth() {
     _sessionsToday = d.sessions_today || 0;
     _sessionsPerDay = d.sessions_per_day || 1;
     localStorage.setItem('ca_username', _username);
-    if (!d.has_api_keys) {
+    if (!d.has_revx_keys) {
       showAuthScreen();
       showApiKeys(); return;
     }
@@ -1674,7 +1683,6 @@ function applyIOSSafeAreaFix() {
 
     // Fallback: se env() è ancora 0 e lo schermo è >= 812pt → iPhone Face ID → 34px
     const finalSafeB = safeB > 0 ? safeB : (window.screen.height >= 812 ? 34 : 0);
-    // Assicura che il body copra l'intero schermo fisico
     document.documentElement.style.setProperty('--app-height', window.screen.height + 'px');
     if (finalSafeB > 0) {
       document.documentElement.style.setProperty('--safe-b', finalSafeB + 'px');
@@ -1717,10 +1725,9 @@ async function loadUserProfile() {
       _sessionsPerDay   = billing.sessions_per_day ?? _sessionsPerDay;
     }
 
-    _hasApiKeys = me.has_api_keys || false;
     _hasRevxKeys = me.has_revx_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
-    window._realMode = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+    window._realMode = _hasRevxKeys && !_simMode;
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
     if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram ✓' : 'Collega Telegram';
@@ -1995,7 +2002,8 @@ async function setSimMode(sim) {
     return;
   }
   _simMode = sim;
-  window._realMode = _hasApiKeys && !sim;
+  window._realMode = _hasRevxKeys && !sim;
+  S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
   try {
     await fetch(API + '/auth/sim_mode', {
       method: 'POST', headers: authHeaders(),
@@ -2003,6 +2011,7 @@ async function setSimMode(sim) {
     });
   } catch(e) {}
   updateSimToggle();
+  render();
   renderHome();
   renderTransazioni();
 }
@@ -2011,14 +2020,14 @@ function updateSimToggle() {
   const toggle = document.getElementById('simModeToggle');
   const row = document.getElementById('simModeRow');
   // Mostra toggle simulazione solo se ha almeno un exchange reale configurato
-  if (row) row.style.display = (_hasApiKeys || _hasRevxKeys) ? 'flex' : 'none';
+  if (row) row.style.display = _hasRevxKeys ? 'flex' : 'none';
   if (toggle) toggle.classList.toggle('on', _simMode);
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
   const badge = document.getElementById('cfgModeBadge');
-  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+  const isReal = _hasRevxKeys && !_simMode;
   let modeLabel = 'Simulazione';
-  if (isReal) modeLabel = _hasRevxKeys ? 'Reale — Revolut X' : 'Reale — Coinbase';
+  if (isReal) modeLabel = 'Reale — Revolut X';
   if (lbl) lbl.textContent = modeLabel;
   if (lbl) lbl.style.color = isReal ? 'var(--red)' : 'var(--text2)';
   if (badge) badge.style.display = 'inline-flex';
@@ -2043,14 +2052,6 @@ function toggleTheme() {
 }
 
 // ── EMA FILTER ────────────────────────────────────────────────────────────────
-function setEmaFilter(on) {
-  _emaFilter = on;
-  document.getElementById('emaOnBtn').classList.toggle('active', on);
-  document.getElementById('emaOffBtn').classList.toggle('active', !on);
-  document.getElementById('emaFilterLabel').textContent = on ? 'ON' : 'OFF';
-  document.getElementById('emaFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
-}
-
 // ── SLIDER HELPERS ────────────────────────────────────────────────────────────
 function updateMaxTrades() {
   const v = parseInt(document.getElementById('maxTrades').value);
@@ -2134,20 +2135,6 @@ const LOGO_URLS = {
   SEI:'https://assets.coingecko.com/coins/images/28205/small/Sei_Logo_-_Transparent.png',
   TAO:'https://assets.coingecko.com/coins/images/28452/small/ARUsPeNQ_400x400.jpeg',
   XLM:'https://assets.coingecko.com/coins/images/100/small/Stellar_symbol_black_RGB.png',
-  DOT:'https://assets.coingecko.com/coins/images/12171/small/polkadot.png',
-  LINK:'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
-  MATIC:'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
-  UNI:'https://assets.coingecko.com/coins/images/12504/small/uniswap-uni.png',
-  NEAR:'https://assets.coingecko.com/coins/images/10365/small/near_icon.png',
-  INJ:'https://assets.coingecko.com/coins/images/12882/small/Secondary_Symbol.png',
-  APT:'https://assets.coingecko.com/coins/images/26455/small/aptos_round.png',
-  ARB:'https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg',
-  OP:'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',
-  ATOM:'https://assets.coingecko.com/coins/images/1481/small/cosmos_hub.png',
-  TRX:'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
-  HBAR:'https://assets.coingecko.com/coins/images/3688/small/hbar.png',
-  AAVE:'https://assets.coingecko.com/coins/images/12645/small/AAVE.png',
-  GRT:'https://assets.coingecko.com/coins/images/13397/small/Graph_Token.png',
   // Coin mancanti o con ID errato
   CHZ:'https://assets.coingecko.com/coins/images/8834/small/CHZ_Token_updated.png',
   BIO:'https://assets.coingecko.com/coins/images/31069/small/bio.png',
@@ -2163,13 +2150,9 @@ const LOGO_URLS = {
   ASTER:'https://assets.coingecko.com/coins/images/35276/small/aster.png',
   XPL:'https://assets.coingecko.com/coins/images/38444/small/xpl.png',
   CAKE:'https://assets.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo.png',
-  XPL:'https://assets.coingecko.com/coins/images/38444/small/xpl.png',
   PLUME:'https://assets.coingecko.com/coins/images/39352/small/plume.jpg',
   SIGN:'https://assets.coingecko.com/coins/images/37900/small/sign.png',
   DASH:'https://assets.coingecko.com/coins/images/19/small/dash-logo.png',
-  BARD:'https://assets.coingecko.com/coins/images/38900/small/bard.jpg',
-  TRUMP:'https://assets.coingecko.com/coins/images/39307/small/trump.jpg',
-  ASTER:'https://assets.coingecko.com/coins/images/35276/small/aster.png',
   PAXG:'https://assets.coingecko.com/coins/images/9519/small/paxg.PNG',
   ZEC:'https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png',
   TREE:'https://assets.coingecko.com/coins/images/39972/small/tree.jpg',
@@ -2200,6 +2183,13 @@ function getLogo(sym) {
 let S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
 let trades = [];
 let pollInterval = null;
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function coinImgErr(el, initial, size) {
+  const d = document.createElement('div');
+  d.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0`;
+  d.textContent = initial;
+  el.replaceWith(d);
+}
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function showTab(name, el) {
@@ -2228,6 +2218,18 @@ function restoreActiveTab() {
   if (tabs[idx]) showTab(saved, tabs[idx]);
 }
 
+async function clearTrades() {
+  if (!confirm('Cancellare tutte le transazioni? L\'operazione è irreversibile.')) return;
+  try {
+    await fetch(API + '/trades', { method: 'DELETE', headers: authHeaders() });
+    trades = [];
+    _newTradeCount = 0;
+    _lastSeenTradeCount = 0;
+    updateStoricoBadge();
+    renderTransazioni();
+  } catch(e) { alert('Errore: ' + e.message); }
+}
+
 function updateStoricoBadge() {
   const badge = document.getElementById('storicoBadge');
   if (_newTradeCount > 0) {
@@ -2245,26 +2247,22 @@ function startFluidTimer() {
     const wrap = document.getElementById('heroRemainingWrap');
     if (!S.running || !_sessionEndTs) {
       if (el) el.textContent = '--';
-      if (wrap) wrap.style.display = 'none';
       return;
     }
     const remaining = Math.max(0, _sessionEndTs - Date.now());
     const s = Math.floor(remaining / 1000);
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
     if (el) el.textContent = h > 0 ? h + 'h ' + m + 'm' : m + 'm';
-    if (wrap) wrap.style.display = '';
   }, 1000);
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','stopLoss','minR','pullbackTolerance','minVolume','maxTrades','maxConsecutiveLosses','cooldown','tp1R','tp2R','maxHoldHours','rsiMin','rsiMax'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','momentumPct','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
   document.getElementById('modeSimBtn').disabled = true;
   document.getElementById('modeRealBtn').disabled = true;
-  document.getElementById('emaOnBtn').disabled = true;
-  document.getElementById('emaOffBtn').disabled = true;
   document.getElementById('startBtn').style.display = 'none';
   document.getElementById('resetBtn').style.display = 'none';
 }
@@ -2272,8 +2270,6 @@ function unlockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=false; });
   document.getElementById('modeSimBtn').disabled = false;
   document.getElementById('modeRealBtn').disabled = false;
-  document.getElementById('emaOnBtn').disabled = false;
-  document.getElementById('emaOffBtn').disabled = false;
   document.getElementById('startBtn').style.display = '';
   document.getElementById('resetBtn').style.display = '';
 }
@@ -2283,25 +2279,23 @@ function resetConfigToDefaults() {
   document.getElementById('capitalDisplay').textContent = '--';
   document.getElementById('allocPct').value = 0; document.getElementById('allocVal').textContent = '0%';
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
-  document.getElementById('stopLoss').value = 2.5; document.getElementById('slVal').textContent = '2.5%';
-  document.getElementById('minR').value = 1.0; document.getElementById('minRVal').textContent = '1.0%';
-  document.getElementById('pullbackTolerance').value = 2.0; document.getElementById('pullbackVal').textContent = '2.0%';
+  document.getElementById('momentumPct').value = 1; document.getElementById('momentumPctVal').textContent = '1.0%';
+  document.getElementById('stopLoss').value = 2.0; document.getElementById('slVal').textContent = '2.0%';
+  document.getElementById('profitTolerance').value = 20; document.getElementById('profitTolVal').textContent = '20%';
+  document.getElementById('profitActivation').value = 0.3; document.getElementById('profitActVal').textContent = '0.3%';
   document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = getCurrSym() + '0M';
   document.getElementById('maxTrades').value = 0; updateMaxTrades();
   document.getElementById('maxConsecutiveLosses').value = 3; updateMaxLoss();
   document.getElementById('cooldown').value = 0; document.getElementById('cdVal').textContent = '0h';
-  document.getElementById('tp1R').value = 2.0; document.getElementById('tp1RVal').textContent = '2.0R';
-  document.getElementById('tp2R').value = 4.0; document.getElementById('tp2RVal').textContent = '4.0R'; updateTpSchema();
   document.getElementById('maxHoldHours').value = 4; document.getElementById('maxHoldVal').textContent = '4h';
-  document.getElementById('rsiMin').value = 35; document.getElementById('rsiMax').value = 65; updateRsiRange();
-  setEmaFilter(true); setTrend1h(true); setBtcEma(true); setRsiFilter(true); setTrailing(true);
+  setBtcEma(true);
   document.getElementById('modeRealBtn').classList.remove('active-real');
   document.getElementById('modeSimBtn').classList.remove('active-sim');
   document.getElementById('modeHint').textContent = 'Seleziona la modalita per iniziare';
   document.getElementById('modeHint').style.color = '';
   document.getElementById('totalBalanceDisplay').textContent = 'Modalita simulazione';
   document.getElementById('totalBalanceDisplay').style.color = '';
-  _realMode = false; window._realMode = false;
+  _simMode = true; window._realMode = false;
   updateProfileMenu();
 }
 
@@ -2313,25 +2307,16 @@ function restoreConfigFromStorage() {
   if (saved.capitalPct !== undefined) { const p=Math.round(saved.capitalPct*100); document.getElementById('capitalPct').value=p; document.getElementById('capitalPctVal').textContent=p+'%'; }
   if (saved.allocPct) { const p=Math.round(saved.allocPct*100); document.getElementById('allocPct').value=p; document.getElementById('allocVal').textContent=p+'%'; }
   if (saved.sessionDuration) { document.getElementById('sessionDuration').value=saved.sessionDuration; document.getElementById('sessionVal').textContent=saved.sessionDuration+'h'; }
+  if (saved.momentumPct !== undefined) { const mp=(saved.momentumPct*100).toFixed(1); document.getElementById('momentumPct').value=parseFloat(mp); document.getElementById('momentumPctVal').textContent=mp+'%'; }
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
-  if (saved.minR !== undefined) { const mr=(saved.minR*100).toFixed(1); document.getElementById('minR').value=mr; document.getElementById('minRVal').textContent=mr+'%'; }
-  if (saved.pullbackTolerance) { const pt=(saved.pullbackTolerance*100).toFixed(1); document.getElementById('pullbackTolerance').value=pt; document.getElementById('pullbackVal').textContent=pt+'%'; }
+  if (saved.profitTolerance !== undefined) { const raw=saved.profitTolerance; const pt=Math.min(40,Math.max(5,raw>1?Math.round(raw):Math.round(raw*100))); document.getElementById('profitTolerance').value=pt; document.getElementById('profitTolVal').textContent=pt+'%'; }
+  if (saved.profitActivation !== undefined) { const pa=(saved.profitActivation*100).toFixed(1); document.getElementById('profitActivation').value=parseFloat(pa); document.getElementById('profitActVal').textContent=pa+'%'; }
   if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
   if (saved.cooldown !== undefined) { document.getElementById('cooldown').value=saved.cooldown; document.getElementById('cdVal').textContent=saved.cooldown+'h'; }
-  if (saved.emaFilter !== undefined) setEmaFilter(saved.emaFilter);
-  if (saved.trend1hFilter !== undefined) setTrend1h(saved.trend1hFilter);
   if (saved.btcEmaFilter !== undefined) setBtcEma(saved.btcEmaFilter);
-  if (saved.timeFilter !== undefined) setTimeFilter(saved.timeFilter);
-  if (saved.rsiFilter !== undefined) setRsiFilter(saved.rsiFilter);
-  if (saved.rsiMin) { document.getElementById('rsiMin').value=saved.rsiMin; }
-  if (saved.rsiMax) { document.getElementById('rsiMax').value=saved.rsiMax; }
-  updateRsiRange();
-  if (saved.tp1R) { document.getElementById('tp1R').value=saved.tp1R; document.getElementById('tp1RVal').textContent=parseFloat(saved.tp1R).toFixed(1)+'R'; }
-  if (saved.tp2R) { document.getElementById('tp2R').value=saved.tp2R; document.getElementById('tp2RVal').textContent=parseFloat(saved.tp2R).toFixed(1)+'R'; updateTpSchema(); }
   if (saved.maxHoldHours) { document.getElementById('maxHoldHours').value=saved.maxHoldHours; document.getElementById('maxHoldVal').textContent=saved.maxHoldHours+'h'; }
-  if (saved.trailingStop !== undefined) setTrailing(saved.trailingStop);
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
@@ -2342,14 +2327,10 @@ function restoreConfigFromStorage() {
   updateAlloc();
 }
 
-function getCurrSym() {
-  // Restituisce il simbolo valuta corretto basato sull'exchange attivo
-  return _hasRevxKeys && !_simMode ? '$' : '$';
-}
+function getCurrSym() { return '$'; }
 
 function getFeePct() {
-  // Fee per lato: Revolut X 0.09% taker, Coinbase 0.6%
-  return _hasRevxKeys && !_simMode ? 0.0009 : 0.006;
+  return 0.0009; // RevX taker fee 0.09%
 }
 
 function updateCapitalPct() {
@@ -2377,7 +2358,7 @@ function updateAlloc() {
   const netCapital = tradable - feeReserve;
   const netPerTrade = netCapital * v / 100;
   const sym = getCurrSym();
-  const exchangeName = (_hasRevxKeys && !_simMode) ? 'Revolut X (0.09%)' : 'Coinbase (0.6%)';
+  const exchangeName = 'Revolut X (0.09%)';
 
   const hint = document.getElementById('allocHint');
   if (tradable > 0) {
@@ -2396,7 +2377,6 @@ function onCapitalInput() { updateCapitalPct(); } // compat
 let _trend1hFilter = true;
 let _btcEmaFilter  = true;
 let _rsiFilter     = true;
-let _timeFilter    = true;
 let _trailingStop  = true;
 
 function setTrend1h(on) {
@@ -2419,21 +2399,17 @@ function setRsiFilter(on) {
   document.getElementById('rsiOffBtn').classList.toggle('active', !on);
   document.getElementById('rsiFilterLabel').textContent = on ? 'ON' : 'OFF';
   document.getElementById('rsiFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
-  document.getElementById('rsiRangeFields').style.display = on ? '' : 'none';
-}
-function setTimeFilter(on) {
-  _timeFilter = on;
-  document.getElementById('timeFilterOnBtn').classList.toggle('active', on);
-  document.getElementById('timeFilterOffBtn').classList.toggle('active', !on);
-  document.getElementById('timeFilterLabel').textContent = on ? 'ON' : 'OFF';
-  document.getElementById('timeFilterLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
+  const rsiRangeFields = document.getElementById('rsiRangeFields');
+  if (rsiRangeFields) rsiRangeFields.style.display = on ? '' : 'none';
 }
 function updateRsiRange() {
-  const min = document.getElementById('rsiMin').value;
-  const max = document.getElementById('rsiMax').value;
-  document.getElementById('rsiMinVal').textContent = min;
-  document.getElementById('rsiMaxVal').textContent = max;
-  document.getElementById('rsiRangeVal').textContent = min + '–' + max;
+  const minEl = document.getElementById('rsiMin');
+  const maxEl = document.getElementById('rsiMax');
+  if (!minEl || !maxEl) return;
+  const min = minEl.value, max = maxEl.value;
+  const minV = document.getElementById('rsiMinVal'); if (minV) minV.textContent = min;
+  const maxV = document.getElementById('rsiMaxVal'); if (maxV) maxV.textContent = max;
+  const rv   = document.getElementById('rsiRangeVal'); if (rv) rv.textContent = min + '–' + max;
 }
 function setTrailing(on) {
   _trailingStop = on;
@@ -2443,10 +2419,10 @@ function setTrailing(on) {
   document.getElementById('trailingLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
 }
 function updateTpSchema() {
-  const tp1r = parseFloat(document.getElementById('tp1R').value).toFixed(1);
-  const tp2r = parseFloat(document.getElementById('tp2R').value).toFixed(1);
-  document.getElementById('tp1Label').textContent = 'TP1 — ' + tp1r + 'R';
-  document.getElementById('tp2Label').textContent = 'TP2 — ' + tp2r + 'R';
+  const sl  = parseFloat(document.getElementById('stopLoss').value || 2).toFixed(0);
+  const tol = parseFloat(document.getElementById('profitTolerance').value || 20).toFixed(0);
+  const l1 = document.getElementById('tp1Label'); if (l1) l1.textContent = sl;
+  const l2 = document.getElementById('tp2Label'); if (l2) l2.textContent = tol;
 }
 async function setMode(real) {
   _realMode = real; window._realMode = real;
@@ -2459,11 +2435,13 @@ async function setMode(real) {
     hint.textContent = 'Recupero saldo...'; hint.style.color = 'var(--yellow)';
     capitalInput.disabled = false;
     try {
-      const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
+      const r = await fetch(API + '/test_revx', { headers: authHeaders() });
       const d = await r.json();
       if (d.ok) {
-        const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
-        const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
+        const usd = d.balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
+        const eur = d.balances.find(b => b.currency === 'EUR');
+        const best = usd || eur;
+        const bal = best ? parseFloat(best.available) : 0;
         const suggested = parseFloat((bal * 0.98).toFixed(2));
         document.getElementById('totalBalanceDisplay').textContent = getCurrSym() + bal.toFixed(2) + ' disponibili';
         document.getElementById('totalBalanceDisplay').style.color = 'var(--green)';
@@ -2496,7 +2474,7 @@ async function startAgent() {
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
   if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const isReal = _hasApiKeys && !_simMode;
+  const isReal = _hasRevxKeys && !_simMode;
   const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
   if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
   if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
@@ -2505,24 +2483,17 @@ async function startAgent() {
     capitalPct:            capitalPctVal / 100,
     allocPct:              allocVal / 100,
     sessionDuration:       parseInt(document.getElementById('sessionDuration').value),
+    momentumPct:           parseFloat(document.getElementById('momentumPct').value) / 100,
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
-    minR:                  parseFloat(document.getElementById('minR').value) / 100,
-    pullbackTolerance:     parseFloat(document.getElementById('pullbackTolerance').value) / 100,
+    profitTolerance:       parseFloat(document.getElementById('profitTolerance').value) / 100,
+    profitActivation:      parseFloat(document.getElementById('profitActivation').value) / 100,
     minVolume:             parseFloat(document.getElementById('minVolume').value) * 1000000,
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
-    emaFilter:             _emaFilter,
-    realMode:              _hasApiKeys && !_simMode,
-    trend1hFilter:         _trend1hFilter,
+    realMode:              _hasRevxKeys && !_simMode,
     btcEmaFilter:          _btcEmaFilter,
-    timeFilter:            _timeFilter,
-    rsiFilter:             _rsiFilter,
-    rsiMin:                parseFloat(document.getElementById('rsiMin').value),
-    rsiMax:                parseFloat(document.getElementById('rsiMax').value),
-    tp1R:                  parseFloat(document.getElementById('tp1R').value),
-    tp2R:                  parseFloat(document.getElementById('tp2R').value),
-    trailingStop:          _trailingStop,
+    timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
   };
   if (isReal) { showConfirmModal(cfg); return; }
@@ -2546,7 +2517,31 @@ async function doStartAgent(cfg) {
 }
 
 async function stopAgent() {
-  await fetch(API + '/stop', { method:'POST', headers:authHeaders() });
+  let data;
+  try {
+    const res = await fetch(API + '/stop', { method:'POST', headers:authHeaders() });
+    data = await res.json();
+  } catch(e) { alert('Errore di rete: ' + e.message); return; }
+
+  // Se alcune posizioni non sono state vendute, la sessione rimane aperta
+  if (data.error && !data.ok) {
+    alert('⚠️ ' + data.error);
+    return;
+  }
+
+  // Fetch finale: aggiorna trades prima di spegnere il poll
+  try {
+    const tRes = await fetch(API + '/trades', { headers: authHeaders() });
+    const td = await tRes.json();
+    trades = td.trades || [];
+    _lastSeenTradeCount = trades.length;
+    _newTradeCount = 0;
+    updateStoricoBadge();
+  } catch(e) {}
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  // Svuota S immediatamente — le posizioni sono chiuse, non aspettare il prossimo poll
+  S.running = false;
+  S.positions = [];
   localStorage.removeItem('ca_session');
   document.getElementById('startBtn').disabled = false;
   document.getElementById('stopBtn').disabled = true;
@@ -2554,6 +2549,7 @@ async function stopAgent() {
   _sessionEndTs = null;
   window._lastStatus = null;
   unlockConfig();
+  render();
 }
 
 function resetAgent() {
@@ -2713,7 +2709,7 @@ function render() {
   // Hero P&L
   const pnl = S.pnl || 0;
   const heroPnlEl = document.getElementById('heroPnl');
-  if (heroPnlEl) heroPnlEl.textContent = (pnl >= 0 ? '+' : '') + getCurrSym() + pnl.toFixed(2);
+  if (heroPnlEl) heroPnlEl.textContent = (pnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(pnl);
 
   // Hero stats
   const heroTrades = document.getElementById('heroTrades');
@@ -2738,8 +2734,7 @@ function render() {
   const logs = S.log || [];
   if (actList) {
     if (logs.length > 0) {
-      const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-      actList.innerHTML = logs.map(l => {
+        actList.innerHTML = logs.map(l => {
         const time = l.ts ? new Date(l.ts).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : (l.time || '');
         const label = l.label || '';
         const desc = String(l.desc || '');
@@ -2768,17 +2763,31 @@ function render() {
     }
   }
 
-  if (document.getElementById('page-transazioni').classList.contains('active')) renderStorico();
+  if (document.getElementById('page-transazioni').classList.contains('active')) renderTransazioni();
   renderHomeSession();
+  // Aggiorna KPI home in tempo reale
+  const kpiPnl = document.getElementById('homeKpiPnl');
+  const kpiWr  = document.getElementById('homeKpiWr');
+  const kpiSaldo = document.getElementById('homeKpiSaldo');
+  if (kpiPnl) {
+    const pnl = S.pnl || 0;
+    kpiPnl.textContent = S.tradeCount > 0 ? (pnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(Math.abs(pnl)) : '--';
+    kpiPnl.style.color = S.tradeCount > 0 ? (pnl >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
+  }
+  if (kpiWr) kpiWr.textContent = S.tradeCount > 0 ? Math.round(S.winRate) + '%' : '--%';
+  if (kpiSaldo && !(_hasRevxKeys && !_simMode)) {
+    const pnl = S.pnl || 0;
+    const base = S.capital || 1000;
+    kpiSaldo.textContent = '$' + (base + pnl).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
 }
 
 function renderHomeSession() {
   const widget = document.getElementById('homeSessionWidget');
   const cnt = document.getElementById('homeSessionContent');
-  const startBtnWrap = document.getElementById('homeStartBtnWrap');
+  const heroCard = document.getElementById('homeHeroCard');
   if (!widget || !cnt) return;
-  // Nasconde l'intero wrapper (bottone + margini) quando la sessione è attiva
-  if (startBtnWrap) startBtnWrap.style.display = S.running ? 'none' : 'flex';
+  if (heroCard) heroCard.style.display = S.running ? 'none' : '';
   if (!S.running) { widget.style.display = 'none'; return; }
   widget.style.display = 'block';
   const pos = S.positions || [];
@@ -2791,33 +2800,25 @@ function renderHomeSession() {
     const _cp = p.currentPrice || _ep;
     const pnl = _ep > 0 ? (_cp - _ep) / _ep * (p.size_remaining || p.size || 0) : 0;
     const pct = _ep > 0 ? (_cp - _ep) / _ep * 100 : 0;
-    const isPos = pnl >= 0;
-    const color = isPos ? 'var(--green)' : 'var(--red)';
+    const isPos = pnl > 0.005;
+    const isNeg = pnl < -0.005;
+    const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
-    const img = logo ? `<img src="${logo}" style="width:30px;height:30px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2)">${p.symbol[0]}</div>`;
-    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:10px">${img}
-          <div>
-            <div style="font-size:14px;font-weight:700">${p.symbol}</div>
-            <div style="font-size:11px;color:var(--text3)">${getCurrSym()}${_cp.toFixed(4)}</div>
-          </div>
+    const img = `<img src="${logo}" style="width:40px;height:40px;border-radius:50%;flex-shrink:0;object-fit:cover" onerror="coinImgErr(this,'${esc(p.symbol[0])}',40)">`;
+    const d = mktData.find(c => c.symbol === p.symbol);
+    const spark = renderSparkline(d ? d.sparkline : [], color);
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        ${img}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700">${esc(p.symbol)}</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
-          <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
+        ${spark}
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:15px;font-weight:700;color:${color}">${isPos?'+':isNeg?'-':''}${getCurrSym()}${fmtMoney(Math.abs(pnl))}</div>
+          <div style="font-size:11px;font-weight:600;color:${color}">${isPos?'+':isNeg?'-':''}${Math.abs(pct).toFixed(2)}%</div>
         </div>
-      </div>
-      <div class="pos-chart-wrap"><canvas class="pos-chart-canvas" id="home-chart-${p.symbol}"></canvas></div>
     </div>`;
   }).join('');
-  // Carica grafici in background
-  pos.forEach(p => {
-    fetchMiniChart(p.symbol).then(closes => {
-      const canvas = document.getElementById('home-chart-' + p.symbol);
-      if (canvas && closes) drawMiniChart(canvas, closes, p.entryPrice);
-    });
-  });
 }
 
 function getPriceSym(pos) {
@@ -2904,10 +2905,11 @@ function drawHeroSparkline() {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
   if (data.length < 2) return;
-  const min = Math.min(...data), max = Math.max(...data);
+  const vals = data.map(p => p.v);
+  const min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || 1;
-  const pts = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * w,
+  const pts = vals.map((v, i) => ({
+    x: (i / (vals.length - 1)) * w,
     y: h - ((v - min) / range) * h * 0.75 - h * 0.12
   }));
   ctx.beginPath();
@@ -2925,56 +2927,68 @@ function renderPositions() {
   const pos = S.positions || [];
   if (!pos.length) { wrap.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div>'; return; }
   wrap.innerHTML = pos.map(p => {
-    const entryPrice = p.entryPrice || 0;
+    const entryPrice   = p.entryPrice || 0;
     const currentPrice = p.currentPrice || entryPrice;
-    const pnl = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * (p.size_remaining || p.size || 0) : 0;
-    const pct = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100 : 0;
-    const isPos = pnl >= 0;
-    const color = isPos ? 'var(--green)' : 'var(--red)';
+    const size         = p.size_remaining || p.size || 0;
+    const pnl  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * size : 0;
+    const pct  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100 : 0;
+    const isPos = pnl > 0.005, isNeg = pnl < -0.005;
+    const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
-    const img = logo ? `<img src="${logo}" class="pos-logo" onerror="this.style.display='none'">` : `<div class="pos-icon">${p.symbol[0]}</div>`;
-    const tp1Hit = p.tp1_hit || false;
-    const tp1Price = p.tp1Price || 0;
-    const tp2Price = p.tp2Price || 0;
-    const stopPrice = p.stopPrice || 0;
-    const tp1Badge = tp1Hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:6px">TP1 ✓</span>' : '';
-    // SL→TP bar
+    const img  = logo
+      ? `<img src="${logo}" class="pos-logo-new" onerror="coinImgErr(this,'${esc(p.symbol[0])}',44)">`
+      : `<div class="pos-icon-new">${p.symbol[0]}</div>`;
+    const stopPrice  = p.stopPrice || 0;
+    const posQty     = p.qty_purchased > 0 ? p.qty_purchased : (entryPrice > 0 ? size / entryPrice : 0);
+    const posQtyFmt  = posQty >= 1000 ? posQty.toFixed(0) : posQty >= 1 ? posQty.toFixed(3) : posQty.toFixed(6);
+    const curVal     = currentPrice * posQty;
+    const durMin     = Math.round((Date.now() - new Date(p.entryTime || Date.now()).getTime()) / 60000);
+    const durFmt     = durMin < 60 ? `${durMin}m` : `${Math.floor(durMin/60)}h ${durMin%60}m`;
+
+    // SL bar: SL (sinistra) → prezzo corrente (dot) → ENTRY (destra)
     let barHtml = '';
-    if (tp2Price > 0 && tp1Price > 0 && stopPrice > 0 && entryPrice > 0) {
-      const total = tp2Price - stopPrice;
+    if (stopPrice > 0 && entryPrice > 0) {
+      const barMax  = entryPrice + (entryPrice - stopPrice) * 0.6;
+      const total   = barMax - stopPrice;
       if (total > 0) {
-        const entryPct = Math.max(8, Math.min(88, (entryPrice - stopPrice) / total * 100));
-        const tp1Pct   = Math.max(8, Math.min(92, (tp1Price  - stopPrice) / total * 100));
-        const curPct   = Math.max(2, Math.min(98, (currentPrice - stopPrice) / total * 100));
-        const R = entryPrice - stopPrice;
-        const tp1R = R > 0 ? ((tp1Price - entryPrice) / R).toFixed(1) : '2.0';
-        const tp2R = R > 0 ? ((tp2Price - entryPrice) / R).toFixed(1) : '4.0';
-        const barCol = isPos ? 'var(--green)' : 'var(--red)';
-        barHtml = `<div class="pos-rl-wrap"><div class="pos-rl-bar">
-          <div class="pos-rl-fill" style="width:${curPct}%;background:${barCol}"></div>
-          <div class="pos-rl-dot" style="left:${curPct}%;background:${barCol}"></div>
-          <span class="pos-rl-lbl" style="left:2%;color:var(--red)">SL</span>
-          <span class="pos-rl-lbl" style="left:${entryPct}%;color:var(--text3)">ENTRY</span>
-          <span class="pos-rl-lbl" style="left:${tp1Pct}%;color:var(--green)">TP1 ${tp1R}R</span>
-          <span class="pos-rl-lbl" style="left:98%;color:var(--green)">TP2 ${tp2R}R</span>
+        const entryPct = Math.max(10, Math.min(90, (entryPrice  - stopPrice) / total * 100));
+        const curPct   = Math.max(2,  Math.min(97, (currentPrice - stopPrice) / total * 100));
+        const barCol   = isPos ? 'var(--green)' : 'var(--red)';
+        barHtml = `<div class="pos-sl-bar-wrap"><div class="pos-sl-bar">
+          <div class="pos-sl-fill" style="width:${curPct}%;background:${barCol}"></div>
+          <div class="pos-sl-dot" style="left:${curPct}%;background:${barCol}"></div>
+          <span class="pos-sl-price" style="left:${curPct}%;color:${barCol}">${getCurrSym()}${fmtPrice(currentPrice)}</span>
+          <span class="pos-sl-lbl" style="left:0">SL ${getCurrSym()}${fmtPrice(stopPrice)}</span>
+          <span class="pos-sl-lbl" style="left:${entryPct}%;transform:translateX(-50%)">ENTRY</span>
         </div></div>`;
       }
     }
-    return `<div class="pos-card">
-      <div class="pos-header">
-        <div class="pos-coin">${img}
+
+    return `<div class="pos-card-new">
+      <div class="pos-head-new">
+        <div class="pos-coin-new">${img}
           <div>
-            <div class="pos-name">${p.symbol}${tp1Badge}</div>
-            <div class="pos-time">entry · ${getPriceSym(p)}${entryPrice.toLocaleString('en-US',{maximumFractionDigits:4})}</div>
+            <div class="pos-sym-new">${esc(p.symbol)}</div>
           </div>
         </div>
-        <div class="pos-pnl">
-          <div class="pos-pnl-val" style="color:${color}">${isPos?'+':''}${pct.toFixed(2)}%</div>
-          <div class="pos-pnl-pct" style="color:${color}">${isPos?'+':''}${getCurrSym()}${pnl.toFixed(2)}</div>
+        <div class="pos-pnl-new">
+          <div class="pos-pnl-val-new" style="color:${color}">${isPos?'+':isNeg?'-':''}${getCurrSym()}${fmtMoney(Math.abs(pnl))}</div>
+          <div class="pos-pnl-pct-new" style="color:${color}">${isPos?'+':isNeg?'-':''}${Math.abs(pct).toFixed(2)}%</div>
         </div>
       </div>
+      <div class="pos-grid4">
+        <div class="pos-g4-cell"><div class="pos-g4-label">Investito</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(size)}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Quantità</div><div class="pos-g4-val">${posQtyFmt}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Valore ora</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(curVal)}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val">${durFmt}</div></div>
+      </div>
       ${barHtml}
-      <button class="close-btn" data-close-sym="${p.symbol}" onclick="closePosition(this.dataset.closeSym)">Chiudi posizione</button>
+      <div style="display:flex;justify-content:flex-end">
+        <button class="pos-close-btn" data-close-sym="${p.symbol}" onclick="closePosition(this.dataset.closeSym)">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Chiudi
+        </button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -3003,7 +3017,10 @@ function closeSignalInfo() {
 async function confirmClosePosition() {
   const symbol = document.getElementById('closeModalPending').value;
   hideCloseModal();
-  await fetch(API + '/close_position/' + symbol, { method:'POST', headers:authHeaders() });
+  try {
+    const r = await fetch(API + '/close_position/' + symbol, { method:'POST', headers:authHeaders() });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); alert('Errore chiusura: ' + (d.detail || d.error || r.status)); }
+  } catch(e) { alert('Errore di connessione durante la chiusura.'); }
 }
 
 // ── FILTRI TRANSAZIONI ───────────────────────────────────────────────────────
@@ -3055,10 +3072,12 @@ function renderTransazioni() {
   const list = document.getElementById('transazioniList');
   if (!trades.length) {
     list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna transazione</div></div>';
-    document.getElementById('txCount').textContent = '0';
+    document.getElementById('txCount').textContent = '-- trade';
     document.getElementById('txWinRate').textContent = '--%';
-    document.getElementById('txPnl').textContent = 'P&L: --';
+    document.getElementById('txPnl').textContent = '--';
     document.getElementById('txWinLoss').textContent = '-- vittorie · -- sconfitte';
+    document.getElementById('txDotBar').innerHTML = '';
+    const fc = document.getElementById('txFilterCount'); if (fc) fc.textContent = '';
     return;
   }
   const filtered = applyTxFilters([...trades].sort((a, b) => new Date(b.time) - new Date(a.time)));
@@ -3067,12 +3086,15 @@ function renderTransazioni() {
   const losses = filtered.filter(t => t.pnl < 0).length;
   const totalPnl = filtered.reduce((a, t) => a + t.pnl, 0);
   const wr = filtered.length > 0 ? Math.round(wins / filtered.length * 100) : 0;
-  document.getElementById('txCount').textContent = filtered.length;
+  document.getElementById('txCount').textContent = filtered.length + ' trade';
   document.getElementById('txWinRate').textContent = filtered.length > 0 ? wr + '%' : '--%';
   document.getElementById('txWinRate').style.color = wr >= 50 ? 'var(--green)' : wr > 0 ? 'var(--red)' : '';
-  document.getElementById('txPnl').textContent = 'P&L: ' + (totalPnl >= 0 ? '+' : '') + getCurrSym() + totalPnl.toFixed(2);
-  document.getElementById('txPnl').style.color = totalPnl > 0 ? 'var(--green)' : totalPnl < 0 ? 'var(--red)' : '';
+  document.getElementById('txPnl').textContent = (totalPnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(totalPnl);
   document.getElementById('txWinLoss').textContent = wins + ' vittorie · ' + losses + ' sconfitte';
+  document.getElementById('txDotBar').innerHTML = [...filtered].reverse().map(t =>
+    `<div style="width:7px;height:7px;border-radius:50%;background:${t.pnl>=0?'var(--green)':'var(--red)'}"></div>`
+  ).join('');
+  const fc = document.getElementById('txFilterCount'); if (fc) fc.textContent = filtered.length + ' operazioni';
 
   if (!filtered.length) {
     list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna transazione</div></div>';
@@ -3081,44 +3103,43 @@ function renderTransazioni() {
 
   const reasonLabel = r => {
     const rl = (r||'').toLowerCase();
-    if (rl.includes('tp2') || rl.includes('tp1')) return 'Take Profit';
-    if (rl.includes('sl') || rl.includes('stop')) return 'Stop Loss';
-    if (rl.includes('manual')) return 'Manuale';
-    return r.replace(' SIM','').replace(' REALE','');
+    if (rl.includes('tp2') || rl.includes('tp1')) return 'Take profit';
+    if (rl.includes('trailing'))                  return 'Trailing profit';
+    if (rl.includes('stop loss') || rl.includes('sl')) return 'Stop loss';
+    if (rl.includes('chiusura manuale') || rl.includes('stop manuale') || rl.includes('manual')) return 'Chiusura manuale';
+    if (rl.includes('sessione scaduta'))           return 'Sessione scaduta';
+    if (rl.includes('max tempo'))                  return 'Max tempo';
+    if (rl.includes('telegram'))                   return 'Telegram';
+    const clean = (r||'').replace(/ SIM$/,'').replace(/ REALE$/,'');
+    return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
   };
 
+  const fmtP = p => p >= 1000 ? p.toFixed(1) : p >= 1 ? p.toFixed(2) : p.toFixed(4);
+  const reasonBadge = r => {
+    const rl = (r||'').toLowerCase();
+    if (rl.includes('stop')) return 'background:rgba(246,70,93,0.15);color:var(--red)';
+    return 'background:rgba(5,193,104,0.15);color:var(--green)';
+  };
   list.innerHTML = filtered.map(t => {
     const isWin = t.pnl >= 0;
     const color = isWin ? 'var(--green)' : 'var(--red)';
     const dt = new Date(t.time);
-    const ds = dt.toLocaleDateString('it-IT', {day:'2-digit', month:'short'}) + ' ' + dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
-    const tp1Badge = t.tp1_hit ? '<span style="font-size:9px;background:rgba(5,193,104,0.15);color:var(--green);border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px">TP1+TP2</span>' : '';
-    return `<div class="trade-row ${isWin?'win':'loss'}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <img src="${getLogo(t.symbol)||''}" style="width:28px;height:28px;border-radius:50%" onerror="this.style.display='none'">
-          <div>
-            <div style="font-weight:700;font-size:15px;display:flex;align-items:center">${t.symbol}${tp1Badge}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
-              <span style="font-size:11px;color:var(--text3);font-weight:500">${ds} · ${t.durationMin} min</span>
-              <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--surface3);color:var(--text2)">${reasonLabel(t.reason)}</span>
-            </div>
-          </div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-weight:700;font-size:15px;color:${color}">${isWin?'+':''}${getCurrSym()}${t.pnl.toFixed(2)}</div>
-          <div style="font-size:12px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
-        </div>
+    const timeStr = dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid ${color};margin-bottom:8px">
+      <img src="${getLogo(t.symbol)}" style="width:40px;height:40px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(t.symbol[0])}',40)">
+      <div style="flex:0 0 auto;min-width:80px">
+        <div style="font-weight:700;font-size:14px;letter-spacing:0.01em">${esc(t.symbol)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${timeStr} · ${t.durationMin} min</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <div style="background:var(--surface3);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">ENTRATA</div>
-          <div style="font-size:12px;font-weight:600">$${t.entryPrice.toFixed(4)}</div>
-        </div>
-        <div style="background:var(--surface3);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:3px">USCITA</div>
-          <div style="font-size:12px;font-weight:600">$${t.exitPrice.toFixed(4)}</div>
-        </div>
+      <div style="flex:1;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--text2)">
+        $${fmtP(t.entryPrice)}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        $${fmtP(t.exitPrice)}
+      </div>
+      <span style="flex:0 0 auto;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;${reasonBadge(t.reason)}">${reasonLabel(t.reason)}</span>
+      <div style="flex:0 0 auto;text-align:right;min-width:64px">
+        <div style="font-weight:700;font-size:14px;color:${color}">${isWin?'+':''}${getCurrSym()}${fmtMoney(t.pnl)}</div>
+        <div style="font-size:11px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
       </div>
     </div>`;
   }).join('');
@@ -3151,14 +3172,14 @@ function closeFddOnOutside(e) {
   }
 }
 
-function selectFdd(fddId, val, label, filterType) {
+function selectFdd(el, fddId, val, label, filterType) {
   // Aggiorna label bottone
   const btn = document.getElementById(fddId + 'Btn');
   const chevron = btn.querySelector('svg').outerHTML;
   btn.innerHTML = label + ' ' + chevron;
   // Marca selected
   document.querySelectorAll('#' + fddId + 'Menu .fdd-item').forEach(i => i.classList.remove('selected'));
-  event.target.classList.add('selected');
+  el.classList.add('selected');
   // Chiudi menu
   document.getElementById(fddId + 'Menu').classList.remove('open');
   btn.classList.remove('open');
@@ -3171,12 +3192,12 @@ function selectFdd(fddId, val, label, filterType) {
   renderTransazioni();
 }
 
-function selectFddMkt(fddId, val, label, type) {
+function selectFddMkt(el, fddId, val, label, type) {
   const btn = document.getElementById(fddId + 'Btn');
   const chevron = btn.querySelector('svg').outerHTML;
   btn.innerHTML = label + ' ' + chevron;
   document.querySelectorAll('#' + fddId + 'Menu .fdd-item').forEach(i => i.classList.remove('selected'));
-  event.target.classList.add('selected');
+  el.classList.add('selected');
   document.getElementById(fddId + 'Menu').classList.remove('open');
   btn.classList.remove('open');
   document.removeEventListener('click', closeFddOnOutside);
@@ -3216,8 +3237,22 @@ function setMktFilterDropdown(val) {
 }
 
 function fmtVol(v) { if(v>=1e9) return (v/1e9).toFixed(1)+'B'; if(v>=1e6) return (v/1e6).toFixed(0)+'M'; return (v/1e3).toFixed(0)+'K'; }
+function fmtMoney(v) { const a = Math.abs(v); return a > 0 && a < 0.01 ? v.toFixed(3) : v.toFixed(2); }
 function fmtPrice(p, sym='$') { if(p>=1000) return sym+p.toLocaleString('en-US',{maximumFractionDigits:0}); if(p>=1) return sym+p.toFixed(2); if(p>=0.01) return sym+p.toFixed(4); return sym+p.toFixed(6); }
 
+
+function renderSparkline(closes, color) {
+  if (!closes || closes.length < 2) return '<svg width="72" height="36"></svg>';
+  const W = 72, H = 36;
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const range = max - min || 1;
+  const pts = closes.map((v, i) => {
+    const x = (i / (closes.length - 1)) * W;
+    const y = H - 2 - ((v - min) / range) * (H - 4);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="flex-shrink:0;display:block"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/></svg>`;
+}
 
 function renderMarket() {
   let data = [...mktData];
@@ -3234,56 +3269,36 @@ function renderMarket() {
     const chg24=c.change24h||0, chg1h=c.change1h||0, vol=c.volume24h||0;
     const c24=chg24>=0?'var(--green)':'var(--red)'; const c1h=chg1h>=0?'var(--green)':'var(--red)';
     const isOpen = S.running && (S.positions||[]).some(p=>p.symbol===c.symbol);
-    const bg24=chg24>=0?'rgba(5,193,104,0.12)':'rgba(246,70,93,0.12)';
+    const bg24=chg24>=0?'rgba(5,193,104,0.15)':'rgba(246,70,93,0.15)';
     const fullName=getCoinName(c.symbol);
     const ema = c.ema;
     let emaDots = '';
     if (ema) {
       const emaId = 'ema_' + c.symbol;
       _emaCache[emaId] = ema;
-      const dot = (on, key, label) => {
-        return `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}"
-          onmouseenter="showDotTooltip(this)"
-          onmouseleave="hideEmaTooltip()"
-          ontouchstart="showDotTooltip(this);event.stopPropagation()"
-          style="cursor:pointer"
-        ><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
-      };
+      const dot = (on, key, label) => `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}" onmouseenter="showDotTooltip(this)" onmouseleave="hideEmaTooltip()" ontouchstart="showDotTooltip(this);event.stopPropagation()" style="cursor:pointer"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.trend1h_ok ?? true,'trend1h','1H')}${dot(ema.trend,'trend','15M')}${dot(ema.pullback_ok ?? false,'pullback','PULL')}${dot(ema.rsi_ok ?? true,'rsi','RSI')}${dot(ema.body_ok ?? true,'body','BODY')}${dot(ema.vol_ok ?? true,'vol','VOL')}${dot(ema.stop,'stop','R')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'breakout','BREAK')}${dot(ema.vol_ok,'vol','VOL')}${signalDot}</div>`;
     }
+    const starred = _watchlist.has(c.symbol);
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
-      <div class="mkt-row-main">
-        <div class="mkt-coin">
-          <div class="mkt-logo-wrap">
-            <img ${getLogo(c.symbol) ? `src="${getLogo(c.symbol)}"` : ''} class="mkt-logo" data-logo-sym="${c.symbol}" id="logo-img-${c.symbol}" ${!getLogo(c.symbol) ? 'style="display:none"' : ''} onerror="this.onerror=null;this.style.display='none';document.getElementById('logo-ph-${c.symbol}').style.display='flex'">
-            <div class="mkt-icon-placeholder" id="logo-ph-${c.symbol}" style="${getLogo(c.symbol) ? 'display:none' : 'display:flex'}">${c.symbol[0]}</div>
-          </div>
-          <div style="min-width:0;flex:1">
-            <div class="mkt-name" style="display:flex;align-items:center;justify-content:space-between;width:100%">
-              <span>${fullName}${isOpen?'<span class="mkt-in-badge">IN</span>':''}</span>
-              <button class="star-btn ${_watchlist.has(c.symbol)?'starred':''}" data-star-sym="${c.symbol}" onclick="event.stopPropagation();toggleWatchlist('${c.symbol}')" style="margin-left:4px;width:24px;height:24px">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="${_watchlist.has(c.symbol)?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              </button>
-            </div>
-            <div class="mkt-sym-sub">${c.symbol} &middot; Vol $${fmtVol(vol)}</div>
-          </div>
+      <img src="${getLogo(c.symbol)}" class="mkt-logo" data-logo-sym="${c.symbol}" id="logo-img-${c.symbol}" onerror="coinImgErr(this,'${esc(c.symbol[0])}',48)">
+      <div class="mkt-row-info">
+        <div class="mkt-name">
+          <span>${esc(fullName)}${isOpen?'<span class="mkt-in-badge">IN</span>':''}</span>
+          <button class="star-btn ${starred?'starred':''}" data-star-sym="${c.symbol}" onclick="event.stopPropagation();toggleWatchlist('${c.symbol}')" style="width:22px;height:22px;margin-left:2px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="${starred?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </button>
         </div>
-        <div class="mkt-right" style="flex-shrink:0">
-          <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtPrice(c.price)}</div>
-          <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:5px">
-            <div style="text-align:center">
-              <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">24H</div>
-              <div class="mkt-chg-pill" id="mkt-chg24-${c.symbol}" style="background:${bg24};color:${c24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</div>
-            </div>
-            <div style="text-align:center">
-              <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:2px">1H</div>
-              <div class="mkt-chg-pill" id="mkt-chg1h-${c.symbol}" style="background:rgba(138,143,168,0.08);color:${c1h}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}%</div>
-            </div>
-          </div>
-        </div>
+        <div class="mkt-sym-sub">${esc(c.symbol)} &middot; Vol $${fmtVol(vol)}</div>
+        ${emaDots}
       </div>
-      ${emaDots}
+      ${renderSparkline(c.sparkline, chg24>=0?'var(--green)':'var(--red)')}
+      <div class="mkt-row-right">
+        <div class="mkt-price-val" id="mkt-price-${c.symbol}">${fmtPrice(c.price)}</div>
+        <div style="margin-top:5px"><span class="mkt-chg-pill" id="mkt-chg24-${c.symbol}" style="background:${bg24};color:${c24}">${chg24>=0?'+':''}${chg24.toFixed(2)}%</span></div>
+        <div style="font-size:11px;font-weight:600;color:${c1h};margin-top:3px" id="mkt-chg1h-${c.symbol}">${chg1h>=0?'+':''}${chg1h.toFixed(2)}% 1h</div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -3337,6 +3352,9 @@ function renderMarket() {
       try {
         if (active === 'monitor' || active === 'config') {
           await poll();
+        } else if (active === 'home') {
+          await poll();
+          renderHome();
         } else if (active === 'market') {
           await refreshMarket();
         } else if (active === 'transazioni') {
@@ -3357,87 +3375,103 @@ function renderMarket() {
 
 // ── HOME PAGE ─────────────────────────────────────────────────────────────────
 async function loadHomeBalance() {
-  const valEl = document.getElementById('homeBalanceVal');
-  const subEl = document.getElementById('homeBalanceSub');
-  const tagEl = document.getElementById('homeModeTag');
-  if (!valEl) return;
+  const kpiSaldo = document.getElementById('homeKpiSaldo');
+  const kpiLabel = document.getElementById('homeKpiSaldoLabel');
+  const kpiPnl   = document.getElementById('homeKpiPnl');
+  const kpiWr    = document.getElementById('homeKpiWr');
+  const isReal = _hasRevxKeys && !_simMode;
 
-  const isReal = (_hasApiKeys || _hasRevxKeys) && !_simMode;
+  // Label saldo
+  if (kpiLabel) kpiLabel.textContent = isReal ? 'Saldo reale' : 'Saldo simulato';
 
-  if (tagEl) {
-    tagEl.textContent = isReal ? 'Modalità Reale' : 'Simulazione';
-    tagEl.style.color = isReal ? 'var(--red)' : 'var(--text3)';
+  // P&L sessione e win rate
+  if (kpiPnl) {
+    const pnl = S.pnl || 0;
+    kpiPnl.textContent = S.tradeCount > 0 ? (pnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(Math.abs(pnl)) : '--';
+    kpiPnl.style.color = S.tradeCount > 0 ? (pnl >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
+  }
+  if (kpiWr) {
+    kpiWr.textContent = S.tradeCount > 0 ? Math.round(S.winRate) + '%' : '--%';
   }
 
   if (isReal) {
-    valEl.textContent = '...';
+    if (kpiSaldo) kpiSaldo.textContent = '...';
     if (_hasRevxKeys) {
-      // Revolut X ha la precedenza
-      subEl.textContent = 'Recupero saldo Revolut X';
       try {
         const r = await fetch(API + '/test_revx', { headers: authHeaders() });
         if (r.status === 429) {
-          valEl.textContent = '--'; subEl.textContent = 'Riprova tra poco';
+          if (kpiSaldo) kpiSaldo.textContent = '--';
         } else {
           const d = await r.json();
           if (d.ok && d.balances && d.balances.length > 0) {
             const usd = d.balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
             const eur = d.balances.find(b => b.currency === 'EUR');
-            const best = usd || eur || d.balances[0];
-            const bal = parseFloat(best.available);
-            const sym = best.currency;
-            valEl.textContent = (sym === 'EUR' ? '€' : '$') + bal.toFixed(2);
-            subEl.textContent = sym + ' disponibili su Revolut X';
+            const best = usd || eur;
+            const bal = best ? parseFloat(best.available) : 0;
+            const sym = best ? best.currency : 'USD';
+            if (kpiSaldo) kpiSaldo.textContent = (sym === 'EUR' ? '€' : '$') + bal.toFixed(2);
             const tbd = document.getElementById('totalBalanceDisplay');
             if (tbd) { tbd.textContent = bal.toFixed(2) + ' ' + sym + ' (Revolut X)'; tbd.style.color = 'var(--green)'; }
             const cap = document.getElementById('capital');
             if (cap) cap.dataset.total = bal;
             updateCapitalPct();
           } else {
-            valEl.textContent = '--'; subEl.textContent = 'Errore Revolut X';
+            if (kpiSaldo) kpiSaldo.textContent = '--';
           }
         }
-      } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
+      } catch(e) { if (kpiSaldo) kpiSaldo.textContent = '--'; }
     } else {
-      subEl.textContent = 'Recupero saldo...';
-      try {
-        const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
-        const d = await r.json();
-        if (d.ok) {
-          const usdc = d.balances.find(b => b.currency === 'USDC/USD' || b.currency === 'USDC' || b.currency === 'USD');
-          const bal = d.usdc_tradable || (usdc ? parseFloat(usdc.available) : 0);
-          valEl.textContent = '$' + bal.toFixed(2); // Coinbase fallback
-          subEl.textContent = 'USDC disponibili';
-          const tbd = document.getElementById('totalBalanceDisplay');
-          if (tbd) { tbd.textContent = '$' + bal.toFixed(2) + ' USDC'; tbd.style.color = 'var(--green)'; }
-          const cap = document.getElementById('capital');
-          if (cap) cap.dataset.total = bal;
-          updateCapitalPct();
-        } else {
-          valEl.textContent = '--'; subEl.textContent = 'Errore connessione';
-        }
-      } catch(e) { valEl.textContent = '--'; subEl.textContent = 'Connessione fallita'; }
+      if (kpiSaldo) kpiSaldo.textContent = '--';
     }
   } else {
-    valEl.textContent = '$1,000'; // simulazione
-    subEl.textContent = 'Saldo simulato';
+    // Calcola saldo simulato corrente (capitale base + P&L sessione)
+    const base = S.capital || 1000;
+    const pnl = S.pnl || 0;
+    const current = base + pnl;
+    if (kpiSaldo) kpiSaldo.textContent = '$' + current.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
     const tbd = document.getElementById('totalBalanceDisplay');
-    if (tbd) { tbd.textContent = 'Simulazione — $1,000'; tbd.style.color = ''; }
-    // In simulazione il saldo di riferimento è 1000
+    if (tbd) { tbd.textContent = 'Simulazione — $' + base.toLocaleString('en-US', {maximumFractionDigits:0}); tbd.style.color = ''; }
     const cap = document.getElementById('capital');
-    if (cap) cap.dataset.total = 1000;
+    if (cap) cap.dataset.total = base;
     updateCapitalPct();
   }
+  // Aggiorna pills dopo aver caricato saldo
+  renderHomeHeroPills();
 }
 
 function renderHome() {
   document.getElementById('homeUsername').textContent = _username || '--';
+  // Badge modalità
+  const isReal = _hasRevxKeys && !_simMode;
+  const badge = document.getElementById('homeModeBadge');
+  const modeText = document.getElementById('homeModeText');
+  if (badge) { badge.className = 'home-mode-badge ' + (isReal ? 'real' : 'sim'); }
+  if (modeText) modeText.textContent = isReal ? 'REALE' : 'SIMULAZIONE';
+  // Pills config nella hero card
+  renderHomeHeroPills();
   loadHomeBalance();
-  // Se non abbiamo dati mercato ancora, li carichiamo prima di mostrare watchlist
   if (mktData.length === 0) {
     refreshMarket().then(() => renderHomeWatchlist());
   } else {
     renderHomeWatchlist();
+  }
+}
+
+function renderHomeHeroPills() {
+  const durEl = document.getElementById('heroPillDuration');
+  const slEl  = document.getElementById('heroPillStrategy');
+  const capEl = document.getElementById('heroPillCapital');
+  if (durEl) {
+    const dur = parseInt(document.getElementById('sessionDuration')?.value || 0);
+    durEl.textContent = dur > 0 ? `Durata ${dur}h` : 'Durata --';
+  }
+  if (slEl) {
+    const sl = parseFloat(document.getElementById('stopLoss')?.value || 0);
+    slEl.textContent = sl > 0 ? `Stop Loss ${sl.toFixed(1)}%` : 'Stop Loss --';
+  }
+  if (capEl) {
+    const capDisp = document.getElementById('capitalDisplay')?.textContent || '';
+    capEl.textContent = capDisp && capDisp !== '--' ? `Capitale ${capDisp}` : 'Capitale --';
   }
 }
 
@@ -3456,23 +3490,24 @@ function renderHomeWatchlist() {
     const chg = d ? d.change24h : 0;
     const chgColor = chg >= 0 ? 'var(--green)' : 'var(--red)';
     const chgText = d ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '--';
+    const spark = renderSparkline(d ? d.sparkline : [], chg >= 0 ? 'var(--green)' : 'var(--red)');
+    const logoHtml = logo
+      ? `<img src="${logo}" data-logo-sym="${sym}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="coinImgErr(this,'${esc(sym[0])}',40)">`
+      : `<div style="width:40px;height:40px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--text2);flex-shrink:0">${sym[0]}</div>`;
     return `<div class="watchlist-row">
-      <div style="display:flex;align-items:center;gap:10px">
-        ${logo ? `<img src="${logo}" data-logo-sym="${sym}" style="width:32px;height:32px;border-radius:50%" onerror="this.style.display='none'">` : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text2)">${sym[0]}</div>`}
-        <div>
-          <div style="font-size:14px;font-weight:700">${getCoinName(sym)}</div>
-          <div style="font-size:11px;color:var(--text3);font-weight:500">${sym}</div>
-        </div>
+      ${logoHtml}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:700">${getCoinName(sym)}</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:500">${sym}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="text-align:right">
-          <div style="font-size:14px;font-weight:700" id="wl-price-${sym}">${price}</div>
-          <div style="font-size:11px;font-weight:600;color:${chgColor}" id="wl-chg-${sym}">${chgText}</div>
-        </div>
-        <button class="star-btn starred" onclick="toggleWatchlist('${sym}')" title="Rimuovi dai preferiti">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        </button>
+      ${spark}
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700" id="wl-price-${sym}">${price}</div>
+        <div style="font-size:11px;font-weight:600;color:${chgColor}" id="wl-chg-${sym}">${chgText}</div>
       </div>
+      <button class="star-btn starred" onclick="toggleWatchlist('${sym}')" title="Rimuovi dai preferiti">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </button>
     </div>`;
   }).join('');
 }
@@ -3503,11 +3538,11 @@ function updateMarketPricesInPlace() {
       const chg = c.change24h || 0;
       chg24El.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
       chg24El.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
-      chg24El.style.background = chg >= 0 ? 'rgba(5,193,104,0.12)' : 'rgba(246,70,93,0.12)';
+      chg24El.style.background = chg >= 0 ? 'rgba(5,193,104,0.15)' : 'rgba(246,70,93,0.15)';
     }
     if (chg1hEl) {
       const chg = c.change1h || 0;
-      chg1hEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      chg1hEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '% 1h';
       chg1hEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
     }
   }
@@ -3576,7 +3611,6 @@ function closeDrawer() {
   document.addEventListener('touchstart', e => {
     const drawer = getDrawer();
     if (!drawer || !drawer.classList.contains('open')) return;
-    // Non intercettare touch che iniziano su uno slider — lo slider gestisce il proprio drag
     if (e.target.closest('input[type=range]')) { dragging = false; return; }
     startY = e.touches[0].clientY;
     startX = e.touches[0].clientX;
@@ -3589,7 +3623,6 @@ function closeDrawer() {
     if (!drawer || !drawer.classList.contains('open')) return;
     const dx = Math.abs(e.touches[0].clientX - startX);
     const dy = e.touches[0].clientY - startY;
-    // Chiudi solo se il gesto è prevalentemente verticale verso il basso con drawer in cima
     if (dy > 0 && drawer.scrollTop <= 0 && dy > dx) {
       drawer.style.transform = `translateY(${dy}px)`;
       drawer.style.transition = 'none';
@@ -3629,6 +3662,11 @@ let _tooltipTimeout = null;
 
 // Definizioni indicatori per tooltip
 const EMA_DOT_INFO = {
+  breakout: {
+    name: 'Breakout',
+    descOn:  "Momentum confermato: il prezzo è salito ≥1% negli ultimi 50 minuti (10 candele 5m) — il coin si sta muovendo.",
+    descOff: "Momentum assente: il prezzo non ha guadagnato abbastanza negli ultimi 50 minuti. Nessun segnale di entrata.",
+  },
   trend1h: {
     name: 'Trend 1h',
     descOn:  "EMA20 > EMA50 su 1h — trend superiore confermato. Filtro aggiuntivo: evita long contro il trend principale.",
@@ -3651,8 +3689,8 @@ const EMA_DOT_INFO = {
   },
   vol: {
     name: 'Volume',
-    descOn:  "Volume dell'ultima candela sopra la media delle ultime 20 — il rimbalzo ha partecipazione reale.",
-    descOff: "Volume basso sul rimbalzo — il movimento non è sostenuto da partecipazione reale. Rischio di falso segnale.",
+    descOn:  "Volume ≥ 1.5× la media delle ultime 20 candele — il breakout ha partecipazione reale.",
+    descOff: "Volume insufficiente — il movimento non è sostenuto da partecipazione reale. Breakout a rischio di falso segnale.",
   },
   rsi: {
     name: 'RSI',
@@ -3674,7 +3712,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
+  const keyMap = { breakout: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';

@@ -1,7 +1,6 @@
 import asyncio
 import os
 import time
-import jwt
 import hashlib
 import json
 import secrets
@@ -74,7 +73,7 @@ FREE_ALLOC_PCT         = 1.0    # allocazione fissa 100% — 1 posizione = tutto
 FREE_RSI_MIN           = 35.0
 FREE_RSI_MAX           = 65.0
 
-# ── ENCRYPTION (chiavi Coinbase) ──────────────────────────────────────────────
+# ── ENCRYPTION (chiavi API) ───────────────────────────────────────────────────
 def _get_fernet() -> Fernet:
     import base64, hashlib
     key = hashlib.sha256(SECRET_KEY.encode()).digest()
@@ -125,6 +124,8 @@ def verify_token(token: str) -> int:
         user_id, expires, sig = int(parts[0]), int(parts[1]), parts[2]
         if int(time.time()) > expires:
             raise HTTPException(status_code=401, detail="Token scaduto")
+        if token in _revoked_tokens:
+            raise HTTPException(status_code=401, detail="Token revocato")
         payload = f"{user_id}:{expires}"
         expected = _hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
         if not _hmac.compare_digest(sig, expected):
@@ -147,12 +148,7 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-class ApiKeyRequest(BaseModel):
-    cb_key: str
-    cb_secret: str
-
 BINANCE_BASE = "https://api.binance.com"
-COINBASE_BASE = "https://api.coinbase.com"
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -198,26 +194,6 @@ async def notify(state: dict, msg: str):
         prefix = f"[{username}] " if username else ""
         await send_telegram(prefix + msg)
 
-_ENV_CB_KEY    = os.environ.get("CB_KEY", "")
-_ENV_CB_SECRET = os.environ.get("CB_SECRET", "")
-
-def make_coinbase_jwt(method: str, path: str, cb_key: str, cb_secret: str) -> str:
-    key = cb_secret
-    if '\\n' in key:
-        key = key.replace('\\n', '\n')
-    elif '\n' not in key and 'BEGIN' in key:
-        key = key.replace('-----BEGIN EC PRIVATE KEY----- ', '-----BEGIN EC PRIVATE KEY-----\n')
-        key = key.replace(' -----END EC PRIVATE KEY-----', '\n-----END EC PRIVATE KEY-----')
-    payload = {
-        "sub": cb_key,
-        "iss": "cdp",
-        "nbf": int(time.time()),
-        "exp": int(time.time()) + 120,
-        "uri": f"{method} api.coinbase.com{path}",
-    }
-    token = jwt.encode(payload, key, algorithm="ES256",
-                       headers={"kid": cb_key, "nonce": hashlib.sha256(os.urandom(16)).hexdigest()[:16]})
-    return token
 
 def make_revx_signature(api_key_id: str, private_key_pem: str, method: str, path: str, query: str = "", body: str = "") -> dict:
     """Genera gli header di autenticazione per Revolut X (Ed25519)."""
@@ -275,25 +251,13 @@ async def revx_request(method: str, path: str, body: dict = None,
             r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
     return r.json()
 
-async def coinbase_request(method: str, path: str, body: dict = None,
-                           cb_key: str = None, cb_secret: str = None) -> dict:
-    api_key    = cb_key    or _ENV_CB_KEY
-    api_secret = cb_secret or _ENV_CB_SECRET
-    jwt_path = path.split("?")[0]
-    token = make_coinbase_jwt(method, jwt_path, api_key, api_secret)
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=30) as client:
-        if method == "GET":
-            r = await client.get(f"{COINBASE_BASE}{path}", headers=headers)
-        else:
-            r = await client.post(f"{COINBASE_BASE}{path}", headers=headers, json=body)
-    return r.json()
 
 # ── market data ───────────────────────────────────────────────────────────────
 
 market_data = {}  # sym -> {price, change1h, change24h, volume24h, icon}
 user_sessions: dict = {}
 _sessions_starting: set = set()  # user_id in avvio, evita doppi /start concorrenti
+_revoked_tokens: set = set()     # token revocati al logout
 
 # ── CANDLE DATA (nuovo) ───────────────────────────────────────────────────────
 # sym -> {
@@ -304,9 +268,15 @@ _sessions_starting: set = set()  # user_id in avvio, evita doppi /start concorre
 # }
 candle_data: dict = {}
 _candles_last_update: float = 0
-CANDLE_UPDATE_INTERVAL = 120  # secondi (2 minuti)
-CANDLE_UNIVERSE_SIZE   = 12   # top N coin per volume (solo whitelist)
-COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}
+CANDLE_UPDATE_INTERVAL = 120   # secondi (2 minuti)
+CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
+COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
+
+_dynamic_universe: set = set(COIN_WHITELIST)  # aggiornato ogni 30 min
+_universe_last_update: float = 0
+UNIVERSE_UPDATE_INTERVAL = 1800  # 30 minuti
+
+_cg_price_last_fetch: float = 0  # throttle fallback CoinGecko prezzi
 
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
@@ -334,6 +304,40 @@ def calc_rsi(prices: list, period: int = 14) -> float:
         return 100.0
     rs = avg_gain / avg_loss
     return round(100 - (100 / (1 + rs)), 2)
+
+LEVERAGED_KEYWORDS = {"UP", "DOWN", "BULL", "BEAR", "3L", "3S", "2L", "2S"}
+
+async def fetch_dynamic_universe():
+    """Scarica top-50 coin per volume 24h da Binance. Aggiorna _dynamic_universe."""
+    global _dynamic_universe, _universe_last_update
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
+        if r.status_code != 200:
+            return
+        tickers = r.json()
+        candidates = []
+        for t in tickers:
+            sym_pair = t.get("symbol", "")
+            if not sym_pair.endswith("USDT"):
+                continue
+            sym = sym_pair[:-4]
+            if sym in STABLES:
+                continue
+            if any(kw in sym for kw in LEVERAGED_KEYWORDS):
+                continue
+            vol = float(t.get("quoteVolume", 0))
+            if vol < 10_000_000:
+                continue
+            candidates.append((sym, vol))
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        new_universe = {sym for sym, _ in candidates[:CANDLE_UNIVERSE_SIZE]}
+        if new_universe:
+            _dynamic_universe = new_universe
+            _universe_last_update = time.time()
+            print(f"Universo dinamico: {len(_dynamic_universe)} coin")
+    except Exception as e:
+        print(f"Errore fetch universo dinamico: {e}")
 
 async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict | None:
     """Scarica candele 5min, 15min e 1h da Binance. Calcola EMA20/50, RSI14, ATR."""
@@ -383,6 +387,9 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
 
         # Minimo delle ultime 3 candele CHIUSE (escludi candela corrente aperta)
         pullback_low_5m = min(lows5[-4:-1]) if len(lows5) >= 4 else lows5[-2]
+
+        # Prezzo chiuso 10 candele fa (50 min fa) — usato per calcolo momentum %
+        close_10_ago = closes5[-11] if len(closes5) >= 11 else closes5[0]
 
         # Volume: usa solo candele chiuse ([-2] = ultima chiusa, [-21:-1] = 20 chiuse)
         vol_avg_20 = sum(volumes5[-21:-1]) / 20 if len(volumes5) >= 21 else 0.0
@@ -435,6 +442,8 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "ema20_5m_prev3":   ema20_5m_prev3,
             "atr_15m_long":     atr_15m_long,
             "atr_15m_short":    atr_15m_short,
+            "close_10_ago":     close_10_ago,
+            "sparkline":        closes1h[-25:-1],
             "updated_at":       time.time(),
         }
     except Exception as e:
@@ -445,9 +454,9 @@ async def fetch_all_candles():
     """Aggiorna candle_data per le top CANDLE_UNIVERSE_SIZE coin per volume."""
     global _candles_last_update
 
-    # Seleziona top coin per volume tra quelle nella whitelist
+    # Seleziona top coin per volume tra quelle nell'universo dinamico
     universe = sorted(
-        [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in COIN_WHITELIST],
+        [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in _dynamic_universe],
         key=lambda x: x[1].get("volume24h", 0),
         reverse=True
     )[:CANDLE_UNIVERSE_SIZE]
@@ -472,124 +481,47 @@ async def fetch_all_candles():
     _candles_last_update = time.time()
     print(f"Candele aggiornate: {updated}/{len(syms)}")
 
-def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0.02,
-                   max_stop_pct: float = 0.05,
-                   trend1h_filter: bool = True, rsi_filter: bool = True,
-                   rsi_min: float = 35.0, rsi_max: float = 65.0,
-                   min_r: float = 0.01) -> dict:
+def get_momentum_signal(sym: str, current_price: float,
+                        max_stop_pct: float = 0.02,
+                        vol_multiplier: float = 1.2,
+                        momentum_threshold: float = 0.01) -> dict:
     """
-    Analizza il segnale di pullback per una coin.
-    Condizioni: trend 1h + 15m, prezzo vicino a EMA20 15m (pullback), RSI, candela bullish, volume, stop valido.
+    Segnale momentum: entra quando il prezzo è salito >= 1% rispetto a 50 minuti fa
+    (10 candele 5m) con volume sopra 1.2× la media delle ultime 20 candele.
     """
     cd = candle_data.get(sym)
     if not cd:
-        return {"signal": False, "reason": "no candle data", "stop_price": 0.0, "R": 0.0,
-                "trend_ok": False, "pullback_ok": False,
-                "stop_ok": False, "rsi_ok": True, "trend1h_ok": True, "atr_5m": 0.0}
+        return {"signal": False, "reason": "no candle data", "stop_price": 0.0,
+                "breakout_ok": False, "vol_ok": False}
 
-    ema20_15m        = cd["ema20_15m"]
-    ema50_15m        = cd["ema50_15m"]
-    ema20_15m_prev3  = cd.get("ema20_15m_prev3", ema20_15m)
-    ema50_15m_prev3  = cd.get("ema50_15m_prev3", ema50_15m)
-    ema20_5m         = cd["ema20_5m"]
-    ema20_1h         = cd.get("ema20_1h", 0)
-    ema50_1h         = cd.get("ema50_1h", 0)
-    atr_5m           = cd["atr_5m"]
-    pullback_low_5m  = cd["pullback_low_5m"]
-    rsi_14           = cd.get("rsi_14", 50.0)
-    candle_body      = cd.get("candle_body", 0.0)
-    body_ratio       = cd.get("body_ratio", 0.0)
-    last_close_5m    = cd.get("last_close_5m", current_price)
-    vol_avg_20       = cd.get("vol_avg_20", 0.0)
-    vol_last         = cd.get("vol_last", 0.0)
-    ema20_5m_prev3   = cd.get("ema20_5m_prev3", ema20_5m)
-    ema20_1h_prev3   = cd.get("ema20_1h_prev3", ema20_1h)
-    atr_15m_long     = cd.get("atr_15m_long", 0.0)
-    atr_15m_short    = cd.get("atr_15m_short", 0.0)
+    close_10_ago = cd.get("close_10_ago", 0.0)
+    last_close   = cd.get("last_close_5m", 0.0)
+    vol_avg_20   = cd.get("vol_avg_20", 0.0)
+    vol_last     = cd.get("vol_last", 0.0)
 
-    # 1. Trend rialzista su 1h (macro): EMA20 > EMA50
-    trend1h_ok = (ema20_1h > ema50_1h) if (trend1h_filter and ema20_1h > 0 and ema50_1h > 0) else True
+    momentum_pct = (last_close - close_10_ago) / close_10_ago if close_10_ago > 0 else 0.0
+    breakout_ok  = momentum_pct >= momentum_threshold
+    vol_ok       = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
 
-    # 2. Trend rialzista su 15m: EMA20 > EMA50 (uptrend attivo sulla timeframe operativa)
-    trend_ok = ema20_15m > ema50_15m
+    stop_price = current_price * (1 - max_stop_pct)
 
-    # 3. Pullback: prezzo vicino all'EMA20 su 15m (entro pullback_tolerance)
-    #    Compra la correzione verso la media, non il breakout già partito
-    dist_from_ema20 = (current_price - ema20_15m) / ema20_15m if ema20_15m > 0 else 1.0
-    pullback_ok = abs(dist_from_ema20) <= pullback_tolerance
+    signal = breakout_ok and vol_ok
 
-    # 4. EMA20 1h in pendenza positiva (trend macro in salita)
-    slope_ok = ema20_1h > ema20_1h_prev3
-
-    # 5. Prezzo live vicino al close confermato (drift < 1%)
-    price_drift = abs(current_price - last_close_5m) / last_close_5m if last_close_5m > 0 else 0
-    fresh_ok = price_drift <= 0.01
-
-    # 6. RSI in zona (non ipercomprato, c'è spazio per salire)
-    rsi_ok = (rsi_min <= rsi_14 <= rsi_max) if rsi_filter else True
-
-    # 7. Ultima candela 5m chiusa bullish con corpo solido (rimbalzo confermato)
-    body_ok = candle_body > 0 and body_ratio >= 0.30
-
-    # 8. Volume sopra la media (il rimbalzo ha partecipazione reale)
-    vol_ok = (vol_last >= vol_avg_20) if vol_avg_20 > 0 else True
-
-    # SL: minimo delle ultime candele chiuse oppure 1.5× ATR sotto il prezzo
-    stop_from_low = pullback_low_5m
-    stop_from_atr = current_price - atr_5m * 1.5 if atr_5m > 0 else 0.0
-    stop_price    = min(stop_from_low, stop_from_atr) if stop_from_atr > 0 else stop_from_low
-
-    R = (current_price - stop_price) / current_price if stop_price > 0 else 0.0
-    stop_ok = min_r <= R <= max_stop_pct
-
-    signal = trend1h_ok and trend_ok and pullback_ok and fresh_ok and rsi_ok and body_ok and vol_ok and stop_ok
-
-    if not trend1h_ok:
-        reason = f"no trend 1h (EMA20 {ema20_1h:.4f} < EMA50 {ema50_1h:.4f})"
-    elif not trend_ok:
-        reason = f"no trend 15m (EMA20 {ema20_15m:.4f} < EMA50 {ema50_15m:.4f})"
-    elif not pullback_ok:
-        direction = "sopra" if dist_from_ema20 > 0 else "sotto"
-        reason = f"prezzo {abs(dist_from_ema20)*100:.2f}% {direction} EMA20 15m — fuori zona pullback ({pullback_tolerance*100:.1f}%)"
-    elif not fresh_ok:
-        direction = "salito" if current_price > last_close_5m else "sceso"
-        reason = f"prezzo {direction} del {price_drift*100:.1f}% dal last close — segnale stantio"
-    elif not rsi_ok:
-        reason = f"RSI fuori zona ({rsi_14:.1f}, zona {rsi_min:.0f}-{rsi_max:.0f})"
-    elif not body_ok:
-        reason = f"candela ribassista o doji ({body_ratio*100:.0f}% del range)" if candle_body <= 0 else f"corpo troppo piccolo ({body_ratio*100:.0f}% < 30%)"
+    if not breakout_ok:
+        reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{momentum_threshold*100:.0f}%)"
     elif not vol_ok:
-        reason = f"volume basso ({vol_last/vol_avg_20:.2f}x media) — rimbalzo senza partecipazione"
-    elif not stop_ok:
-        if R > 0 and R < min_r:
-            reason = f"R troppo piccolo ({R*100:.2f}% < {min_r*100:.1f}% min)"
-        elif R > max_stop_pct:
-            reason = f"stop troppo largo ({R*100:.1f}% > {max_stop_pct*100:.1f}%)"
-        else:
-            reason = "stop non calcolabile"
+        ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
+        reason = f"volume basso ({ratio:.2f}x < {vol_multiplier}x richiesto)"
     else:
-        reason = (f"OK | EMA20/50 1h: {ema20_1h:.4f}/{ema50_1h:.4f} | "
-                  f"EMA20/50 15m: {ema20_15m:.4f}/{ema50_15m:.4f} | "
-                  f"pullback: {dist_from_ema20*100:.2f}% | "
-                  f"RSI: {rsi_14:.1f} | corpo: {body_ratio*100:.0f}% | "
-                  f"vol: {vol_last/vol_avg_20:.2f}x | R: {R*100:.2f}%")
+        ratio = vol_last / vol_avg_20
+        reason = f"MOMENTUM +{momentum_pct*100:.2f}% in 50min | vol {ratio:.1f}x | SL -{max_stop_pct*100:.1f}%"
 
     return {
-        "signal":       signal,
-        "reason":       reason,
-        "stop_price":   round(stop_price, 8),
-        "R":            round(R, 6),
-        "atr_5m":       atr_5m,
-        "trend_ok":     trend_ok,
-        "pullback_ok":  pullback_ok,
-        "trend1h_ok":   trend1h_ok,
-        "slope_ok":     slope_ok,
-        "fresh_ok":     fresh_ok,
-        "rsi_ok":       rsi_ok,
-        "body_ok":      body_ok,
-        "vol_ok":       vol_ok,
-        "stop_ok":      stop_ok,
-        "rsi":          rsi_14,
+        "signal":      signal,
+        "reason":      reason,
+        "stop_price":  round(stop_price, 8),
+        "breakout_ok": breakout_ok,
+        "vol_ok":      vol_ok,
     }
 
 # ── rest of market data ───────────────────────────────────────────────────────
@@ -597,7 +529,6 @@ def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0
 STABLES = {'USDT','USDC','BUSD','DAI','FDUSD','TUSD','USDP','GUSD','FRAX',
            'LUSD','SUSD','EUR','GBP','USD','USDD','USTC','PAX','CBBTC','WBTC'}
 
-_coinbase_products: dict = {}
 _global_revx_key_id: str = ""
 _global_revx_private_key: str = ""
 _revx_pairs: set = set()  # simboli EUR disponibili su Revolut X es. {"BTC","ETH","ADA"} — caricato all'avvio
@@ -648,97 +579,110 @@ async def fetch_revx_market_data(key_id: str = "", private_key: str = "") -> dic
         print(f"[REVX TICKER] error: {e}")
     return result
 
-async def fetch_prices():
-    global _products_last_update
+async def fetch_prices_coingecko():
+    """Fallback CoinGecko quando Binance è bloccato (451). Throttlato a 1 fetch/60s."""
+    global _cg_price_last_fetch
+    if time.time() - _cg_price_last_fetch < 60:
+        return
+    _cg_price_last_fetch = time.time()
     try:
-        # Usa Advanced Trade API per i prodotti — più aggiornata di Exchange API
-        # Prodotti pubblici, nessuna auth richiesta
+        fetched = 0
+        async with httpx.AsyncClient(timeout=20) as client:
+            for page in (1, 2):
+                r = await client.get(
+                    "https://api.coingecko.com/api/v3/coins/markets",
+                    params={
+                        "vs_currency": "usd",
+                        "order": "volume_desc",
+                        "per_page": 250,
+                        "page": page,
+                        "price_change_percentage": "1h,24h",
+                    }
+                )
+                if r.status_code != 200:
+                    print(f"[CG] fetch_prices HTTP {r.status_code}")
+                    break
+                coins = r.json()
+                if not isinstance(coins, list):
+                    break
+                for coin in coins:
+                    sym = (coin.get("symbol") or "").upper()
+                    if not sym or not sym.isalpha() or sym in STABLES:
+                        continue
+                    price = coin.get("current_price") or 0.0
+                    if price <= 0:
+                        continue
+                    change24h = coin.get("price_change_percentage_24h") or 0.0
+                    change1h  = coin.get("price_change_percentage_1h_in_currency") or 0.0
+                    vol_usd   = coin.get("total_volume") or 0.0
+                    if sym not in market_data:
+                        market_data[sym] = {"price": 0.0, "change1h": 0.0, "change24h": 0.0, "volume24h": 0.0, "icon": sym[0]}
+                    market_data[sym]["price"]     = float(price)
+                    market_data[sym]["change1h"]  = float(change1h)
+                    market_data[sym]["change24h"] = float(change24h)
+                    market_data[sym]["volume24h"] = float(vol_usd)
+                    for state in list(user_sessions.values()):
+                        for pos in list(state["positions"]):
+                            if pos["symbol"] == sym:
+                                pos["currentPrice"] = float(price)
+                                if float(price) > pos["highPrice"]:
+                                    pos["highPrice"] = float(price)
+                    fetched += 1
+                await asyncio.sleep(1.5)
+        print(f"[CG] fetch_prices fallback: {fetched} coin aggiornate")
+    except Exception as e:
+        print(f"[CG] fetch_prices error: {e}")
+
+
+async def fetch_prices():
+    try:
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(
-                "https://api.coinbase.com/api/v3/brokerage/market/products",
-                params={"product_type": "SPOT", "limit": 500}
-            )
-            all_products_adv = r.json().get("products", [])
+            r = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
+        if r.status_code != 200:
+            print(f"[BINANCE] fetch_prices HTTP {r.status_code}: {r.text[:200]}")
+            await fetch_prices_coingecko()
+            return
+        tickers = r.json()
+        if not isinstance(tickers, list):
+            print(f"[BINANCE] fetch_prices risposta non-lista: {str(tickers)[:200]}")
+            await fetch_prices_coingecko()
+            return
 
-        usd_syms = {}
-        usdc_syms = {}
-        for p in all_products_adv:
-            if not isinstance(p, dict): continue
-            if p.get("status", "") not in ("online", ""): continue
-            if p.get("is_disabled", False): continue
-            product_id = p.get("product_id", "")
-            if not product_id or "-" not in product_id: continue
-            parts = product_id.split("-")
-            if len(parts) != 2: continue
-            sym, quote = parts[0], parts[1]
-            if not sym.isascii() or not sym.isalpha(): continue
-            if sym in STABLES: continue
-            if quote == "USD":
-                usd_syms[product_id] = sym
-            elif quote == "USDC":
-                usdc_syms[sym] = product_id
-
-        async with httpx.AsyncClient(timeout=15) as client:
-            r2 = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
-            tickers = r2.json()
-
-        binance_map = {}
         for t in tickers:
-            pair = t.get("symbol","")
-            if pair.endswith("USDT"):
-                s = pair[:-4]
-                if s in usd_syms.values():
-                    binance_map[s] = t
-
-        for product_id, sym in usd_syms.items():
-            t = binance_map.get(sym)
-            if t:
-                try:
-                    price = float(t["lastPrice"])
-                    change24h = float(t["priceChangePercent"])
-                    vol_usd = float(t["quoteVolume"])
-                except (ValueError, TypeError):
-                    continue
-            else:
+            pair = t.get("symbol", "")
+            if not pair.endswith("USDT"):
                 continue
-            if price <= 0: continue
-
-            # Preferisci USDC se disponibile, altrimenti USD
-            product_id_trading = usdc_syms.get(sym, product_id)
-            _coinbase_products[sym] = {
-                "price": price, "change24h": change24h,
-                "volume24h": vol_usd, "logo_url": "",
-                "product_id": product_id_trading
-            }
+            sym = pair[:-4]
+            if not sym.isascii() or not sym.isalpha() or sym in STABLES:
+                continue
+            try:
+                price    = float(t["lastPrice"])
+                change24h = float(t["priceChangePercent"])
+                vol_usd  = float(t["quoteVolume"])
+            except (ValueError, TypeError):
+                continue
+            if price <= 0:
+                continue
 
             if sym not in market_data:
-                market_data[sym] = {
-                    "price": 0.0, "change1h": 0.0, "change24h": 0.0,
-                    "volume24h": 0.0, "icon": sym[0]
-                }
+                market_data[sym] = {"price": 0.0, "change1h": 0.0, "change24h": 0.0, "volume24h": 0.0, "icon": sym[0]}
 
-            # change1h: usa il close della candela 1h precedente da candle_data
-            # candle_data viene aggiornato ogni 5 minuti con dati reali Binance
             cd = candle_data.get(sym)
-            if cd and cd.get("close_1h_ago", 0) > 0:
-                change1h = (price - cd["close_1h_ago"]) / cd["close_1h_ago"] * 100
-            else:
-                change1h = market_data[sym].get("change1h", 0.0)
+            change1h = ((price - cd["close_1h_ago"]) / cd["close_1h_ago"] * 100
+                        if cd and cd.get("close_1h_ago", 0) > 0
+                        else market_data[sym].get("change1h", 0.0))
 
             market_data[sym]["price"]     = price
             market_data[sym]["change1h"]  = change1h
             market_data[sym]["change24h"] = change24h
             market_data[sym]["volume24h"] = vol_usd
 
-            for state in user_sessions.values():
-                for pos in state["positions"]:
+            for state in list(user_sessions.values()):
+                for pos in list(state["positions"]):
                     if pos["symbol"] == sym:
                         pos["currentPrice"] = price
                         if price > pos["highPrice"]:
                             pos["highPrice"] = price
-
-        # Nota: prezzi da Binance USDT — usati per segnali tecnici (EMA, RSI)
-        # Gli ordini RevX usano quote_size EUR, quindi il prezzo USD non influisce sull'esecuzione
 
     except Exception as e:
         print(f"Fetch error: {e}")
@@ -751,7 +695,6 @@ def make_session() -> dict:
         "positions": [], "pnlHistory": [], "sessionStart": None,
         "sessionDuration": 0, "config": {}, "cooldowns": {},
         "tradeCount": 0, "wins": 0, "trades": [], "log": [],
-        "cb_key": "", "cb_secret": "",
         "consecutiveLosses": 0,
         "plan": "free",
     }
@@ -762,19 +705,20 @@ def get_session(user_id: int) -> dict:
     return user_sessions[user_id]
 
 def add_log(state: dict, type_: str, label: str, desc: str):
-    state["log"].insert(0, {
+    log = state.setdefault("log", [])
+    log.insert(0, {
         "type": type_, "label": label, "desc": desc,
         "ts": int(time.time() * 1000)
     })
-    if len(state["log"]) > 200:
-        state["log"].pop()
+    if len(log) > 200:
+        log.pop()
 
 def unrealized_pnl(state: dict) -> float:
     total = 0.0
     for p in state["positions"]:
         size = p.get("size_remaining", p["size"])
         gross = (p["currentPrice"] - p["entryPrice"]) / p["entryPrice"] * size
-        exit_fee = size * p.get("fee_pct", 0.006)  # fee di uscita stimata
+        exit_fee = size * p.get("fee_pct", 0.0009)
         total += gross - exit_fee
     return total
 
@@ -792,47 +736,6 @@ async def get_revx_usd_balance(key_id: str, private_key: str) -> float:
         print(f"[REVX BALANCE] error: {e}")
     return 0.0
 
-async def get_coinbase_usdc_balance(cb_key: str, cb_secret: str) -> float:
-    """
-    Legge il saldo USDC/USD disponibile su Coinbase Advanced Trade.
-    Usa /portfolios/{uuid} che restituisce available_to_trade_fiat per ogni asset.
-    """
-    try:
-        # Trova il portfolio DEFAULT
-        port_res = await coinbase_request("GET", "/api/v3/brokerage/portfolios", cb_key=cb_key, cb_secret=cb_secret)
-        portfolios = port_res.get("portfolios", [])
-        default = next((p for p in portfolios if p.get("type") == "DEFAULT"), None)
-        if not default and portfolios:
-            default = portfolios[0]
-        if not default:
-            print("[BALANCE] nessun portfolio trovato")
-            return 0.0
-
-        uuid = default.get("uuid", "")
-        detail = await coinbase_request("GET", f"/api/v3/brokerage/portfolios/{uuid}", cb_key=cb_key, cb_secret=cb_secret)
-        spot_positions = detail.get("breakdown", {}).get("spot_positions", [])
-
-        total = 0.0
-        for pos in spot_positions:
-            if pos.get("asset") in ("USDC", "USD") and pos.get("is_cash"):
-                val = float(pos.get("available_to_trade_fiat", 0) or 0)
-                total += val
-                print(f"[BALANCE] {pos['asset']}: ${val:.2f} disponibile per trading")
-
-        if total > 0:
-            return total
-
-        # Fallback: total_cash_equivalent_balance dal portfolio
-        cash = detail.get("breakdown", {}).get("portfolio_balances", {}).get("total_cash_equivalent_balance", {})
-        total_cash = float(cash.get("value", 0) or 0)
-        if total_cash > 0:
-            print(f"[BALANCE] cash_equivalent fallback: ${total_cash:.2f}")
-            return total_cash
-
-    except Exception as e:
-        print(f"[BALANCE] portfolios error: {e}")
-
-    return 0.0
 
 async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     cfg      = state["config"]
@@ -840,16 +743,14 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     sym      = sym_data["symbol"]
     is_real  = cfg.get("realMode", False)
 
-    alloc_pct = cfg.get("allocPct", 0.20)
-    use_revx  = state.get("use_revx", False)
-    COINBASE_FEE = 0.0009 if use_revx else 0.006  # RevX: 0.09% | Coinbase: 0.60%
-    # Size = quota del capitale tradabile netto per questo trade
+    alloc_pct  = cfg.get("allocPct", 0.20)
+    use_revx   = state.get("use_revx", False)
+    TRADING_FEE = 0.0009  # RevX taker fee 0.09%
     size = tradable_capital * alloc_pct
     if size < 1:
         return
 
-    # Fee di entrata (sempre applicata, in reale la detrae Coinbase, in sim la contabilizziamo noi)
-    entry_fee = size * COINBASE_FEE
+    entry_fee = size * TRADING_FEE
 
     # Funzione per formattare prezzi con abbastanza decimali (gestisce coin micro come PEPE)
     def fmt_price(p: float) -> str:
@@ -921,7 +822,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
                 add_log(state, "buy", "ACQUISTO REALE (RevX)",
                     f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | Qty: {qty_purchased:.6f} | "
-                    f"SL: ${stop_price:.4f} | TP1: ${tp1_price:.4f} | TP2: ${tp2_price:.4f} | R: {R_pct*100:.2f}%")
+                    f"SL: ${stop_price:.4f}")
                 await notify(state, f"ACQUISTO REALE RevX\n{sym} @ ${actual_price:.4f}\nSize: ${size:.2f}")
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"RevX error: {e}")
@@ -931,6 +832,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
             pos = {
                 "symbol": sym, "icon": sym_data["icon"],
                 "entryPrice": actual_price, "currentPrice": actual_price, "highPrice": actual_price,
+                "peak_price": actual_price,
                 "size": size, "size_remaining": size, "tp1_hit": False,
                 "entryTime": datetime.utcnow().isoformat() + "Z",
                 "stopPrice": stop_price, "tp1Price": tp1_price, "tp2Price": tp2_price,
@@ -941,73 +843,11 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
             }
             state["positions"].append(pos)
             return
-        # ── COINBASE ─────────────────────────────────────────────────────────
-        cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
-        cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
-        try:
-            product_id = _coinbase_products.get(sym, {}).get("product_id", f"{sym}-USDC")
-            body = {
-                "client_order_id": f"ca-{sym}-{int(time.time())}",
-                "product_id": product_id,
-                "side": "BUY",
-                "order_configuration": {"market_market_ioc": {"quote_size": str(round(size, 2))}}
-            }
-            add_log(state, "info", "DEBUG", f"Ordine {sym}: product_id={product_id} size=${size:.2f}")
-            result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
-            # Se fallisce con USDC prova USD e viceversa
-            if result.get("success") != True:
-                err_str = str(result).lower()
-                if "not available" in err_str or "invalid_argument" in err_str:
-                    alt_id = product_id.replace("-USDC", "-USD") if "-USDC" in product_id else product_id.replace("-USD", "-USDC")
-                    if alt_id != product_id:
-                        add_log(state, "info", "RETRY", f"{sym}: provo {alt_id}")
-                        body["product_id"] = alt_id
-                        result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
-                        if result.get("success") == True:
-                            product_id = alt_id
-                            # Aggiorna il product_id in cache per i prossimi ordini
-                            if sym in _coinbase_products:
-                                _coinbase_products[sym]["product_id"] = alt_id
-            if result.get("success") != True:
-                err = result.get("error_response") or result
-                err_msg = err.get("message") or err.get("error_details") or str(result)
-                err_str = str(result).lower()
-                add_log(state, "info", "ERRORE", f"Ordine {sym} fallito [{product_id}]: {err_msg}")
-                # Cooldown automatico per errori che indicano coin non tradabile temporaneamente
-                if any(x in err_str for x in ["not available", "cancel only", "permission_denied", "orderbook", "suspended"]):
-                    state["cooldowns"][sym] = (datetime.now().timestamp() + 3600) * 1000
-                    add_log(state, "info", "ESCLUSA", f"{sym} esclusa per 1h — {err_msg[:60]}")
-                # Saldo insufficiente: ferma la sessione
-                if any(x in err_str for x in ["insufficient", "insufficient_fund", "not enough"]):
-                    state["running"] = False
-                    add_log(state, "info", "STOP AUTO", f"Saldo insufficiente — sessione fermata")
-                    await notify(state, f"STOP AUTO: saldo insufficiente")
-                return
-            filled       = result.get("success_response", {})
-            actual_price = float(filled.get("average_filled_price", price)) or price
-            # Quantità effettivamente acquistata — useremo questo per vendere solo ciò che abbiamo comprato
-            qty_purchased = size / actual_price if actual_price > 0 else 0.0
-            # Ricalcola stop e TP sull'actual price
-            stop_price  = actual_price * (1 - R_pct)
-            tp1_price   = actual_price * (1 + R_pct)
-            tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
-            add_log(state, "buy", "ACQUISTO REALE",
-                f"{sym} @ {fmt_price(actual_price)} | Size: ${size:.0f} | Qty: {qty_purchased:.6f} | Fee: ${entry_fee:.2f} | "
-                f"SL: {fmt_price(stop_price)} | TP1: {fmt_price(tp1_price)} | TP2: {fmt_price(tp2_price)} | R: {R_pct*100:.2f}%")
-            await notify(state,
-                "ACQUISTO REALE\n" + sym + " @ $" + f"{actual_price:.4f}" +
-                "\nSize: $" + f"{size:.2f}" +
-                "\nSL: $" + f"{stop_price:.4f}" +
-                "\nTP1: $" + f"{tp1_price:.4f}" + " | TP2: $" + f"{tp2_price:.4f}"
-            )
-        except Exception as e:
-            add_log(state, "info", "ERRORE", f"Coinbase error: {sanitize_error(e, cb_key, cb_secret)}")
-            return
     else:
         actual_price = price
         add_log(state, "buy", "ACQUISTO SIM",
             f"{sym} @ {fmt_price(actual_price)} | Size: ${size:.0f} | Fee: ${entry_fee:.2f} | "
-            f"SL: {fmt_price(stop_price)} | TP1: {fmt_price(tp1_price)} | TP2: {fmt_price(tp2_price)} | R: {R_pct*100:.2f}%")
+            f"SL: {fmt_price(stop_price)}")
         await notify(state,
             "ACQUISTO SIM\n" + sym + " @ " + fmt_price(actual_price) +
             "\nSize: $" + f"{size:.0f}" +
@@ -1023,6 +863,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
         "entryPrice":    actual_price,
         "currentPrice":  actual_price,
         "highPrice":     actual_price,
+        "peak_price":    actual_price,
         "size":          size,
         "size_remaining": size,
         "tp1_hit":       False,
@@ -1033,9 +874,8 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
         "R_pct":         R_pct,
         "atr_5m":        candle_data.get(sym, {}).get("atr_5m", 0.0),
         "realMode":      is_real,
-        "fee_pct":       COINBASE_FEE,
-        "qty_purchased": qty_purchased if is_real else 0.0,  # quantità crypto acquistata (solo reale)
-        "product_id":    _coinbase_products.get(sym, {}).get("product_id", f"{sym}-USDC"),
+        "fee_pct":       TRADING_FEE,
+        "qty_purchased": qty_purchased if is_real else 0.0,
     }
     state["positions"].append(pos)
 
@@ -1051,10 +891,17 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 
     cur  = pos["currentPrice"]
     sym  = pos["symbol"]
+
+    # Evita doppia vendita concorrente sullo stesso simbolo
+    _exiting = state.setdefault("_exiting", set())
+    if sym in _exiting:
+        return
+    _exiting.add(sym)
     dur  = (datetime.utcnow() - datetime.fromisoformat(pos["entryTime"].replace("Z", ""))).total_seconds() / 60
 
     # Dimensione effettiva da chiudere
     close_size = pos["size_remaining"] * 0.5 if partial else pos["size_remaining"]
+    qty_to_sell = round(pos.get("qty_purchased", 0.0) * (0.5 if partial else 1.0), 8)
 
     if pos.get("realMode", False):
         # ── REVOLUT X EXIT ────────────────────────────────────────────────────
@@ -1064,7 +911,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
             qty_purchased = pos.get("qty_purchased", 0.0)
             if qty_purchased <= 0:
                 add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} RevX — vendita annullata")
-                return
+                _exiting.discard(sym); return
             try:
                 import uuid as _uuid
                 qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
@@ -1094,30 +941,70 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                             break
                 except Exception as be:
                     print(f"[REVX SELL] errore lettura saldo: {be}")
-                order_body = {
-                    "client_order_id": str(_uuid.uuid4()),
-                    "symbol": symbol_pair,
-                    "side": "SELL",
-                    "order_configuration": {"market": {"base_size": str(qty_to_sell)}}
-                }
-                # Retry su errori di rete — max 2 tentativi
+                # Limit order IOC con slippage progressivo — evita slippage protection RevX
+                # Tre tentativi: -0.5%, -1.5%, -3% sotto prezzo corrente
+                SELL_SLIP_BUFFERS = [0.001, 0.005, 0.015]
                 result = None
-                for attempt in range(2):
+                for slip_attempt, slip_buf in enumerate(SELL_SLIP_BUFFERS):
+                    limit_price = round(cur * (1 - slip_buf), 8)
+                    order_body = {
+                        "client_order_id": str(_uuid.uuid4()),
+                        "symbol": symbol_pair,
+                        "side": "SELL",
+                        "order_configuration": {
+                            "limit": {
+                                "base_size": str(qty_to_sell),
+                                "price": str(limit_price),
+                                "time_in_force": "IOC"
+                            }
+                        }
+                    }
+                    print(f"[REVX SELL] {sym} limit @ ${limit_price:.6f} (-{slip_buf*100:.1f}%) attempt {slip_attempt+1}/{len(SELL_SLIP_BUFFERS)}")
                     try:
                         result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
-                        break
+                        _d = result.get("data") or result
+                        _state = _d.get("state", "")
+                        if _state in ("filled", "partially_filled"):
+                            break  # successo
+                        if _state == "new":
+                            # IOC returned 'new' — RevX still processing; poll for final state
+                            _oid = _d.get("venue_order_id") or _d.get("order_id")
+                            if _oid:
+                                for _pi in range(5):
+                                    await asyncio.sleep(1)
+                                    try:
+                                        _pr = await revx_request("GET", f"/api/1.0/orders/{_oid}", None, key_id=revx_key_id, private_key=revx_priv)
+                                        _pd = _pr.get("data") or _pr
+                                        _ps = _pd.get("state", "")
+                                        print(f"[REVX SELL] {sym} poll {_pi+1}/5 order {_oid[:8]}: state={_ps}")
+                                        if _ps in ("filled", "partially_filled"):
+                                            result = _pr; _state = _ps; break
+                                        if _ps in ("cancelled", "expired", "rejected"):
+                                            _state = _ps; break
+                                    except Exception as _pe:
+                                        print(f"[REVX SELL] {sym} poll error: {_pe}"); break
+                            if _state in ("filled", "partially_filled"):
+                                break
+                            # Still unresolved — treat as cancelled for retry
+                            _state = "cancelled"
+                        if _state == "cancelled" and slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
+                            print(f"[REVX SELL] limit -{slip_buf*100:.1f}% cancelled, riprovo con spread più largo...")
+                            await asyncio.sleep(1)
+                        else:
+                            break  # errore API o ultimo tentativo
                     except Exception as net_err:
-                        if attempt == 0:
-                            print(f"[REVX SELL] tentativo 1 fallito: {net_err}, riprovo...")
+                        if slip_attempt < len(SELL_SLIP_BUFFERS) - 1:
+                            print(f"[REVX SELL] tentativo {slip_attempt+1} errore: {net_err}, riprovo...")
                             await asyncio.sleep(2)
-                            order_body["client_order_id"] = str(_uuid.uuid4())
                         else:
                             raise
                 print(f"[REVX SELL RESULT] {sym}: {result}")
                 data = result.get("data") or result
                 order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
-                if not order_id:
-                    err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
+                order_state = data.get("state", "")
+                sell_failed = not order_id or order_state == "cancelled"
+                if sell_failed:
+                    err_msg = f"ordine {order_state}" if order_state == "cancelled" else (result.get("message") or result.get("error") or result.get("detail") or str(result))
                     # Conta tentativi falliti consecutivi
                     pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
                     add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
@@ -1128,8 +1015,8 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                         await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
                         # Non fare return — lascia che il codice dopo rimuova la posizione
                     else:
-                        return
-                filled_price = float(data.get("average_price") or data.get("price") or cur)
+                        _exiting.discard(sym); return
+                filled_price = float(data.get("average_price") or data.get("price") or limit_price)
                 if filled_price > 0:
                     cur = filled_price
                 add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f}")
@@ -1137,46 +1024,14 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     pos["qty_purchased"] = qty_purchased - qty_to_sell
             except Exception as e:
                 add_log(state, "info", "ERRORE", f"RevX exit error: {e}")
-                return
-        # ── COINBASE EXIT ─────────────────────────────────────────────────────
-        else:
-            cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
-            cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
-            try:
-                qty_purchased = pos.get("qty_purchased", 0.0)
-                if qty_purchased <= 0:
-                    add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} — vendita annullata")
-                    return
-                qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
-                product_id  = pos.get("product_id", f"{sym}-USDC")
-                body = {
-                    "client_order_id": f"ca-exit-{sym}-{int(time.time())}",
-                    "product_id": product_id, "side": "SELL",
-                    "order_configuration": {"market_market_ioc": {"base_size": str(qty_to_sell)}}
-                }
-                result = await coinbase_request("POST", "/api/v3/brokerage/orders", body, cb_key=cb_key, cb_secret=cb_secret)
-                if result.get("success") != True:
-                    err = result.get("error_response") or result
-                    err_msg = err.get("message") or err.get("error_details") or str(result)
-                    add_log(state, "info", "ERRORE", f"Vendita {sym} fallita [{product_id}]: {err_msg}")
-                    await notify(state, f"ERRORE VENDITA {sym}: {err_msg[:100]}")
-                    return
-                filled = result.get("success_response", {})
-                cur = float(filled.get("average_filled_price", cur)) or cur
-                add_log(state, "info", "VENDUTO", f"{sym} qty: {qty_to_sell:.6f} @ {_fp(cur)}")
-                if partial:
-                    pos["qty_purchased"] = qty_purchased - qty_to_sell
-            except Exception as e:
-                add_log(state, "info", "ERRORE", f"Coinbase exit error: {sanitize_error(e, cb_key, cb_secret)}")
-                return
+                _exiting.discard(sym); return
 
     pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
 
-    # Fee di uscita: 0.60% sul valore liquidato (applicata sempre per riflettere realtà)
-    fee_pct = pos.get("fee_pct", 0.006)
+    fee_pct = pos.get("fee_pct", 0.0009)
     exit_fee = close_size * fee_pct
-    pnl -= exit_fee  # riduce il PnL netto
+    pnl -= exit_fee
 
     if partial:
         # TP1: restituisce metà capitale, aggiorna size_remaining
@@ -1187,19 +1042,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         pos["tp1_hit"]         = True
         pos["tp1_pnl"]         = pnl  # salviamo per il messaggio finale
         pos["qty_tp1_sold"]    = qty_to_sell  # qty venduta a TP1 per calcolo proporzione
-        mode = "REALE" if pos.get("realMode") else "SIM"
-        add_log(state, "sell", f"TP1 {mode}",
-            f"{sym} 50% @ ${cur:.4f} | +{pnl:.2f}$ ({pct:+.2f}%) | trailing stop attivo")
-        if pos.get("realMode"):
-            await notify(state,
-                "TP1 REALE\n" + sym + " 50% @ $" + f"{cur:.4f}" +
-                "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
-            )
-        else:
-            await notify(state,
-                "TP1 SIM\n" + sym + " 50% @ $" + f"{cur:.4f}" +
-                "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
-            )
+        _exiting.discard(sym)
         return  # posizione resta aperta per TP2
 
     # Chiusura totale
@@ -1250,6 +1093,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         except Exception as e:
             print(f"DB trade save error: {e}")
     state["positions"] = [p for p in state["positions"] if p is not pos]
+    _exiting.discard(sym)
     mode = "REALE" if pos.get("realMode") else "SIM"
     add_log(state, "sell", f"{reason} {mode}",
         f"{sym} @ {_fp(cur)} | {total_pnl:+.2f}$ ({total_pct:+.2f}%) | fee: ${exit_fee:.2f} | {dur:.0f} min")
@@ -1285,7 +1129,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 # ── main loop ─────────────────────────────────────────────────────────────────
 
 async def scan_and_trade(state: dict, user_id: int = None):
-    if not state["running"]:
+    if not state["running"] or state.get("_stopping"):
         return
     cfg = state["config"]
 
@@ -1308,13 +1152,12 @@ async def scan_and_trade(state: dict, user_id: int = None):
             add_log(state, "info", "STOP AUTO", f"Raggiunto limite di {max_trades} trade — sessione fermata")
             return
 
-    # Gestione posizioni aperte: max hold, TP1, TP2, trailing stop, stop loss
+    # Gestione posizioni aperte: hard stop + trailing profit stop
     for pos in list(state["positions"]):
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
 
-        trailing_stop    = cfg.get("trailingStop", True)
-        max_hold_hours   = cfg.get("maxHoldHours", 4)
+        max_hold_hours = cfg.get("maxHoldHours", 4)
 
         # Max hold time: chiude se la posizione è aperta da troppo
         if max_hold_hours > 0:
@@ -1323,65 +1166,48 @@ async def scan_and_trade(state: dict, user_id: int = None):
                 await exit_position(state, pos, "MAX TEMPO", user_id=user_id)
                 continue
 
-        if cur > pos.get("highPrice", cur):
+        # Aggiorna il picco di prezzo raggiunto dalla posizione
+        if cur > pos.get("peak_price", entry):
+            pos["peak_price"] = cur
+        if cur > pos.get("highPrice", entry):
             pos["highPrice"] = cur
 
-        # TP1: prima volta che tocca +tp1R
-        if not pos.get("tp1_hit", False) and cur >= pos["tp1Price"]:
-            await exit_position(state, pos, "TP1", partial=True, user_id=user_id)
+        # Hard stop fisso: protezione catastrofica, non si muove mai
+        if cur <= pos["stopPrice"]:
+            await exit_position(state, pos, "STOP LOSS", user_id=user_id)
             continue
 
-        # Dopo TP1: trailing ATR (respira con la volatilità reale)
-        if pos.get("tp1_hit", False):
-            if trailing_stop and pos.get("highPrice", 0) > 0:
-                atr = pos.get("atr_5m", 0.0)
-                if atr > 0:
-                    trail_price = pos["highPrice"] - atr * 1.5
-                else:
-                    trail_price = pos["highPrice"] * (1 - 0.015)  # fallback 1.5%
-                # Lo stop non può scendere sotto il breakeven
-                new_stop = max(trail_price, pos["entryPrice"])
-                if new_stop > pos["stopPrice"]:
-                    pos["stopPrice"] = new_stop
-
-            # TP2
-            if cur >= pos["tp2Price"]:
-                await exit_position(state, pos, "TP2", user_id=user_id)
+        # Trailing profit stop: si attiva solo quando la posizione è in profitto netto
+        # Profitto netto = profitto lordo - commissioni round-trip - slippage IOC sell
+        fee_rt      = pos.get("fee_pct", 0.0009) * 2  # round-trip
+        ioc_slip    = 0.001 if (state.get("use_revx") and pos.get("realMode")) else 0
+        net_pnl_pct = (cur - entry) / entry - fee_rt - ioc_slip
+        profit_activation = cfg.get("profitActivation", 0.003)
+        if net_pnl_pct > profit_activation:
+            peak         = pos.get("peak_price", cur)
+            profit_move  = peak - entry
+            tolerance    = cfg.get("profitTolerance", 0.20)
+            trail_price  = peak - profit_move * tolerance
+            if cur <= trail_price:
+                await exit_position(state, pos, "TRAILING PROFIT", user_id=user_id)
                 continue
-
-        # Stop loss (include trailing/breakeven dopo TP1)
-        if cur <= pos["stopPrice"]:
-            reason = "STOP TRAILING" if pos.get("tp1_hit") else "STOP LOSS"
-            await exit_position(state, pos, reason, user_id=user_id)
-            continue  # evita re-entry nella stessa iterazione
 
     alloc_pct   = cfg.get("allocPct", 0.20)
     capital_pct = cfg.get("capitalPct", 1.0)
-    COINBASE_FEE = 0.0009  # 0.09% per lato (taker fee RevX)
+    TRADING_FEE = 0.0009  # RevX taker fee 0.09%
 
     # Calcola il capitale tradabile dinamicamente
     if cfg.get("realMode", False):
         use_revx = state.get("use_revx", False)
-        if use_revx:
-            revx_key_id = state.get("revx_key_id", "")
-            revx_priv   = state.get("revx_private_key", "")
-            try:
-                usd_balance = await get_revx_usd_balance(revx_key_id, revx_priv)
-                tradable_capital = usd_balance * capital_pct
-            except Exception as e:
-                add_log(state, "info", "ERRORE", f"Fetch saldo RevX fallito: {e}")
-                _update_pnl(state)
-                return
-        else:
-            cb_key    = state.get("cb_key", "") or _ENV_CB_KEY
-            cb_secret = state.get("cb_secret", "") or _ENV_CB_SECRET
-            try:
-                usdc_balance = await get_coinbase_usdc_balance(cb_key, cb_secret)
-                tradable_capital = usdc_balance * capital_pct
-            except Exception as e:
-                add_log(state, "info", "ERRORE", f"Fetch saldo fallito: {sanitize_error(e, cb_key, cb_secret)}")
-                _update_pnl(state)
-                return
+        revx_key_id = state.get("revx_key_id", "")
+        revx_priv   = state.get("revx_private_key", "")
+        try:
+            usd_balance = await get_revx_usd_balance(revx_key_id, revx_priv)
+            tradable_capital = usd_balance * capital_pct
+        except Exception as e:
+            add_log(state, "info", "ERRORE", f"Fetch saldo RevX fallito: {e}")
+            _update_pnl(state)
+            return
     else:
         # Sim: usa currentCapital (già aggiornato dopo ogni trade)
         tradable_capital = state["currentCapital"] * capital_pct
@@ -1392,7 +1218,13 @@ async def scan_and_trade(state: dict, user_id: int = None):
     open_positions = state["positions"]
     if min_trade_size < 1.0 and cfg.get("realMode", False):
         if open_positions:
-            # Capitale bloccato in posizioni aperte — aspetta che si chiudano
+            _now = time.time()
+            if _now - state.get("_last_monitor_log", 0) >= 60:
+                state["_last_monitor_log"] = _now
+                n = len(open_positions)
+                pos_label = "posizioni aperte" if n > 1 else "posizione aperta"
+                add_log(state, "info", "MONITOR",
+                    f"{n} {pos_label} — saldo libero ${tradable_capital:.2f} | monitoring attivo")
             _update_pnl(state)
             return
         # Evita falso stop per settlement delay: se currentCapital è molto > saldo letto,
@@ -1416,7 +1248,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     # Numero massimo di posizioni aperte contemporaneamente
     is_free = state.get("plan", "free") == "free"
-    max_pos   = FREE_MAX_POSITIONS if is_free else max(1, int(round(1 / alloc_pct)))
+    max_pos   = FREE_MAX_POSITIONS if is_free else max(1, int(1 / alloc_pct))
     open_syms = {p["symbol"] for p in state["positions"]}
     slots     = max_pos - len(state["positions"])
     if is_free and slots <= 0:
@@ -1428,7 +1260,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
     # Sottrai le commissioni round-trip attese per tutte le posizioni apribili
     # fee_totale = size_per_trade * 1.2% * slot_disponibili
     size_per_trade = tradable_capital * alloc_pct
-    fee_reserve = size_per_trade * COINBASE_FEE * 2 * slots  # entrata + uscita per ogni slot
+    fee_reserve = size_per_trade * TRADING_FEE * 2 * slots  # entrata + uscita per ogni slot
     tradable_capital_net = tradable_capital - fee_reserve
 
     # Non aprire nuove posizioni se maxTrades raggiunto
@@ -1436,7 +1268,11 @@ async def scan_and_trade(state: dict, user_id: int = None):
         _update_pnl(state)
         return
 
-    if slots <= 0 or tradable_capital < state["capital"] * alloc_pct * capital_pct * 0.5:
+    if slots <= 0:
+        _update_pnl(state)
+        return
+    if tradable_capital < state["capital"] * alloc_pct * capital_pct * 0.5:
+        add_log(state, "info", "SCAN", "Capitale insufficiente per nuovi trade")
         _update_pnl(state)
         return
 
@@ -1476,74 +1312,53 @@ async def scan_and_trade(state: dict, user_id: int = None):
             _update_pnl(state)
             return
 
-    min_vol       = cfg.get("minVolume", 0)
-    ema_filter    = cfg.get("emaFilter", True)
-    pullback_tol  = cfg.get("pullbackTolerance", 0.02)
-    max_stop_pct  = cfg.get("maxStopPct", 0.05)
-    trend1h_filter = cfg.get("trend1hFilter", True)
-    rsi_filter    = cfg.get("rsiFilter", True)
-    rsi_min       = cfg.get("rsiMin", 35.0)
-    rsi_max       = cfg.get("rsiMax", 65.0)
-    min_r         = cfg.get("minR", 0.01)
+    min_vol      = cfg.get("minVolume", 0)
+    max_stop_pct   = cfg.get("maxStopPct", 0.02)
+    vol_mult       = cfg.get("volMultiplier", 1.2)
+    momentum_thr   = cfg.get("momentumPct", 0.01)
 
-    # Se Revolut X: usa tutte le coin con candele disponibili (non filtriamo per _coinbase_products)
-    # Se Coinbase: filtra solo le coin con prodotto disponibile
     use_revx_filter = state.get("use_revx", False)
     universe = [
-            {**d, "symbol": sym}
-            for sym, d in market_data.items()
-            if d["price"] > 0
-            and sym in COIN_WHITELIST
-            and d.get("volume24h", 0) >= min_vol
-            and sym not in open_syms
-            and (use_revx_filter or sym in _coinbase_products)
-            and (not use_revx_filter or not _revx_pairs or sym in _revx_pairs)
-            and sym in candle_data
-            and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
-        ]
+        {**d, "symbol": sym}
+        for sym, d in market_data.items()
+        if d["price"] > 0
+        and sym in _dynamic_universe
+        and d.get("volume24h", 0) >= min_vol
+        and sym not in open_syms
+        and (not use_revx_filter or not _revx_pairs or sym in _revx_pairs)
+        and sym in candle_data
+        and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
+    ]
     universe_sorted = sorted(universe, key=lambda d: d.get("volume24h", 0), reverse=True)
 
-    candidates  = []
-    ema_skipped = 0
-    block_count = {"trend1h": 0, "trend15m": 0, "pull": 0, "fresh": 0, "rsi": 0, "body": 0, "vol": 0, "stop": 0}
+    candidates   = []
+    skipped      = 0
+    block_count  = {"breakout": 0, "vol": 0}
 
     for d in universe_sorted:
-        sym = d["symbol"]
-        if ema_filter:
-            signal = get_ema_signal(sym, d["price"], pullback_tol, max_stop_pct,
-                                    trend1h_filter, rsi_filter, rsi_min, rsi_max, min_r)
-            if not signal["signal"]:
-                ema_skipped += 1
-                if not signal.get("trend1h_ok", True):     block_count["trend1h"] += 1
-                elif not signal.get("trend_ok", True):     block_count["trend15m"] += 1
-                elif not signal.get("pullback_ok", True):  block_count["pull"] += 1
-                elif not signal.get("fresh_ok", True):     block_count["fresh"] += 1
-                elif not signal.get("rsi_ok", True):       block_count["rsi"] += 1
-                elif not signal.get("body_ok", True):      block_count["body"] += 1
-                elif not signal.get("vol_ok", True):       block_count["vol"] += 1
-                elif not signal["stop_ok"]:                 block_count["stop"] += 1
-                continue
-            d["ema_reason"]  = signal["reason"]
-            d["stop_price"]  = signal["stop_price"]
-            d["R_pct"]       = signal["R"]
+        sym    = d["symbol"]
+        signal = get_momentum_signal(sym, d["price"], max_stop_pct, vol_mult, momentum_thr)
+        if not signal["signal"]:
+            skipped += 1
+            if not signal.get("breakout_ok"): block_count["breakout"] += 1
+            elif not signal.get("vol_ok"):    block_count["vol"] += 1
+            continue
+        d["ema_reason"] = signal["reason"]
+        d["stop_price"] = signal["stop_price"]
+        d["R_pct"]      = max_stop_pct
         candidates.append(d)
         if len(candidates) >= slots:
             break
 
-    # Trova il filtro che blocca di più
-    top_blocker = max(block_count, key=block_count.get) if ema_skipped > 0 else "-"
-    top_blocker_n = block_count.get(top_blocker, 0)
-
-    top3 = [(d["symbol"], round(d.get("volume24h", 0) / 1e6, 0)) for d in universe_sorted[:3]]
     add_log(state, "info", "SCAN",
         f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | "
-        f"Saltati: {ema_skipped} | Blocco: {top_blocker}({top_blocker_n}) | "
-        f"RSI range: {rsi_min:.0f}-{rsi_max:.0f} | Candele: {len(candle_data)}"
+        f"Saltati: {skipped} | no-momentum: {block_count['breakout']} | low-vol: {block_count['vol']} | "
+        f"Candele: {len(candle_data)}"
     )
 
     for d in candidates:
         sym = d["symbol"]
-        add_log(state, "info", "SEGNALE", f"{sym} | {d.get('ema_reason', 'EMA off')}")
+        add_log(state, "info", "SEGNALE", f"{sym} | {d.get('ema_reason', '')}")
         await enter_position(state, d, tradable_capital_net)
 
     _update_pnl(state)
@@ -1844,10 +1659,10 @@ async def poll_telegram():
 
                 elif cmd == "/STOP":
                     if state and state.get("running"):
-                        state["running"] = False
                         closed = [p["symbol"] for p in list(state["positions"])]
                         for p in list(state["positions"]):
                             await exit_position(state, p, "STOP MANUALE", user_id=uid)
+                        state["running"] = False
                         pnl = state["currentCapital"] - state["capital"]
                         add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
                         await persist_sessions()
@@ -1885,6 +1700,9 @@ async def background_loop():
         try:
             await fetch_prices()
 
+            if time.time() - _universe_last_update >= UNIVERSE_UPDATE_INTERVAL:
+                await fetch_dynamic_universe()
+
             if time.time() - _candles_last_update >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_candles()
 
@@ -1915,11 +1733,11 @@ async def persist_sessions():
     """Salva lo stato delle sessioni attive nel DB per sopravvivere ai riavvii."""
     if not db_pool:
         return
-    _SENSITIVE_KEYS = {"cb_key", "cb_secret", "revx_key_id", "revx_private_key"}
+    _SENSITIVE_KEYS = {"revx_key_id", "revx_private_key"}
     sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
         try:
-            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k != "log"}
+            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_exiting", "_stopping")}
             state_json = json.dumps(state_to_save, default=str)
             async with db_pool.acquire() as conn:
                 if state.get("running"):
@@ -1983,8 +1801,6 @@ async def startup():
                         id SERIAL PRIMARY KEY,
                         username TEXT UNIQUE NOT NULL,
                         password_hash TEXT NOT NULL,
-                        cb_key TEXT DEFAULT '',
-                        cb_secret TEXT DEFAULT '',
                         telegram_chat_id TEXT DEFAULT '',
                         avatar_b64 TEXT DEFAULT '',
                         sim_mode BOOLEAN DEFAULT TRUE,
@@ -2042,12 +1858,22 @@ async def startup():
 
         except Exception as e:
             print(f"Database error: {e}")
-    asyncio.create_task(background_loop())
-    asyncio.create_task(load_global_revx_keys())
-    asyncio.create_task(load_telegram_bot_info())
-    asyncio.create_task(fetch_coingecko_logos())
-    await _skip_old_telegram_updates()  # aspetta offset corretto prima di iniziare il polling
-    asyncio.create_task(telegram_loop())
+    def _on_task_done(t: asyncio.Task):
+        if not t.cancelled() and t.exception():
+            print(f"[TASK CRASH] {t.get_name()}: {t.exception()}", file=sys.stderr)
+
+    for _name, _coro in [
+        ("background_loop",      background_loop()),
+        ("load_global_revx_keys", load_global_revx_keys()),
+        ("load_telegram_bot_info", load_telegram_bot_info()),
+        ("fetch_coingecko_logos", fetch_coingecko_logos()),
+        ("cleanup_rate_buckets",  _cleanup_rate_buckets()),
+    ]:
+        _t = asyncio.create_task(_coro, name=_name)
+        _t.add_done_callback(_on_task_done)
+    await _skip_old_telegram_updates()
+    _t = asyncio.create_task(telegram_loop(), name="telegram_loop")
+    _t.add_done_callback(_on_task_done)
 
 async def load_global_revx_keys():
     """Carica le chiavi RevX e le coppie USD disponibili all'avvio."""
@@ -2130,7 +1956,7 @@ async def restore_sessions_from_db(pool):
     try:
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
-                SELECT s.user_id, s.state_json, u.cb_key, u.cb_secret, u.revx_key_id, u.revx_private_key
+                SELECT s.user_id, s.state_json, u.revx_key_id, u.revx_private_key
                 FROM active_sessions s JOIN users u ON u.id = s.user_id
             """)
         for row in rows:
@@ -2145,9 +1971,6 @@ async def restore_sessions_from_db(pool):
                     elapsed = (datetime.now().timestamp() - session_start) * 1000
                     if elapsed >= session_dur:
                         continue
-                # Reinserisce le chiavi (cifrate nel DB, decifrate in memoria) — non salvate in state_json
-                state["cb_key"]          = decrypt_key(row["cb_key"] or "")
-                state["cb_secret"]       = decrypt_key(row["cb_secret"] or "")
                 state["revx_key_id"]     = decrypt_key(row["revx_key_id"] or "")
                 state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
                 user_sessions[uid] = state
@@ -2160,6 +1983,14 @@ async def restore_sessions_from_db(pool):
 # ── RATE LIMITING ─────────────────────────────────────────────────────────────
 from collections import defaultdict
 _rate_buckets: dict = defaultdict(list)  # key -> [timestamps]
+
+async def _cleanup_rate_buckets():
+    while True:
+        await asyncio.sleep(300)
+        now = time.time()
+        stale = [k for k, ts in list(_rate_buckets.items()) if not any(now - t < 600 for t in ts)]
+        for k in stale:
+            _rate_buckets.pop(k, None)
 
 def _get_client_ip(request: Request) -> str:
     """Estrae l'IP reale del client, gestendo il reverse proxy di Railway.
@@ -2214,14 +2045,17 @@ async def register(req: RegisterRequest, request: Request):
                 req.username.lower(), pw_hash, req.username
             )
         token = create_token(row["id"])
-        return {"token": token, "username": req.username, "has_api_keys": False}
+        return {"token": token, "username": req.username, "has_revx_keys": False}
     except asyncpg.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Username già in uso")
     except Exception:
         raise HTTPException(status_code=500, detail="Errore durante la registrazione")
 
 @app.post("/auth/logout")
-async def logout_user():
+async def logout_user(request: Request):
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        _revoked_tokens.add(auth[7:])
     return {"ok": True}
 
 @app.post("/auth/login")
@@ -2231,7 +2065,7 @@ async def login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, password_hash, cb_key FROM users WHERE username = $1",
+            "SELECT id, password_hash, revx_key_id, display_name FROM users WHERE username = $1",
             req.username.lower()
         )
     if not row:
@@ -2239,28 +2073,10 @@ async def login(req: LoginRequest, request: Request):
     if not bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
         raise HTTPException(status_code=401, detail="Username o password errati")
     token = create_token(row["id"])
-    has_keys = bool(row["cb_key"])
-    # Usa display_name se disponibile
-    async with db_pool.acquire() as conn2:
-        urow = await conn2.fetchrow("SELECT display_name FROM users WHERE id = $1", row["id"])
-    dname = (urow["display_name"] or req.username) if urow else req.username
-    return {"token": token, "username": dname, "has_api_keys": has_keys}
+    has_keys = bool(row.get("revx_key_id"))
+    dname = row["display_name"] or req.username
+    return {"token": token, "username": dname, "has_revx_keys": has_keys}
 
-@app.post("/auth/save_keys")
-async def save_keys(req: ApiKeyRequest, request: Request, user_id: int = Depends(get_current_user)):
-    check_rate_limit(request, max_attempts=10, window=300, key_suffix="save_keys")
-    if not db_pool:
-        raise HTTPException(status_code=500, detail="Database non disponibile")
-    if len(req.cb_key) < 10 or len(req.cb_key) > 512:
-        raise HTTPException(status_code=400, detail="API Key non valida")
-    if len(req.cb_secret) < 10 or len(req.cb_secret) > 2048:
-        raise HTTPException(status_code=400, detail="API Secret non valido")
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE users SET cb_key = $1, cb_secret = $2 WHERE id = $3",
-            encrypt_key(req.cb_key), encrypt_key(req.cb_secret), user_id
-        )
-    return {"ok": True}
 
 # ── WATCHLIST ─────────────────────────────────────────────────────────────────
 
@@ -2337,10 +2153,10 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT username, display_name, cb_key, avatar_b64, sim_mode, revx_key_id, telegram_chat_id, "
+            "SELECT username, display_name, avatar_b64, sim_mode, revx_key_id, telegram_chat_id, "
             "plan, subscription_expires_at, last_session_date, sessions_today FROM users WHERE id = $1", user_id
         )
-    has_keys = bool(row["cb_key"])
+    has_keys = bool(row.get("revx_key_id"))
     sim = row["sim_mode"] if row["sim_mode"] is not None else True
     if not has_keys:
         sim = True
@@ -2356,10 +2172,9 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
     sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
     return {
         "username": dname,
-        "has_api_keys": has_keys,
+        "has_revx_keys": has_keys,
         "avatar_b64": row["avatar_b64"] or "",
         "sim_mode": sim,
-        "has_revx_keys": bool(row.get("revx_key_id") or ""),
         "telegram_linked": bool(row["telegram_chat_id"] or ""),
         "plan": raw_plan,
         "sessions_today": sessions_today,
@@ -2376,13 +2191,17 @@ async def set_sim_mode(req: SimModeRequest, request: Request, user_id: int = Dep
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT cb_key, revx_key_id FROM users WHERE id = $1", user_id)
-        if not row["cb_key"] and not row["revx_key_id"] and not req.sim_mode:
+        row = await conn.fetchrow("SELECT revx_key_id FROM users WHERE id = $1", user_id)
+        if not row["revx_key_id"] and not req.sim_mode:
             raise HTTPException(status_code=400, detail="API keys richieste per modalità reale")
         await conn.execute(
             "UPDATE users SET sim_mode = $1 WHERE id = $2",
             req.sim_mode, user_id
         )
+    # Reset session state so stale data from the previous mode doesn't show up
+    state = user_sessions.get(user_id)
+    if state and not state.get("running"):
+        user_sessions[user_id] = make_session()
     return {"ok": True, "sim_mode": req.sim_mode}
 
 # ── TRADES HISTORY ─────────────────────────────────────────────────────────────
@@ -2436,35 +2255,24 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
     user_state = user_sessions.get(user_id, {})
     active_cfg = user_state.get("config", {})
 
-    pullback_tol   = active_cfg.get("pullbackTolerance", 0.02)
-    max_stop_pct   = active_cfg.get("maxStopPct", 0.05)
-    trend1h_filter = active_cfg.get("trend1hFilter", True)
-    rsi_filter     = active_cfg.get("rsiFilter", True)
-    rsi_min        = active_cfg.get("rsiMin", 35.0)
-    rsi_max        = active_cfg.get("rsiMax", 65.0)
-    min_r          = active_cfg.get("minR", 0.01)
+    max_stop_pct  = active_cfg.get("maxStopPct", 0.02)
+    vol_mult      = active_cfg.get("volMultiplier", 1.2)
+    momentum_thr  = active_cfg.get("momentumPct", 0.01)
 
     for s, d in market_data.items():
         if d["price"] <= 0:
             continue
-        if s not in candle_data:
+        if s not in _dynamic_universe:
             continue
         item = {"symbol": s, **d}
-        sig = get_ema_signal(s, d["price"], pullback_tol, max_stop_pct,
-                             trend1h_filter, rsi_filter, rsi_min, rsi_max, min_r)
+        sig = get_momentum_signal(s, d["price"], max_stop_pct, vol_mult, momentum_thr)
         item["ema"] = {
-            "trend":        sig["trend_ok"],
-            "trend1h_ok":   sig.get("trend1h_ok", True),
-            "slope_ok":     sig.get("slope_ok", True),
-            "pullback_ok":  sig.get("pullback_ok", False),
-            "rsi_ok":       sig["rsi_ok"],
-            "body_ok":      sig.get("body_ok", True),
-            "vol_ok":       sig.get("vol_ok", True),
-            "stop":         sig["stop_ok"],
-            "signal":       sig["signal"],
-            "rsi":          sig.get("rsi", 50),
-            "reason":       sig["reason"],
+            "breakout_ok": sig.get("breakout_ok", False),
+            "vol_ok":      sig.get("vol_ok", False),
+            "signal":      sig["signal"],
+            "reason":      sig["reason"],
         }
+        item["sparkline"] = candle_data.get(s, {}).get("sparkline", [])
         items.append(item)
 
     # Filtra sempre alle coin RevX se disponibili — sim e reale mostrano le stesse coin
@@ -2509,6 +2317,19 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
         except Exception as e:
             print(f"DB trades fetch error: {e}")
     return {"trades": mem_trades}
+
+@app.delete("/trades")
+async def clear_trades(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=10, window=60, key_suffix="clear_trades")
+    state = get_session(user_id)
+    state["trades"] = []
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                await conn.execute("DELETE FROM trades_history WHERE user_id = $1", user_id)
+        except Exception as e:
+            print(f"DB clear trades error: {e}")
+    return {"ok": True}
 
 @app.get("/telegram/bot_info")
 async def telegram_bot_info(request: Request, user_id: int = Depends(get_current_user)):
@@ -2595,9 +2416,9 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     cfg["capitalPct"]         = _clamp(cfg.get("capitalPct", 1.0), 0.01, 1.0, 1.0)
     cfg["maxTrades"]          = _clamp_int(cfg.get("maxTrades", 0), 0, 100, 0)
     cfg["maxConsecutiveLosses"] = _clamp_int(cfg.get("maxConsecutiveLosses", 3), 1, 20, 3)
-    cfg["sessionDuration"]    = _clamp_int(cfg.get("sessionDuration", 8), 1, 48, 8)
+    cfg["sessionDuration"]    = _clamp_int(cfg.get("sessionDuration", 8), 0, 48, 8)
 
-    cb_key, cb_secret, real_mode = "", "", False
+    real_mode = False
     revx_key_id, revx_private_key, use_revx = "", "", False
     user_plan = "free"
     row = None
@@ -2605,17 +2426,15 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         try:
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT cb_key, cb_secret, sim_mode, revx_key_id, revx_private_key, username, display_name, "
+                    "SELECT sim_mode, revx_key_id, revx_private_key, username, display_name, "
                     "telegram_chat_id, plan, subscription_expires_at, last_session_date, sessions_today "
                     "FROM users WHERE id = $1", user_id)
                 if row:
-                    cb_key    = decrypt_key(row["cb_key"] or "")
-                    cb_secret = decrypt_key(row["cb_secret"] or "")
-                    revx_key_id     = decrypt_key(row["revx_key_id"] or "")
+                    revx_key_id      = decrypt_key(row["revx_key_id"] or "")
                     revx_private_key = decrypt_key(row["revx_private_key"] or "")
                     sim = row["sim_mode"] if row["sim_mode"] is not None else True
                     use_revx = bool(revx_key_id) and not sim
-                    real_mode = (bool(cb_key) or use_revx) and not sim
+                    real_mode = use_revx
                     # Piano effettivo
                     raw_plan = row["plan"] or "free"
                     exp = row["subscription_expires_at"]
@@ -2662,6 +2481,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
 
     state.update({
         "running": True,
+        "_exiting": set(),
         "capital": capital,
         "currentCapital": capital,
         "positions": [],
@@ -2693,9 +2513,11 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
             "trailingStop":        bool(cfg.get("trailingStop", True)),
             "maxHoldHours":        float(cfg.get("maxHoldHours", 4.0)),
             "timeFilter":          bool(cfg.get("timeFilter", True)),
+            "momentumPct":         float(cfg.get("momentumPct", 0.01)),
+            "profitTolerance":     float(cfg.get("profitTolerance", 0.20)),
+            "profitActivation":    float(cfg.get("profitActivation", 0.003)),
         },
         "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
-        "cb_key": cb_key, "cb_secret": cb_secret,
         "revx_key_id": revx_key_id, "revx_private_key": revx_private_key,
         "use_revx": use_revx,
         "consecutiveLosses": 0,
@@ -2707,20 +2529,19 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     capp   = float(cfg.get("capitalPct", 1.0)) * 100
     vol    = float(cfg.get("minVolume", 0)) / 1_000_000
     mode   = "REALE" if real_mode else "SIMULAZIONE"
-    ema_s  = "ON" if cfg.get("emaFilter", True) else "OFF"
-    mt     = int(cfg.get("maxTrades", 0))
-    mcl    = int(cfg.get("maxConsecutiveLosses", 3))
-    tp1r   = float(cfg.get("tp1R", 2.0))
-    tp2r   = float(cfg.get("tp2R", 4.0))
-    mxh    = float(cfg.get("maxHoldHours", 4.0))
-    rsi_s  = f"{cfg.get('rsiMin',35):.0f}-{cfg.get('rsiMax',65):.0f}" if cfg.get("rsiFilter", True) else "OFF"
-    t1h_s  = "ON" if cfg.get("trend1hFilter", True) else "OFF"
-    curr_sym = "$"
-    exchange_name = "Revolut X" if (use_revx and real_mode) else ("Coinbase" if (cb_key and real_mode) else "SIM")
+    mt           = int(cfg.get("maxTrades", 0))
+    mcl          = int(cfg.get("maxConsecutiveLosses", 3))
+    mxh          = float(cfg.get("maxHoldHours", 4.0))
+    mom_thr_pct  = float(cfg.get("momentumPct", 0.01)) * 100
+    vol_mult_s   = float(cfg.get("volMultiplier", 1.2))
+    max_stop_pct_s = float(cfg.get("maxStopPct", 0.02)) * 100
+    btc_filt_s   = "ON" if cfg.get("btcEmaFilter", True) else "OFF"
+    curr_sym     = "$"
+    exchange_name = "Revolut X" if real_mode else "SIM"
     add_log(state, "info", "AVVIO",
         f"{curr_sym}{capital:.0f} | {mode} [{exchange_name}] | Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | "
-        f"EMA: {ema_s} | Trend1h: {t1h_s} | RSI: {rsi_s} | "
-        f"TP1: {tp1r}R | TP2: {tp2r}R | MaxHold: {mxh}h | MaxLoss: {mcl}"
+        f"Momentum: +{mom_thr_pct:.1f}% | Vol: {vol_mult_s}x | Stop: -{max_stop_pct_s:.1f}% | "
+        f"BTC: {btc_filt_s} | MaxHold: {mxh}h | MaxLoss: {mcl}"
     )
     _sessions_starting.discard(user_id)
     return {"ok": True}
@@ -2731,9 +2552,18 @@ async def stop_agent(request: Request, user_id: int = Depends(get_current_user))
     state = get_session(user_id)
     if not state["running"]:
         return {"error": "Not running"}
-    state["running"] = False
+    state["_stopping"] = True  # blocca nuovi trade senza nascondere posizioni al poll
     for p in list(state["positions"]):
         await exit_position(state, p, "STOP MANUALE", user_id=user_id)
+    # Se alcune posizioni non sono state vendute, non chiudere la sessione
+    remaining = state.get("positions", [])
+    if remaining:
+        state.pop("_stopping", None)
+        syms = ", ".join(p["symbol"] for p in remaining)
+        add_log(state, "info", "ERRORE", f"Stop annullato: vendita fallita per {syms} — riprova")
+        return {"error": f"Vendita fallita per: {syms}. Sessione non fermata.", "remaining": [p["symbol"] for p in remaining]}
+    state["running"] = False
+    state.pop("_stopping", None)
     pnl = state["currentCapital"] - state["capital"]
     add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
     await persist_sessions()  # rimuovi dal DB
@@ -2833,7 +2663,7 @@ async def candles_status(request: Request, user_id: int = Depends(get_current_us
     sample = {}
     for sym in list(candle_data.keys())[:5]:
         price = market_data.get(sym, {}).get("price", 0)
-        sample[sym] = get_ema_signal(sym, price)
+        sample[sym] = get_momentum_signal(sym, price)
     return {
         "candles_count": len(candle_data),
         "last_update": datetime.fromtimestamp(_candles_last_update).isoformat() if _candles_last_update else None,
@@ -2904,39 +2734,6 @@ async def test_revx(request: Request, user_id: int = Depends(get_current_user)):
             if float(b.get("available", 0) or 0) > 0
         ]
         return {"ok": True, "balances": balances}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-@app.get("/test_coinbase")
-async def test_coinbase(request: Request, user_id: int = Depends(get_current_user)):
-    check_rate_limit(request, max_attempts=10, window=60, key_suffix="test_coinbase")
-    cb_key, cb_secret = _ENV_CB_KEY, _ENV_CB_SECRET
-    if db_pool:
-        try:
-            async with db_pool.acquire() as conn:
-                row = await conn.fetchrow("SELECT cb_key, cb_secret FROM users WHERE id = $1", user_id)
-                if row and row["cb_key"]:
-                    cb_key    = decrypt_key(row["cb_key"])
-                    cb_secret = decrypt_key(row["cb_secret"])
-        except Exception as e:
-            print(f"DB error: {e}")
-    if not cb_key:
-        return {"ok": False, "error": "API key non configurata"}
-    try:
-        # Leggi saldo USDC/USD
-        usdc_balance = await get_coinbase_usdc_balance(cb_key, cb_secret)
-        # Leggi anche tutti gli account crypto
-        result = await coinbase_request("GET", "/api/v3/brokerage/accounts", cb_key=cb_key, cb_secret=cb_secret)
-        accounts = result.get("accounts", [])
-        balances = [
-            {"currency": a["currency"], "available": a["available_balance"]["value"]}
-            for a in accounts
-            if float(a.get("available_balance", {}).get("value", 0) or 0) > 0
-        ]
-        # Aggiungi USDC in cima se trovato
-        if usdc_balance > 0:
-            balances.insert(0, {"currency": "USDC/USD", "available": str(round(usdc_balance, 2))})
-        return {"ok": True, "balances": balances, "usdc_tradable": usdc_balance}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -3020,6 +2817,12 @@ async def billing_checkout(body: dict, request: Request, user_id: int = Depends(
     cancel_url  = body.get("cancel_url", "")
     if not success_url or not cancel_url:
         raise HTTPException(status_code=400, detail="success_url e cancel_url obbligatori")
+    _allowed = tuple(o for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip().startswith("https://"))
+    if _allowed:
+        if not any(success_url.startswith(o.strip()) for o in _allowed):
+            raise HTTPException(status_code=400, detail="success_url non autorizzata")
+        if not any(cancel_url.startswith(o.strip()) for o in _allowed):
+            raise HTTPException(status_code=400, detail="cancel_url non autorizzata")
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
