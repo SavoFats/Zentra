@@ -2746,6 +2746,23 @@ async def test_revx(request: Request, user_id: int = Depends(get_current_user)):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+@app.get("/debug/revx_order")
+async def debug_revx_order(request: Request, order_id: str, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=15, window=60, key_suffix="debug_revx_order")
+    if not db_pool:
+        return {"ok": False, "error": "DB non disponibile"}
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
+    if not row or not row["revx_key_id"]:
+        return {"ok": False, "error": "Chiavi Revolut X non configurate"}
+    key_id = decrypt_key(row["revx_key_id"])
+    private_key = decrypt_key(row["revx_private_key"])
+    try:
+        result = await revx_request("GET", f"/api/1.0/orders/{order_id}", key_id=key_id, private_key=private_key)
+        return {"ok": True, "raw": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 @app.get("/logos")
 async def get_logos(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=30, window=60, key_suffix="logos")
