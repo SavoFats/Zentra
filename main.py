@@ -481,126 +481,6 @@ async def fetch_all_candles():
     _candles_last_update = time.time()
     print(f"Candele aggiornate: {updated}/{len(syms)}")
 
-def get_ema_signal(sym: str, current_price: float, pullback_tolerance: float = 0.02,
-                   max_stop_pct: float = 0.05,
-                   trend1h_filter: bool = True, rsi_filter: bool = True,
-                   rsi_min: float = 35.0, rsi_max: float = 65.0,
-                   min_r: float = 0.01) -> dict:
-    """
-    Analizza il segnale di pullback per una coin.
-    Condizioni: trend 1h + 15m, prezzo vicino a EMA20 15m (pullback), RSI, candela bullish, volume, stop valido.
-    """
-    cd = candle_data.get(sym)
-    if not cd:
-        return {"signal": False, "reason": "no candle data", "stop_price": 0.0, "R": 0.0,
-                "trend_ok": False, "pullback_ok": False,
-                "stop_ok": False, "rsi_ok": True, "trend1h_ok": True, "atr_5m": 0.0}
-
-    ema20_15m        = cd["ema20_15m"]
-    ema50_15m        = cd["ema50_15m"]
-    ema20_15m_prev3  = cd.get("ema20_15m_prev3", ema20_15m)
-    ema50_15m_prev3  = cd.get("ema50_15m_prev3", ema50_15m)
-    ema20_5m         = cd["ema20_5m"]
-    ema20_1h         = cd.get("ema20_1h", 0)
-    ema50_1h         = cd.get("ema50_1h", 0)
-    atr_5m           = cd["atr_5m"]
-    pullback_low_5m  = cd["pullback_low_5m"]
-    rsi_14           = cd.get("rsi_14", 50.0)
-    candle_body      = cd.get("candle_body", 0.0)
-    body_ratio       = cd.get("body_ratio", 0.0)
-    last_close_5m    = cd.get("last_close_5m", current_price)
-    vol_avg_20       = cd.get("vol_avg_20", 0.0)
-    vol_last         = cd.get("vol_last", 0.0)
-    ema20_5m_prev3   = cd.get("ema20_5m_prev3", ema20_5m)
-    ema20_1h_prev3   = cd.get("ema20_1h_prev3", ema20_1h)
-    atr_15m_long     = cd.get("atr_15m_long", 0.0)
-    atr_15m_short    = cd.get("atr_15m_short", 0.0)
-
-    # 1. Trend rialzista su 1h (macro): EMA20 > EMA50
-    trend1h_ok = (ema20_1h > ema50_1h) if (trend1h_filter and ema20_1h > 0 and ema50_1h > 0) else True
-
-    # 2. Trend rialzista su 15m: EMA20 > EMA50 (uptrend attivo sulla timeframe operativa)
-    trend_ok = ema20_15m > ema50_15m
-
-    # 3. Pullback: prezzo vicino all'EMA20 su 15m (entro pullback_tolerance)
-    #    Compra la correzione verso la media, non il breakout già partito
-    dist_from_ema20 = (current_price - ema20_15m) / ema20_15m if ema20_15m > 0 else 1.0
-    pullback_ok = abs(dist_from_ema20) <= pullback_tolerance
-
-    # 4. EMA20 1h in pendenza positiva (trend macro in salita)
-    slope_ok = ema20_1h > ema20_1h_prev3
-
-    # 5. Prezzo live vicino al close confermato (drift < 1%)
-    price_drift = abs(current_price - last_close_5m) / last_close_5m if last_close_5m > 0 else 0
-    fresh_ok = price_drift <= 0.01
-
-    # 6. RSI in zona (non ipercomprato, c'è spazio per salire)
-    rsi_ok = (rsi_min <= rsi_14 <= rsi_max) if rsi_filter else True
-
-    # 7. Ultima candela 5m chiusa bullish con corpo solido (rimbalzo confermato)
-    body_ok = candle_body > 0 and body_ratio >= 0.30
-
-    # 8. Volume sopra la media (il rimbalzo ha partecipazione reale)
-    vol_ok = (vol_last >= vol_avg_20) if vol_avg_20 > 0 else True
-
-    # SL: minimo delle ultime candele chiuse oppure 1.5× ATR sotto il prezzo
-    stop_from_low = pullback_low_5m
-    stop_from_atr = current_price - atr_5m * 1.5 if atr_5m > 0 else 0.0
-    stop_price    = min(stop_from_low, stop_from_atr) if stop_from_atr > 0 else stop_from_low
-
-    R = (current_price - stop_price) / current_price if stop_price > 0 else 0.0
-    stop_ok = min_r <= R <= max_stop_pct
-
-    signal = trend1h_ok and trend_ok and pullback_ok and fresh_ok and rsi_ok and body_ok and vol_ok and stop_ok
-
-    if not trend1h_ok:
-        reason = f"no trend 1h (EMA20 {ema20_1h:.4f} < EMA50 {ema50_1h:.4f})"
-    elif not trend_ok:
-        reason = f"no trend 15m (EMA20 {ema20_15m:.4f} < EMA50 {ema50_15m:.4f})"
-    elif not pullback_ok:
-        direction = "sopra" if dist_from_ema20 > 0 else "sotto"
-        reason = f"prezzo {abs(dist_from_ema20)*100:.2f}% {direction} EMA20 15m — fuori zona pullback ({pullback_tolerance*100:.1f}%)"
-    elif not fresh_ok:
-        direction = "salito" if current_price > last_close_5m else "sceso"
-        reason = f"prezzo {direction} del {price_drift*100:.1f}% dal last close — segnale stantio"
-    elif not rsi_ok:
-        reason = f"RSI fuori zona ({rsi_14:.1f}, zona {rsi_min:.0f}-{rsi_max:.0f})"
-    elif not body_ok:
-        reason = f"candela ribassista o doji ({body_ratio*100:.0f}% del range)" if candle_body <= 0 else f"corpo troppo piccolo ({body_ratio*100:.0f}% < 30%)"
-    elif not vol_ok:
-        reason = f"volume basso ({vol_last/vol_avg_20:.2f}x media) — rimbalzo senza partecipazione"
-    elif not stop_ok:
-        if R > 0 and R < min_r:
-            reason = f"R troppo piccolo ({R*100:.2f}% < {min_r*100:.1f}% min)"
-        elif R > max_stop_pct:
-            reason = f"stop troppo largo ({R*100:.1f}% > {max_stop_pct*100:.1f}%)"
-        else:
-            reason = "stop non calcolabile"
-    else:
-        reason = (f"OK | EMA20/50 1h: {ema20_1h:.4f}/{ema50_1h:.4f} | "
-                  f"EMA20/50 15m: {ema20_15m:.4f}/{ema50_15m:.4f} | "
-                  f"pullback: {dist_from_ema20*100:.2f}% | "
-                  f"RSI: {rsi_14:.1f} | corpo: {body_ratio*100:.0f}% | "
-                  f"vol: {vol_last/vol_avg_20:.2f}x | R: {R*100:.2f}%")
-
-    return {
-        "signal":       signal,
-        "reason":       reason,
-        "stop_price":   round(stop_price, 8),
-        "R":            round(R, 6),
-        "atr_5m":       atr_5m,
-        "trend_ok":     trend_ok,
-        "pullback_ok":  pullback_ok,
-        "trend1h_ok":   trend1h_ok,
-        "slope_ok":     slope_ok,
-        "fresh_ok":     fresh_ok,
-        "rsi_ok":       rsi_ok,
-        "body_ok":      body_ok,
-        "vol_ok":       vol_ok,
-        "stop_ok":      stop_ok,
-        "rsi":          rsi_14,
-    }
-
 def get_momentum_signal(sym: str, current_price: float,
                         max_stop_pct: float = 0.02,
                         vol_multiplier: float = 1.2,
@@ -1165,19 +1045,6 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         pos["tp1_hit"]         = True
         pos["tp1_pnl"]         = pnl  # salviamo per il messaggio finale
         pos["qty_tp1_sold"]    = qty_to_sell  # qty venduta a TP1 per calcolo proporzione
-        mode = "REALE" if pos.get("realMode") else "SIM"
-        add_log(state, "sell", f"TP1 {mode}",
-            f"{sym} 50% @ ${cur:.4f} | +{pnl:.2f}$ ({pct:+.2f}%) | trailing stop attivo")
-        if pos.get("realMode"):
-            await notify(state,
-                "TP1 REALE\n" + sym + " 50% @ $" + f"{cur:.4f}" +
-                "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
-            )
-        else:
-            await notify(state,
-                "TP1 SIM\n" + sym + " 50% @ $" + f"{cur:.4f}" +
-                "\nP&L parziale: +$" + f"{pnl:.2f}" + "\nStop spostato a breakeven"
-            )
         _exiting.discard(sym)
         return  # posizione resta aperta per TP2
 
@@ -1484,7 +1351,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     add_log(state, "info", "SCAN",
         f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | "
-        f"Saltati: {skipped} | no-breakout: {block_count['breakout']} | low-vol: {block_count['vol']} | "
+        f"Saltati: {skipped} | no-momentum: {block_count['breakout']} | low-vol: {block_count['vol']} | "
         f"Candele: {len(candle_data)}"
     )
 
