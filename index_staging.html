@@ -598,7 +598,6 @@ body.auth-active .tabbar { display:none !important; }
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:8px">
     <span id="planBadge" class="plan-badge free" style="display:none">FREE</span>
-    <span id="liveBadge" class="live-badge" style="display:none"><span class="live-dot"></span>LIVE</span>
     <div class="avatar-btn" id="avatarBtn" onclick="toggleProfileMenu()">
       <span id="avatarInitial">?</span>
     </div>
@@ -1335,7 +1334,6 @@ body.auth-active .tabbar { display:none !important; }
             <div class="fdd-item" onclick="selectFddMkt(this,'fddMktDir','losers','Ribasso','dir')">Ribasso</div>
           </div>
         </div>
-        <button onclick="openSignalInfo()" style="margin-left:auto;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:serif" title="Legenda segnali">ⓘ</button>
       </div>
       <div style="position:relative;margin-bottom:12px">
         <input type="text" id="mktSearch" placeholder="Cerca coin..." oninput="renderMarket()"
@@ -2813,7 +2811,6 @@ function renderHomeSession() {
         ${img}
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:700">${esc(p.symbol)}</div>
-          <div style="font-size:11px;color:var(--text3);font-weight:500">entry ${getCurrSym()}${_ep.toFixed(4)}</div>
         </div>
         ${spark}
         <div style="text-align:right;flex-shrink:0">
@@ -2972,7 +2969,6 @@ function renderPositions() {
         <div class="pos-coin-new">${img}
           <div>
             <div class="pos-sym-new">${esc(p.symbol)}</div>
-            <div class="pos-sub-new">ora ${getCurrSym()}${fmtPrice(currentPrice)} · entry ${getCurrSym()}${fmtPrice(entryPrice)}</div>
           </div>
         </div>
         <div class="pos-pnl-new">
