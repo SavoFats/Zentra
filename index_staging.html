@@ -2800,10 +2800,8 @@ function renderHomeSession() {
   cnt.innerHTML = pos.map(p => {
     const _ep = p.entryPrice || 0;
     const _cp = p.currentPrice || _ep;
-    const _sz  = p.size_remaining || p.size || 0;
-    const _fee = p.realMode ? _sz * (p.fee_pct || 0.0009) : 0;
-    const pnl  = _ep > 0 ? (_cp - _ep) / _ep * _sz - _fee : 0;
-    const pct  = _ep > 0 && _sz > 0 ? pnl / _sz * 100 : 0;
+    const pnl = _ep > 0 ? (_cp - _ep) / _ep * (p.size_remaining || p.size || 0) : 0;
+    const pct = _ep > 0 ? (_cp - _ep) / _ep * 100 : 0;
     const isPos = pnl > 0.005;
     const isNeg = pnl < -0.005;
     const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
@@ -2935,9 +2933,8 @@ function renderPositions() {
     const entryPrice   = p.entryPrice || 0;
     const currentPrice = p.currentPrice || entryPrice;
     const size         = p.size_remaining || p.size || 0;
-    const entryFee     = p.realMode ? size * (p.fee_pct || 0.0009) : 0;
-    const pnl  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * size - entryFee : 0;
-    const pct  = entryPrice > 0 && size > 0 ? pnl / size * 100 : 0;
+    const pnl  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * size : 0;
+    const pct  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100 : 0;
     const isPos = pnl > 0.005, isNeg = pnl < -0.005;
     const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
