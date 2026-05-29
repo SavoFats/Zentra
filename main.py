@@ -990,10 +990,19 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     if not order_id or market_cancelled:
                         err_msg = result.get("message") or result.get("error") or result.get("detail") or str(result)
                         if "insufficient" in str(err_msg).lower():
-                            add_log(state, "info", "WARN", f"{sym}: Insufficient balance — venduto esternamente, registro trade")
-                            sold_externally = True
+                            pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
+                            add_log(state, "info", "WARN", f"{sym}: Insufficient balance su market order ({pos['_sell_failures']}x) — balance locked su RevX, riprova")
+                            await notify(state, f"WARN {sym}: balance insufficiente su RevX (tentativo {pos['_sell_failures']}). Posizione mantenuta, riprovando.")
+                            if pos.get("_sell_failures", 0) >= 3:
+                                add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — vendi manualmente su RevX")
+                                await notify(state, f"WARN: {sym} rimosso dopo 3 errori. Vendi manualmente su RevX.")
+                                if pos in state["positions"]: state["positions"].remove(pos)
+                                _exiting.discard(sym); return
+                            else:
+                                _exiting.discard(sym); return
                         elif market_cancelled:
-                            # RevX slippage protection: market order rifiutato — fallback IOC limit -2%
+                            # RevX slippage protection: market order rifiutato — fallback IOC limit -5%
+                            add_log(state, "info", "WARN", f"{sym}: market sell cancellato (slippage protection) → fallback limit IOC -5%")
                             print(f"[REVX SELL] {sym} market cancelled (slippage), fallback IOC limit -5%")
                             limit_price = round(cur * 0.95, 8)
                             fb_body = {
@@ -1008,6 +1017,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                                     }
                                 }
                             }
+                            add_log(state, "info", "INFO", f"{sym}: IOC limit piazzato a ${limit_price:.4f} (qty {qty_to_sell:.4f})")
                             fb_result = await revx_request("POST", "/api/1.0/orders", fb_body, key_id=revx_key_id, private_key=revx_priv)
                             print(f"[REVX SELL FALLBACK] {sym}: {fb_result}")
                             fb_data = fb_result.get("data") or fb_result
@@ -1025,25 +1035,29 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                                     pos["qty_purchased"] = qty_purchased - qty_to_sell
                             else:
                                 fb_err = fb_result.get("message") or fb_result.get("error") or str(fb_result)
+                                pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
                                 if "insufficient" in str(fb_err).lower():
-                                    add_log(state, "info", "WARN", f"{sym}: Insufficient balance (fallback) — venduto esternamente")
-                                    sold_externally = True
+                                    add_log(state, "info", "WARN", f"{sym}: Insufficient balance su IOC fallback ({pos['_sell_failures']}x) — balance locked su RevX, riprova")
+                                    await notify(state, f"WARN {sym}: balance insufficiente su RevX (tentativo {pos['_sell_failures']}). Posizione mantenuta, riprovando.")
                                 else:
-                                    pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
                                     add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): market+IOC entrambi cancellati")
                                     await notify(state, f"ERRORE VENDITA RevX {sym}: slippage protection attiva, riprovando...")
-                                    if pos.get("_sell_failures", 0) >= 3:
-                                        add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite")
-                                        await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
-                                    else:
-                                        _exiting.discard(sym); return
+                                if pos.get("_sell_failures", 0) >= 3:
+                                    add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — vendi manualmente su RevX")
+                                    await notify(state, f"WARN: {sym} rimosso dopo 3 errori. Vendi manualmente su RevX.")
+                                    if pos in state["positions"]: state["positions"].remove(pos)
+                                    _exiting.discard(sym); return
+                                else:
+                                    _exiting.discard(sym); return
                         else:
                             pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
                             add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
                             await notify(state, f"ERRORE VENDITA RevX {sym}: {err_msg[:100]}")
                             if pos.get("_sell_failures", 0) >= 3:
-                                add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — verifica su RevX")
-                                await notify(state, f"WARN: {sym} rimosso da memoria dopo 3 errori. Verifica saldo su Revolut X.")
+                                add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — vendi manualmente su RevX")
+                                await notify(state, f"WARN: {sym} rimosso dopo 3 errori. Vendi manualmente su RevX.")
+                                if pos in state["positions"]: state["positions"].remove(pos)
+                                _exiting.discard(sym); return
                             else:
                                 _exiting.discard(sym); return
                     if not sold_externally and order_id and not market_cancelled:
@@ -2806,6 +2820,23 @@ async def debug_revx_order(request: Request, order_id: str, user_id: int = Depen
     private_key = decrypt_key(row["revx_private_key"])
     try:
         result = await revx_request("GET", f"/api/1.0/orders/{order_id}", key_id=key_id, private_key=private_key)
+        return {"ok": True, "raw": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@app.delete("/debug/revx_cancel_order")
+async def debug_revx_cancel_order(request: Request, order_id: str, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=15, window=60, key_suffix="debug_revx_cancel")
+    if not db_pool:
+        return {"ok": False, "error": "DB non disponibile"}
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
+    if not row or not row["revx_key_id"]:
+        return {"ok": False, "error": "Chiavi Revolut X non configurate"}
+    key_id = decrypt_key(row["revx_key_id"])
+    private_key = decrypt_key(row["revx_private_key"])
+    try:
+        result = await revx_request("DELETE", f"/api/1.0/orders/{order_id}", key_id=key_id, private_key=private_key)
         return {"ok": True, "raw": result}
     except Exception as e:
         return {"ok": False, "error": str(e)}
