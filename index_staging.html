@@ -3304,7 +3304,7 @@ function renderMarket() {
       _emaCache[emaId] = ema;
       const dot = (on, key, label) => `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}" onmouseenter="showDotTooltip(this)" onmouseleave="hideEmaTooltip()" ontouchstart="showDotTooltip(this);event.stopPropagation()" style="cursor:pointer"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'breakout','BREAK')}${dot(ema.vol_ok,'vol','VOL')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${signalDot}</div>`;
     }
     const starred = _watchlist.has(c.symbol);
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
@@ -3688,8 +3688,8 @@ let _tooltipTimeout = null;
 
 // Definizioni indicatori per tooltip
 const EMA_DOT_INFO = {
-  breakout: {
-    name: 'Breakout',
+  momentum: {
+    name: 'Momentum',
     descOn:  "Momentum confermato: il prezzo è salito ≥1% negli ultimi 50 minuti (10 candele 5m) — il coin si sta muovendo.",
     descOff: "Momentum assente: il prezzo non ha guadagnato abbastanza negli ultimi 50 minuti. Nessun segnale di entrata.",
   },
@@ -3738,7 +3738,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { breakout: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
+  const keyMap = { momentum: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
