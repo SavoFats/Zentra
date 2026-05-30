@@ -489,7 +489,9 @@ async def fetch_all_candles():
         [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in _dynamic_universe],
         key=lambda x: x[1].get("volume24h", 0),
         reverse=True
-    )[:CANDLE_UNIVERSE_SIZE]
+    )
+    if not _revx_pairs:
+        universe = universe[:CANDLE_UNIVERSE_SIZE]
 
     if not universe:
         return
