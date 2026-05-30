@@ -947,6 +947,7 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
     }
     try:
         result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+        print(f"[GTC PLACE] {sym} #{attempt+1} raw result: {result}")
         data = result.get("data") or result
         order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
         if order_id and data.get("state", "") not in ("cancelled", "rejected"):
@@ -955,13 +956,16 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
             pos["_sell_limit_order_id"] = order_id
             pos["_sell_limit_placed_at"] = time.time()
             pos["_sell_limit_price"] = limit_price
+            print(f"[GTC PLACE] {sym}: tentativo #{attempt+1} OK — order_id={order_id} price=${limit_price:.4f}")
             add_log(state, "info", "LIMIT GTC", f"{sym}: tentativo #{attempt+1} — limite a ${limit_price:.4f} (-{drop*100:.0f}%)")
             await notify(state, f"LIMIT GTC {sym}: #{attempt+1} a ${limit_price:.4f} (-{int(drop*100)}% dal prezzo originale)")
         else:
             err = result.get("message") or result.get("error") or str(result)
+            print(f"[GTC PLACE] {sym}: tentativo #{attempt+1} FALLITO — {str(err)[:120]}")
             add_log(state, "info", "ERRORE", f"{sym}: GTC limit #{attempt+1} fallito: {str(err)[:80]}")
             await _place_revx_gtc_limit(state, pos, attempt + 1, user_id)
     except Exception as e:
+        print(f"[GTC PLACE] {sym}: eccezione #{attempt+1}: {e}")
         add_log(state, "info", "ERRORE", f"{sym}: eccezione piazzamento GTC limit: {e}")
 
 
@@ -984,6 +988,9 @@ async def _poll_revx_gtc_limit(state: dict, pos: dict, user_id: int = None):
         fee_currency = d.get("fee_currency", "USD")
         elapsed = time.time() - placed_at
 
+        print(f"[GTC POLL] {sym}: order_id={order_id} raw={result}")
+        print(f"[GTC POLL] {sym}: state='{order_state}' filled_qty={filled_qty} avg_fill={avg_fill} elapsed={elapsed:.0f}s attempt={attempt}")
+
         if order_state in ("filled", "completed"):
             sell_price = avg_fill or pos.get("_sell_limit_price", pos["currentPrice"])
             sell_fee_usd = total_fee if fee_currency == "USD" else total_fee * sell_price
@@ -992,21 +999,29 @@ async def _poll_revx_gtc_limit(state: dict, pos: dict, user_id: int = None):
             pos["_already_sold"] = True
             pos["_sell_type"] = f"Limit GTC #{attempt+1}"
             reason = pos.get("_sell_reason", "LIMIT GTC")
+            print(f"[GTC POLL] {sym}: FILLATO #{attempt+1} @ ${sell_price:.4f} fee={sell_fee_usd:.4f} — chiamo exit_position")
             add_log(state, "info", "VENDUTO RevX", f"{sym} GTC limit #{attempt+1} fillato @ ${sell_price:.4f} fee=${sell_fee_usd:.4f}")
             await exit_position(state, pos, reason, user_id=user_id)
             pos.pop("_sell_mode", None)  # rimosso dopo exit_position per proteggere il loop SL/TP in caso di eccezione
 
         elif order_state in ("cancelled", "rejected", "expired"):
+            print(f"[GTC POLL] {sym}: stato '{order_state}' — passo al livello {attempt+2}")
             add_log(state, "info", "INFO", f"{sym}: GTC limit #{attempt+1} cancellato — prossimo livello")
             await _place_revx_gtc_limit(state, pos, attempt + 1, user_id)
 
         elif order_state in ("new", "open", "pending", "active"):
             if elapsed >= 300 and filled_qty == 0:
+                print(f"[GTC POLL] {sym}: timeout 5min senza fill — cancello e passo al livello {attempt+2}")
                 add_log(state, "info", "INFO", f"{sym}: GTC limit #{attempt+1} non fillato dopo 5 min — prossimo livello")
                 await revx_request("DELETE", f"/api/1.0/orders/{order_id}", key_id=revx_key_id, private_key=revx_priv)
                 await _place_revx_gtc_limit(state, pos, attempt + 1, user_id)
+            else:
+                print(f"[GTC POLL] {sym}: ancora aperto — aspetto (filled={filled_qty}, elapsed={elapsed:.0f}s)")
             # < 5 min oppure parzialmente fillato: aspetta
+        else:
+            print(f"[GTC POLL] {sym}: stato SCONOSCIUTO '{order_state}' — raw={result}")
     except Exception as e:
+        print(f"[GTC POLL] {sym}: ECCEZIONE — {e}")
         add_log(state, "info", "ERRORE", f"Poll GTC {sym}: {e}")
 
 
