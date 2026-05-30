@@ -352,7 +352,7 @@ async def fetch_dynamic_universe():
             if any(kw in sym for kw in LEVERAGED_KEYWORDS):
                 continue
             vol = float(t.get("quoteVolume", 0))
-            if vol < 10_000_000:
+            if not _revx_pairs and vol < 10_000_000:
                 continue
             candidates.append((sym, vol))
         candidates.sort(key=lambda x: x[1], reverse=True)
