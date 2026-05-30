@@ -2072,6 +2072,7 @@ async def load_global_revx_keys():
                         pairs.add(symbol[:-4])  # "BTC/USD" -> "BTC"
                 if pairs:
                     _revx_pairs = pairs
+                    _universe_last_update = 0  # forza re-fetch universo con coppie RevX
                     print(f"[REVX] {len(pairs)} coppie USD caricate: {sorted(pairs)[:8]}...")
                 else:
                     print(f"[REVX] Nessuna coppia USD trovata nel ticker")
