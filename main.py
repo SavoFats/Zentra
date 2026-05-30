@@ -257,7 +257,7 @@ async def revx_request(method: str, path: str, body: dict = None,
             r = await client.delete(f"{REVX_BASE}{path}", headers=headers)
         else:
             r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
-    return r.json()
+    return r.json() if r.content else {"ok": True}
 
 
 async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -> dict:
@@ -909,6 +909,105 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     }
     state["positions"].append(pos)
 
+REVX_LIMIT_DROPS = [0.01, 0.02, 0.04, 0.06, 0.09, 0.12, 0.16, 0.20, 0.25, 0.30]
+
+async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: int = None):
+    import uuid as _uuid
+    sym = pos["symbol"]
+    revx_key_id = state.get("revx_key_id", "")
+    revx_priv = state.get("revx_private_key", "")
+    symbol_pair = pos.get("symbol_pair", f"{sym}-USD").replace("/", "-")
+    qty_to_sell = pos.get("_sell_qty", pos.get("qty_purchased", 0.0))
+
+    if attempt >= len(REVX_LIMIT_DROPS):
+        add_log(state, "info", "ERRORE", f"{sym}: 10 tentativi GTC limit esauriti — vendi manualmente su RevX")
+        await notify(state, f"ERRORE {sym}: 10 tentativi GTC limit falliti. Vendi manualmente su RevX.")
+        pos.pop("_sell_mode", None)
+        pos.pop("_sell_limit_order_id", None)
+        return
+
+    drop = REVX_LIMIT_DROPS[attempt]
+    orig_price = pos.get("_sell_original_price", pos["currentPrice"])
+    calc_price = round(orig_price * (1 - drop), 8)
+    limit_price = max(calc_price, round(pos["currentPrice"], 8))
+
+    order_body = {
+        "client_order_id": str(_uuid.uuid4()),
+        "symbol": symbol_pair,
+        "side": "SELL",
+        "order_configuration": {
+            "limit": {
+                "base_size": str(qty_to_sell),
+                "price": str(limit_price),
+                "time_in_force": "GTC"
+            }
+        }
+    }
+    try:
+        result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+        data = result.get("data") or result
+        order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+        if order_id and data.get("state", "") not in ("cancelled", "rejected"):
+            pos["_sell_mode"] = "retry_limit"
+            pos["_sell_attempt"] = attempt
+            pos["_sell_limit_order_id"] = order_id
+            pos["_sell_limit_placed_at"] = time.time()
+            pos["_sell_limit_price"] = limit_price
+            add_log(state, "info", "LIMIT GTC", f"{sym}: tentativo #{attempt+1} — limite a ${limit_price:.4f} (-{drop*100:.0f}%)")
+            await notify(state, f"LIMIT GTC {sym}: #{attempt+1} a ${limit_price:.4f} (-{int(drop*100)}% dal prezzo originale)")
+        else:
+            err = result.get("message") or result.get("error") or str(result)
+            add_log(state, "info", "ERRORE", f"{sym}: GTC limit #{attempt+1} fallito: {str(err)[:80]}")
+            await _place_revx_gtc_limit(state, pos, attempt + 1, user_id)
+    except Exception as e:
+        add_log(state, "info", "ERRORE", f"{sym}: eccezione piazzamento GTC limit: {e}")
+
+
+async def _poll_revx_gtc_limit(state: dict, pos: dict, user_id: int = None):
+    sym = pos["symbol"]
+    order_id = pos.get("_sell_limit_order_id", "")
+    attempt = pos.get("_sell_attempt", 0)
+    placed_at = pos.get("_sell_limit_placed_at", time.time())
+    revx_key_id = state.get("revx_key_id", "")
+    revx_priv = state.get("revx_private_key", "")
+    if not order_id:
+        return
+    try:
+        result = await revx_request("GET", f"/api/1.0/orders/{order_id}", key_id=revx_key_id, private_key=revx_priv)
+        d = result.get("data") or result
+        order_state = (d.get("state") or "").lower()
+        filled_qty = float(d.get("filled_quantity") or 0)
+        avg_fill = float(d.get("average_fill_price") or 0)
+        total_fee = float(d.get("total_fee") or 0)
+        fee_currency = d.get("fee_currency", "USD")
+        elapsed = time.time() - placed_at
+
+        if order_state in ("filled", "completed"):
+            sell_price = avg_fill or pos.get("_sell_limit_price", pos["currentPrice"])
+            sell_fee_usd = total_fee if fee_currency == "USD" else total_fee * sell_price
+            pos["sell_fee_usd"] = pos.get("sell_fee_usd", 0.0) + sell_fee_usd
+            pos["currentPrice"] = sell_price
+            pos["_already_sold"] = True
+            pos["_sell_type"] = f"Limit GTC #{attempt+1}"
+            reason = pos.get("_sell_reason", "LIMIT GTC")
+            pos.pop("_sell_mode", None)
+            add_log(state, "info", "VENDUTO RevX", f"{sym} GTC limit #{attempt+1} fillato @ ${sell_price:.4f} fee=${sell_fee_usd:.4f}")
+            await exit_position(state, pos, reason, user_id=user_id)
+
+        elif order_state in ("cancelled", "rejected", "expired"):
+            add_log(state, "info", "INFO", f"{sym}: GTC limit #{attempt+1} cancellato — prossimo livello")
+            await _place_revx_gtc_limit(state, pos, attempt + 1, user_id)
+
+        elif order_state in ("new", "open", "pending", "active"):
+            if elapsed >= 300 and filled_qty == 0:
+                add_log(state, "info", "INFO", f"{sym}: GTC limit #{attempt+1} non fillato dopo 5 min — prossimo livello")
+                await revx_request("DELETE", f"/api/1.0/orders/{order_id}", key_id=revx_key_id, private_key=revx_priv)
+                await _place_revx_gtc_limit(state, pos, attempt + 1, user_id)
+            # < 5 min oppure parzialmente fillato: aspetta
+    except Exception as e:
+        add_log(state, "info", "ERRORE", f"Poll GTC {sym}: {e}")
+
+
 async def exit_position(state: dict, pos: dict, reason: str, partial: bool = False, user_id: int = None):
     """
     Se partial=True: chiude il 50% della posizione (TP1).
@@ -935,7 +1034,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 
     if pos.get("realMode", False):
         # ── REVOLUT X EXIT ────────────────────────────────────────────────────
-        if pos.get("exchange") == "revx":
+        if pos.get("exchange") == "revx" and not pos.get("_already_sold"):
             revx_key_id = state.get("revx_key_id", "")
             revx_priv   = state.get("revx_private_key", "")
             qty_purchased = pos.get("qty_purchased", 0.0)
@@ -1009,54 +1108,14 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                             else:
                                 _exiting.discard(sym); return
                         elif market_cancelled:
-                            # RevX slippage protection: market order rifiutato — fallback IOC limit -5%
-                            add_log(state, "info", "WARN", f"{sym}: market sell cancellato (slippage protection) → fallback limit IOC -5%")
-                            print(f"[REVX SELL] {sym} market cancelled (slippage), fallback IOC limit -5%")
-                            limit_price = round(cur * 0.95, 8)
-                            fb_body = {
-                                "client_order_id": str(_uuid.uuid4()),
-                                "symbol": symbol_pair,
-                                "side": "SELL",
-                                "order_configuration": {
-                                    "limit": {
-                                        "base_size": str(qty_to_sell),
-                                        "price": str(limit_price),
-                                        "time_in_force": "IOC"
-                                    }
-                                }
-                            }
-                            add_log(state, "info", "INFO", f"{sym}: IOC limit piazzato a ${limit_price:.4f} (qty {qty_to_sell:.4f})")
-                            fb_result = await revx_request("POST", "/api/1.0/orders", fb_body, key_id=revx_key_id, private_key=revx_priv)
-                            print(f"[REVX SELL FALLBACK] {sym}: {fb_result}")
-                            fb_data = fb_result.get("data") or fb_result
-                            fb_id    = fb_data.get("venue_order_id") or fb_data.get("order_id") or fb_data.get("id", "")
-                            fb_state = fb_data.get("state", "")
-                            if fb_id and fb_state not in ("cancelled", "rejected", ""):
-                                # fallback riuscito
-                                fb_od = await get_revx_order_details(fb_id, revx_key_id, revx_priv)
-                                filled_price = fb_od.get("average_fill_price") or float(fb_data.get("average_price") or fb_data.get("price") or limit_price)
-                                if filled_price > 0: cur = filled_price
-                                fb_fee_usd = fb_od.get("total_fee", 0.0) if fb_od.get("fee_currency", "USD") == "USD" else fb_od.get("total_fee", 0.0) * cur
-                                pos["sell_fee_usd"] = pos.get("sell_fee_usd", 0.0) + fb_fee_usd
-                                add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f} fee=${fb_fee_usd:.4f} (IOC fallback)")
-                                if partial:
-                                    pos["qty_purchased"] = qty_purchased - qty_to_sell
-                            else:
-                                fb_err = fb_result.get("message") or fb_result.get("error") or str(fb_result)
-                                pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
-                                if "insufficient" in str(fb_err).lower():
-                                    add_log(state, "info", "WARN", f"{sym}: Insufficient balance su IOC fallback ({pos['_sell_failures']}x) — balance locked su RevX, riprova")
-                                    await notify(state, f"WARN {sym}: balance insufficiente su RevX (tentativo {pos['_sell_failures']}). Posizione mantenuta, riprovando.")
-                                else:
-                                    add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): market+IOC entrambi cancellati")
-                                    await notify(state, f"ERRORE VENDITA RevX {sym}: slippage protection attiva, riprovando...")
-                                if pos.get("_sell_failures", 0) >= 3:
-                                    add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — vendi manualmente su RevX")
-                                    await notify(state, f"WARN: {sym} rimosso dopo 3 errori. Vendi manualmente su RevX.")
-                                    if pos in state["positions"]: state["positions"].remove(pos)
-                                    _exiting.discard(sym); return
-                                else:
-                                    _exiting.discard(sym); return
+                            # RevX slippage protection: market order rifiutato — avvia retry GTC limit
+                            add_log(state, "info", "WARN", f"{sym}: market sell cancellato (slippage protection) → retry GTC limit")
+                            print(f"[REVX SELL] {sym} market cancelled (slippage), avvio GTC retry")
+                            pos["_sell_reason"] = reason
+                            pos["_sell_original_price"] = cur
+                            pos["_sell_qty"] = qty_to_sell
+                            await _place_revx_gtc_limit(state, pos, 0, user_id)
+                            _exiting.discard(sym); return
                         else:
                             pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
                             add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
@@ -1075,6 +1134,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                             cur = filled_price
                         sell_fee_usd = od.get("total_fee", 0.0) if od.get("fee_currency", "USD") == "USD" else od.get("total_fee", 0.0) * cur
                         pos["sell_fee_usd"] = pos.get("sell_fee_usd", 0.0) + sell_fee_usd
+                        pos["_sell_type"] = "Market"
                         add_log(state, "info", "VENDUTO RevX", f"{sym} qty: {qty_to_sell:.6f} @ ${cur:.4f} fee=${sell_fee_usd:.4f}")
                         if partial:
                             pos["qty_purchased"] = qty_purchased - qty_to_sell
@@ -1141,6 +1201,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         "size": pos["size"], "realMode": pos.get("realMode", False),
         "tp1_hit": pos.get("tp1_hit", False),
         "buyFee": round(buy_fee_usd, 4), "sellFee": round(sell_fee_usd, 4),
+        "sellType": pos.get("_sell_type", "Market"),
     }
     state["trades"].append(trade_record)
     if db_pool and user_id:
@@ -1150,15 +1211,16 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     INSERT INTO trades_history
                     (user_id, symbol, entry_price, exit_price, size, pnl, pct,
                      reason, tp1_hit, duration_min, entry_time, exit_time, mode,
-                     buy_fee, sell_fee)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                     buy_fee, sell_fee, sell_type)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
                 """, user_id, sym,
                     float(pos["entryPrice"]), float(cur),
                     float(pos["size"]), float(total_pnl), float(total_pct),
                     reason, bool(pos.get("tp1_hit", False)), float(round(dur, 1)),
                     pos["entryTime"], datetime.utcnow().isoformat() + "Z",
                     "real" if pos.get("realMode") else "sim",
-                    float(buy_fee_usd), float(sell_fee_usd)
+                    float(buy_fee_usd), float(sell_fee_usd),
+                    pos.get("_sell_type", "Market")
                 )
         except Exception as e:
             print(f"DB trade save error: {e}")
@@ -1222,8 +1284,16 @@ async def scan_and_trade(state: dict, user_id: int = None):
             add_log(state, "info", "STOP AUTO", f"Raggiunto limite di {max_trades} trade — sessione fermata")
             return
 
+    # Poll ordini GTC limit in attesa di fill
+    for pos in list(state["positions"]):
+        if pos.get("_sell_mode") == "retry_limit" and pos.get("realMode") and pos.get("exchange") == "revx":
+            await _poll_revx_gtc_limit(state, pos, user_id)
+
     # Gestione posizioni aperte: hard stop + trailing profit stop
     for pos in list(state["positions"]):
+        # Posizione in attesa di GTC limit fill: salta SL/TP
+        if pos.get("_sell_mode") == "retry_limit":
+            continue
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
 
@@ -1926,6 +1996,7 @@ async def startup():
                 await conn.execute("""
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS buy_fee FLOAT DEFAULT 0;
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_fee FLOAT DEFAULT 0;
+                    ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_type TEXT DEFAULT 'Market';
                 """)
             print("Database connesso e schema creato")
 

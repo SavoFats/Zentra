@@ -2970,6 +2970,7 @@ function renderPositions() {
           <div style="display:flex;align-items:center;gap:7px">
             <div class="pos-sym-new">${esc(p.symbol)}</div>
             ${p.trailingActive ? '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;background:rgba(5,193,104,0.15);color:var(--green);white-space:nowrap;letter-spacing:0.03em">Trailing attivo</span>' : ''}
+            ${p._sell_mode === 'retry_limit' ? `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;background:rgba(245,158,11,0.15);color:#f59e0b;white-space:nowrap;letter-spacing:0.03em">Limit #${(p._sell_attempt||0)+1} a $${(p._sell_limit_price||0).toFixed(4)}</span>` : ''}
           </div>
         </div>
         <div class="pos-pnl-new">
@@ -3139,6 +3140,7 @@ function renderTransazioni() {
         $${fmtP(t.exitPrice)}
       </div>
       <span style="flex:0 0 auto;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;${reasonBadge(t.reason,t.pnl)}">${reasonLabel(t.reason)}</span>
+      ${t.sellType && t.sellType !== 'Market' ? `<span style="flex:0 0 auto;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;background:rgba(245,158,11,0.15);color:#f59e0b;white-space:nowrap">${esc(t.sellType)}</span>` : ''}
       <div style="flex:0 0 auto;text-align:right;min-width:64px">
         <div style="font-weight:700;font-size:14px;color:${color}">${isWin?'+':''}${getCurrSym()}${fmtMoney(t.pnl)}</div>
         <div style="font-size:11px;font-weight:600;color:${color}">${isWin?'+':''}${t.pct.toFixed(2)}%</div>
