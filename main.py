@@ -356,11 +356,16 @@ async def fetch_dynamic_universe():
                 continue
             candidates.append((sym, vol))
         candidates.sort(key=lambda x: x[1], reverse=True)
-        new_universe = {sym for sym, _ in candidates[:CANDLE_UNIVERSE_SIZE]}
+        candidate_syms = {sym for sym, _ in candidates}
+        if _revx_pairs:
+            # RevX attivo: universo = tutti i coin RevX con dati Binance
+            new_universe = candidate_syms & _revx_pairs
+        else:
+            new_universe = {sym for sym, _ in candidates[:CANDLE_UNIVERSE_SIZE]}
         if new_universe:
             _dynamic_universe = new_universe
             _universe_last_update = time.time()
-            print(f"Universo dinamico: {len(_dynamic_universe)} coin")
+            print(f"Universo dinamico: {len(_dynamic_universe)} coin{' (RevX)' if _revx_pairs else ''}")
     except Exception as e:
         print(f"Errore fetch universo dinamico: {e}")
 
