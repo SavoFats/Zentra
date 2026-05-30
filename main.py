@@ -918,6 +918,9 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
     revx_priv = state.get("revx_private_key", "")
     symbol_pair = pos.get("symbol_pair", f"{sym}-USD").replace("/", "-")
     qty_to_sell = pos.get("_sell_qty", pos.get("qty_purchased", 0.0))
+    if qty_to_sell <= 0:
+        add_log(state, "info", "ERRORE", f"{sym}: qty_to_sell={qty_to_sell} non valida — GTC annullato")
+        return
 
     if attempt >= len(REVX_LIMIT_DROPS):
         add_log(state, "info", "ERRORE", f"{sym}: 10 tentativi GTC limit esauriti — vendi manualmente su RevX")
@@ -938,8 +941,7 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
         "order_configuration": {
             "limit": {
                 "base_size": str(qty_to_sell),
-                "price": str(limit_price),
-                "time_in_force": "GTC"
+                "price": str(limit_price)
             }
         }
     }
