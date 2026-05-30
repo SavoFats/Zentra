@@ -1879,7 +1879,7 @@ async def background_loop():
                 last_persist = time.time()
 
             consecutive_errors = 0
-            await asyncio.sleep(8)
+            await asyncio.sleep(3)
         except Exception as e:
             import traceback
             consecutive_errors += 1
