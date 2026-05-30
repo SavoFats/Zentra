@@ -2183,6 +2183,7 @@ function getLogo(sym) {
 let S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
 let trades = [];
 let pollInterval = null;
+let _expandedTrades = new Set();
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function coinImgErr(el, initial, size) {
   const d = document.createElement('div');
@@ -2198,6 +2199,7 @@ function showTab(name, el) {
   const page = document.getElementById('page-' + name);
   if (!page) return;
   page.classList.add('active');
+  page.scrollTop = 0;
   el.classList.add('active');
   localStorage.setItem('ca_active_tab', name);
   if (name === 'home') renderHome();
@@ -2225,6 +2227,7 @@ async function clearTrades() {
     trades = [];
     _newTradeCount = 0;
     _lastSeenTradeCount = 0;
+    _expandedTrades.clear();
     updateStoricoBadge();
     renderTransazioni();
   } catch(e) { alert('Errore: ' + e.message); }
@@ -3154,12 +3157,18 @@ function renderTransazioni() {
       </div>
     </div>`;
   }).join('');
+  _expandedTrades.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.maxHeight = '80px';
+  });
 }
 
 function toggleTradeRow(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.style.maxHeight = el.style.maxHeight === '80px' ? '0' : '80px';
+  const isOpen = el.style.maxHeight === '80px';
+  el.style.maxHeight = isOpen ? '0' : '80px';
+  if (isOpen) _expandedTrades.delete(id); else _expandedTrades.add(id);
 }
 
 // ── MERCATO ───────────────────────────────────────────────────────────────────
