@@ -2046,7 +2046,7 @@ async def startup():
 
 async def load_global_revx_keys():
     """Carica le chiavi RevX e le coppie USD disponibili all'avvio."""
-    global _global_revx_key_id, _global_revx_private_key, _revx_pairs
+    global _global_revx_key_id, _global_revx_private_key, _revx_pairs, _universe_last_update
     if not db_pool:
         return
     try:
