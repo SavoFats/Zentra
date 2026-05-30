@@ -990,9 +990,9 @@ async def _poll_revx_gtc_limit(state: dict, pos: dict, user_id: int = None):
             pos["_already_sold"] = True
             pos["_sell_type"] = f"Limit GTC #{attempt+1}"
             reason = pos.get("_sell_reason", "LIMIT GTC")
-            pos.pop("_sell_mode", None)
             add_log(state, "info", "VENDUTO RevX", f"{sym} GTC limit #{attempt+1} fillato @ ${sell_price:.4f} fee=${sell_fee_usd:.4f}")
             await exit_position(state, pos, reason, user_id=user_id)
+            pos.pop("_sell_mode", None)  # rimosso dopo exit_position per proteggere il loop SL/TP in caso di eccezione
 
         elif order_state in ("cancelled", "rejected", "expired"):
             add_log(state, "info", "INFO", f"{sym}: GTC limit #{attempt+1} cancellato — prossimo livello")
@@ -2457,6 +2457,7 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
                 "size": r["size"],
                 "buyFee": float(r["buy_fee"] or 0),
                 "sellFee": float(r["sell_fee"] or 0),
+                "sellType": r["sell_type"] or "Market",
             } for r in rows]
             # Merge: DB ha tutto, mem ha solo sessione corrente
             # Usa entryTime come chiave — è identico in memoria e nel DB
