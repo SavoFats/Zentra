@@ -989,7 +989,7 @@ async def _poll_revx_gtc_limit(state: dict, pos: dict, user_id: int = None):
     try:
         result = await revx_request("GET", f"/api/1.0/orders/{order_id}", key_id=revx_key_id, private_key=revx_priv)
         d = result.get("data") or result
-        order_state = (d.get("state") or "").lower()
+        order_state = (d.get("status") or d.get("state") or "").lower()
         filled_qty = float(d.get("filled_quantity") or 0)
         avg_fill = float(d.get("average_fill_price") or 0)
         total_fee = float(d.get("total_fee") or 0)
