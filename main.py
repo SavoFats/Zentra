@@ -1177,7 +1177,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     # Per real mode usa fee reali da RevX, altrimenti stima
     if pos.get("realMode") and pos.get("exchange") == "revx":
         sell_fee_real = pos.get("sell_fee_usd", exit_fee)
-        pnl = pnl - sell_fee_real + exit_fee - pos.get("buy_fee_usd", 0.0)
+        pnl = pnl - sell_fee_real - pos.get("buy_fee_usd", 0.0)
         exit_fee = sell_fee_real
     else:
         pnl -= exit_fee
@@ -1347,8 +1347,9 @@ async def scan_and_trade(state: dict, user_id: int = None):
         ioc_slip    = 0.001 if (state.get("use_revx") and pos.get("realMode")) else 0
         net_pnl_pct = (cur - entry) / entry - fee_rt - ioc_slip
         profit_activation = cfg.get("profitActivation", 0.003)
-        pos["trailingActive"] = net_pnl_pct > profit_activation
         if net_pnl_pct > profit_activation:
+            pos["trailingActive"] = True
+        if pos.get("trailingActive"):
             peak         = pos.get("peak_price", cur)
             profit_move  = peak - entry
             tolerance    = cfg.get("profitTolerance", 0.20)
