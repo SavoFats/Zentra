@@ -28,7 +28,7 @@ else:
     _ORIGINS_ANY = False
     print(f"[CORS] origini consentite: {_ORIGIN_SET}", file=sys.stderr)
 
-_CORS_METHODS = "GET, POST, DELETE, OPTIONS"
+_CORS_METHODS = "GET, POST, PATCH, DELETE, OPTIONS"
 _CORS_HEADERS = "Authorization, Content-Type"
 
 @app.middleware("http")
