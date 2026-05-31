@@ -473,6 +473,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "atr_15m_long":     atr_15m_long,
             "atr_15m_short":    atr_15m_short,
             "close_10_ago":     close_10_ago,
+            "close_3_ago":      closes5[-5] if len(closes5) >= 5 else closes5[0],
             "sparkline":        closes1h[-25:-1],
             "updated_at":       time.time(),
         }
@@ -527,26 +528,34 @@ def get_momentum_signal(sym: str, current_price: float,
                 "breakout_ok": False, "vol_ok": False}
 
     close_10_ago = cd.get("close_10_ago", 0.0)
+    close_3_ago  = cd.get("close_3_ago", close_10_ago)
     last_close   = cd.get("last_close_5m", 0.0)
     vol_avg_20   = cd.get("vol_avg_20", 0.0)
     vol_last     = cd.get("vol_last", 0.0)
+    rsi_14       = cd.get("rsi_14", 50.0)
 
     momentum_pct = (last_close - close_10_ago) / close_10_ago if close_10_ago > 0 else 0.0
     breakout_ok  = momentum_pct >= momentum_threshold
     vol_ok       = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
+    freshness_ok = last_close > close_3_ago
+    rsi_ok       = 45 <= rsi_14 <= 72
 
     stop_price = current_price * (1 - max_stop_pct)
 
-    signal = breakout_ok and vol_ok
+    signal = breakout_ok and vol_ok and freshness_ok and rsi_ok
 
     if not breakout_ok:
         reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{momentum_threshold*100:.0f}%)"
     elif not vol_ok:
         ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
         reason = f"volume basso ({ratio:.2f}x < {vol_multiplier}x richiesto)"
+    elif not freshness_ok:
+        reason = f"momentum stantio | ultimi 15min negativi | RSI {rsi_14:.0f}"
+    elif not rsi_ok:
+        reason = f"RSI {rsi_14:.0f} fuori range [45-72]"
     else:
         ratio = vol_last / vol_avg_20
-        reason = f"MOMENTUM +{momentum_pct*100:.2f}% in 50min | vol {ratio:.1f}x | SL -{max_stop_pct*100:.1f}%"
+        reason = f"MOMENTUM +{momentum_pct*100:.2f}% in 50min | vol {ratio:.1f}x | RSI {rsi_14:.0f} | SL -{max_stop_pct*100:.1f}%"
 
     return {
         "signal":      signal,
