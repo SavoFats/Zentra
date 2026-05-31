@@ -1260,7 +1260,11 @@ body.auth-active .tabbar { display:none !important; }
         oninput="document.getElementById('cdVal').textContent=this.value+'h'">
     </div>
 
+    <div id="sessionActiveBanner" style="display:none;background:rgba(0,82,255,0.10);border:1px solid rgba(0,82,255,0.25);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:16px;font-size:13px;font-weight:600;color:var(--blue)">
+      Sessione in corso — le modifiche si applicano ai nuovi trade
+    </div>
     <button class="start-btn" id="startBtn" onclick="startAgent()">Avvia sessione</button>
+    <button class="start-btn" id="saveBtn" onclick="saveConfigLive()" style="display:none">Salva modifiche</button>
     <button class="reset-btn" id="resetBtn" onclick="resetAgent()">Reset</button>
     <div style="height:8px"></div>
   </div>
@@ -1280,7 +1284,7 @@ body.auth-active .tabbar { display:none !important; }
         </button>
         <button id="pauseBtn" onclick="pauseAgent()" disabled
           style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-          Pausa
+          ‖ Pausa
         </button>
       </div>
       <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
@@ -2267,13 +2271,16 @@ function startFluidTimer() {
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','momentumPct','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
+const CONFIG_IDS_LOCKED_LIVE = ['capitalPct','sessionDuration'];
 
 function lockConfig() {
-  CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
+  CONFIG_IDS_LOCKED_LIVE.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
   document.getElementById('modeSimBtn').disabled = true;
   document.getElementById('modeRealBtn').disabled = true;
   document.getElementById('startBtn').style.display = 'none';
   document.getElementById('resetBtn').style.display = 'none';
+  document.getElementById('saveBtn').style.display = '';
+  document.getElementById('sessionActiveBanner').style.display = '';
 }
 function unlockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=false; });
@@ -2281,6 +2288,32 @@ function unlockConfig() {
   document.getElementById('modeRealBtn').disabled = false;
   document.getElementById('startBtn').style.display = '';
   document.getElementById('resetBtn').style.display = '';
+  document.getElementById('saveBtn').style.display = 'none';
+  document.getElementById('sessionActiveBanner').style.display = 'none';
+}
+
+async function saveConfigLive() {
+  const cfg = {
+    momentumPct:          parseFloat(document.getElementById('momentumPct').value) / 100,
+    maxStopPct:           parseFloat(document.getElementById('stopLoss').value) / 100,
+    profitTolerance:      parseFloat(document.getElementById('profitTolerance').value) / 100,
+    profitActivation:     parseFloat(document.getElementById('profitActivation').value) / 100,
+    minVolume:            parseFloat(document.getElementById('minVolume').value) * 1000000,
+    maxTrades:            parseInt(document.getElementById('maxTrades').value),
+    maxConsecutiveLosses: parseInt(document.getElementById('maxConsecutiveLosses').value),
+    cooldown:             parseFloat(document.getElementById('cooldown').value),
+    maxHoldHours:         parseFloat(document.getElementById('maxHoldHours').value),
+    allocPct:             parseInt(document.getElementById('allocPct').value) / 100,
+    btcEmaFilter:         _btcEmaFilter,
+  };
+  try {
+    const r = await fetch(API + '/config', { method:'PATCH', headers:authHeaders(), body:JSON.stringify(cfg) });
+    const d = await r.json();
+    if (d.error) { alert(d.error); return; }
+    saveConfigToStorage({...cfg});
+    showToast('Modifiche applicate');
+    closeDrawer();
+  } catch(e) { alert('Errore: ' + e.message); }
 }
 
 function resetConfigToDefaults() {
@@ -2723,7 +2756,7 @@ function render() {
     if (stopBtn) stopBtn.disabled = false;
     if (pauseBtn) {
       pauseBtn.disabled = false;
-      pauseBtn.textContent = S.paused ? 'Riprendi' : 'Pausa';
+      pauseBtn.textContent = S.paused ? '▶ Riprendi' : '‖ Pausa';
       pauseBtn.style.background = S.paused ? 'rgba(246,200,61,0.25)' : 'rgba(255,255,255,0.10)';
       pauseBtn.style.borderColor = S.paused ? 'rgba(246,200,61,0.5)' : 'rgba(255,255,255,0.22)';
       pauseBtn.style.color = S.paused ? '#f6c83d' : '#fff';
@@ -3640,7 +3673,6 @@ function renderMarketStars() {
 
 // ── DRAWER CONFIG ─────────────────────────────────────────────────────────────
 function openDrawer() {
-  if (S.running) return; // non aprire se sessione in corso
   const drawerContent = document.getElementById('drawerConfigContent');
   if (!drawerContent) return;
   const configPage = document.getElementById('page-config');

@@ -2827,6 +2827,23 @@ async def stop_agent(request: Request, user_id: int = Depends(get_current_user))
     await persist_sessions()  # rimuovi dal DB
     return {"ok": True, "pnl": pnl}
 
+@app.patch("/config")
+async def update_config_live(body: dict, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="config")
+    state = get_session(user_id)
+    if not state["running"]:
+        return {"error": "Nessuna sessione attiva"}
+    LOCKED = {"capital", "realMode", "capitalPct", "sessionDuration"}
+    cfg = state["config"]
+    changed = []
+    for k, v in body.items():
+        if k not in LOCKED and k in cfg:
+            cfg[k] = v
+            changed.append(k)
+    if changed:
+        add_log(state, "info", "CONFIG", f"Parametri aggiornati: {', '.join(changed)}")
+    return {"ok": True}
+
 @app.post("/pause")
 async def pause_agent(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=30, window=60, key_suffix="pause")
