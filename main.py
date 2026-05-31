@@ -1,6 +1,7 @@
 import asyncio
 import os
 import time
+import math
 import hashlib
 import json
 import secrets
@@ -313,6 +314,18 @@ def calc_ema(prices: list, period: int) -> float:
         ema = price * k + ema * (1 - k)
     return ema
 
+def calc_ema_list(data: list, period: int) -> list:
+    """Calcola EMA su una serie e restituisce tutti i valori (non solo l'ultimo)."""
+    if len(data) < period:
+        return [0.0] * len(data)
+    k = 2 / (period + 1)
+    ema = sum(data[:period]) / period
+    result = [ema]
+    for price in data[period:]:
+        ema = price * k + ema * (1 - k)
+        result.append(ema)
+    return result
+
 def calc_rsi(prices: list, period: int = 14) -> float:
     """Calcola RSI su una lista di prezzi close. Restituisce l'ultimo valore (0-100)."""
     if len(prices) < period + 1:
@@ -394,6 +407,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         closes15 = [float(k[4]) for k in klines15]
         closes1h = [float(k[4]) for k in klines1h]
         volumes5 = [float(k[5]) for k in klines5]
+        highs5   = [float(k[2]) for k in klines5]
         lows5    = [float(k[3]) for k in klines5]
 
         # ATR 5m: media True Range sugli ultimi 14 periodi
@@ -438,6 +452,38 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         candle_body  = last_close_c - last_open  # positivo = verde
         body_ratio   = abs(candle_body) / candle_range if candle_range > 0 else 0.0
 
+        # Choppiness Index(14) su candele chiuse
+        chop_n = 14
+        atr_sum_chop = sum(trs[-chop_n:]) if len(trs) >= chop_n else sum(trs)
+        hh_chop = max(highs5[-chop_n-1:-1]) if len(highs5) >= chop_n+1 else max(highs5)
+        ll_chop = min(lows5[-chop_n-1:-1])  if len(lows5)  >= chop_n+1 else min(lows5)
+        chop_range = hh_chop - ll_chop
+        chop_14 = round(100 * math.log10(atr_sum_chop / chop_range) / math.log10(chop_n), 2) if chop_range > 0 and atr_sum_chop > 0 else 50.0
+
+        # Keltner Channel upper band: EMA20 + 2×ATR
+        keltner_upper = ema20_5m_cur + 2 * atr_5m
+
+        # TSI(25, 13) su candele chiuse
+        closed5 = closes5[:-1]
+        pc5     = [closed5[i] - closed5[i-1] for i in range(1, len(closed5))]
+        abs_pc5 = [abs(x) for x in pc5]
+        ema1_pc  = calc_ema_list(pc5, 25)
+        ema2_pc  = calc_ema_list(ema1_pc, 13)
+        ema1_abs = calc_ema_list(abs_pc5, 25)
+        ema2_abs = calc_ema_list(ema1_abs, 13)
+        tsi = round(100 * ema2_pc[-1] / ema2_abs[-1], 2) if ema2_abs and ema2_abs[-1] != 0 else 0.0
+
+        # MACD(5, 13, 3) su candele chiuse
+        ema5_list  = calc_ema_list(closed5, 5)
+        ema13_list = calc_ema_list(closed5, 13)
+        off1 = len(ema5_list) - len(ema13_list)
+        macd_line   = [ema5_list[off1 + i] - ema13_list[i] for i in range(len(ema13_list))]
+        signal_list = calc_ema_list(macd_line, 3)
+        off2 = len(macd_line) - len(signal_list)
+        hist_list   = [macd_line[off2 + i] - signal_list[i] for i in range(len(signal_list))]
+        macd_hist      = hist_list[-1] if hist_list else 0.0
+        macd_hist_prev = hist_list[-2] if len(hist_list) >= 2 else 0.0
+
         # Slope EMA20: confronta EMA20 attuale con EMA20 di 3 candele fa
         ema20_5m_cur   = calc_ema(closes5[:-1], 20)   # su candele chiuse
         ema20_5m_prev3 = calc_ema(closes5[:-4], 20)   # EMA20 di 3 candele fa
@@ -475,6 +521,11 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "close_10_ago":     close_10_ago,
             "close_3_ago":      closes5[-5] if len(closes5) >= 5 else closes5[0],
             "upper_wick_ratio": (last_high - max(last_close_c, last_open)) / candle_range if candle_range > 0 else 0.0,
+            "chop_14":          chop_14,
+            "keltner_upper":    keltner_upper,
+            "tsi":              tsi,
+            "macd_hist":        macd_hist,
+            "macd_hist_prev":   macd_hist_prev,
             "sparkline":        closes1h[-25:-1],
             "updated_at":       time.time(),
         }
@@ -527,7 +578,8 @@ def get_momentum_signal(sym: str, current_price: float,
     if not cd:
         return {"signal": False, "reason": "no candle data", "stop_price": 0.0,
                 "breakout_ok": False, "vol_ok": False, "freshness_ok": False, "rsi_ok": False,
-                "decomp_ok": False, "wick_ok": False}
+                "decomp_ok": False, "wick_ok": False, "chop_ok": False, "keltner_ok": False,
+                "tsi_ok": False, "macd_ok": False}
 
     close_10_ago     = cd.get("close_10_ago", 0.0)
     close_3_ago      = cd.get("close_3_ago", close_10_ago)
@@ -536,6 +588,11 @@ def get_momentum_signal(sym: str, current_price: float,
     vol_last         = cd.get("vol_last", 0.0)
     rsi_14           = cd.get("rsi_14", 50.0)
     upper_wick_ratio = cd.get("upper_wick_ratio", 0.0)
+    chop_14          = cd.get("chop_14", 100.0)
+    keltner_upper    = cd.get("keltner_upper", 0.0)
+    tsi              = cd.get("tsi", -1.0)
+    macd_hist        = cd.get("macd_hist", -1.0)
+    macd_hist_prev   = cd.get("macd_hist_prev", 0.0)
 
     momentum_pct = (last_close - close_10_ago) / close_10_ago if close_10_ago > 0 else 0.0
     total_move   = last_close - close_10_ago
@@ -547,10 +604,15 @@ def get_momentum_signal(sym: str, current_price: float,
     rsi_ok       = 45 <= rsi_14 <= 72
     decomp_ok    = (recent_move / total_move) >= 0.25 if total_move > 0 else False
     wick_ok      = upper_wick_ratio <= 0.55
+    chop_ok      = chop_14 < 61.8
+    keltner_ok   = last_close > keltner_upper if keltner_upper > 0 else False
+    tsi_ok       = tsi > 0
+    macd_ok      = macd_hist > 0 and macd_hist > macd_hist_prev
 
     stop_price = current_price * (1 - max_stop_pct)
 
-    signal = breakout_ok and vol_ok and freshness_ok and rsi_ok and decomp_ok and wick_ok
+    signal = (breakout_ok and vol_ok and freshness_ok and rsi_ok and
+              decomp_ok and wick_ok and chop_ok and keltner_ok and tsi_ok and macd_ok)
 
     if not breakout_ok:
         reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{momentum_threshold*100:.0f}%)"
@@ -563,13 +625,22 @@ def get_momentum_signal(sym: str, current_price: float,
         reason = f"RSI {rsi_14:.0f} fuori range [45-72]"
     elif not decomp_ok:
         pct = (recent_move / total_move * 100) if total_move > 0 else 0
-        reason = f"move esaurito | solo {pct:.0f}% del move nelle ultime 3 candele (min 25%)"
+        reason = f"move esaurito | solo {pct:.0f}% nelle ultime 3 candele (min 25%)"
     elif not wick_ok:
-        reason = f"rigetto venditori | fitino superiore {upper_wick_ratio*100:.0f}% del range (max 55%)"
+        reason = f"rigetto venditori | fitino {upper_wick_ratio*100:.0f}% del range (max 55%)"
+    elif not chop_ok:
+        reason = f"mercato laterale | CHOP {chop_14:.1f} (max 61.8)"
+    elif not keltner_ok:
+        reason = f"sotto Keltner upper | prezzo non ha rotto EMA20+2×ATR"
+    elif not tsi_ok:
+        reason = f"TSI {tsi:.1f} negativo — momentum non confermato"
+    elif not macd_ok:
+        reason = f"MACD histogram non accelera | hist {macd_hist:.6f}"
     else:
         ratio = vol_last / vol_avg_20
-        pct = (recent_move / total_move * 100) if total_move > 0 else 0
-        reason = f"MOMENTUM +{momentum_pct*100:.2f}% in 50min | vol {ratio:.1f}x | RSI {rsi_14:.0f} | fresco {pct:.0f}% | SL -{max_stop_pct*100:.1f}%"
+        pct   = (recent_move / total_move * 100) if total_move > 0 else 0
+        reason = (f"MOMENTUM +{momentum_pct*100:.2f}% | vol {ratio:.1f}x | RSI {rsi_14:.0f} | "
+                  f"TSI {tsi:.1f} | CHOP {chop_14:.1f} | fresco {pct:.0f}% | SL -{max_stop_pct*100:.1f}%")
 
     return {
         "signal":       signal,
@@ -581,6 +652,10 @@ def get_momentum_signal(sym: str, current_price: float,
         "rsi_ok":       rsi_ok,
         "decomp_ok":    decomp_ok,
         "wick_ok":      wick_ok,
+        "chop_ok":      chop_ok,
+        "keltner_ok":   keltner_ok,
+        "tsi_ok":       tsi_ok,
+        "macd_ok":      macd_ok,
     }
 
 # ── rest of market data ───────────────────────────────────────────────────────
@@ -2555,6 +2630,10 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "rsi_ok":       sig.get("rsi_ok", False),
             "decomp_ok":    sig.get("decomp_ok", False),
             "wick_ok":      sig.get("wick_ok", False),
+            "chop_ok":      sig.get("chop_ok", False),
+            "keltner_ok":   sig.get("keltner_ok", False),
+            "tsi_ok":       sig.get("tsi_ok", False),
+            "macd_ok":      sig.get("macd_ok", False),
             "signal":       sig["signal"],
             "reason":       sig["reason"],
         }

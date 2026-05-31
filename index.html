@@ -3395,7 +3395,7 @@ function renderMarket() {
       _emaCache[emaId] = ema;
       const dot = (on, key, label) => `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}" onmouseenter="showDotTooltip(this)" onmouseleave="hideEmaTooltip()" ontouchstart="showDotTooltip(this);event.stopPropagation()" style="cursor:pointer"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${dot(ema.freshness_ok,'freshness','FRSH')}${dot(ema.rsi_ok,'rsi','RSI')}${dot(ema.decomp_ok,'decomp','DCMP')}${dot(ema.wick_ok,'wick','WICK')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${dot(ema.freshness_ok,'freshness','FRSH')}${dot(ema.rsi_ok,'rsi','RSI')}${dot(ema.decomp_ok,'decomp','DCMP')}${dot(ema.wick_ok,'wick','WICK')}${dot(ema.chop_ok,'chop','CHOP')}${dot(ema.keltner_ok,'keltner','KELT')}${dot(ema.tsi_ok,'tsi','TSI')}${dot(ema.macd_ok,'macd','MACD')}${signalDot}</div>`;
     }
     const starred = _watchlist.has(c.symbol);
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
@@ -3823,6 +3823,26 @@ const EMA_DOT_INFO = {
     descOn:  "Ultima candela senza rigetto significativo dei venditori — fitino superiore sotto il 55% del range totale.",
     descOff: "I venditori hanno rigettato il push: il fitino superiore supera il 55% del range dell'ultima candela. Segnale di debolezza.",
   },
+  chop: {
+    name: 'Choppiness',
+    descOn:  "CHOP < 61.8 — il mercato è in trend direzionale, non laterale. Condizione favorevole per strategie momentum.",
+    descOff: "CHOP ≥ 61.8 — mercato laterale/choppy. I segnali momentum falliscono in queste condizioni.",
+  },
+  keltner: {
+    name: 'Keltner Channel',
+    descOn:  "Prezzo sopra la banda superiore del Keltner Channel (EMA20 + 2×ATR) — breakout confermato dal canale di volatilità.",
+    descOff: "Prezzo sotto la banda superiore del Keltner Channel — il breakout non è abbastanza forte rispetto alla volatilità attuale.",
+  },
+  tsi: {
+    name: 'TSI',
+    descOn:  "True Strength Index > 0 — momentum rialzista confermato con doppia smussatura. Meno falsi segnali dell'RSI.",
+    descOff: "TSI ≤ 0 — momentum negativo o assente. Il move di prezzo non è supportato da forza interna.",
+  },
+  macd: {
+    name: 'MACD Histogram',
+    descOn:  "Istogramma MACD(5,13,3) positivo e in accelerazione — il momentum sta crescendo, non decelerando.",
+    descOff: "Istogramma MACD negativo o in calo — il momentum si sta esaurendo anche se il prezzo è ancora su.",
+  },
   rsi: {
     name: 'RSI [45-72]',
     descOn:  "RSI(14) su 5min tra 45 e 72 — momentum reale senza ipercomprato. Zona ideale per un ingresso long.",
@@ -3843,7 +3863,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { momentum: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', freshness: 'freshness_ok', rsi: 'rsi_ok', decomp: 'decomp_ok', wick: 'wick_ok', stop: 'stop' };
+  const keyMap = { momentum: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', freshness: 'freshness_ok', rsi: 'rsi_ok', decomp: 'decomp_ok', wick: 'wick_ok', chop: 'chop_ok', keltner: 'keltner_ok', tsi: 'tsi_ok', macd: 'macd_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
