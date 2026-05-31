@@ -1278,10 +1278,13 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     # Controllo stop automatico per perdite consecutive
     max_losses = cfg.get("maxConsecutiveLosses", 0)
     if max_losses > 0 and state.get("consecutiveLosses", 0) >= max_losses:
-        state["running"] = False
-        add_log(state, "info", "STOP AUTO",
-            f"{max_losses} perdite consecutive — sessione fermata automaticamente")
-        await notify(state, f"STOP AUTO: {max_losses} perdite consecutive")
+        if not state.get("_draining"):
+            state["_draining"] = True
+            add_log(state, "info", "STOP AUTO",
+                f"{max_losses} perdite consecutive — nuovi ingressi bloccati, posizioni esistenti monitorate")
+            await notify(state,
+                f"⚠️ STOP AUTO: {max_losses} perdite consecutive\n"
+                "Nessun nuovo ingresso. Le posizioni aperte restano monitorate fino alla chiusura.")
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 
@@ -1310,17 +1313,28 @@ async def scan_and_trade(state: dict, user_id: int = None):
     elapsed_ms = (datetime.now().timestamp() - state["sessionStart"]) * 1000
     session_duration = state["sessionDuration"]
     if session_duration > 0 and elapsed_ms >= session_duration:
-        state["running"] = False
-        for p in list(state["positions"]):
-            await exit_position(state, p, "SESSIONE SCADUTA", user_id=user_id)
-        add_log(state, "info", "FINE SESSIONE", "Durata massima raggiunta.")
-        return
+        if state["positions"]:
+            if not state.get("_draining"):
+                state["_draining"] = True
+                add_log(state, "info", "FINE SESSIONE",
+                    "Durata massima raggiunta — in attesa chiusura posizioni aperte.")
+                await notify(state,
+                    "⏰ Sessione scaduta\n"
+                    "Nessun nuovo ingresso. Le posizioni aperte restano monitorate fino alla chiusura.")
+        else:
+            state["running"] = False
+            add_log(state, "info", "FINE SESSIONE", "Durata massima raggiunta.")
+            await persist_sessions()
+            return
 
     # Controllo maxTrades
     max_trades = cfg.get("maxTrades", 0)
     if max_trades > 0 and state["tradeCount"] >= max_trades:
         if state["positions"]:
-            pass  # aspetta che le posizioni aperte si chiudano
+            if not state.get("_draining"):
+                state["_draining"] = True
+                add_log(state, "info", "STOP AUTO",
+                    f"Raggiunto limite di {max_trades} trade — nuovi ingressi bloccati, posizioni esistenti monitorate")
         else:
             state["running"] = False
             add_log(state, "info", "STOP AUTO", f"Raggiunto limite di {max_trades} trade — sessione fermata")
@@ -1375,6 +1389,18 @@ async def scan_and_trade(state: dict, user_id: int = None):
             if cur <= trail_price:
                 await exit_position(state, pos, "TRAILING PROFIT", user_id=user_id)
                 continue
+
+    # Drenaggio attivo: nessun nuovo ingresso. Ferma la sessione appena tutte le posizioni sono chiuse.
+    if state.get("_draining"):
+        if not state["positions"]:
+            state["running"] = False
+            state.pop("_draining", None)
+            add_log(state, "info", "STOP", "Tutte le posizioni chiuse — sessione terminata.")
+            await notify(state, "✅ Zentra — sessione terminata\nTutte le posizioni aperte sono state chiuse.")
+            await persist_sessions()
+        else:
+            _update_pnl(state)
+        return
 
     alloc_pct   = cfg.get("allocPct", 0.20)
     capital_pct = cfg.get("capitalPct", 1.0)
