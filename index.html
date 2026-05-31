@@ -1169,15 +1169,15 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
-      <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
-      <input type="range" id="momentumPct" min="0.5" max="3" value="1" step="0.5"
+      <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.5%</span></div>
+      <input type="range" id="momentumPct" min="0.5" max="3" value="1.5" step="0.5"
         oninput="document.getElementById('momentumPctVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
       <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
     </div>
 
     <div class="field">
-      <div class="field-label">Moltiplicatore Volume <span id="volMultVal" style="color:var(--blue);font-weight:700">1.2×</span></div>
-      <input type="range" id="volMultiplier" min="1" max="3" value="1.2" step="0.1"
+      <div class="field-label">Moltiplicatore Volume <span id="volMultVal" style="color:var(--blue);font-weight:700">1.5×</span></div>
+      <input type="range" id="volMultiplier" min="1" max="3" value="1.5" step="0.1"
         oninput="document.getElementById('volMultVal').textContent=parseFloat(this.value).toFixed(1)+'×'">
       <div class="field-hint">Volume ultima candela deve essere almeno X volte la media delle ultime 20 — più alto = segnali rari ma più forti</div>
     </div>
@@ -1185,8 +1185,8 @@ body.auth-active .tabbar { display:none !important; }
     <div class="section-label">Stop &amp; Take Profit</div>
 
     <div class="field">
-      <div class="field-label">Stop Loss massimo <span id="slVal">2.5%</span></div>
-      <input type="range" id="stopLoss" min="0.5" max="5" value="2.0" step="0.1"
+      <div class="field-label">Stop Loss massimo <span id="slVal">0.5%</span></div>
+      <input type="range" id="stopLoss" min="0.5" max="5" value="0.5" step="0.1"
         oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%';updateTpSchema()">
       <div class="field-hint">Stop fisso sotto il prezzo di entrata — protezione catastrofica, non si muove mai</div>
     </div>
@@ -1291,7 +1291,7 @@ body.auth-active .tabbar { display:none !important; }
         </button>
         <button id="pauseBtn" onclick="pauseAgent()" disabled
           style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-          ‖ Pausa
+          ⏸ Pausa
         </button>
       </div>
       <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
@@ -2329,9 +2329,9 @@ function resetConfigToDefaults() {
   document.getElementById('capitalDisplay').textContent = '--';
   document.getElementById('allocPct').value = 0; document.getElementById('allocVal').textContent = '0%';
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
-  document.getElementById('momentumPct').value = 1; document.getElementById('momentumPctVal').textContent = '1.0%';
-  document.getElementById('volMultiplier').value = 1.2; document.getElementById('volMultVal').textContent = '1.2×';
-  document.getElementById('stopLoss').value = 2.0; document.getElementById('slVal').textContent = '2.0%';
+  document.getElementById('momentumPct').value = 1.5; document.getElementById('momentumPctVal').textContent = '1.5%';
+  document.getElementById('volMultiplier').value = 1.5; document.getElementById('volMultVal').textContent = '1.5×';
+  document.getElementById('stopLoss').value = 0.5; document.getElementById('slVal').textContent = '0.5%';
   document.getElementById('profitTolerance').value = 20; document.getElementById('profitTolVal').textContent = '20%';
   document.getElementById('profitActivation').value = 0.3; document.getElementById('profitActVal').textContent = '0.3%';
   document.getElementById('minVolume').value = 0; document.getElementById('volVal').textContent = getCurrSym() + '0M';
@@ -2767,7 +2767,7 @@ function render() {
     if (stopBtn) stopBtn.disabled = false;
     if (pauseBtn) {
       pauseBtn.disabled = false;
-      pauseBtn.textContent = S.paused ? '▶ Riprendi' : '‖ Pausa';
+      pauseBtn.textContent = S.paused ? '▶ Riprendi' : '⏸ Pausa';
       pauseBtn.style.background = S.paused ? 'rgba(246,200,61,0.25)' : 'rgba(255,255,255,0.10)';
       pauseBtn.style.borderColor = S.paused ? 'rgba(246,200,61,0.5)' : 'rgba(255,255,255,0.22)';
       pauseBtn.style.color = S.paused ? '#f6c83d' : '#fff';
