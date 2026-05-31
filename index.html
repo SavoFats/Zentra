@@ -1175,6 +1175,13 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
     </div>
 
+    <div class="field">
+      <div class="field-label">Moltiplicatore Volume <span id="volMultVal" style="color:var(--blue);font-weight:700">1.2×</span></div>
+      <input type="range" id="volMultiplier" min="1" max="3" value="1.2" step="0.1"
+        oninput="document.getElementById('volMultVal').textContent=parseFloat(this.value).toFixed(1)+'×'">
+      <div class="field-hint">Volume ultima candela deve essere almeno X volte la media delle ultime 20 — più alto = segnali rari ma più forti</div>
+    </div>
+
     <div class="section-label">Stop &amp; Take Profit</div>
 
     <div class="field">
@@ -2270,7 +2277,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','momentumPct','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
+const CONFIG_IDS = ['capitalPct','allocPct','sessionDuration','momentumPct','volMultiplier','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
 const CONFIG_IDS_LOCKED_LIVE = ['capitalPct','sessionDuration'];
 
 function lockConfig() {
@@ -2295,6 +2302,7 @@ function unlockConfig() {
 async function saveConfigLive() {
   const cfg = {
     momentumPct:          parseFloat(document.getElementById('momentumPct').value) / 100,
+    volMultiplier:        parseFloat(document.getElementById('volMultiplier').value),
     maxStopPct:           parseFloat(document.getElementById('stopLoss').value) / 100,
     profitTolerance:      parseFloat(document.getElementById('profitTolerance').value) / 100,
     profitActivation:     parseFloat(document.getElementById('profitActivation').value) / 100,
@@ -2322,6 +2330,7 @@ function resetConfigToDefaults() {
   document.getElementById('allocPct').value = 0; document.getElementById('allocVal').textContent = '0%';
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
   document.getElementById('momentumPct').value = 1; document.getElementById('momentumPctVal').textContent = '1.0%';
+  document.getElementById('volMultiplier').value = 1.2; document.getElementById('volMultVal').textContent = '1.2×';
   document.getElementById('stopLoss').value = 2.0; document.getElementById('slVal').textContent = '2.0%';
   document.getElementById('profitTolerance').value = 20; document.getElementById('profitTolVal').textContent = '20%';
   document.getElementById('profitActivation').value = 0.3; document.getElementById('profitActVal').textContent = '0.3%';
@@ -2350,6 +2359,7 @@ function restoreConfigFromStorage() {
   if (saved.allocPct) { const p=Math.round(saved.allocPct*100); document.getElementById('allocPct').value=p; document.getElementById('allocVal').textContent=p+'%'; }
   if (saved.sessionDuration) { document.getElementById('sessionDuration').value=saved.sessionDuration; document.getElementById('sessionVal').textContent=saved.sessionDuration+'h'; }
   if (saved.momentumPct !== undefined) { const mp=(saved.momentumPct*100).toFixed(1); document.getElementById('momentumPct').value=parseFloat(mp); document.getElementById('momentumPctVal').textContent=mp+'%'; }
+  if (saved.volMultiplier !== undefined) { const vm=parseFloat(saved.volMultiplier).toFixed(1); document.getElementById('volMultiplier').value=vm; document.getElementById('volMultVal').textContent=vm+'×'; }
   if (saved.maxStopPct) { const sl=(saved.maxStopPct*100).toFixed(1); document.getElementById('stopLoss').value=sl; document.getElementById('slVal').textContent=sl+'%'; }
   if (saved.profitTolerance !== undefined) { const raw=saved.profitTolerance; const pt=Math.min(40,Math.max(5,raw>1?Math.round(raw):Math.round(raw*100))); document.getElementById('profitTolerance').value=pt; document.getElementById('profitTolVal').textContent=pt+'%'; }
   if (saved.profitActivation !== undefined) { const pa=(saved.profitActivation*100).toFixed(1); document.getElementById('profitActivation').value=parseFloat(pa); document.getElementById('profitActVal').textContent=pa+'%'; }
@@ -2526,6 +2536,7 @@ async function startAgent() {
     allocPct:              allocVal / 100,
     sessionDuration:       parseInt(document.getElementById('sessionDuration').value),
     momentumPct:           parseFloat(document.getElementById('momentumPct').value) / 100,
+    volMultiplier:         parseFloat(document.getElementById('volMultiplier').value),
     maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
     profitTolerance:       parseFloat(document.getElementById('profitTolerance').value) / 100,
     profitActivation:      parseFloat(document.getElementById('profitActivation').value) / 100,
