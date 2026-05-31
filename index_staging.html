@@ -1272,11 +1272,17 @@ body.auth-active .tabbar { display:none !important; }
     <!-- Hero P&L card -->
     <div class="hero-card off" id="heroCard">
       <canvas class="hero-sparkline" id="heroSparkline"></canvas>
-      <button id="stopBtn" onclick="stopAgent()" disabled
-        style="display:none;position:absolute;top:14px;right:16px;padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-        <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
-        Ferma
-      </button>
+      <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;display:none;flex-direction:column;align-items:flex-end;gap:6px">
+        <button id="stopBtn" onclick="stopAgent()" disabled
+          style="padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
+          Ferma
+        </button>
+        <button id="pauseBtn" onclick="pauseAgent()" disabled
+          style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          Pausa
+        </button>
+      </div>
       <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
       <div class="hero-pnl" id="heroPnl">$0.00</div>
       <div class="hero-stats" style="margin-top:10px">
@@ -2519,6 +2525,16 @@ async function doStartAgent(cfg) {
   } catch(e) { alert('Errore connessione: ' + e.message); }
 }
 
+async function pauseAgent() {
+  try {
+    const res = await fetch(API + '/pause', { method:'POST', headers:authHeaders() });
+    const d = await res.json();
+    if (d.error) { alert(d.error); return; }
+    S.paused = d.paused;
+    render();
+  } catch(e) { alert('Errore di rete: ' + e.message); }
+}
+
 async function stopAgent() {
   let data;
   try {
@@ -2691,6 +2707,8 @@ function render() {
   const dot = document.getElementById('logoDot');
 
   const stopBtn = document.getElementById('stopBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const sessionBtns = document.getElementById('sessionBtns');
   const heroCard = document.getElementById('heroCard');
   const liveBadge = document.getElementById('liveBadge');
   if (S.running) {
@@ -2701,11 +2719,28 @@ function render() {
     }
     if (heroCard) heroCard.classList.remove('off');
     if (liveBadge) liveBadge.style.display = window._realMode ? '' : 'none';
-    if (stopBtn) { stopBtn.disabled = false; stopBtn.style.display = 'flex'; }
+    if (sessionBtns) sessionBtns.style.display = 'flex';
+    if (stopBtn) stopBtn.disabled = false;
+    if (pauseBtn) {
+      pauseBtn.disabled = false;
+      pauseBtn.textContent = S.paused ? 'Riprendi' : 'Pausa';
+      pauseBtn.style.background = S.paused ? 'rgba(246,200,61,0.25)' : 'rgba(255,255,255,0.10)';
+      pauseBtn.style.borderColor = S.paused ? 'rgba(246,200,61,0.5)' : 'rgba(255,255,255,0.22)';
+      pauseBtn.style.color = S.paused ? '#f6c83d' : '#fff';
+    }
+    const heroPnlEl2 = document.getElementById('heroPnl');
+    if (heroPnlEl2 && S.paused) {
+      heroPnlEl2.style.opacity = '0.6';
+    } else if (heroPnlEl2) {
+      heroPnlEl2.style.opacity = '';
+    }
   } else {
     dot.className = 'hdr-logo-dot inactive';
     if (heroCard) heroCard.classList.add('off');
     if (liveBadge) liveBadge.style.display = 'none';
+    if (sessionBtns) sessionBtns.style.display = 'none';
+    if (stopBtn) stopBtn.disabled = true;
+    if (pauseBtn) pauseBtn.disabled = true;
     if (stopBtn) { stopBtn.disabled = true; stopBtn.style.display = 'none'; }
   }
 
@@ -2801,7 +2836,12 @@ function renderHomeSession() {
   cnt.innerHTML = pos.map(p => {
     const _ep = p.entryPrice || 0;
     const _cp = p.currentPrice || _ep;
-    const pnl = _ep > 0 ? (_cp - _ep) / _ep * (p.size_remaining || p.size || 0) : 0;
+    const sizeNow = p.size_remaining || p.size || 0;
+    const grossPnl = _ep > 0 ? (_cp - _ep) / _ep * sizeNow : 0;
+    const feePct = p.fee_pct || 0.0009;
+    const buyFee = (p.buy_fee_usd != null) ? p.buy_fee_usd : sizeNow * feePct;
+    const sellFeeEst = sizeNow * feePct;
+    const pnl = grossPnl - buyFee - sellFeeEst;
     const pct = _ep > 0 ? (_cp - _ep) / _ep * 100 : 0;
     const isPos = pnl > 0.005;
     const isNeg = pnl < -0.005;

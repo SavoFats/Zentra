@@ -729,6 +729,7 @@ def make_session() -> dict:
         "tradeCount": 0, "wins": 0, "trades": [], "log": [],
         "consecutiveLosses": 0,
         "plan": "free",
+        "paused": False,
     }
 
 def get_session(user_id: int) -> dict:
@@ -1409,6 +1410,11 @@ async def scan_and_trade(state: dict, user_id: int = None):
     elif tradable_capital < 1.0 and not cfg.get("realMode", False):
         # Sim con capitale esaurito
         add_log(state, "info", "INFO", f"Capitale sim esaurito (${tradable_capital:.2f}) — attesa recupero da posizioni aperte")
+        _update_pnl(state)
+        return
+
+    # Pausa manuale: SL/TP continuano, nessun nuovo ingresso
+    if state.get("paused", False):
         _update_pnl(state)
         return
 
@@ -2418,6 +2424,7 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
         "remainingMs": remaining,
         "pnlHistory": state["pnlHistory"][-100:],
         "log": state.get("log", [])[:40],
+        "paused": state.get("paused", False),
     }
 
 @app.get("/market")
@@ -2744,6 +2751,17 @@ async def stop_agent(request: Request, user_id: int = Depends(get_current_user))
     add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
     await persist_sessions()  # rimuovi dal DB
     return {"ok": True, "pnl": pnl}
+
+@app.post("/pause")
+async def pause_agent(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="pause")
+    state = get_session(user_id)
+    if not state["running"]:
+        return {"error": "Not running"}
+    state["paused"] = not state.get("paused", False)
+    status = "paused" if state["paused"] else "resumed"
+    add_log(state, "info", "PAUSA" if state["paused"] else "RIPRESA", "Nuovi ingressi bloccati." if state["paused"] else "Nuovi ingressi riattivati.")
+    return {"ok": True, "paused": state["paused"], "status": status}
 
 @app.post("/close_position/{symbol}")
 async def close_symbol(symbol: str, request: Request, user_id: int = Depends(get_current_user)):
