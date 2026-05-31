@@ -1293,6 +1293,10 @@ body.auth-active .tabbar { display:none !important; }
           style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
           ⏸ Pausa
         </button>
+        <button onclick="openDrawer()"
+          style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          ✏️ Modifica
+        </button>
       </div>
       <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
       <div class="hero-pnl" id="heroPnl">$0.00</div>
@@ -3391,7 +3395,8 @@ function renderMarket() {
       _emaCache[emaId] = ema;
       const dot = (on, key, label) => `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}" onmouseenter="showDotTooltip(this)" onmouseleave="hideEmaTooltip()" ontouchstart="showDotTooltip(this);event.stopPropagation()" style="cursor:pointer"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${signalDot}</div>`;
+      const blockReason = (!ema.signal && (ema.breakout_ok || ema.vol_ok)) ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;font-weight:500">${esc(ema.reason||'')}</div>` : '';
+      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${dot(ema.freshness_ok,'freshness','FRSH')}${dot(ema.rsi_ok,'rsi','RSI')}${signalDot}</div>${blockReason}`;
     }
     const starred = _watchlist.has(c.symbol);
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">

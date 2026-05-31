@@ -525,7 +525,7 @@ def get_momentum_signal(sym: str, current_price: float,
     cd = candle_data.get(sym)
     if not cd:
         return {"signal": False, "reason": "no candle data", "stop_price": 0.0,
-                "breakout_ok": False, "vol_ok": False}
+                "breakout_ok": False, "vol_ok": False, "freshness_ok": False, "rsi_ok": False}
 
     close_10_ago = cd.get("close_10_ago", 0.0)
     close_3_ago  = cd.get("close_3_ago", close_10_ago)
@@ -558,11 +558,13 @@ def get_momentum_signal(sym: str, current_price: float,
         reason = f"MOMENTUM +{momentum_pct*100:.2f}% in 50min | vol {ratio:.1f}x | RSI {rsi_14:.0f} | SL -{max_stop_pct*100:.1f}%"
 
     return {
-        "signal":      signal,
-        "reason":      reason,
-        "stop_price":  round(stop_price, 8),
-        "breakout_ok": breakout_ok,
-        "vol_ok":      vol_ok,
+        "signal":       signal,
+        "reason":       reason,
+        "stop_price":   round(stop_price, 8),
+        "breakout_ok":  breakout_ok,
+        "vol_ok":       vol_ok,
+        "freshness_ok": freshness_ok,
+        "rsi_ok":       rsi_ok,
     }
 
 # ── rest of market data ───────────────────────────────────────────────────────
@@ -2531,10 +2533,12 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
         item = {"symbol": s, **d}
         sig = get_momentum_signal(s, d["price"], max_stop_pct, vol_mult, momentum_thr)
         item["ema"] = {
-            "breakout_ok": sig.get("breakout_ok", False),
-            "vol_ok":      sig.get("vol_ok", False),
-            "signal":      sig["signal"],
-            "reason":      sig["reason"],
+            "breakout_ok":  sig.get("breakout_ok", False),
+            "vol_ok":       sig.get("vol_ok", False),
+            "freshness_ok": sig.get("freshness_ok", False),
+            "rsi_ok":       sig.get("rsi_ok", False),
+            "signal":       sig["signal"],
+            "reason":       sig["reason"],
         }
         item["sparkline"] = candle_data.get(s, {}).get("sparkline", [])
         items.append(item)
