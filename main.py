@@ -1288,6 +1288,23 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
 async def scan_and_trade(state: dict, user_id: int = None):
     if not state["running"] or state.get("_stopping"):
         return
+
+    # Sessione ripristinata dopo riavvio server: chiudi tutto e ferma
+    if state.get("_auto_stop_on_restore"):
+        state.pop("_auto_stop_on_restore")
+        n_pos = len(state.get("positions", []))
+        print(f"[AUTO-STOP] Chiusura sessione ripristinata — {n_pos} posizioni aperte")
+        for p in list(state["positions"]):
+            await exit_position(state, p, "STOP AUTO-RIAVVIO", user_id=user_id)
+        state["running"] = False
+        await persist_sessions()
+        await notify(state,
+            "⚠️ <b>Zentra — riavvio rilevato</b>\n"
+            f"Sessione trovata attiva dopo il riavvio del server.\n"
+            f"Posizioni chiuse: {n_pos}\n"
+            "L'agente è stato <b>FERMATO</b>. Riavvia manualmente dall'app quando sei pronto.")
+        return
+
     cfg = state["config"]
 
     elapsed_ms = (datetime.now().timestamp() - state["sessionStart"]) * 1000
@@ -2131,11 +2148,16 @@ async def fetch_coingecko_logos():
         print(f"[CG] Errore fetch loghi: {e}")
 
 async def restore_sessions_from_db(pool):
-    """Ripristina sessioni attive salvate nel DB dopo un riavvio."""
+    """Ripristina sessioni attive salvate nel DB dopo un riavvio.
+    Sessioni trovate nel DB vengono marcate per chiusura automatica al primo tick:
+    tutte le posizioni vengono vendute e la sessione viene fermata senza che
+    l'utente debba intervenire. L'utente riceve una notifica Telegram.
+    """
     try:
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
-                SELECT s.user_id, s.state_json, u.revx_key_id, u.revx_private_key
+                SELECT s.user_id, s.state_json, s.updated_at,
+                       u.revx_key_id, u.revx_private_key
                 FROM active_sessions s JOIN users u ON u.id = s.user_id
             """)
         for row in rows:
@@ -2143,17 +2165,44 @@ async def restore_sessions_from_db(pool):
             try:
                 state = json.loads(row["state_json"])
                 if not state.get("running"):
+                    # Sessione già ferma nel DB — pulizia
+                    async with pool.acquire() as conn:
+                        await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
                     continue
+
+                updated_at = row["updated_at"]
+                stale = (datetime.utcnow() - updated_at.replace(tzinfo=None)).total_seconds() > 600
+                if stale:
+                    # Sessione troppo vecchia (>10 min) — non ripristinare
+                    async with pool.acquire() as conn:
+                        await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
+                    print(f"[RESTORE] Sessione user {uid} scartata: updated_at troppo vecchio ({updated_at})")
+                    tg_chat = state.get("telegram_chat_id", "")
+                    msg = ("⚠️ <b>Zentra — sessione scaduta</b>\n"
+                           "Una sessione precedente è stata trovata nel DB ma era troppo vecchia (>10 min). "
+                           "Non è stata ripristinata. Riavvia manualmente dall'app se necessario.")
+                    if tg_chat:
+                        await send_telegram_to(tg_chat, msg)
+                    else:
+                        await send_telegram(msg)
+                    continue
+
                 session_start = state.get("sessionStart", 0)
                 session_dur   = state.get("sessionDuration", 0)
                 if session_dur > 0:
                     elapsed = (datetime.now().timestamp() - session_start) * 1000
                     if elapsed >= session_dur:
+                        async with pool.acquire() as conn:
+                            await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
                         continue
+
                 state["revx_key_id"]     = decrypt_key(row["revx_key_id"] or "")
                 state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
+                # Marca per chiusura automatica al primo tick di scan_and_trade
+                state["_auto_stop_on_restore"] = True
                 user_sessions[uid] = state
-                print(f"Sessione ripristinata per user {uid} con {len(state.get('positions',[]))} posizioni")
+                n_pos = len(state.get("positions", []))
+                print(f"[RESTORE] Sessione user {uid} marcata per auto-stop ({n_pos} posizioni aperte)")
             except Exception as e:
                 print(f"Errore ripristino sessione user {uid}: {e}")
     except Exception as e:
