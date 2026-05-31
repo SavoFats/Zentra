@@ -474,6 +474,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "atr_15m_short":    atr_15m_short,
             "close_10_ago":     close_10_ago,
             "close_3_ago":      closes5[-5] if len(closes5) >= 5 else closes5[0],
+            "upper_wick_ratio": (last_high - max(last_close_c, last_open)) / candle_range if candle_range > 0 else 0.0,
             "sparkline":        closes1h[-25:-1],
             "updated_at":       time.time(),
         }
@@ -525,24 +526,31 @@ def get_momentum_signal(sym: str, current_price: float,
     cd = candle_data.get(sym)
     if not cd:
         return {"signal": False, "reason": "no candle data", "stop_price": 0.0,
-                "breakout_ok": False, "vol_ok": False, "freshness_ok": False, "rsi_ok": False}
+                "breakout_ok": False, "vol_ok": False, "freshness_ok": False, "rsi_ok": False,
+                "decomp_ok": False, "wick_ok": False}
 
-    close_10_ago = cd.get("close_10_ago", 0.0)
-    close_3_ago  = cd.get("close_3_ago", close_10_ago)
-    last_close   = cd.get("last_close_5m", 0.0)
-    vol_avg_20   = cd.get("vol_avg_20", 0.0)
-    vol_last     = cd.get("vol_last", 0.0)
-    rsi_14       = cd.get("rsi_14", 50.0)
+    close_10_ago     = cd.get("close_10_ago", 0.0)
+    close_3_ago      = cd.get("close_3_ago", close_10_ago)
+    last_close       = cd.get("last_close_5m", 0.0)
+    vol_avg_20       = cd.get("vol_avg_20", 0.0)
+    vol_last         = cd.get("vol_last", 0.0)
+    rsi_14           = cd.get("rsi_14", 50.0)
+    upper_wick_ratio = cd.get("upper_wick_ratio", 0.0)
 
     momentum_pct = (last_close - close_10_ago) / close_10_ago if close_10_ago > 0 else 0.0
+    total_move   = last_close - close_10_ago
+    recent_move  = last_close - close_3_ago
+
     breakout_ok  = momentum_pct >= momentum_threshold
     vol_ok       = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
     freshness_ok = last_close > close_3_ago
     rsi_ok       = 45 <= rsi_14 <= 72
+    decomp_ok    = (recent_move / total_move) >= 0.25 if total_move > 0 else False
+    wick_ok      = upper_wick_ratio <= 0.55
 
     stop_price = current_price * (1 - max_stop_pct)
 
-    signal = breakout_ok and vol_ok and freshness_ok and rsi_ok
+    signal = breakout_ok and vol_ok and freshness_ok and rsi_ok and decomp_ok and wick_ok
 
     if not breakout_ok:
         reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{momentum_threshold*100:.0f}%)"
@@ -553,9 +561,15 @@ def get_momentum_signal(sym: str, current_price: float,
         reason = f"momentum stantio | ultimi 15min negativi | RSI {rsi_14:.0f}"
     elif not rsi_ok:
         reason = f"RSI {rsi_14:.0f} fuori range [45-72]"
+    elif not decomp_ok:
+        pct = (recent_move / total_move * 100) if total_move > 0 else 0
+        reason = f"move esaurito | solo {pct:.0f}% del move nelle ultime 3 candele (min 25%)"
+    elif not wick_ok:
+        reason = f"rigetto venditori | fitino superiore {upper_wick_ratio*100:.0f}% del range (max 55%)"
     else:
         ratio = vol_last / vol_avg_20
-        reason = f"MOMENTUM +{momentum_pct*100:.2f}% in 50min | vol {ratio:.1f}x | RSI {rsi_14:.0f} | SL -{max_stop_pct*100:.1f}%"
+        pct = (recent_move / total_move * 100) if total_move > 0 else 0
+        reason = f"MOMENTUM +{momentum_pct*100:.2f}% in 50min | vol {ratio:.1f}x | RSI {rsi_14:.0f} | fresco {pct:.0f}% | SL -{max_stop_pct*100:.1f}%"
 
     return {
         "signal":       signal,
@@ -565,6 +579,8 @@ def get_momentum_signal(sym: str, current_price: float,
         "vol_ok":       vol_ok,
         "freshness_ok": freshness_ok,
         "rsi_ok":       rsi_ok,
+        "decomp_ok":    decomp_ok,
+        "wick_ok":      wick_ok,
     }
 
 # ── rest of market data ───────────────────────────────────────────────────────
@@ -2537,6 +2553,8 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "vol_ok":       sig.get("vol_ok", False),
             "freshness_ok": sig.get("freshness_ok", False),
             "rsi_ok":       sig.get("rsi_ok", False),
+            "decomp_ok":    sig.get("decomp_ok", False),
+            "wick_ok":      sig.get("wick_ok", False),
             "signal":       sig["signal"],
             "reason":       sig["reason"],
         }

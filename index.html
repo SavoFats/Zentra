@@ -3395,7 +3395,7 @@ function renderMarket() {
       _emaCache[emaId] = ema;
       const dot = (on, key, label) => `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}" onmouseenter="showDotTooltip(this)" onmouseleave="hideEmaTooltip()" ontouchstart="showDotTooltip(this);event.stopPropagation()" style="cursor:pointer"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${dot(ema.freshness_ok,'freshness','FRSH')}${dot(ema.rsi_ok,'rsi','RSI')}${signalDot}</div>`;
+      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${dot(ema.freshness_ok,'freshness','FRSH')}${dot(ema.rsi_ok,'rsi','RSI')}${dot(ema.decomp_ok,'decomp','DCMP')}${dot(ema.wick_ok,'wick','WICK')}${signalDot}</div>`;
     }
     const starred = _watchlist.has(c.symbol);
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
@@ -3813,6 +3813,16 @@ const EMA_DOT_INFO = {
     descOn:  "Momentum ancora attivo: ultimi 15 minuti (3 candele 5m) sono net positivi. Il move è ancora in corso, non stantio.",
     descOff: "Momentum stantio: il prezzo degli ultimi 15 minuti è sceso rispetto a 15 minuti fa. Il grosso del move è già avvenuto — ingresso tardivo.",
   },
+  decomp: {
+    name: 'Decomposizione',
+    descOn:  "Almeno il 25% del move totale è avvenuto nelle ultime 3 candele — il momentum è distribuito e ancora attivo, non tutto concentrato all'inizio.",
+    descOff: "Meno del 25% del move nelle ultime 3 candele — il grosso è avvenuto 30-40 minuti fa e il prezzo ora è stagnante. Ingresso tardivo.",
+  },
+  wick: {
+    name: 'Wick Check',
+    descOn:  "Ultima candela senza rigetto significativo dei venditori — fitino superiore sotto il 55% del range totale.",
+    descOff: "I venditori hanno rigettato il push: il fitino superiore supera il 55% del range dell'ultima candela. Segnale di debolezza.",
+  },
   rsi: {
     name: 'RSI [45-72]',
     descOn:  "RSI(14) su 5min tra 45 e 72 — momentum reale senza ipercomprato. Zona ideale per un ingresso long.",
@@ -3833,7 +3843,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { momentum: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', freshness: 'freshness_ok', rsi: 'rsi_ok', stop: 'stop' };
+  const keyMap = { momentum: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', freshness: 'freshness_ok', rsi: 'rsi_ok', decomp: 'decomp_ok', wick: 'wick_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
