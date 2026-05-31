@@ -3395,8 +3395,7 @@ function renderMarket() {
       _emaCache[emaId] = ema;
       const dot = (on, key, label) => `<div class="ema-dot-wrap" data-emakey="${key}" data-emaid="${emaId}" onmouseenter="showDotTooltip(this)" onmouseleave="hideEmaTooltip()" ontouchstart="showDotTooltip(this);event.stopPropagation()" style="cursor:pointer"><div class="ema-dot ${on?'on':'off'}"></div><span class="ema-dot-label">${label}</span></div>`;
       const signalDot = ema.signal ? `<div class="ema-dot-wrap" style="margin-left:2px"><div class="ema-dot signal"></div><span class="ema-dot-label" style="color:var(--blue)">IN</span></div>` : '';
-      const blockReason = (!ema.signal && (ema.breakout_ok || ema.vol_ok)) ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;font-weight:500">${esc(ema.reason||'')}</div>` : '';
-      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${dot(ema.freshness_ok,'freshness','FRSH')}${dot(ema.rsi_ok,'rsi','RSI')}${signalDot}</div>${blockReason}`;
+      emaDots = `<div class="ema-dots">${dot(ema.breakout_ok,'momentum','MOM')}${dot(ema.vol_ok,'vol','VOL')}${dot(ema.freshness_ok,'freshness','FRSH')}${dot(ema.rsi_ok,'rsi','RSI')}${signalDot}</div>`;
     }
     const starred = _watchlist.has(c.symbol);
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
@@ -3809,10 +3808,15 @@ const EMA_DOT_INFO = {
     descOn:  "Volume ≥ 1.5× la media delle ultime 20 candele — il breakout ha partecipazione reale.",
     descOff: "Volume insufficiente — il movimento non è sostenuto da partecipazione reale. Breakout a rischio di falso segnale.",
   },
+  freshness: {
+    name: 'Freshness',
+    descOn:  "Momentum ancora attivo: ultimi 15 minuti (3 candele 5m) sono net positivi. Il move è ancora in corso, non stantio.",
+    descOff: "Momentum stantio: il prezzo degli ultimi 15 minuti è sceso rispetto a 15 minuti fa. Il grosso del move è già avvenuto — ingresso tardivo.",
+  },
   rsi: {
-    name: 'RSI',
-    descOn:  "RSI(14) su 5min in zona neutrale (range configurato). Evita ingressi in ipercomprato o ipervenduto.",
-    descOff: "RSI(14) fuori dalla zona neutrale — mercato in ipercomprato (>60) o ipervenduto (<40). Trade scartato.",
+    name: 'RSI [45-72]',
+    descOn:  "RSI(14) su 5min tra 45 e 72 — momentum reale senza ipercomprato. Zona ideale per un ingresso long.",
+    descOff: "RSI(14) fuori range: sotto 45 = nessun momentum reale, sopra 72 = ipercomprato. Trade scartato.",
   },
   stop: {
     name: 'R (Stop)',
@@ -3829,7 +3833,7 @@ function showDotTooltip(el) {
   const info = EMA_DOT_INFO[key];
   if (!info) return;
   // Mappa chiave dot → chiave nel cache ema
-  const keyMap = { momentum: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', rsi: 'rsi_ok', stop: 'stop' };
+  const keyMap = { momentum: 'breakout_ok', trend1h: 'trend1h_ok', trend: 'trend', pullback: 'pullback_ok', body: 'body_ok', vol: 'vol_ok', freshness: 'freshness_ok', rsi: 'rsi_ok', stop: 'stop' };
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
