@@ -2180,14 +2180,12 @@ async def background_loop():
     last_persist = 0.0
     while True:
         try:
-            # Fetch REST se WebSocket non connesso O se non arrivano msg da >30s
-            ws_stale = _ws_connected and (_ws_last_msg_ts == 0 or time.time() - _ws_last_msg_ts > 30)
-            if not _ws_connected or ws_stale:
-                if time.time() - _rest_price_last_fetch >= 30:
-                    _rest_price_last_fetch = time.time()
-                    await fetch_prices()
-                    if ws_stale:
-                        print(f"[WS] Nessun msg da {int(time.time()-_ws_last_msg_ts)}s — fetch REST prezzi")
+            # Fetch REST prezzi: ogni 5s se WS silente, ogni 30s se WS attivo
+            ws_live = _ws_connected and _ws_last_msg_ts > 0 and (time.time() - _ws_last_msg_ts < 10)
+            rest_interval = 30 if ws_live else 5
+            if time.time() - _rest_price_last_fetch >= rest_interval:
+                _rest_price_last_fetch = time.time()
+                await fetch_prices()
 
             if time.time() - _universe_last_update >= UNIVERSE_UPDATE_INTERVAL:
                 await fetch_dynamic_universe()
