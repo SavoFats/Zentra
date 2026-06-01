@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+      - staging
+
+jobs:
+  revx-guardrails:
+    name: RevX guardrails on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.9"
+          - "3.11"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run RevX guardrail tests
+        env:
+          SECRET_KEY: test-secret
+          PYTHONPYCACHEPREFIX: /tmp/zentra-pycache
+        run: python -m unittest tests/test_revx_guardrails.py
+
+      - name: Compile Python files
+        env:
+          PYTHONPYCACHEPREFIX: /tmp/zentra-pycache
+        run: python -m py_compile main.py tests/test_revx_guardrails.py
