@@ -3009,9 +3009,6 @@ async function poll() {
     } else {
       document.getElementById('startBtn').disabled = false;
       document.getElementById('stopBtn').disabled = true;
-      // Mantieni il polling se ci sono posizioni manuali aperte (aggiornamento prezzi)
-      const hasManual = (S.positions || []).some(p => p.manual);
-      if (!hasManual && pollInterval) { clearInterval(pollInterval); pollInterval = null; }
       unlockConfig();
     }
     render();
