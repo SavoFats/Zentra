@@ -3033,7 +3033,24 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
     sl_pct = max(0.1, min(req.sl_pct, 50.0))
     tp_pct = max(0.1, min(req.tp_pct, 200.0))
     state = get_session(user_id)
-    is_real = state.get("use_revx", False)
+    # Leggi chiavi RevX: prima dalla sessione in memoria, poi dal DB
+    revx_key_id = state.get("revx_key_id", "")
+    revx_priv   = state.get("revx_private_key", "")
+    is_real     = state.get("use_revx", False)
+    if (not is_real or not revx_key_id) and db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT sim_mode, revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
+            if row and not row["sim_mode"] and row["revx_key_id"]:
+                revx_key_id = row["revx_key_id"]
+                revx_priv   = row["revx_private_key"]
+                is_real     = True
+                state["revx_key_id"]      = revx_key_id
+                state["revx_private_key"] = revx_priv
+                state["use_revx"]         = True
+        except Exception as _e:
+            print(f"[MANUAL TRADE] DB lookup: {_e}")
     price = market_data.get(sym, {}).get("price", 0.0)
     if not price:
         raise HTTPException(status_code=400, detail="Prezzo non disponibile per questa coin")
@@ -3042,8 +3059,6 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
     tp_price   = price * (1 + tp_pct / 100)
     icon       = market_data.get(sym, {}).get("icon", "")
     if is_real and req.exchange == "revx":
-        revx_key_id = state.get("revx_key_id", "")
-        revx_priv   = state.get("revx_private_key", "")
         if not revx_key_id or not revx_priv:
             raise HTTPException(status_code=400, detail="Chiavi RevX non configurate")
         try:
