@@ -1080,6 +1080,7 @@ body.auth-active .tabbar { display:none !important; }
     </button>
     <button class="sb-item" data-tab="posizioni" onclick="showTab('posizioni',this)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Posizioni
+      <span id="sbPosBadge" style="display:none;width:8px;height:8px;background:var(--red);border-radius:50%;margin-left:auto;flex-shrink:0"></span>
     </button>
   </div>
   <div class="sb-foot">
@@ -2530,12 +2531,9 @@ async function clearTrades() {
 }
 
 function updateStoricoBadge() {
-  const badge = document.getElementById('storicoBadge');
-  if (_newTradeCount > 0) {
-    badge.style.display = 'block';
-  } else {
-    badge.style.display = 'none';
-  }
+  const show = _newTradeCount > 0 ? 'block' : 'none';
+  document.getElementById('storicoBadge').style.display = show;
+  document.getElementById('sbPosBadge').style.display   = show;
 }
 
 // ── TIMER FLUIDO ─────────────────────────────────────────────────────────────
