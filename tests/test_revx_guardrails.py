@@ -235,6 +235,32 @@ class RevxGuardrailTests(unittest.TestCase):
                     self.main.verify_token(token)
                 self.assertEqual(ctx.exception.status_code, 401)
 
+    def test_close_symbol_reports_unconfirmed_close(self):
+        main = self.main
+        pos = {"symbol": "BTC", "_manual_action_required": True}
+        state = {"positions": [pos], "config": {}, "log": []}
+
+        async def fake_exit_position(close_state, close_pos, reason, user_id=None):
+            self.assertEqual(close_state, state)
+            self.assertEqual(close_pos, pos)
+            self.assertEqual(reason, "CHIUSURA MANUALE")
+
+        original_get_session = main.get_session
+        original_exit_position = main.exit_position
+        original_rate_limit = main.check_rate_limit
+        main.get_session = lambda user_id: state
+        main.exit_position = fake_exit_position
+        main.check_rate_limit = lambda *args, **kwargs: None
+        try:
+            result = asyncio.run(main.close_symbol("btc", request=object(), user_id=123))
+        finally:
+            main.get_session = original_get_session
+            main.exit_position = original_exit_position
+            main.check_rate_limit = original_rate_limit
+
+        self.assertIn("error", result)
+        self.assertTrue(result["manual_action_required"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3426,6 +3426,7 @@ async def update_config_live(body: dict, request: Request, user_id: int = Depend
                 continue
     if changed:
         add_log(state, "info", "CONFIG", f"Parametri aggiornati: {', '.join(changed)}")
+        await persist_sessions()
     return {"ok": True}
 
 @app.post("/pause")
@@ -3437,6 +3438,7 @@ async def pause_agent(request: Request, user_id: int = Depends(get_current_user)
     state["paused"] = not state.get("paused", False)
     status = "paused" if state["paused"] else "resumed"
     add_log(state, "info", "PAUSA" if state["paused"] else "RIPRESA", "Nuovi ingressi bloccati." if state["paused"] else "Nuovi ingressi riattivati.")
+    await persist_sessions()
     return {"ok": True, "paused": state["paused"], "status": status}
 
 @app.post("/close_position/{symbol}")
@@ -3450,6 +3452,11 @@ async def close_symbol(symbol: str, request: Request, user_id: int = Depends(get
     if not pos:
         return {"error": f"No position on {symbol}"}
     await exit_position(state, pos, "CHIUSURA MANUALE", user_id=user_id)
+    if pos in state.get("positions", []):
+        return {
+            "error": f"Chiusura non confermata per {sym}. Posizione ancora aperta.",
+            "manual_action_required": bool(pos.get("_manual_action_required")),
+        }
     return {"ok": True}
 
 class ManualTradeReq(BaseModel):
