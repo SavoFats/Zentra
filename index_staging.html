@@ -2966,13 +2966,21 @@ async function poll() {
     const td = await tRes.json();
     const md = await mRes.json();
     mktData = md.market || [];
-    // debug: mostra timestamp ultimo poll riuscito
+    // debug: mostra timestamp ultimo poll + info backend
     const dbgEl = document.getElementById('scanPollDbg');
     if (dbgEl) {
       const now = new Date();
       const t = now.toLocaleTimeString('it-IT');
       const sample = mktData[0];
-      dbgEl.textContent = `poll OK ${t} — ${mktData.length} coin — ${sample ? sample.symbol + ' $' + sample.price.toFixed(4) : ''}`;
+      const priceStr = sample ? sample.symbol + ' $' + sample.price.toFixed(4) : '';
+      try {
+        const cs = await fetch(API + '/candles/status', { headers: authHeaders(), cache: 'no-store' });
+        const csd = await cs.json();
+        const wsAgo = csd.ws_last_msg_ago_sec != null ? csd.ws_last_msg_ago_sec + 's fa' : 'mai';
+        dbgEl.textContent = `${t} | ${mktData.length} coin | ${priceStr} | WS msg: ${wsAgo} | universo: ${csd.universe_size}`;
+      } catch {
+        dbgEl.textContent = `${t} | ${mktData.length} coin | ${priceStr}`;
+      }
     }
     // Aggiorna prezzi in-place se i tab sono già renderizzati
     if (document.getElementById('page-scanner').classList.contains('active')) {
