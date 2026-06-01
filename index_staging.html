@@ -4208,14 +4208,8 @@ function openTVChart(symbol) {
   document.getElementById('tvModal').style.display = 'flex';
   const container = document.getElementById('tvWidgetContainer');
   const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-  const cfg = JSON.stringify({autosize:true,symbol:`BINANCE:${base}USDT`,interval:'5',timezone:'Etc/UTC',theme,style:'1',locale:'it',hide_side_toolbar:false,allow_symbol_change:false});
-  const tvHtml = `<!DOCTYPE html><html><head><style>*{margin:0;padding:0}html,body,.tradingview-widget-container,.tradingview-widget-container__widget{width:100%;height:100%;overflow:hidden}</style></head><body><div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script type="text/javascript" src="https://s.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>${cfg}<\/script></div></body></html>`;
-  const tvIframe = document.createElement('iframe');
-  tvIframe.style.cssText = 'width:100%;height:100%;border:none';
-  tvIframe.setAttribute('allowfullscreen','');
-  tvIframe.srcdoc = tvHtml;
-  container.innerHTML = '';
-  container.appendChild(tvIframe);
+  const sym = encodeURIComponent(`BINANCE:${base}USDT`);
+  container.innerHTML = `<iframe src="https://s.tradingview.com/widgetembed/?symbol=${sym}&interval=5&theme=${theme}&style=1&locale=it&hidesidetoolbar=0&hidetoptoolbar=0&saveimage=0&allow_symbol_change=0" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;
 }
 
 function closeTVChart() {
