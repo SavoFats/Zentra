@@ -2105,9 +2105,14 @@ async def monitor_manual_positions(state: dict, user_id: int):
 
 async def binance_ws_loop():
     global _ws_connected
-    url = "wss://stream.binance.com:9443/ws/!miniTicker@arr"
+    urls = [
+        "wss://stream.binance.com:9443/ws/!miniTicker@arr",
+        "wss://stream.binance.us:9443/ws/!miniTicker@arr",
+    ]
     backoff = 5
+    url_idx = 0
     while True:
+        url = urls[url_idx % len(urls)]
         try:
             print(f"[WS] Connessione a {url} ...")
             async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
@@ -2155,7 +2160,8 @@ async def binance_ws_loop():
                         print(f"[WS] Errore parsing: {parse_err}")
         except Exception as e:
             _ws_connected = False
-            print(f"[WS] ❌ Disconnesso: {e} — retry in {backoff}s")
+            url_idx += 1
+            print(f"[WS] ❌ Disconnesso: {e} — provo {urls[url_idx % len(urls)]} in {backoff}s")
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60)
 
