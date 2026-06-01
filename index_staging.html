@@ -1553,7 +1553,6 @@ body.auth-active .tabbar { display:none !important; }
         <div style="font-size:15px;font-weight:700" id="scanResultsTitle">Breakout</div>
         <div id="scanCount" style="font-size:11px;font-weight:700;color:#fff;background:var(--blue);padding:4px 12px;border-radius:20px">0 found</div>
       </div>
-      <div id="scanPollDbg" style="font-size:10px;color:var(--text3);margin-bottom:8px;font-family:monospace"></div>
       <div style="display:flex;align-items:center;padding:0 0 8px;border-bottom:1px solid var(--border);margin-bottom:4px">
         <div style="width:50px;flex-shrink:0"></div>
         <div style="min-width:60px;max-width:80px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Coin</div>
@@ -2966,22 +2965,6 @@ async function poll() {
     const td = await tRes.json();
     const md = await mRes.json();
     mktData = md.market || [];
-    // debug: mostra timestamp ultimo poll + info backend
-    const dbgEl = document.getElementById('scanPollDbg');
-    if (dbgEl) {
-      const now = new Date();
-      const t = now.toLocaleTimeString('it-IT');
-      const sample = mktData[0];
-      const priceStr = sample ? sample.symbol + ' $' + sample.price.toFixed(4) : '';
-      try {
-        const cs = await fetch(API + '/candles/status', { headers: authHeaders(), cache: 'no-store' });
-        const csd = await cs.json();
-        const wsAgo = csd.ws_last_msg_ago_sec != null ? csd.ws_last_msg_ago_sec + 's fa' : 'mai';
-        dbgEl.textContent = `${t} | ${mktData.length} coin | ${priceStr} | WS msg: ${wsAgo} | universo: ${csd.universe_size}`;
-      } catch {
-        dbgEl.textContent = `${t} | ${mktData.length} coin | ${priceStr}`;
-      }
-    }
     // Aggiorna prezzi in-place se i tab sono già renderizzati
     if (document.getElementById('page-scanner').classList.contains('active')) {
       updateScannerPricesInPlace();
@@ -4352,8 +4335,7 @@ function updateScannerPricesInPlace() {
   }
   // Aggiorna solo i prezzi in-place con flash se cambiati
   for (const c of matched) {
-    const base = c.symbol.replace('USDT', '');
-    const el = document.getElementById('scan-price-' + base + 'USDT');
+    const el = document.getElementById('scan-price-' + c.symbol);
     if (!el) continue;
     const oldPrice = parseFloat(el.dataset.price || 0);
     if (oldPrice !== c.price) {
