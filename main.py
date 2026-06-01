@@ -355,9 +355,13 @@ async def fetch_dynamic_universe():
     """Scarica top-50 coin per volume 24h da Binance. Aggiorna _dynamic_universe."""
     global _dynamic_universe, _universe_last_update
     try:
+        r = None
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
-        if r.status_code != 200:
+            for base in (BINANCE_BASE, BINANCE_US_BASE):
+                r = await client.get(f"{base}/api/v3/ticker/24hr")
+                if r.status_code != 451:
+                    break
+        if r is None or r.status_code != 200:
             return
         tickers = r.json()
         candidates = []
@@ -3389,10 +3393,17 @@ async def candles_status(request: Request, user_id: int = Depends(get_current_us
     for sym in list(candle_data.keys())[:5]:
         price = market_data.get(sym, {}).get("price", 0)
         sample[sym] = get_momentum_signal(sym, price)
+    now = time.time()
+    ws_ago = round(now - _ws_last_msg_ts, 1) if _ws_last_msg_ts else None
+    sample_prices = {sym: market_data.get(sym, {}).get("price", 0) for sym in list(_dynamic_universe)[:5]}
     return {
         "candles_count": len(candle_data),
         "last_update": datetime.fromtimestamp(_candles_last_update).isoformat() if _candles_last_update else None,
-        "next_update_in_sec": max(0, CANDLE_UPDATE_INTERVAL - (time.time() - _candles_last_update)) if _candles_last_update else 0,
+        "next_update_in_sec": max(0, CANDLE_UPDATE_INTERVAL - (now - _candles_last_update)) if _candles_last_update else 0,
+        "ws_connected": _ws_connected,
+        "ws_last_msg_ago_sec": ws_ago,
+        "universe_size": len(_dynamic_universe),
+        "sample_prices": sample_prices,
         "sample_signals": sample,
     }
 
