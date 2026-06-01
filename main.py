@@ -596,9 +596,13 @@ async def fetch_all_candles():
     syms = [sym for sym, _ in universe]
     print(f"Aggiornamento candele per {len(syms)} coin...")
 
-    # Fetch parallelo con un unico client (rispetta rate limit Binance)
+    # Fetch parallelo con concorrenza limitata per rispettare rate limit Binance
     async with httpx.AsyncClient(timeout=15) as client:
-        tasks = [fetch_candles_for_symbol(sym, client) for sym in syms]
+        sem = asyncio.Semaphore(8)
+        async def _fetch_limited(s):
+            async with sem:
+                return await fetch_candles_for_symbol(s, client)
+        tasks = [_fetch_limited(sym) for sym in syms]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     updated = 0
@@ -922,7 +926,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     sym      = sym_data["symbol"]
     is_real  = cfg.get("realMode", False)
 
-    alloc_pct  = cfg.get("allocPct", 0.20)
+    alloc_pct  = min(cfg.get("allocPct", 0.20), 1.0)
     use_revx   = state.get("use_revx", False)
     TRADING_FEE = 0.0009  # RevX taker fee 0.09%
     fixed_amt  = cfg.get("tradeAmountUsd", 0)
@@ -1078,10 +1082,30 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
         return
 
     if attempt >= len(REVX_LIMIT_DROPS):
-        add_log(state, "info", "ERRORE", f"{sym}: 10 tentativi GTC limit esauriti — vendi manualmente su RevX")
-        await notify(state, f"ERRORE {sym}: 10 tentativi GTC limit falliti. Vendi manualmente su RevX.")
+        add_log(state, "info", "WARN", f"{sym}: 10 tentativi GTC limit esauriti — market sell emergenza")
+        await notify(state, f"⚠️ {sym}: 10 GTC falliti. Tentativo market sell emergenza...")
         pos.pop("_sell_mode", None)
         pos.pop("_sell_limit_order_id", None)
+        try:
+            emergency_body = {
+                "client_order_id": str(_uuid.uuid4()),
+                "symbol": symbol_pair,
+                "side": "SELL",
+                "order_configuration": {"market": {"base_size": str(qty_to_sell)}}
+            }
+            em_result = await revx_request("POST", "/api/1.0/orders", emergency_body,
+                                           key_id=revx_key_id, private_key=revx_priv)
+            em_data = em_result.get("data") or em_result
+            em_id = em_data.get("venue_order_id") or em_data.get("order_id") or em_data.get("id", "")
+            if em_id:
+                await exit_position(state, pos, "EMERGENZA MARKET SELL (10 GTC falliti)", user_id=user_id)
+            else:
+                err = em_result.get("message") or em_result.get("error") or str(em_result)
+                add_log(state, "info", "ERRORE", f"{sym}: market sell emergenza fallito: {err[:80]} — vendi manualmente su RevX")
+                await notify(state, f"🚨 {sym}: impossibile vendere automaticamente. Vendi manualmente su RevX!")
+        except Exception as _em_e:
+            add_log(state, "info", "ERRORE", f"{sym}: market sell emergenza eccezione: {_em_e} — vendi manualmente su RevX")
+            await notify(state, f"🚨 {sym}: errore market sell ({_em_e}). Vendi manualmente su RevX!")
         return
 
     drop = REVX_LIMIT_DROPS[attempt]
@@ -1359,9 +1383,9 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         state["consecutiveLosses"] = state.get("consecutiveLosses", 0) + 1
 
     cfg = state["config"]
-    # Dopo uno stop loss secco (senza TP1), cooldown più lungo per proteggere da re-entry su trend avverso
+    # SL secco (senza TP1): cooldown doppio per evitare re-entry immediato su trend avverso
     is_clean_stop = ("STOP" in reason) and not pos.get("tp1_hit", False)
-    cooldown_h = cfg.get("cooldown", 1)
+    cooldown_h = cfg.get("cooldown", 1) * (2.0 if is_clean_stop else 1.0)
     state["cooldowns"][sym] = (datetime.now().timestamp() + cooldown_h * 3600) * 1000
     buy_fee_usd  = pos.get("buy_fee_usd", 0.0)
     sell_fee_usd = pos.get("sell_fee_usd", exit_fee)
@@ -1599,7 +1623,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             _update_pnl(state)
         return
 
-    alloc_pct   = cfg.get("allocPct", 0.20)
+    alloc_pct   = min(cfg.get("allocPct", 0.20), 1.0)
     fixed_amt   = cfg.get("tradeAmountUsd", 0)
     capital_pct = cfg.get("capitalPct", 1.0)
     TRADING_FEE = 0.0009  # RevX taker fee 0.09%
