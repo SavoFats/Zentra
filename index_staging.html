@@ -2826,7 +2826,10 @@ async function pauseAgent() {
   try {
     const res = await fetch(API + '/pause', { method:'POST', headers:authHeaders() });
     const d = await res.json();
-    if (d.error) { alert(d.error); return; }
+    if (!res.ok || d.error) {
+      await poll(); // risincronizza lo stato reale dal server
+      return;
+    }
     S.paused = d.paused;
     render();
   } catch(e) { alert('Errore di rete: ' + e.message); }
@@ -3940,7 +3943,6 @@ function renderMarketStars() {
 
 // ── DRAWER CONFIG ─────────────────────────────────────────────────────────────
 function openDrawer() {
-  if (S.running) return; // non aprire se sessione in corso
   const drawerContent = document.getElementById('drawerConfigContent');
   if (!drawerContent) return;
   const configPage = document.getElementById('page-config');
