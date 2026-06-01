@@ -3004,6 +3004,9 @@ async function poll() {
     if (document.getElementById('page-home').classList.contains('active')) {
       updateWatchlistPricesInPlace();
     }
+    if (document.getElementById('page-posizioni').classList.contains('active')) {
+      updatePositionPricesInPlace();
+    }
     const newTrades = td.trades || [];
 
     // Notifica nuovi trade chiusi
@@ -3420,14 +3423,14 @@ function renderPositions() {
           </div>
         </div>
         <div class="pos-pnl-new">
-          <div class="pos-pnl-val-new" style="color:${color}">${isPos?'+':isNeg?'-':''}${getCurrSym()}${fmtMoney(Math.abs(pnl))}</div>
-          <div class="pos-pnl-pct-new" style="color:${color}">${isPos?'+':isNeg?'-':''}${Math.abs(pct).toFixed(2)}%</div>
+          <div class="pos-pnl-val-new" id="pos-pnlval-${esc(p.symbol)}" style="color:${color}">${isPos?'+':isNeg?'-':''}${getCurrSym()}${fmtMoney(Math.abs(pnl))}</div>
+          <div class="pos-pnl-pct-new" id="pos-pnlpct-${esc(p.symbol)}" style="color:${color}">${isPos?'+':isNeg?'-':''}${Math.abs(pct).toFixed(2)}%</div>
         </div>
       </div>
       <div class="pos-grid4">
         <div class="pos-g4-cell"><div class="pos-g4-label">Investito</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(size)}</div></div>
         <div class="pos-g4-cell"><div class="pos-g4-label">Quantità</div><div class="pos-g4-val">${posQtyFmt} ${esc(p.symbol)}</div></div>
-        <div class="pos-g4-cell"><div class="pos-g4-label">Valore ora</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(curVal)}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Valore ora</div><div class="pos-g4-val" id="pos-curval-${esc(p.symbol)}">${getCurrSym()}${fmtMoney(curVal)}</div></div>
         <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val">${durFmt}</div></div>
       </div>
       ${barHtml}
@@ -3439,6 +3442,44 @@ function renderPositions() {
       </div>
     </div>`;
   }).join('');
+}
+
+function updatePositionPricesInPlace() {
+  const positions = S.positions || [];
+  positions.forEach(p => {
+    const sym        = p.symbol;
+    const entryPrice = p.entryPrice || 0;
+    const size       = p.size_remaining || p.size || 0;
+    const posQty     = p.qty_purchased > 0 ? p.qty_purchased : (entryPrice > 0 ? size / entryPrice : 0);
+
+    // Prezzo più aggiornato: mktData prima, poi quello del server
+    const md           = mktData.find(c => c.symbol === sym);
+    const currentPrice = (md && md.price > 0) ? md.price : (p.currentPrice || entryPrice);
+    if (!currentPrice || currentPrice <= 0) return;
+
+    const pnl   = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * size : 0;
+    const pct   = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100  : 0;
+    const isPos = pnl >  0.005;
+    const isNeg = pnl < -0.005;
+    const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
+    const curVal = currentPrice * posQty;
+
+    const pnlValEl = document.getElementById('pos-pnlval-' + sym);
+    const pnlPctEl = document.getElementById('pos-pnlpct-' + sym);
+    const curValEl = document.getElementById('pos-curval-' + sym);
+
+    if (pnlValEl) {
+      pnlValEl.textContent = (isPos ? '+' : isNeg ? '-' : '') + getCurrSym() + fmtMoney(Math.abs(pnl));
+      pnlValEl.style.color = color;
+    }
+    if (pnlPctEl) {
+      pnlPctEl.textContent = (isPos ? '+' : isNeg ? '-' : '') + Math.abs(pct).toFixed(2) + '%';
+      pnlPctEl.style.color = color;
+    }
+    if (curValEl) {
+      curValEl.textContent = getCurrSym() + fmtMoney(curVal);
+    }
+  });
 }
 
 async function closePosition(symbol) {
