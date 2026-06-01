@@ -307,6 +307,8 @@ UNIVERSE_UPDATE_INTERVAL = 1800  # 30 minuti
 _ws_connected: bool = False  # True quando il WebSocket Binance è attivo
 
 _cg_price_last_fetch: float = 0  # throttle fallback CoinGecko prezzi
+_ws_last_msg_ts: float = 0       # timestamp ultimo messaggio ricevuto dal WebSocket
+_rest_price_last_fetch: float = 0  # throttle fetch REST periodico prezzi
 
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
@@ -2120,6 +2122,7 @@ async def binance_ws_loop():
                 backoff = 5
                 print("[WS] ✅ Connesso — stream prezzi attivo")
                 async for raw in ws:
+                    _ws_last_msg_ts = time.time()
                     try:
                         tickers = json.loads(raw)
                         if not isinstance(tickers, list):
@@ -2172,8 +2175,14 @@ async def background_loop():
     last_persist = 0.0
     while True:
         try:
-            if not _ws_connected:
-                await fetch_prices()
+            # Fetch REST se WebSocket non connesso O se non arrivano msg da >30s
+            ws_stale = _ws_connected and (_ws_last_msg_ts == 0 or time.time() - _ws_last_msg_ts > 30)
+            if not _ws_connected or ws_stale:
+                if time.time() - _rest_price_last_fetch >= 30:
+                    _rest_price_last_fetch = time.time()
+                    await fetch_prices()
+                    if ws_stale:
+                        print(f"[WS] Nessun msg da {int(time.time()-_ws_last_msg_ts)}s — fetch REST prezzi")
 
             if time.time() - _universe_last_update >= UNIVERSE_UPDATE_INTERVAL:
                 await fetch_dynamic_universe()
