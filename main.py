@@ -240,10 +240,9 @@ async def get_eur_usd_rate() -> float:
 async def revx_request(method: str, path: str, body: dict = None,
                         key_id: str = None, private_key: str = None,
                         params: dict = None) -> dict:
-    """Esegue una richiesta autenticata a Revolut X."""
+    """Esegue una richiesta autenticata a Revolut X con retry su 429."""
     from urllib.parse import urlsplit, urlencode
     body_str = json.dumps(body, separators=(',', ':')) if body else ""
-    # Separa path e query string per la firma (RevX non vuole il '?' nel messaggio)
     parsed = urlsplit(path)
     clean_path = parsed.path
     if params:
@@ -253,14 +252,28 @@ async def revx_request(method: str, path: str, body: dict = None,
     else:
         query_str = ""
     headers = make_revx_signature(key_id, private_key, method, clean_path, query_str, body_str)
-    async with httpx.AsyncClient(timeout=30) as client:
-        if method == "GET":
-            r = await client.get(f"{REVX_BASE}{path}", headers=headers, params=params or {})
-        elif method == "DELETE":
-            r = await client.delete(f"{REVX_BASE}{path}", headers=headers)
-        else:
-            r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
-    return r.json() if r.content else {"ok": True}
+    backoff = 2
+    for attempt in range(4):
+        async with httpx.AsyncClient(timeout=30) as client:
+            if method == "GET":
+                r = await client.get(f"{REVX_BASE}{path}", headers=headers, params=params or {})
+            elif method == "DELETE":
+                r = await client.delete(f"{REVX_BASE}{path}", headers=headers)
+            else:
+                r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
+        if r.status_code == 429:
+            retry_after = int(r.headers.get("Retry-After", backoff))
+            print(f"[RevX] 429 rate limit su {path} — attesa {retry_after}s (tentativo {attempt+1}/4)")
+            await asyncio.sleep(retry_after)
+            backoff = min(backoff * 2, 30)
+            continue
+        if r.status_code >= 500:
+            print(f"[RevX] {r.status_code} server error su {path} — attesa {backoff}s (tentativo {attempt+1}/4)")
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30)
+            continue
+        return r.json() if r.content else {"ok": True}
+    raise Exception(f"RevX {method} {path} fallito dopo 4 tentativi")
 
 
 async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -> dict:
