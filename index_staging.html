@@ -682,14 +682,14 @@ body.auth-active .tabbar { display:none !important; }
   <div class="profile-menu-toggle" id="simModeRow" style="display:none">
     <div class="profile-menu-toggle-label">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg>
-      Simulazione
+      Conto Demo
     </div>
     <div class="toggle-switch" id="simModeToggle" onclick="setSimMode(!_simMode)"></div>
   </div>
   <div class="profile-menu-toggle">
     <div class="profile-menu-toggle-label">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-      Tema chiaro
+      Dark Mode
     </div>
     <div class="toggle-switch" id="themeToggle" onclick="toggleTheme()"></div>
   </div>
@@ -1069,11 +1069,11 @@ body.auth-active .tabbar { display:none !important; }
   </div>
   <div style="padding:0 8px;border-top:1px solid var(--border)">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
-      <span style="font-size:13px;font-weight:500;color:var(--text2)">Simulazione</span>
+      <span style="font-size:13px;font-weight:500;color:var(--text2)">Conto Demo</span>
       <div class="toggle-switch" id="sbSimToggle" onclick="setSimMode(!_simMode)"></div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 8px">
-      <span style="font-size:13px;font-weight:500;color:var(--text2)">Tema chiaro</span>
+      <span style="font-size:13px;font-weight:500;color:var(--text2)">Dark Mode</span>
       <div class="toggle-switch" id="sbThemeToggle" onclick="toggleTheme()"></div>
     </div>
   </div>
@@ -1210,7 +1210,7 @@ body.auth-active .tabbar { display:none !important; }
 
     <!-- badge modalità in config -->
     <div id="cfgModeBadge" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:16px;font-size:12px;font-weight:600;padding:6px 12px;border-radius:20px;background:var(--surface2);color:var(--text3)">
-      Modalità: <span id="cfgModeLabel">Simulazione</span>
+      Modalità: <span id="cfgModeLabel">Conto Demo</span>
       <span style="font-size:10px;color:var(--text3)">· cambia dal menu profilo</span>
     </div>
 
@@ -2292,7 +2292,7 @@ function updateSimToggle() {
   const lbl = document.getElementById('cfgModeLabel');
   const badge = document.getElementById('cfgModeBadge');
   const isReal = _hasRevxKeys && !_simMode;
-  let modeLabel = 'Simulazione';
+  let modeLabel = 'Conto Demo';
   if (isReal) modeLabel = 'Reale — Revolut X';
   if (lbl) lbl.textContent = modeLabel;
   if (lbl) lbl.style.color = isReal ? 'var(--red)' : 'var(--text2)';
@@ -3795,7 +3795,7 @@ async function loadHomeBalance() {
     const current = base + pnl;
     if (kpiSaldo) kpiSaldo.textContent = '$' + current.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
     const tbd = document.getElementById('totalBalanceDisplay');
-    if (tbd) { tbd.textContent = 'Simulazione — $' + base.toLocaleString('en-US', {maximumFractionDigits:0}); tbd.style.color = ''; }
+    if (tbd) { tbd.textContent = 'Conto Demo — $' + base.toLocaleString('en-US', {maximumFractionDigits:0}); tbd.style.color = ''; }
     const cap = document.getElementById('capital');
     if (cap) cap.dataset.total = base;
     updateCapitalPct();
