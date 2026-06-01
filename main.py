@@ -2603,6 +2603,15 @@ async def get_trades_history(request: Request, user_id: int = Depends(get_curren
 async def get_status(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=120, window=60, key_suffix="status")
     state = get_session(user_id)
+    if not state.get("telegram_chat_id") and db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT telegram_chat_id FROM users WHERE id = $1", user_id)
+            if row and row["telegram_chat_id"]:
+                state["telegram_chat_id"] = row["telegram_chat_id"]
+        except Exception:
+            pass
     unr     = unrealized_pnl(state)
     pos_val = sum(p.get("size_remaining", p["size"]) for p in state["positions"])
     total   = state["currentCapital"] + pos_val + unr
