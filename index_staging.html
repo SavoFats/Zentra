@@ -356,7 +356,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .scan-chip { padding:8px 16px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); white-space:nowrap; font-family:var(--sans); transition:all 0.15s; }
 .scan-chip.active { background:var(--green); border-color:var(--green); color:#fff; }
 .scan-chip.bear.active { background:var(--red); border-color:var(--red); color:#fff; }
-.scan-card { display:flex; flex-direction:column; align-items:center; padding:10px 8px 10px; background:var(--surface); border:1.5px solid var(--border); border-radius:14px; cursor:pointer; width:92px; min-width:92px; gap:8px; transition:all 0.15s; flex-shrink:0; }
+.scan-card { display:flex; flex-direction:column; align-items:center; padding:10px 8px 10px; background:var(--surface); border:1.5px solid var(--border); border-radius:14px; cursor:pointer; width:92px; min-width:92px; gap:8px; transition:all 0.15s; flex-shrink:0; position:relative; }
 .scan-card:hover { border-color:var(--blue); }
 .scan-card.active { border-color:var(--blue); background:rgba(0,100,255,0.07); box-shadow:0 0 0 3px rgba(0,100,255,0.1); }
 .scan-card-icon { width:100%; display:flex; align-items:center; justify-content:center; color:var(--text3); flex:1; }
@@ -364,6 +364,12 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .scan-card-label { font-size:10px; font-weight:700; color:var(--text2); text-align:center; line-height:1.3; }
 .scan-card.active .scan-card-label { color:var(--blue); }
 .scan-cat-hdr { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.1em; margin:0 0 10px; display:flex; align-items:center; gap:5px; }
+.scan-info-btn { position:absolute; top:6px; right:6px; width:16px; height:16px; border-radius:50%; border:1.5px solid var(--border); background:var(--surface2); color:var(--text3); font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; z-index:2; font-family:var(--sans); transition:border-color 0.15s,color 0.15s; }
+.scan-info-btn:hover { border-color:var(--blue); color:var(--blue); }
+.scan-tooltip { position:fixed; z-index:500; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; width:240px; box-shadow:0 8px 32px rgba(0,0,0,0.35); pointer-events:none; opacity:0; transition:opacity 0.15s; }
+.scan-tooltip.visible { opacity:1; pointer-events:auto; }
+.scan-tooltip-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px; }
+.scan-tooltip-body { font-size:12px; color:var(--text2); line-height:1.6; }
 .scan-row { display:flex; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
 .scan-row:last-child { border-bottom:none; }
 /* ── SIDEBAR ─────────────────────────────────────────────────────────── */
@@ -1485,14 +1491,17 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
       <button class="scan-card active" id="scard-breakout" onclick="selectScanSignal('breakout',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'breakout')">i</span>
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><line x1="4" y1="24" x2="46" y2="24" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.4"/><rect x="6" y="27" width="5" height="7" rx="1" fill="currentColor" opacity="0.25"/><rect x="16" y="25" width="5" height="9" rx="1" fill="currentColor" opacity="0.35"/><rect x="26" y="19" width="5" height="13" rx="1" fill="currentColor" opacity="0.55"/><line x1="39" y1="22" x2="39" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="35,11 39,7 43,11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div>
         <div class="scan-card-label">Breakout</div>
       </button>
       <button class="scan-card" id="scard-golden_cross" onclick="selectScanSignal('golden_cross',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'golden_cross')">i</span>
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><path d="M4,30 Q20,28 28,26 T48,26" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.4"/><path d="M4,32 Q16,28 24,20 T48,6" stroke="currentColor" stroke-width="2" fill="none" opacity="0.8"/><circle cx="26" cy="25" r="3.5" fill="currentColor" opacity="0.9"/></svg></div>
         <div class="scan-card-label">Golden Cross</div>
       </button>
       <button class="scan-card" id="scard-ema_stack" onclick="selectScanSignal('ema_stack',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'ema_stack')">i</span>
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><path d="M4,32 Q20,30 48,28" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.25"/><path d="M4,26 Q20,24 48,21" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.45"/><path d="M4,20 Q20,17 48,12" stroke="currentColor" stroke-width="2" fill="none" opacity="0.9"/></svg></div>
         <div class="scan-card-label">EMA Stack</div>
       </button>
@@ -1505,14 +1514,17 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
       <button class="scan-card" id="scard-rsi_oversold" onclick="selectScanSignal('rsi_oversold',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'rsi_oversold')">i</span>
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><rect x="0" y="28" width="52" height="10" fill="currentColor" opacity="0.07" rx="2"/><line x1="4" y1="28" x2="48" y2="28" stroke="currentColor" stroke-width="1" opacity="0.3"/><path d="M4,18 Q14,20 20,30 Q26,30 34,14 Q40,4 48,6" stroke="currentColor" stroke-width="2" fill="none" opacity="0.8"/><circle cx="48" cy="6" r="3" fill="currentColor" opacity="0.9"/></svg></div>
         <div class="scan-card-label">RSI Oversold</div>
       </button>
       <button class="scan-card" id="scard-macd_bullish" onclick="selectScanSignal('macd_bullish',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'macd_bullish')">i</span>
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><line x1="4" y1="22" x2="48" y2="22" stroke="currentColor" stroke-width="1" opacity="0.3"/><rect x="6" y="24" width="6" height="6" rx="1" fill="currentColor" opacity="0.3"/><rect x="16" y="23" width="6" height="5" rx="1" fill="currentColor" opacity="0.25"/><rect x="26" y="20" width="6" height="2" rx="1" fill="currentColor" opacity="0.3"/><rect x="36" y="12" width="6" height="10" rx="1" fill="currentColor" opacity="0.75"/><rect x="44" y="8" width="6" height="14" rx="1" fill="currentColor" opacity="0.9"/></svg></div>
         <div class="scan-card-label">MACD Bullish</div>
       </button>
       <button class="scan-card" id="scard-tsi_bullish" onclick="selectScanSignal('tsi_bullish',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'tsi_bullish')">i</span>
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><line x1="4" y1="19" x2="48" y2="19" stroke="currentColor" stroke-width="1" opacity="0.3"/><path d="M4,32 Q16,28 24,19 Q32,10 48,6" stroke="currentColor" stroke-width="2" fill="none" opacity="0.85"/><circle cx="24" cy="19" r="3.5" fill="currentColor" opacity="0.9"/></svg></div>
         <div class="scan-card-label">TSI Bullish</div>
       </button>
@@ -1525,6 +1537,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap">
       <button class="scan-card" id="scard-volume_spike" onclick="selectScanSignal('volume_spike',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'volume_spike')">i</span>
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><rect x="4" y="26" width="7" height="8" rx="1" fill="currentColor" opacity="0.25"/><rect x="14" y="23" width="7" height="11" rx="1" fill="currentColor" opacity="0.3"/><rect x="24" y="28" width="7" height="6" rx="1" fill="currentColor" opacity="0.25"/><rect x="34" y="24" width="7" height="10" rx="1" fill="currentColor" opacity="0.3"/><rect x="44" y="6" width="7" height="28" rx="1" fill="currentColor" opacity="0.9"/></svg></div>
         <div class="scan-card-label">Volume Spike</div>
       </button>
@@ -4201,6 +4214,81 @@ const _scanLabelMap = {
 };
 
 const _scanBearish = new Set(['death_cross','macd_bearish','rsi_overbought']);
+
+const _scanInfoData = {
+  breakout: {
+    title: 'Breakout',
+    body: 'Il prezzo supera con decisione un livello di resistenza chiave, accompagnato da volume crescente. Segnala forte pressione d\'acquisto e spesso marca l\'inizio di un nuovo uptrend.'
+  },
+  golden_cross: {
+    title: 'Golden Cross',
+    body: 'La EMA20 supera la EMA50 verso l\'alto. È un segnale di inversione bullish a medio termine: il momentum di breve ha preso il sopravvento su quello di lungo.'
+  },
+  ema_stack: {
+    title: 'EMA Stack',
+    body: 'Prezzo > EMA20 > EMA50: le tre linee sono allineate in ordine crescente. Conferma che il trend rialzista è solido su tutti i timeframe considerati.'
+  },
+  rsi_oversold: {
+    title: 'RSI Oversold',
+    body: 'Il RSI a 14 periodi è sceso sotto 30, zona di ipervenduto. Il prezzo ha subito una pressione eccessiva al ribasso e statisticamente tende a rimbalzare.'
+  },
+  macd_bullish: {
+    title: 'MACD Bullish',
+    body: 'L\'istogramma MACD è positivo e in crescita: la media veloce (12) è sopra la lenta (26) e il gap si sta allargando. Indica momentum rialzista in accelerazione.'
+  },
+  tsi_bullish: {
+    title: 'TSI Bullish',
+    body: 'Il True Strength Index è sopra zero e in salita. Misura la forza del trend eliminando il rumore: un TSI positivo conferma che la tendenza rialzista ha sostanza.'
+  },
+  volume_spike: {
+    title: 'Volume Spike',
+    body: 'Il volume dell\'ultima candela supera il doppio della media delle ultime 20. Segnala interesse anomalo degli operatori: spesso precede un movimento direzionale significativo.'
+  }
+};
+
+let _scanTooltipEl = null;
+let _scanTooltipTimer = null;
+
+function _getScanTooltip() {
+  if (!_scanTooltipEl) {
+    _scanTooltipEl = document.createElement('div');
+    _scanTooltipEl.className = 'scan-tooltip';
+    _scanTooltipEl.innerHTML = '<div class="scan-tooltip-title"></div><div class="scan-tooltip-body"></div>';
+    document.body.appendChild(_scanTooltipEl);
+    document.addEventListener('click', e => {
+      if (!_scanTooltipEl.contains(e.target) && !e.target.classList.contains('scan-info-btn')) {
+        _hideScanTooltip();
+      }
+    });
+  }
+  return _scanTooltipEl;
+}
+
+function _hideScanTooltip() {
+  if (_scanTooltipEl) _scanTooltipEl.classList.remove('visible');
+}
+
+function showScanInfo(e, key) {
+  e.stopPropagation();
+  const data = _scanInfoData[key];
+  if (!data) return;
+  const tt = _getScanTooltip();
+  tt.querySelector('.scan-tooltip-title').textContent = data.title;
+  tt.querySelector('.scan-tooltip-body').textContent = data.body;
+  tt.classList.add('visible');
+  const btn = e.currentTarget;
+  const r = btn.getBoundingClientRect();
+  const ttW = 240, ttH = tt.offsetHeight || 140;
+  const margin = 8;
+  let left = r.right + margin;
+  let top = r.top;
+  if (left + ttW > window.innerWidth - margin) left = r.left - ttW - margin;
+  if (left < margin) left = margin;
+  if (top + ttH > window.innerHeight - margin) top = window.innerHeight - ttH - margin;
+  if (top < margin) top = margin;
+  tt.style.left = left + 'px';
+  tt.style.top = top + 'px';
+}
 
 function selectScanSignal(key, el) {
   _scanSignal = key;
