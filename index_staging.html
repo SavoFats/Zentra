@@ -1136,6 +1136,29 @@ body.auth-active .tabbar { display:none !important; }
       <div id="sessionsIndicator" style="display:none;font-size:11px;color:rgba(255,255,255,0.65);margin-top:10px"></div>
     </div>
 
+    <!-- Hero P&L card — visibile quando l'agente è in esecuzione (stessa posizione di homeHeroCard) -->
+    <div class="hero-card off" id="heroCard" style="margin-bottom:12px;display:none">
+      <canvas class="hero-sparkline" id="heroSparkline"></canvas>
+      <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;flex-direction:column;align-items:flex-end;gap:6px">
+        <button id="stopBtn" onclick="stopAgent()" disabled
+          style="padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
+          Ferma
+        </button>
+        <button id="pauseBtn" onclick="pauseAgent()" disabled
+          style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          Pausa
+        </button>
+      </div>
+      <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
+      <div class="hero-pnl" id="heroPnl">$0.00</div>
+      <div class="hero-stats" style="margin-top:10px">
+        <div class="hero-stat">Trade <strong id="heroTrades">0</strong></div>
+        <div class="hero-stat">Win rate <strong id="heroWR">--%</strong></div>
+        <div class="hero-stat" id="heroRemainingWrap">Rimanente <strong id="heroRemaining">--</strong></div>
+      </div>
+    </div>
+
     <!-- 3 KPI -->
     <div class="home-kpi-row">
       <div class="home-kpi-sm">
@@ -1160,30 +1183,7 @@ body.auth-active .tabbar { display:none !important; }
       </div>
     </div>
 
-    <!-- Hero P&L card — visibile quando l'agente è in esecuzione -->
-    <div class="hero-card off" id="heroCard" style="margin-bottom:12px">
-      <canvas class="hero-sparkline" id="heroSparkline"></canvas>
-      <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;flex-direction:column;align-items:flex-end;gap:6px">
-        <button id="stopBtn" onclick="stopAgent()" disabled
-          style="padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-          <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
-          Ferma
-        </button>
-        <button id="pauseBtn" onclick="pauseAgent()" disabled
-          style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-          Pausa
-        </button>
-      </div>
-      <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
-      <div class="hero-pnl" id="heroPnl">$0.00</div>
-      <div class="hero-stats" style="margin-top:10px">
-        <div class="hero-stat">Trade <strong id="heroTrades">0</strong></div>
-        <div class="hero-stat">Win rate <strong id="heroWR">--%</strong></div>
-        <div class="hero-stat" id="heroRemainingWrap">Rimanente <strong id="heroRemaining">--</strong></div>
-      </div>
-    </div>
-
-    <!-- Posizioni in corso (sessione attiva) -->
+    <!-- Posizioni in corso (sessione attiva o posizioni manuali) -->
     <div id="homeSessionWidget" style="display:none;margin-top:12px">
       <div class="card" style="padding-bottom:0">
         <div class="home-pos-label">
@@ -3005,10 +3005,10 @@ function render() {
     }
     const sbDot = document.getElementById('sbDot');
     if (sbDot) sbDot.className = dot.className;
-    if (heroCard) heroCard.classList.remove('off');
+    if (heroCard) { heroCard.classList.remove('off'); heroCard.style.display = ''; }
     if (liveBadge) liveBadge.style.display = window._realMode ? '' : 'none';
     if (sessionBtns) sessionBtns.style.display = 'flex';
-    if (stopBtn) stopBtn.disabled = false;
+    if (stopBtn) { stopBtn.disabled = false; stopBtn.style.display = ''; }
     if (pauseBtn) {
       pauseBtn.disabled = false;
       pauseBtn.textContent = S.paused ? 'Riprendi' : 'Pausa';
@@ -3026,12 +3026,11 @@ function render() {
     dot.className = 'hdr-logo-dot inactive';
     const sbDot2 = document.getElementById('sbDot');
     if (sbDot2) sbDot2.className = 'hdr-logo-dot inactive';
-    if (heroCard) heroCard.classList.add('off');
+    if (heroCard) { heroCard.classList.add('off'); heroCard.style.display = 'none'; }
     if (liveBadge) liveBadge.style.display = 'none';
     if (sessionBtns) sessionBtns.style.display = 'none';
-    if (stopBtn) stopBtn.disabled = true;
-    if (pauseBtn) pauseBtn.disabled = true;
     if (stopBtn) { stopBtn.disabled = true; stopBtn.style.display = 'none'; }
+    if (pauseBtn) pauseBtn.disabled = true;
   }
 
   // Hero P&L
@@ -3117,9 +3116,10 @@ function renderHomeSession() {
   const heroCard = document.getElementById('homeHeroCard');
   if (!widget || !cnt) return;
   if (heroCard) heroCard.style.display = S.running ? 'none' : '';
-  if (!S.running) { widget.style.display = 'none'; return; }
-  widget.style.display = 'block';
   const pos = S.positions || [];
+  if (!S.running && pos.length === 0) { widget.style.display = 'none'; return; }
+  if (!S.running && pos.length > 0) { widget.style.display = 'block'; }
+  else if (S.running) widget.style.display = 'block';
   if (pos.length === 0) {
     cnt.innerHTML = '<div style="text-align:center;padding:16px 0;font-size:13px;color:var(--text3);font-weight:500">Scan mercato in corso</div>';
     return;

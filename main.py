@@ -2894,12 +2894,14 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         cfg["maxHoldHours"]    = 4.0
         cfg["minR"]            = 0.01
 
+    existing_manual = [p for p in state.get("positions", []) if p.get("manual")]
+    manual_invested  = sum(p.get("size", 0) for p in existing_manual)
     state.update({
         "running": True,
         "_exiting": set(),
         "capital": capital,
-        "currentCapital": capital,
-        "positions": [],
+        "currentCapital": max(0.0, capital - manual_invested),
+        "positions": existing_manual,
         "pnlHistory": [{"t": 0, "v": 0}],
         "sessionStart": datetime.now().timestamp(),
         "sessionDuration": int(cfg.get("sessionDuration", 8)) * 3600 * 1000,
