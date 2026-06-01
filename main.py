@@ -493,7 +493,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         # Keltner Channel upper band: EMA20 + 2×ATR
         keltner_upper = ema20_5m_cur + 2 * atr_5m
 
-        # TSI(25, 13) su 15m e 1h — confluenza per tsi_bullish
+        # TSI(25, 13) su 15m e 1h — confluenza + slope per tsi_bullish
         def _calc_tsi(closes):
             pc     = [closes[i] - closes[i-1] for i in range(1, len(closes))]
             abs_pc = [abs(x) for x in pc]
@@ -501,12 +501,16 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             e2     = calc_ema_list(e1, 13)
             a1     = calc_ema_list(abs_pc, 25)
             a2     = calc_ema_list(a1, 13)
-            return round(100 * e2[-1] / a2[-1], 2) if a2 and a2[-1] != 0 else 0.0
+            if not a2 or len(a2) < 2:
+                return 0.0, 0.0
+            cur  = round(100 * e2[-1]  / a2[-1],  2) if a2[-1]  != 0 else 0.0
+            prev = round(100 * e2[-2]  / a2[-2],  2) if a2[-2]  != 0 else 0.0
+            return cur, prev
 
-        closed5  = closes5[:-1]
-        tsi      = _calc_tsi(closed5)           # mantenuto per compatibilità segnale bot
-        tsi_15m  = _calc_tsi(closes15[:-1])
-        tsi_1h   = _calc_tsi(closes1h[:-1])
+        closed5              = closes5[:-1]
+        tsi,      _          = _calc_tsi(closed5)   # mantenuto per compatibilità segnale bot
+        tsi_15m,  tsi_15m_p  = _calc_tsi(closes15[:-1])
+        tsi_1h,   tsi_1h_p   = _calc_tsi(closes1h[:-1])
 
         # MACD(5, 13, 3) su candele chiuse
         ema5_list  = calc_ema_list(closed5, 5)
@@ -557,7 +561,9 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "keltner_upper":    keltner_upper,
             "tsi":              tsi,
             "tsi_15m":          tsi_15m,
+            "tsi_15m_prev":     tsi_15m_p,
             "tsi_1h":           tsi_1h,
+            "tsi_1h_prev":      tsi_1h_p,
             "macd_hist":        macd_hist,
             "macd_hist_prev":   macd_hist_prev,
             "golden_cross":     golden_cross,
@@ -630,7 +636,9 @@ def get_momentum_signal(sym: str, current_price: float,
     keltner_upper    = cd.get("keltner_upper", 0.0)
     tsi              = cd.get("tsi", -1.0)
     tsi_15m          = cd.get("tsi_15m", -1.0)
+    tsi_15m_p        = cd.get("tsi_15m_prev", -1.0)
     tsi_1h           = cd.get("tsi_1h", -1.0)
+    tsi_1h_p         = cd.get("tsi_1h_prev", -1.0)
     macd_hist        = cd.get("macd_hist", -1.0)
     macd_hist_prev   = cd.get("macd_hist_prev", 0.0)
 
@@ -646,7 +654,7 @@ def get_momentum_signal(sym: str, current_price: float,
     wick_ok      = upper_wick_ratio <= 0.55
     chop_ok      = chop_14 < 61.8
     keltner_ok   = last_close > keltner_upper if keltner_upper > 0 else False
-    tsi_ok       = tsi_15m > 0 and tsi_1h > 0
+    tsi_ok       = (tsi_15m > 0 and tsi_15m >= tsi_15m_p) and (tsi_1h > 0 and tsi_1h >= tsi_1h_p)
     macd_ok      = macd_hist > 0 and macd_hist > macd_hist_prev
 
     stop_price = current_price * (1 - max_stop_pct)
