@@ -2266,7 +2266,7 @@ function showTab(name, el) {
   localStorage.setItem('ca_active_tab', name);
   if (name === 'home') renderHome();
   if (name === 'market') refreshMarket();
-  if (name === 'scanner') renderScanner();
+  if (name === 'scanner') refreshMarket().then(() => renderScanner());
   if (name === 'transazioni') {
     renderTransazioni();
     _newTradeCount = 0;
