@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import binascii
 import os
+import re
 import time
 import websockets
 import math
@@ -139,6 +140,13 @@ def sanitize_error(e: Exception, *secrets: str) -> str:
         if secret and len(secret) > 4:
             msg = msg.replace(secret, "[REDACTED]")
     return msg
+
+def public_error(e: Exception, *secrets: str, max_len: int = 240) -> str:
+    msg = sanitize_error(e, *secrets)
+    msg = re.sub(r"-----BEGIN [^-]+-----.*?-----END [^-]+-----", "[REDACTED PEM]", msg, flags=re.DOTALL)
+    msg = re.sub(r"(?i)(api[_ -]?key|private[_ -]?key|secret|token)(['\":= ]+)([^\s,'\"}]+)", r"\1\2[REDACTED]", msg)
+    msg = re.sub(r"\s+", " ", msg).strip()
+    return msg[:max_len] + ("..." if len(msg) > max_len else "")
 
 db_pool = None
 
@@ -3569,8 +3577,9 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
         except HTTPException:
             raise
         except Exception as e:
-            add_log(state, "info", "ERRORE", f"Manual trade error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            err = public_error(e, revx_key_id, revx_priv)
+            add_log(state, "info", "ERRORE", f"Manual trade error: {err}")
+            raise HTTPException(status_code=500, detail=err)
     else:
         qty       = amount / price if price else 0.0
         entry_fee = amount * 0.001
@@ -3632,7 +3641,7 @@ async def chat(body: dict, request: Request, user_id: int = Depends(get_current_
         data = res.json()
         if "content" in data:
             return {"reply": data["content"][0]["text"]}
-        return {"error": str(data.get("error", data))}
+        return {"error": public_error(Exception(str(data.get("error", data))), api_key)}
 
 # ── DEBUG / UTILITY ENDPOINTS ──────────────────────────────────────────────────
 
@@ -3748,7 +3757,7 @@ async def test_revx(request: Request, user_id: int = Depends(get_current_user)):
         ]
         return {"ok": True, "balances": balances}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": public_error(e, key_id, private_key)}
 
 @app.get("/debug/revx_orders")
 async def debug_revx_orders(request: Request, user_id: int = Depends(get_current_user)):
@@ -3767,7 +3776,7 @@ async def debug_revx_orders(request: Request, user_id: int = Depends(get_current
         result = await revx_request("GET", "/api/1.0/orders?state=open", key_id=key_id, private_key=private_key)
         return {"ok": True, "raw": result}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": public_error(e, key_id, private_key)}
 
 @app.get("/debug/revx_order")
 async def debug_revx_order(request: Request, order_id: str, user_id: int = Depends(get_current_user)):
@@ -3786,7 +3795,7 @@ async def debug_revx_order(request: Request, order_id: str, user_id: int = Depen
         result = await revx_request("GET", f"/api/1.0/orders/{order_id}", key_id=key_id, private_key=private_key)
         return {"ok": True, "raw": result}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": public_error(e, key_id, private_key)}
 
 @app.delete("/debug/revx_cancel_order")
 async def debug_revx_cancel_order(request: Request, order_id: str, user_id: int = Depends(get_current_user)):
@@ -3805,7 +3814,7 @@ async def debug_revx_cancel_order(request: Request, order_id: str, user_id: int 
         result = await revx_request("DELETE", f"/api/1.0/orders/{order_id}", key_id=key_id, private_key=private_key)
         return {"ok": True, "raw": result}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": public_error(e, key_id, private_key)}
 
 @app.get("/logos")
 async def get_logos(request: Request, user_id: int = Depends(get_current_user)):

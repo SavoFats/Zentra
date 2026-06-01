@@ -261,6 +261,18 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertIn("error", result)
         self.assertTrue(result["manual_action_required"])
 
+    def test_public_error_redacts_secrets_and_truncates(self):
+        secret = "A" * 64
+        pem = "-----BEGIN PRIVATE KEY-----\nvery-secret\n-----END PRIVATE KEY-----"
+        err = Exception(f"RevX failed api_key: {secret} pem={pem} " + ("x" * 500))
+
+        msg = self.main.public_error(err, secret, max_len=120)
+
+        self.assertNotIn(secret, msg)
+        self.assertNotIn("very-secret", msg)
+        self.assertIn("[REDACTED]", msg)
+        self.assertLessEqual(len(msg), 123)
+
 
 if __name__ == "__main__":
     unittest.main()
