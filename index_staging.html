@@ -2532,7 +2532,7 @@ async function clearTrades() {
 function updateStoricoBadge() {
   const badge = document.getElementById('storicoBadge');
   if (_newTradeCount > 0) {
-    badge.style.display = '';
+    badge.style.display = 'block';
   } else {
     badge.style.display = 'none';
   }
@@ -3264,6 +3264,10 @@ function renderPositions() {
   const wrap = document.getElementById('positionsWrap');
   const pos = S.positions || [];
   if (!pos.length) { wrap.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div>'; return; }
+  pos.forEach(p => {
+    const md = mktData.find(c => c.symbol === p.symbol);
+    if (md && md.price > 0) p.currentPrice = md.price;
+  });
   wrap.innerHTML = pos.map(p => {
     const entryPrice   = p.entryPrice || 0;
     const currentPrice = p.currentPrice || entryPrice;
@@ -4259,9 +4263,9 @@ function openTradeConfirmModal(sym, price, qty, slPct, tpPct, amountUsdt) {
 
 function closeTradeConfirmModal() {
   document.getElementById('tradeConfirmModal').style.display = 'none';
-  // Badge visibile sul tab Posizioni solo dopo che il modal è chiuso
   _newTradeCount++;
   updateStoricoBadge();
+  showToast('Posizione aperta: ' + (_tmSymbol || ''));
 }
 
 async function scanToggleStar(sym) {
