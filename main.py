@@ -452,6 +452,18 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         candle_body  = last_close_c - last_open  # positivo = verde
         body_ratio   = abs(candle_body) / candle_range if candle_range > 0 else 0.0
 
+        # Slope EMA20: confronta EMA20 attuale con EMA20 di 3 candele fa
+        ema20_5m_cur   = calc_ema(closes5[:-1], 20)   # su candele chiuse
+        ema20_5m_prev3 = calc_ema(closes5[:-4], 20)   # EMA20 di 3 candele fa
+
+        # Slope EMA20 su 1h: confronta EMA20 attuale con EMA20 di 3 ore fa
+        ema20_1h_cur   = calc_ema(closes1h[:-1], 20)
+        ema20_1h_prev3 = calc_ema(closes1h[:-4], 20)  # EMA20 di 3 ore fa
+
+        # Crossover 15m: EMA20 e EMA50 di 6 candele fa (90 min) per rilevare incrocio fresco
+        ema20_15m_prev3 = calc_ema(closes15[:-7], 20)
+        ema50_15m_prev3 = calc_ema(closes15[:-7], 50)
+
         # Choppiness Index(14) su candele chiuse
         chop_n = 14
         atr_sum_chop = sum(trs[-chop_n:]) if len(trs) >= chop_n else sum(trs)
@@ -483,18 +495,6 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         hist_list   = [macd_line[off2 + i] - signal_list[i] for i in range(len(signal_list))]
         macd_hist      = hist_list[-1] if hist_list else 0.0
         macd_hist_prev = hist_list[-2] if len(hist_list) >= 2 else 0.0
-
-        # Slope EMA20: confronta EMA20 attuale con EMA20 di 3 candele fa
-        ema20_5m_cur   = calc_ema(closes5[:-1], 20)   # su candele chiuse
-        ema20_5m_prev3 = calc_ema(closes5[:-4], 20)   # EMA20 di 3 candele fa
-
-        # Slope EMA20 su 1h: confronta EMA20 attuale con EMA20 di 3 ore fa
-        ema20_1h_cur   = calc_ema(closes1h[:-1], 20)
-        ema20_1h_prev3 = calc_ema(closes1h[:-4], 20)  # EMA20 di 3 ore fa
-
-        # Crossover 15m: EMA20 e EMA50 di 6 candele fa (90 min) per rilevare incrocio fresco
-        ema20_15m_prev3 = calc_ema(closes15[:-7], 20)
-        ema50_15m_prev3 = calc_ema(closes15[:-7], 50)
 
         return {
             "ema20_5m":          ema20_5m_cur,
