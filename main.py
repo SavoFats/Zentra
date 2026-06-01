@@ -3043,8 +3043,8 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 row = await conn.fetchrow(
                     "SELECT sim_mode, revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
             if row and not row["sim_mode"] and row["revx_key_id"]:
-                revx_key_id = row["revx_key_id"]
-                revx_priv   = row["revx_private_key"]
+                revx_key_id = decrypt_key(row["revx_key_id"])
+                revx_priv   = decrypt_key(row["revx_private_key"])
                 is_real     = True
                 state["revx_key_id"]      = revx_key_id
                 state["revx_private_key"] = revx_priv
