@@ -1495,6 +1495,28 @@ async def scan_and_trade(state: dict, user_id: int = None):
             add_log(state, "info", "STOP AUTO", f"Raggiunto limite di {max_trades} trade — sessione fermata")
             return
 
+    # Circuit breaker: perdita giornaliera massima
+    today_utc = datetime.utcnow().strftime("%Y-%m-%d")
+    if state.get("daily_date") != today_utc:
+        state["daily_date"]          = today_utc
+        state["daily_capital_start"] = state["currentCapital"]
+    if cfg.get("circuitBreakerEnabled", False):
+        daily_start = state.get("daily_capital_start", state["currentCapital"])
+        if daily_start > 0:
+            daily_loss_pct = (daily_start - state["currentCapital"]) / daily_start
+            limit = cfg.get("dailyLossLimit", 0.03)
+            if daily_loss_pct >= limit:
+                state["running"] = False
+                add_log(state, "info", "CIRCUIT BREAKER",
+                    f"Perdita giornaliera {daily_loss_pct*100:.1f}% — soglia {limit*100:.0f}% raggiunta. Bot fermato per oggi.")
+                await notify(state,
+                    f"🚨 CIRCUIT BREAKER\n"
+                    f"Perdita giornaliera: {daily_loss_pct*100:.1f}%\n"
+                    f"Soglia: {limit*100:.0f}%\n"
+                    f"Bot fermato fino a mezzanotte UTC.")
+                await persist_sessions()
+                return
+
     # Poll ordini GTC limit in attesa di fill
     for pos in list(state["positions"]):
         if pos.get("_sell_mode") == "retry_limit" and pos.get("realMode") and pos.get("exchange") == "revx":
@@ -1537,10 +1559,13 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if net_pnl_pct > profit_activation:
             pos["trailingActive"] = True
         if pos.get("trailingActive"):
-            peak         = pos.get("peak_price", cur)
-            profit_move  = peak - entry
-            tolerance    = cfg.get("profitTolerance", 0.20)
-            trail_price  = peak - profit_move * tolerance
+            peak = pos.get("peak_price", cur)
+            atr  = pos.get("atr_5m", 0.0)
+            mult = cfg.get("trailAtrMultiplier", 2.0)
+            if atr > 0:
+                trail_price = peak - atr * mult
+            else:
+                trail_price = peak - (peak - entry) * cfg.get("profitTolerance", 0.20)
             if cur <= trail_price:
                 await exit_position(state, pos, "TRAILING PROFIT", user_id=user_id)
                 continue
@@ -3106,9 +3131,14 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
             "maxHoldHours":        float(cfg.get("maxHoldHours", 4.0)),
             "timeFilter":          bool(cfg.get("timeFilter", True)),
             "momentumPct":         float(cfg.get("momentumPct", 0.01)),
-            "profitTolerance":     float(cfg.get("profitTolerance", 0.20)),
-            "profitActivation":    float(cfg.get("profitActivation", 0.003)),
+            "profitTolerance":        float(cfg.get("profitTolerance", 0.20)),
+            "profitActivation":       float(cfg.get("profitActivation", 0.003)),
+            "trailAtrMultiplier":     float(cfg.get("trailAtrMultiplier", 2.0)),
+            "circuitBreakerEnabled":  bool(cfg.get("circuitBreakerEnabled", False)),
+            "dailyLossLimit":         float(cfg.get("dailyLossLimit", 0.03)),
         },
+        "daily_capital_start": float(cfg.get("capitalUsd", 1000)),
+        "daily_date":          datetime.utcnow().strftime("%Y-%m-%d"),
         "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
         "revx_key_id": revx_key_id, "revx_private_key": revx_private_key,
         "use_revx": use_revx,
