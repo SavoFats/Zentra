@@ -2971,14 +2971,15 @@ async def stop_agent(request: Request, user_id: int = Depends(get_current_user))
         return {"error": "Not running"}
     state["_stopping"] = True  # blocca nuovi trade senza nascondere posizioni al poll
     for p in list(state["positions"]):
-        await exit_position(state, p, "STOP MANUALE", user_id=user_id)
-    # Se alcune posizioni non sono state vendute, non chiudere la sessione
-    remaining = state.get("positions", [])
-    if remaining:
+        if not p.get("manual"):
+            await exit_position(state, p, "STOP MANUALE", user_id=user_id)
+    # Considera fallimento solo per posizioni non-manuali rimaste
+    remaining_agent = [p for p in state.get("positions", []) if not p.get("manual")]
+    if remaining_agent:
         state.pop("_stopping", None)
-        syms = ", ".join(p["symbol"] for p in remaining)
+        syms = ", ".join(p["symbol"] for p in remaining_agent)
         add_log(state, "info", "ERRORE", f"Stop annullato: vendita fallita per {syms} — riprova")
-        return {"error": f"Vendita fallita per: {syms}. Sessione non fermata.", "remaining": [p["symbol"] for p in remaining]}
+        return {"error": f"Vendita fallita per: {syms}. Sessione non fermata.", "remaining": [p["symbol"] for p in remaining_agent]}
     state["running"] = False
     state.pop("_stopping", None)
     pnl = state["currentCapital"] - state["capital"]
