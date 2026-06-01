@@ -1558,7 +1558,6 @@ body.auth-active .tabbar { display:none !important; }
         <div style="min-width:60px;max-width:80px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Coin</div>
         <div style="flex:1;text-align:right;padding-right:12px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em">Prezzo</div>
         <div style="min-width:90px;text-align:center;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-right:10px">Segnale</div>
-        <div id="scanValHdr" style="min-width:58px;text-align:right;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-right:10px">Var. 24h</div>
         <div style="width:106px;flex-shrink:0"></div>
       </div>
       <div id="scannerList"><div class="empty"><div class="empty-text">Caricamento...</div></div></div>
@@ -4314,8 +4313,6 @@ function selectScanSignal(key, el) {
   el.classList.add('active');
   const titleEl = document.getElementById('scanResultsTitle');
   if (titleEl) titleEl.textContent = _scanLabelMap[key] || key;
-  const valHdr = document.getElementById('scanValHdr');
-  if (valHdr) valHdr.textContent = _scanValHdrMap[key] || 'Valore';
   renderScanner();
 }
 
@@ -4369,7 +4366,7 @@ function renderScanner() {
   list.innerHTML = matched.map(c => {
     const sym = c.symbol;
     const base = sym.replace('USDT','');
-    const val = (_scanValueFn[_scanSignal]?.(c)) || '';
+
     const starred = _watchlist.has(sym);
     return `<div class="scan-row">
       <img src="${getLogo(sym)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;margin-right:12px;flex-shrink:0" onerror="coinImgErr(this,'${esc(base[0])}',38)">
@@ -4382,7 +4379,6 @@ function renderScanner() {
       <div style="width:90px;flex-shrink:0;display:flex;justify-content:center;margin-right:10px">
         <span style="font-size:10px;font-weight:700;background:${badgeColor};color:#fff;padding:4px 9px;border-radius:20px;white-space:nowrap">${esc(label)}</span>
       </div>
-      <span style="font-size:11px;font-weight:600;color:var(--text3);margin-right:10px;min-width:58px;text-align:right;flex-shrink:0">${esc(val)}</span>
       <button onclick="event.stopPropagation();scanToggleStar('${esc(sym)}')" title="${starred ? 'Rimuovi' : 'Aggiungi'} preferiti" class="star-btn ${starred ? 'starred' : ''}" style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:6px;transition:background 0.15s">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="${starred ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
       </button>
