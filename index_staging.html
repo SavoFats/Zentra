@@ -1237,12 +1237,14 @@ body.auth-active .tabbar { display:none !important; }
     <input type="hidden" id="capital">
 
     <div class="field">
-      <div class="field-label">
-        <span style="color:var(--text);font-weight:600">Capitale da tradare &nbsp;<span id="capitalPctVal" style="color:var(--blue)">100%</span></span>
-        <span id="capitalDisplay" style="color:var(--blue)">$1,000.00</span>
+      <div class="field-label">Capitale da tradare</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <span style="font-size:16px;font-weight:600;color:var(--text2)">$</span>
+        <input type="number" id="capitalUsd" min="1" step="0.01" value="1000" placeholder="0.00"
+          style="flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;font-size:16px;font-weight:600;color:var(--text);font-family:var(--sans);outline:none;-webkit-appearance:none;appearance:none"
+          oninput="updateCapitalUsd()">
       </div>
-      <input type="range" id="capitalPct" min="10" max="100" value="100" step="5" oninput="updateCapitalPct()">
-      <div class="field-hint" id="capitalHint">Percentuale del saldo disponibile da mettere in gioco</div>
+      <div class="field-hint" id="capitalHint">Inserisci il capitale da destinare al trading</div>
     </div>
     <div class="field">
       <div class="field-label">Importo per trade <span class="pro-lock-label" style="display:none">PRO</span></div>
@@ -2562,7 +2564,7 @@ function startFluidTimer() {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const CONFIG_IDS = ['capitalPct','allocUsd','sessionDuration','momentumPct','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
+const CONFIG_IDS = ['capitalUsd','allocUsd','sessionDuration','momentumPct','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -2580,8 +2582,7 @@ function unlockConfig() {
 }
 
 function resetConfigToDefaults() {
-  document.getElementById('capitalPct').value = 100; document.getElementById('capitalPctVal').textContent = '100%';
-  document.getElementById('capitalDisplay').textContent = '--';
+  document.getElementById('capitalUsd').value = 1000;
   document.getElementById('allocUsd').value = 10;
   document.getElementById('sessionDuration').value = 0; document.getElementById('sessionVal').textContent = '0h';
   document.getElementById('momentumPct').value = 1; document.getElementById('momentumPctVal').textContent = '1.0%';
@@ -2609,7 +2610,7 @@ function saveConfigToStorage(cfg) { localStorage.setItem('ca_config', JSON.strin
 function restoreConfigFromStorage() {
   const saved = JSON.parse(localStorage.getItem('ca_config') || 'null');
   if (!saved) return;
-  if (saved.capitalPct !== undefined) { const p=Math.round(saved.capitalPct*100); document.getElementById('capitalPct').value=p; document.getElementById('capitalPctVal').textContent=p+'%'; }
+  if (saved.capital !== undefined) { document.getElementById('capitalUsd').value = saved.capital; }
   if (saved.tradeAmountUsd) { document.getElementById('allocUsd').value = saved.tradeAmountUsd; }
   else if (saved.allocPct) { document.getElementById('allocUsd').value = Math.round(saved.allocPct * 100); }
   if (saved.sessionDuration) { document.getElementById('sessionDuration').value=saved.sessionDuration; document.getElementById('sessionVal').textContent=saved.sessionDuration+'h'; }
@@ -2639,23 +2640,27 @@ function getFeePct() {
   return 0.0009; // RevX taker fee 0.09%
 }
 
-function updateCapitalPct() {
-  const pct = parseInt(document.getElementById('capitalPct').value);
-  document.getElementById('capitalPctVal').textContent = pct + '%';
+function updateCapitalUsd() {
+  const usd   = parseFloat(document.getElementById('capitalUsd').value) || 0;
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const amount = total > 0 ? (total * pct / 100) : 0;
-  const sym = getCurrSym();
-  document.getElementById('capitalDisplay').textContent = amount > 0 ? sym + amount.toFixed(2) : '--';
+  const sym   = getCurrSym();
+  const hint  = document.getElementById('capitalHint');
+  if (total > 0) {
+    const pct = usd / total * 100;
+    hint.innerHTML = pct.toFixed(1) + '% del saldo disponibile (' + sym + total.toFixed(2) + ')' +
+      (usd > total ? ' <span style="color:var(--red)">⚠ supera il saldo</span>' : '');
+  } else {
+    hint.textContent = 'Capitale simulato';
+  }
   updateAlloc();
 }
+function updateCapitalPct() { updateCapitalUsd(); } // compat
 
 function updateAlloc() {
   const usd = parseFloat(document.getElementById('allocUsd').value) || 0;
   const hint = document.getElementById('allocHint');
   if (usd <= 0) { hint.textContent = "Inserisci un importo valido"; return; }
-  const capPct = parseInt(document.getElementById('capitalPct').value) || 100;
-  const total  = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const tradable = total > 0 ? (total * capPct / 100) : 0;
+  const tradable = parseFloat(document.getElementById('capitalUsd').value) || 0;
   const sym = getCurrSym();
   if (tradable <= 0) {
     hint.innerHTML = sym + usd.toFixed(2) + ' per trade · collega il saldo per il dettaglio';
@@ -2745,9 +2750,9 @@ async function setMode(real) {
         document.getElementById('totalBalanceDisplay').textContent = getCurrSym() + bal.toFixed(2) + ' disponibili';
         document.getElementById('totalBalanceDisplay').style.color = 'var(--green)';
         capitalInput.value = suggested; capitalInput.dataset.total = bal;
-        document.getElementById('capitalDisplay').textContent = getCurrSym() + suggested;
+        document.getElementById('capitalUsd').value = suggested;
         hint.textContent = getCurrSym() + bal.toFixed(2) + ' disponibili';
-        hint.style.color = 'var(--red)'; updateAlloc();
+        hint.style.color = 'var(--red)'; updateCapitalUsd();
       } else {
         hint.textContent = 'Errore connessione: ' + (d.error || 'sconosciuto'); hint.style.color = 'var(--red)';
       }
@@ -2756,7 +2761,7 @@ async function setMode(real) {
     realBtn.classList.remove('active-real'); simBtn.classList.add('active-sim');
     hint.textContent = 'Nessun ordine reale verra eseguito'; hint.style.color = '';
     capitalInput.disabled = false; capitalInput.value = 1000; capitalInput.dataset.total = 0;
-    document.getElementById('capitalDisplay').textContent = '$1,000'; // simulazione
+    document.getElementById('capitalUsd').value = 1000;
     document.getElementById('totalBalanceDisplay').textContent = 'Modalita simulazione';
     document.getElementById('totalBalanceDisplay').style.color = '';
     updateAlloc();
@@ -2766,20 +2771,21 @@ async function setMode(real) {
 
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
-  const capitalPctVal = parseInt(document.getElementById('capitalPct').value);
-  if (!capitalPctVal || capitalPctVal <= 0 || capitalPctVal > 100) { alert('Percentuale di capitale non valida (1-100%).'); return; }
+  const capitalUsdVal = parseFloat(document.getElementById('capitalUsd').value);
+  if (!capitalUsdVal || capitalUsdVal <= 0) { alert('Capitale da tradare non valido.'); return; }
   const allocUsdVal = parseFloat(document.getElementById('allocUsd').value);
   if (!allocUsdVal || allocUsdVal <= 0) { alert("Importo per trade non valido."); return; }
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
   if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const isReal = _hasRevxKeys && !_simMode;
-  const capitalVal = total > 0 ? parseFloat((total * capitalPctVal / 100).toFixed(2)) : (isReal ? 0 : 1000);
+  const capitalVal = parseFloat(capitalUsdVal.toFixed(2));
+  if (isReal && total > 0 && capitalVal > total) { alert('Capitale superiore al saldo disponibile (' + getCurrSym() + total.toFixed(2) + ').'); return; }
   if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
   if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
   const cfg = {
     capital:               capitalVal,
-    capitalPct:            capitalPctVal / 100,
+    capitalPct:            total > 0 ? capitalVal / total : 1.0,
     allocPct:              capitalVal > 0 ? allocUsdVal / capitalVal : 0.10,
     tradeAmountUsd:        allocUsdVal,
     sessionDuration:       parseInt(document.getElementById('sessionDuration').value),
@@ -3833,8 +3839,8 @@ function renderHomeHeroPills() {
     slEl.textContent = sl > 0 ? `Stop Loss ${sl.toFixed(1)}%` : 'Stop Loss --';
   }
   if (capEl) {
-    const capDisp = document.getElementById('capitalDisplay')?.textContent || '';
-    capEl.textContent = capDisp && capDisp !== '--' ? `Capitale ${capDisp}` : 'Capitale --';
+    const capVal = parseFloat(document.getElementById('capitalUsd')?.value || 0);
+    capEl.textContent = capVal > 0 ? `Capitale ${capVal.toFixed(0)}` : 'Capitale --';
   }
 }
 
