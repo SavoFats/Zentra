@@ -364,6 +364,10 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .scan-card-label { font-size:10px; font-weight:700; color:var(--text2); text-align:center; line-height:1.3; }
 .scan-card.active .scan-card-label { color:var(--blue); }
 .scan-cat-hdr { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.1em; margin:0 0 10px; display:flex; align-items:center; gap:5px; }
+@keyframes scanPriceUp { 0%{color:var(--green)} 100%{color:var(--text)} }
+@keyframes scanPriceDown { 0%{color:var(--red)} 100%{color:var(--text)} }
+.scan-price-up { animation:scanPriceUp 0.8s ease-out forwards; }
+.scan-price-down { animation:scanPriceDown 0.8s ease-out forwards; }
 .scan-info-btn { position:absolute; top:6px; right:6px; width:16px; height:16px; border-radius:50%; border:1.5px solid var(--border); background:var(--surface2); color:var(--text3); font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; z-index:2; font-family:var(--sans); transition:border-color 0.15s,color 0.15s; }
 .scan-info-btn:hover { border-color:var(--blue); color:var(--blue); }
 .scan-tooltip { position:fixed; z-index:500; background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:16px; width:240px; box-shadow:0 8px 32px rgba(0,0,0,0.5); pointer-events:none; opacity:0; transition:opacity 0.15s; }
@@ -2954,7 +2958,7 @@ async function poll() {
     mktData = md.market || [];
     // Aggiorna prezzi in-place se i tab sono già renderizzati
     if (document.getElementById('page-scanner').classList.contains('active')) {
-      renderScanner();
+      updateScannerPricesInPlace();
     }
     if (document.getElementById('page-home').classList.contains('active')) {
       updateWatchlistPricesInPlace();
@@ -4299,6 +4303,36 @@ function selectScanSignal(key, el) {
   renderScanner();
 }
 
+function updateScannerPricesInPlace() {
+  const fn = _scanSignalFn[_scanSignal];
+  const matched = fn ? mktData.filter(c => c.scanner && fn(c)) : [];
+  // Se i simboli nella lista sono cambiati, rebuild completo
+  const listEl = document.getElementById('scannerList');
+  if (!listEl) return;
+  const existing = listEl.querySelectorAll('[id^="scan-price-"]');
+  const existingSyms = new Set([...existing].map(el => el.id.replace('scan-price-', '') + 'USDT'));
+  const newSyms = new Set(matched.map(c => c.symbol));
+  const sameSet = existingSyms.size === newSyms.size && [...newSyms].every(s => existingSyms.has(s));
+  if (!sameSet || existing.length === 0) {
+    renderScanner();
+    return;
+  }
+  // Aggiorna solo i prezzi in-place con flash se cambiati
+  for (const c of matched) {
+    const base = c.symbol.replace('USDT', '');
+    const el = document.getElementById('scan-price-' + base + 'USDT');
+    if (!el) continue;
+    const oldPrice = parseFloat(el.dataset.price || 0);
+    if (oldPrice !== c.price) {
+      el.dataset.price = c.price;
+      el.textContent = fmtPrice(c.price);
+      el.classList.remove('scan-price-up', 'scan-price-down');
+      void el.offsetWidth; // force reflow per restart animation
+      el.classList.add(c.price > oldPrice ? 'scan-price-up' : 'scan-price-down');
+    }
+  }
+}
+
 function renderScanner() {
   const list = document.getElementById('scannerList');
   const countEl = document.getElementById('scanCount');
@@ -4328,7 +4362,7 @@ function renderScanner() {
         <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(base)}</div>
       </div>
       <div style="flex:1;min-width:0;text-align:right;padding-right:12px">
-        <div style="font-size:13px;font-weight:700;color:var(--text)">${fmtPrice(c.price)}</div>
+        <div id="scan-price-${esc(sym)}" data-price="${c.price}" style="font-size:13px;font-weight:700;color:var(--text)">${fmtPrice(c.price)}</div>
       </div>
       <span style="font-size:10px;font-weight:700;background:${badgeColor};color:#fff;padding:4px 9px;border-radius:20px;margin-right:10px;white-space:nowrap;flex-shrink:0">${esc(label)}</span>
       <span style="font-size:11px;font-weight:600;color:var(--text3);margin-right:10px;min-width:58px;text-align:right;flex-shrink:0">${esc(val)}</span>
