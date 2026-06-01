@@ -3033,7 +3033,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
     sl_pct = max(0.1, min(req.sl_pct, 50.0))
     tp_pct = max(0.1, min(req.tp_pct, 200.0))
     state = get_session(user_id)
-    is_real = state.get("isReal", False)
+    is_real = state.get("use_revx", False)
     price = market_data.get(sym, {}).get("price", 0.0)
     if not price:
         raise HTTPException(status_code=400, detail="Prezzo non disponibile per questa coin")
