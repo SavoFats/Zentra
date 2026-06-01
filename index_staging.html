@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production-87b2.up.railway.app https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production-87b2.up.railway.app https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -4208,11 +4208,13 @@ function openTVChart(symbol) {
   document.getElementById('tvModal').style.display = 'flex';
   const container = document.getElementById('tvWidgetContainer');
   const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-  container.innerHTML = '<iframe id="tvIframe" style="width:100%;height:100%;border:none" allowfullscreen></iframe>';
-  const ifrDoc = document.getElementById('tvIframe').contentDocument;
-  ifrDoc.open();
-  ifrDoc.write(`<!DOCTYPE html><html><head><style>*{margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden}</style></head><body><div id="tv" style="width:100%;height:100%"></div><script src="https://s.tradingview.com/tv.js"><\/script><script>new TradingView.widget({autosize:true,symbol:"BINANCE:${base}USDT",interval:"5",timezone:"Etc/UTC",theme:"${theme}",style:"1",locale:"it",hide_side_toolbar:false,allow_symbol_change:false,container_id:"tv"});<\/script></body></html>`);
-  ifrDoc.close();
+  const tvHtml = `<!DOCTYPE html><html><head><style>*{margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden}</style></head><body><div id="tv" style="width:100%;height:100%"></div><script src="https://s.tradingview.com/tv.js"><\/script><script>new TradingView.widget({autosize:true,symbol:"BINANCE:${base}USDT",interval:"5",timezone:"Etc/UTC",theme:"${theme}",style:"1",locale:"it",hide_side_toolbar:false,allow_symbol_change:false,container_id:"tv"});<\/script></body></html>`;
+  const tvIframe = document.createElement('iframe');
+  tvIframe.style.cssText = 'width:100%;height:100%;border:none';
+  tvIframe.setAttribute('allowfullscreen','');
+  tvIframe.srcdoc = tvHtml;
+  container.innerHTML = '';
+  container.appendChild(tvIframe);
 }
 
 function closeTVChart() {
