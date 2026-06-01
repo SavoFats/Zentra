@@ -150,7 +150,8 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-BINANCE_BASE = "https://api.binance.com"
+BINANCE_BASE    = "https://api.binance.com"
+BINANCE_US_BASE = "https://api.binance.us"
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -389,12 +390,18 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
     """Scarica candele 5min, 15min e 1h da Binance. Calcola EMA20/50, RSI14, ATR."""
     pair = f"{sym}USDT"
     try:
-        r5, r15, r1h = await asyncio.gather(
-            client.get(f"{BINANCE_BASE}/api/v3/klines", params={"symbol": pair, "interval": "5m",  "limit": 150}),
-            client.get(f"{BINANCE_BASE}/api/v3/klines", params={"symbol": pair, "interval": "15m", "limit": 150}),
-            client.get(f"{BINANCE_BASE}/api/v3/klines", params={"symbol": pair, "interval": "1h",  "limit": 60}),
-        )
-        if r5.status_code != 200 or r15.status_code != 200 or r1h.status_code != 200:
+        for base in (BINANCE_BASE, BINANCE_US_BASE):
+            r5, r15, r1h = await asyncio.gather(
+                client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "5m",  "limit": 150}),
+                client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "15m", "limit": 150}),
+                client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "1h",  "limit": 60}),
+            )
+            if r5.status_code == 451:
+                continue  # prova Binance US
+            if r5.status_code != 200 or r15.status_code != 200 or r1h.status_code != 200:
+                return None
+            break
+        else:
             return None
 
         klines5  = r5.json()
@@ -785,10 +792,14 @@ async def fetch_prices_coingecko():
 
 async def fetch_prices():
     try:
+        r = None
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
-        if r.status_code != 200:
-            print(f"[BINANCE] fetch_prices HTTP {r.status_code}: {r.text[:200]}")
+            for base in (BINANCE_BASE, BINANCE_US_BASE):
+                r = await client.get(f"{base}/api/v3/ticker/24hr")
+                if r.status_code != 451:
+                    break
+        if r is None or r.status_code != 200:
+            print(f"[BINANCE] fetch_prices HTTP {r.status_code if r else '?'}: {r.text[:200] if r else ''}")
             await fetch_prices_coingecko()
             return
         tickers = r.json()
