@@ -1075,17 +1075,11 @@ body.auth-active .tabbar { display:none !important; }
     <button class="sb-item active" data-tab="home" onclick="showTab('home',this)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
     </button>
-    <button class="sb-item" data-tab="monitor" onclick="showTab('monitor',this)">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Monitor
-    </button>
-    <button class="sb-item" data-tab="market" onclick="showTab('market',this)">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Mercato
-    </button>
     <button class="sb-item" data-tab="scanner" onclick="showTab('scanner',this)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>Scanner
     </button>
-    <button class="sb-item" data-tab="transazioni" onclick="showTab('transazioni',this)">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Transazioni
+    <button class="sb-item" data-tab="posizioni" onclick="showTab('posizioni',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Posizioni
     </button>
   </div>
   <div class="sb-foot">
@@ -1162,6 +1156,29 @@ body.auth-active .tabbar { display:none !important; }
       <div class="card-label">Preferiti</div>
       <div id="homeWatchlist">
         <div class="empty" style="padding:24px 0"><div class="empty-text">Aggiungi coin dai preferiti nel Mercato</div></div>
+      </div>
+    </div>
+
+    <!-- Hero P&L card — visibile quando l'agente è in esecuzione -->
+    <div class="hero-card off" id="heroCard" style="margin-bottom:12px">
+      <canvas class="hero-sparkline" id="heroSparkline"></canvas>
+      <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;flex-direction:column;align-items:flex-end;gap:6px">
+        <button id="stopBtn" onclick="stopAgent()" disabled
+          style="padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
+          Ferma
+        </button>
+        <button id="pauseBtn" onclick="pauseAgent()" disabled
+          style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          Pausa
+        </button>
+      </div>
+      <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
+      <div class="hero-pnl" id="heroPnl">$0.00</div>
+      <div class="hero-stats" style="margin-top:10px">
+        <div class="hero-stat">Trade <strong id="heroTrades">0</strong></div>
+        <div class="hero-stat">Win rate <strong id="heroWR">--%</strong></div>
+        <div class="hero-stat" id="heroRemainingWrap">Rimanente <strong id="heroRemaining">--</strong></div>
       </div>
     </div>
 
@@ -1373,146 +1390,70 @@ body.auth-active .tabbar { display:none !important; }
     <div style="height:8px"></div>
   </div>
 
-  <!-- MONITOR -->
-  <div class="page" id="page-monitor">
-    <div class="ptr-indicator" id="ptr-page-monitor"><div class="ptr-spinner"></div></div>
+  <!-- POSIZIONI -->
+  <div class="page" id="page-posizioni">
+    <div class="ptr-indicator" id="ptr-page-posizioni"><div class="ptr-spinner"></div></div>
 
-    <!-- Hero P&L card -->
-    <div class="hero-card off" id="heroCard">
-      <canvas class="hero-sparkline" id="heroSparkline"></canvas>
-      <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;display:none;flex-direction:column;align-items:flex-end;gap:6px">
-        <button id="stopBtn" onclick="stopAgent()" disabled
-          style="padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-          <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
-          Ferma
-        </button>
-        <button id="pauseBtn" onclick="pauseAgent()" disabled
-          style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-          Pausa
-        </button>
-      </div>
-      <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
-      <div class="hero-pnl" id="heroPnl">$0.00</div>
-      <div class="hero-stats" style="margin-top:10px">
-        <div class="hero-stat">Trade <strong id="heroTrades">0</strong></div>
-        <div class="hero-stat">Win rate <strong id="heroWR">--%</strong></div>
-        <div class="hero-stat" id="heroRemainingWrap">Rimanente <strong id="heroRemaining">--</strong></div>
-      </div>
-    </div>
-
-    <!-- Tabs -->
     <div class="mon-tabs">
-      <button class="mon-tab active" id="monTabPos" onclick="switchMonTab('pos')">Posizioni</button>
-      <button class="mon-tab" id="monTabAct" onclick="switchMonTab('act')">Attività</button>
+      <button class="mon-tab active" id="posTabAperte" onclick="switchPosTab('aperte')">Aperte</button>
+      <button class="mon-tab" id="posTabChiuse" onclick="switchPosTab('chiuse')">Chiuse</button>
     </div>
 
-    <!-- Posizioni panel -->
-    <div id="monPanelPos">
+    <!-- Panel Aperte -->
+    <div id="posPanelAperte">
       <div id="positionsWrap"><div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div></div>
     </div>
 
-    <!-- Attività panel -->
-    <div id="monPanelAct" style="display:none">
-      <div class="card" style="padding:14px 16px">
-        <div id="agentActivityList" style="max-height:360px;overflow-y:auto;-webkit-overflow-scrolling:touch">
-          <div class="empty" style="padding:20px 0"><div class="empty-text">Nessuna attività</div></div>
+    <!-- Panel Chiuse -->
+    <div id="posPanelChiuse" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="background:var(--blue);border-radius:16px;padding:16px 18px">
+          <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">P&L Oggi</div>
+          <div id="txPnl" style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.02em">--</div>
+          <div id="txCount" style="font-size:12px;color:rgba(255,255,255,0.65);margin-top:4px">-- trade</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:16px;padding:16px 18px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Win Rate</div>
+          <div id="txWinRate" style="font-size:26px;font-weight:800;letter-spacing:-0.02em">--%</div>
+          <div id="txDotBar" style="display:flex;gap:3px;margin:8px 0 5px;flex-wrap:wrap"></div>
+          <div id="txWinLoss" style="font-size:11px;color:var(--text3)">-- vittorie · -- sconfitte</div>
         </div>
       </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+        <div class="fdd" id="fddPeriod">
+          <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Oggi <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+          <div class="fdd-menu" id="fddPeriodMenu">
+            <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','all','Tutte','period')">Tutte</div>
+            <div class="fdd-item selected" onclick="selectFdd(this,'fddPeriod','today','Oggi','period')">Oggi</div>
+            <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','week','7 giorni','period')">7 giorni</div>
+            <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','month','30 giorni','period')">30 giorni</div>
+            <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','6m','6 mesi','period')">6 mesi</div>
+          </div>
+        </div>
+        <div class="fdd" id="fddOutcome">
+          <div class="fdd-btn" onclick="toggleFdd('fddOutcome')" id="fddOutcomeBtn">Esito <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+          <div class="fdd-menu" id="fddOutcomeMenu">
+            <div class="fdd-item selected" onclick="selectFdd(this,'fddOutcome','all','Esito','outcome')">Tutti</div>
+            <div class="fdd-item" onclick="selectFdd(this,'fddOutcome','win','Profitto','outcome')">Profitto</div>
+            <div class="fdd-item" onclick="selectFdd(this,'fddOutcome','loss','Perdita','outcome')">Perdita</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+          <span id="txFilterCount" style="font-size:12px;color:var(--text3);font-weight:500"></span>
+          <button onclick="clearTrades()" title="Cancella" style="background:none;border:none;padding:6px;cursor:pointer;color:var(--text3);display:flex;align-items:center;border-radius:8px;transition:color 0.15s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="transazioniList"><div class="empty"><div class="empty-text">Nessuna posizione chiusa</div></div></div>
     </div>
   </div>
 
-  <!-- MERCATO -->
-  <div class="page" id="page-market">
-    <div class="ptr-indicator" id="ptr-page-market"><div class="ptr-spinner"></div></div>
-    <div class="card" style="padding-bottom:8px">
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-        <div class="fdd" id="fddMktVar">
-          <div class="fdd-btn active" onclick="toggleFdd('fddMktVar')" id="fddMktVarBtn">24h % <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-          <div class="fdd-menu" id="fddMktVarMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktVar','change24h','24h %','var')">24h %</div>
-            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktVar','change1h','1h %','var')">1h %</div>
-          </div>
-        </div>
-        <div class="fdd" id="fddMktMetric">
-          <div class="fdd-btn" onclick="toggleFdd('fddMktMetric')" id="fddMktMetricBtn">Volume <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-          <div class="fdd-menu" id="fddMktMetricMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktMetric','volume24h','Volume','metric')">Volume</div>
-            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktMetric','price','Prezzo','metric')">Prezzo</div>
-          </div>
-        </div>
-        <div class="fdd" id="fddMktDir">
-          <div class="fdd-btn" onclick="toggleFdd('fddMktDir')" id="fddMktDirBtn">Tutti <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-          <div class="fdd-menu" id="fddMktDirMenu">
-            <div class="fdd-item selected" onclick="selectFddMkt(this,'fddMktDir','all','Tutti','dir')">Tutti</div>
-            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktDir','gainers','Rialzo','dir')">Rialzo</div>
-            <div class="fdd-item" onclick="selectFddMkt(this,'fddMktDir','losers','Ribasso','dir')">Ribasso</div>
-          </div>
-        </div>
-      </div>
-      <div style="position:relative;margin-bottom:12px">
-        <input type="text" id="mktSearch" placeholder="Cerca coin..." oninput="renderMarket()"
-          style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px 11px 36px;color:var(--text);font-size:14px;font-family:var(--sans);outline:none"
-          onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'">
-        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
-      </div>
-      <div id="marketList"><div class="empty"><div class="empty-text">Caricamento...</div></div></div>
-    </div>
-  </div>
-
-  <!-- TRANSAZIONI -->
-  <div class="page" id="page-transazioni">
-    <div class="ptr-indicator" id="ptr-page-transazioni"><div class="ptr-spinner"></div></div>
-
-    <!-- Stats -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      <div style="background:var(--blue);border-radius:16px;padding:16px 18px">
-        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">P&L Oggi</div>
-        <div id="txPnl" style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.02em">--</div>
-        <div id="txCount" style="font-size:12px;color:rgba(255,255,255,0.65);margin-top:4px">-- trade</div>
-      </div>
-      <div style="background:var(--surface2);border-radius:16px;padding:16px 18px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Win Rate</div>
-        <div id="txWinRate" style="font-size:26px;font-weight:800;letter-spacing:-0.02em">--%</div>
-        <div id="txDotBar" style="display:flex;gap:3px;margin:8px 0 5px;flex-wrap:wrap"></div>
-        <div id="txWinLoss" style="font-size:11px;color:var(--text3)">-- vittorie · -- sconfitte</div>
-      </div>
-    </div>
-
-
-
-    <!-- Filtri dropdown custom -->
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;justify-content:space-between">
-      <div class="fdd" id="fddPeriod">
-        <div class="fdd-btn" onclick="toggleFdd('fddPeriod')" id="fddPeriodBtn">Oggi <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-        <div class="fdd-menu" id="fddPeriodMenu">
-          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','all','Tutte','period')">Tutte</div>
-          <div class="fdd-item selected" onclick="selectFdd(this,'fddPeriod','today','Oggi','period')">Oggi</div>
-          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','week','7 giorni','period')">7 giorni</div>
-          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','month','30 giorni','period')">30 giorni</div>
-          <div class="fdd-item" onclick="selectFdd(this,'fddPeriod','6m','6 mesi','period')">6 mesi</div>
-        </div>
-      </div>
-      <div class="fdd" id="fddOutcome">
-        <div class="fdd-btn" onclick="toggleFdd('fddOutcome')" id="fddOutcomeBtn">Esito <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-        <div class="fdd-menu" id="fddOutcomeMenu">
-          <div class="fdd-item selected" onclick="selectFdd(this,'fddOutcome','all','Esito','outcome')">Tutti</div>
-          <div class="fdd-item" onclick="selectFdd(this,'fddOutcome','win','Profitto','outcome')">Profitto</div>
-          <div class="fdd-item" onclick="selectFdd(this,'fddOutcome','loss','Perdita','outcome')">Perdita</div>
-        </div>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
-      <span id="txFilterCount" style="font-size:12px;color:var(--text3);font-weight:500"></span>
-      <button onclick="clearTrades()" title="Cancella transazioni" style="background:none;border:none;padding:6px;cursor:pointer;color:var(--text3);display:flex;align-items:center;border-radius:8px;transition:color 0.15s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text3)'">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-      </button>
-      </div>
-
-    </div>
-
-    <!-- Lista -->
-    <div id="transazioniList"><div class="empty"><div class="empty-text">Nessuna transazione</div></div></div>
-  </div>
+  <!-- elementi di compatibilità (page-market/monitor/transazioni eliminati ma JS null-safe) -->
+  <div style="display:none" id="page-market"></div>
+  <div style="display:none" id="page-monitor"></div>
+  <div style="display:none" id="page-transazioni"></div>
+  <div style="display:none" id="agentActivityList"></div>
 
   <!-- SCANNER -->
   <div class="page" id="page-scanner">
@@ -1660,6 +1601,34 @@ body.auth-active .tabbar { display:none !important; }
   </div>
 </div>
 
+<!-- Trade Confirm Modal -->
+<div id="tradeConfirmModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:22px;width:min(340px,88vw);padding:28px 24px 24px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,0.4)">
+    <img id="tcmLogo" src="" style="width:52px;height:52px;border-radius:50%;object-fit:cover;margin-bottom:12px" onerror="this.style.display='none'">
+    <div id="tcmTitle" style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:4px"></div>
+    <div id="tcmSub" style="font-size:13px;color:var(--text3);margin-bottom:20px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px;text-align:left">
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Quantità</div>
+        <div id="tcmQty" style="font-size:14px;font-weight:700;color:var(--text)"></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Prezzo</div>
+        <div id="tcmPrice" style="font-size:14px;font-weight:700;color:var(--text)"></div>
+      </div>
+      <div style="background:rgba(246,70,93,0.1);border-radius:12px;padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Stop Loss</div>
+        <div id="tcmSL" style="font-size:14px;font-weight:700;color:var(--red)"></div>
+      </div>
+      <div style="background:rgba(5,193,104,0.1);border-radius:12px;padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Take Profit</div>
+        <div id="tcmTP" style="font-size:14px;font-weight:700;color:var(--green)"></div>
+      </div>
+    </div>
+    <button onclick="closeTradeConfirmModal()" style="width:100%;padding:14px;border-radius:14px;background:var(--blue);border:none;color:#fff;font-size:15px;font-weight:700;cursor:pointer">OK</button>
+  </div>
+</div>
+
 <!-- Manual Trade Modal -->
 <div id="tradeModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);align-items:center;justify-content:center">
   <div style="background:var(--surface);border-radius:22px;width:min(400px,92vw);max-height:92vh;overflow-y:auto;padding:24px;position:relative;box-shadow:0 24px 64px rgba(0,0,0,0.4)">
@@ -1715,25 +1684,16 @@ body.auth-active .tabbar { display:none !important; }
     <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
     <span>Home</span>
   </button>
-  <button class="tab" onclick="showTab('monitor',this)">
-    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
-    <span>Monitor</span>
-  </button>
-  <button class="tab" onclick="showTab('market',this)">
-    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
-    <span>Mercato</span>
-  </button>
-  <button class="tab" onclick="showTab('scanner',this)">
+  <button class="tab" id="tabScanner" onclick="showTab('scanner',this)">
     <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></span>
     <span>Scanner</span>
   </button>
-
-  <button class="tab" onclick="showTab('transazioni',this)" id="tabTransazioni">
+  <button class="tab" id="tabPosizioni" onclick="showTab('posizioni',this)">
     <span class="tab-icon" style="position:relative">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
       <span class="tab-badge" id="storicoBadge" style="display:none"></span>
     </span>
-    <span>Transazioni</span>
+    <span>Posizioni</span>
   </button>
 </div>
 
@@ -2517,6 +2477,9 @@ function coinImgErr(el, initial, size) {
 function showTab(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  // Normalizza nomi vecchi per retrocompatibilità (link salvati in localStorage)
+  if (name === 'monitor' || name === 'transazioni') name = 'posizioni';
+  if (name === 'market') name = 'scanner';
   const page = document.getElementById('page-' + name);
   if (!page) return;
   page.classList.add('active');
@@ -2525,11 +2488,12 @@ function showTab(name, el) {
   localStorage.setItem('ca_active_tab', name);
   updateSidebarActive(name);
   if (name === 'home') renderHome();
-  if (name === 'market') refreshMarket();
   if (name === 'scanner') refreshMarket().then(() => renderScanner());
   if (name === 'account') renderAccountPage();
-  if (name === 'transazioni') {
-    renderTransazioni();
+  if (name === 'posizioni') {
+    const chiuseActive = document.getElementById('posPanelChiuse')?.style.display !== 'none';
+    if (chiuseActive) renderTransazioni();
+    else renderPositions();
     _newTradeCount = 0;
     _lastSeenTradeCount = trades.length;
     updateStoricoBadge();
@@ -2539,7 +2503,7 @@ function showTab(name, el) {
 function restoreActiveTab() {
   const saved = localStorage.getItem('ca_active_tab') || 'home';
   const tabs = document.querySelectorAll('.tab');
-  const tabMap = { home: 0, monitor: 1, market: 2, scanner: 3, transazioni: 4 };
+  const tabMap = { home: 0, scanner: 1, posizioni: 2, monitor: 2, transazioni: 2, market: 1 };
   const idx = tabMap[saved] ?? 0;
   if (tabs[idx]) showTab(saved, tabs[idx]);
 }
@@ -2838,7 +2802,7 @@ async function doStartAgent(cfg) {
     document.getElementById('stopBtn').disabled = false;
     lockConfig();
     closeDrawer();
-    showTab('monitor', document.querySelectorAll('.tab')[1]);
+    showTab('posizioni', document.querySelectorAll('.tab')[2]);
     startPolling();
   } catch(e) { alert('Errore connessione: ' + e.message); }
 }
@@ -2924,8 +2888,8 @@ async function poll() {
     const md = await mRes.json();
     mktData = md.market || [];
     // Aggiorna prezzi in-place se i tab sono già renderizzati
-    if (document.getElementById('page-market').classList.contains('active')) {
-      updateMarketPricesInPlace();
+    if (document.getElementById('page-scanner').classList.contains('active')) {
+      renderScanner();
     }
     if (document.getElementById('page-home').classList.contains('active')) {
       updateWatchlistPricesInPlace();
@@ -2936,7 +2900,7 @@ async function poll() {
     if (newTrades.length > _lastSeenTradeCount) {
       const added = newTrades.length - _lastSeenTradeCount;
       // Solo se non siamo sulla tab storico
-      if (!document.getElementById('page-transazioni').classList.contains('active')) {
+      if (!document.getElementById('page-posizioni').classList.contains('active')) {
         _newTradeCount += added;
         updateStoricoBadge();
       }
@@ -2981,7 +2945,7 @@ async function startupSession() {
       lockConfig();
       // Sessione attiva: vai a monitor se non c'è tab salvata o era home
       const t = localStorage.getItem('ca_active_tab');
-      if (!t || t === 'home') localStorage.setItem('ca_active_tab', 'monitor');
+      if (!t || t === 'home') localStorage.setItem('ca_active_tab', 'posizioni');
     } else {
       // Nessuna sessione: default home
       if (!localStorage.getItem('ca_active_tab')) {
@@ -3076,10 +3040,10 @@ function render() {
   if (heroWR) heroWR.textContent = S.tradeCount > 0 ? Math.round(S.winRate) + '%' : '--%';
 
   // Posizioni tab label
-  const monTabPos = document.getElementById('monTabPos');
-  if (monTabPos) {
+  const posTabAperte = document.getElementById('posTabAperte');
+  if (posTabAperte) {
     const nPos = (S.positions || []).length;
-    monTabPos.textContent = nPos > 0 ? 'Posizioni · ' + nPos : 'Posizioni';
+    posTabAperte.textContent = nPos > 0 ? 'Aperte · ' + nPos : 'Aperte';
   }
 
   // Sparkline
@@ -3121,7 +3085,8 @@ function render() {
     }
   }
 
-  if (document.getElementById('page-transazioni').classList.contains('active')) renderTransazioni();
+  const _posChiuse = document.getElementById('posPanelChiuse');
+  if (document.getElementById('page-posizioni').classList.contains('active') && _posChiuse?.style.display !== 'none') renderTransazioni();
   renderHomeSession();
   // Aggiorna KPI home in tempo reale
   const kpiPnl = document.getElementById('homeKpiPnl');
@@ -3248,11 +3213,13 @@ function drawMiniChart(canvas, closes, entryPrice) {
   ctx.stroke();
 }
 
-function switchMonTab(tab) {
-  document.getElementById('monPanelPos').style.display = tab === 'pos' ? '' : 'none';
-  document.getElementById('monPanelAct').style.display = tab === 'act' ? '' : 'none';
-  document.getElementById('monTabPos').classList.toggle('active', tab === 'pos');
-  document.getElementById('monTabAct').classList.toggle('active', tab === 'act');
+function switchPosTab(tab) {
+  document.getElementById('posPanelAperte').style.display = tab === 'aperte' ? '' : 'none';
+  document.getElementById('posPanelChiuse').style.display = tab === 'chiuse'  ? '' : 'none';
+  document.getElementById('posTabAperte').classList.toggle('active', tab === 'aperte');
+  document.getElementById('posTabChiuse').classList.toggle('active',  tab === 'chiuse');
+  if (tab === 'chiuse') renderTransazioni();
+  if (tab === 'aperte') renderPositions();
 }
 
 function drawHeroSparkline() {
@@ -3736,25 +3703,15 @@ function renderMarket() {
     if (triggered && indicator) {
       const active = localStorage.getItem('ca_active_tab') || 'config';
       try {
-        if (active === 'monitor' || active === 'config') {
+        if (active === 'posizioni' || active === 'config') {
           await poll();
+          renderPositions();
         } else if (active === 'home') {
           await poll();
           renderHome();
-        } else if (active === 'market') {
-          await refreshMarket();
         } else if (active === 'scanner') {
           await refreshMarket();
           renderScanner();
-        } else if (active === 'transazioni') {
-          const [sRes, tRes] = await Promise.all([
-            fetch(API + '/status', { headers: authHeaders() }),
-            fetch(API + '/trades', { headers: authHeaders() })
-          ]);
-          S = await sRes.json();
-          const td = await tRes.json();
-          trades = td.trades || [];
-          renderTransazioni();
         }
       } catch(e) {}
     }
@@ -3868,7 +3825,7 @@ function renderHomeWatchlist() {
   const wl = document.getElementById('homeWatchlist');
   if (!wl) return;
   if (_watchlist.size === 0) {
-    wl.innerHTML = '<div class="empty" style="padding:20px 0"><div class="empty-text">Aggiungi le tue crypto preferite dal Mercato <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:2px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div></div>';
+    wl.innerHTML = '<div class="empty" style="padding:20px 0"><div class="empty-text">Aggiungi le tue crypto preferite dallo Scanner <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:2px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div></div>';
     return;
   }
   const symbols = [..._watchlist];
@@ -4205,6 +4162,7 @@ function renderScanner() {
     const sym = c.symbol;
     const base = sym.replace('USDT','');
     const val = (_scanValueFn[_scanSignal]?.(c)) || '';
+    const starred = _watchlist.has(sym);
     return `<div class="scan-row">
       <img src="${getLogo(sym)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;margin-right:12px;flex-shrink:0" onerror="coinImgErr(this,'${esc(base[0])}',38)">
       <div style="flex:1;min-width:0">
@@ -4213,6 +4171,9 @@ function renderScanner() {
       </div>
       <span style="font-size:10px;font-weight:700;background:${badgeColor};color:#fff;padding:4px 9px;border-radius:20px;margin-right:10px;white-space:nowrap;flex-shrink:0">${esc(label)}</span>
       <span style="font-size:11px;font-weight:600;color:var(--text3);margin-right:10px;min-width:58px;text-align:right;flex-shrink:0">${esc(val)}</span>
+      <button onclick="event.stopPropagation();scanToggleStar('${esc(sym)}')" title="${starred ? 'Rimuovi' : 'Aggiungi'} preferiti" class="star-btn ${starred ? 'starred' : ''}" style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:6px;transition:background 0.15s">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="${starred ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </button>
       <button onclick="openTVChart('${esc(sym)}')" title="Grafico" style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0;transition:background 0.15s;margin-right:6px" onmouseover="this.style.background='var(--blue)';this.style.color='#fff'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text3)'">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       </button>
@@ -4266,6 +4227,34 @@ function closeTVChart() {
   document.getElementById('tvModal').style.display = 'none';
   const c = document.getElementById('tvWidgetContainer');
   if (c) c.innerHTML = '';
+}
+
+// ── TRADE CONFIRM MODAL ───────────────────────────────────────────────────────
+function openTradeConfirmModal(sym, price, qty, slPct, tpPct) {
+  const base = sym.replace('USDT', '');
+  const logo = document.getElementById('tcmLogo');
+  logo.style.display = '';
+  logo.src = getLogo(sym);
+  document.getElementById('tcmTitle').textContent = base + ' acquistato';
+  document.getElementById('tcmSub').textContent = 'Ordine eseguito su Revolut X';
+  const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
+  document.getElementById('tcmQty').textContent  = qtyFmt + ' ' + base;
+  document.getElementById('tcmPrice').textContent = fmtPrice(price);
+  document.getElementById('tcmSL').textContent   = fmtPrice(price * (1 - slPct / 100));
+  document.getElementById('tcmTP').textContent   = fmtPrice(price * (1 + tpPct / 100));
+  document.getElementById('tradeConfirmModal').style.display = 'flex';
+  // Badge sul tab Posizioni
+  _newTradeCount++;
+  updateStoricoBadge();
+}
+
+function closeTradeConfirmModal() {
+  document.getElementById('tradeConfirmModal').style.display = 'none';
+}
+
+async function scanToggleStar(sym) {
+  await toggleWatchlist(sym);
+  renderScanner();
 }
 
 // ── MANUAL TRADE MODAL ────────────────────────────────────────────────────────
@@ -4336,9 +4325,11 @@ async function executeManualTrade() {
     });
     const data = await r.json();
     if (r.ok && data.ok) {
+      const _sl = parseFloat(document.getElementById('tmSL').value) || 2;
+      const _tp = parseFloat(document.getElementById('tmTP').value) || 4;
       closeTradeModal();
-      showToast(_tmSymbol.replace('USDT','') + ' acquistato @ ' + fmtPrice(data.price || _tmPrice));
       await poll();
+      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, _sl, _tp);
     } else {
       errEl.textContent   = data.detail || data.error || 'Errore esecuzione ordine';
       errEl.style.display = 'block';
