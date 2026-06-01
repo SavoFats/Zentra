@@ -2959,8 +2959,6 @@ async function poll() {
       document.getElementById('startBtn').disabled = false;
       document.getElementById('stopBtn').disabled = true;
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-      // Azzera posizioni per evitare badge IN rimasti
-      if (window._lastStatus) window._lastStatus.positions = [];
       unlockConfig();
     }
     render();
