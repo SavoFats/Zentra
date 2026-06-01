@@ -1397,6 +1397,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <button class="start-btn" id="startBtn" onclick="startAgent()">Avvia sessione</button>
+    <button class="start-btn" id="saveConfigBtn" onclick="saveConfigLive()" style="display:none">Salva modifiche</button>
     <button class="reset-btn" id="resetBtn" onclick="resetAgent()">Reset</button>
     <div style="height:8px"></div>
   </div>
@@ -2565,6 +2566,7 @@ function startFluidTimer() {
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const CONFIG_IDS = ['capitalUsd','allocUsd','sessionDuration','momentumPct','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
+const LIVE_EDITABLE_IDS = ['allocUsd','momentumPct','stopLoss','profitTolerance','profitActivation','minVolume','maxTrades','maxConsecutiveLosses','cooldown','maxHoldHours'];
 
 function lockConfig() {
   CONFIG_IDS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
@@ -2832,6 +2834,27 @@ async function pauseAgent() {
     }
     S.paused = d.paused;
     render();
+  } catch(e) { alert('Errore di rete: ' + e.message); }
+}
+
+async function saveConfigLive() {
+  const patch = {
+    tradeAmountUsd:        parseFloat(document.getElementById('allocUsd').value) || 0,
+    momentumPct:           parseFloat(document.getElementById('momentumPct').value) / 100,
+    maxStopPct:            parseFloat(document.getElementById('stopLoss').value) / 100,
+    profitTolerance:       parseFloat(document.getElementById('profitTolerance').value) / 100,
+    profitActivation:      parseFloat(document.getElementById('profitActivation').value) / 100,
+    minVolume:             parseFloat(document.getElementById('minVolume').value) * 1_000_000,
+    maxTrades:             parseInt(document.getElementById('maxTrades').value),
+    maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
+    cooldown:              parseFloat(document.getElementById('cooldown').value),
+    maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
+  };
+  try {
+    const res = await fetch(API + '/config', { method:'PATCH', headers:{...authHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(patch) });
+    const d = await res.json();
+    if (d.error) { alert(d.error); return; }
+    closeDrawer();
   } catch(e) { alert('Errore di rete: ' + e.message); }
 }
 
@@ -3954,6 +3977,12 @@ function openDrawer() {
     configPage.style.padding = '0';
     configPage.style.display = 'block';
   }
+  if (S.running) {
+    LIVE_EDITABLE_IDS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('saveConfigBtn').style.display = '';
+    document.getElementById('resetBtn').style.display = 'none';
+  }
   document.getElementById('drawerOverlay').classList.add('open');
   document.getElementById('configDrawer').classList.add('open');
   loadHomeBalance();
@@ -3971,6 +4000,10 @@ function closeDrawer() {
     configPage.style.overflow = '';
     configPage.style.padding = '';
     configPage.style.display = '';
+  }
+  if (S.running) {
+    LIVE_EDITABLE_IDS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+    document.getElementById('saveConfigBtn').style.display = 'none';
   }
 }
 
