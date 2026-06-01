@@ -66,6 +66,7 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_ID       = os.environ.get("STRIPE_PRICE_ID", "")
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
+ENABLE_DEBUG_REVX = os.environ.get("ENABLE_DEBUG_REVX", "").lower() in ("1", "true", "yes")
 
 # ── FREE PLAN LIMITS ──────────────────────────────────────────────────────────
 FREE_SESSIONS_PER_DAY  = 1
@@ -272,7 +273,16 @@ async def revx_request(method: str, path: str, body: dict = None,
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30)
             continue
-        return r.json() if r.content else {"ok": True}
+        if r.status_code >= 400:
+            try:
+                err_payload = r.json()
+            except Exception:
+                err_payload = r.text[:500]
+            raise Exception(f"RevX {method} {path} HTTP {r.status_code}: {err_payload}")
+        try:
+            return r.json() if r.content else {"ok": True}
+        except Exception as e:
+            raise Exception(f"RevX {method} {path} risposta JSON non valida: {e}")
     raise Exception(f"RevX {method} {path} fallito dopo 4 tentativi")
 
 
@@ -283,6 +293,7 @@ async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -
         result = await revx_request("GET", f"/api/1.0/orders/{order_id}", key_id=key_id, private_key=private_key)
         d = result.get("data") or result
         return {
+            "state":               (d.get("status") or d.get("state") or "").lower(),
             "average_fill_price": float(d.get("average_fill_price") or 0),
             "filled_quantity":    float(d.get("filled_quantity") or 0),
             "filled_amount":      float(d.get("filled_amount") or 0),
@@ -292,6 +303,21 @@ async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -
     except Exception as e:
         print(f"[REVX ORDER DETAILS] errore per {order_id}: {e}")
         return {}
+
+
+async def wait_revx_order_fill(order_id: str, key_id: str, private_key: str,
+                               attempts: int = 6, delay: float = 1.0) -> dict:
+    """Attende un fill RevX prima di aggiornare lo stato interno."""
+    last: dict = {}
+    for _ in range(attempts):
+        last = await get_revx_order_details(order_id, key_id, private_key)
+        state = last.get("state", "")
+        if last.get("average_fill_price", 0) > 0 and last.get("filled_quantity", 0) > 0:
+            return last
+        if state in ("cancelled", "rejected", "expired", "failed"):
+            return last
+        await asyncio.sleep(delay)
+    return last
 
 # ── market data ───────────────────────────────────────────────────────────────
 
@@ -920,16 +946,23 @@ def unrealized_pnl(state: dict) -> float:
 
 # ── trading ───────────────────────────────────────────────────────────────────
 
+def parse_revx_balances(result: object) -> list:
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict) and isinstance(result.get("balances"), list):
+        return result["balances"]
+    if isinstance(result, dict) and isinstance(result.get("data"), list):
+        return result["data"]
+    raise ValueError(f"Risposta balances RevX inattesa: {str(result)[:200]}")
+
+
 async def get_revx_usd_balance(key_id: str, private_key: str) -> float:
     """Legge il saldo USD disponibile su Revolut X."""
-    try:
-        result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
-        balances = result if isinstance(result, list) else result.get("balances", [])
-        for b in balances:
-            if b.get("currency") == "USD":
-                return float(b.get("available", 0) or 0)
-    except Exception as e:
-        print(f"[REVX BALANCE] error: {e}")
+    result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
+    balances = parse_revx_balances(result)
+    for b in balances:
+        if b.get("currency") == "USD":
+            return float(b.get("available", 0) or 0)
     return 0.0
 
 
@@ -988,17 +1021,19 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                     "order_configuration": {"market": {"quote_size": str(round(size, 2))}}
                 }
                 add_log(state, "info", "DEBUG", f"Ordine RevX {symbol_revx} size=${size:.2f}")
-                # Retry su errori di rete — max 2 tentativi
+                # Retry su errori di rete con lo stesso client_order_id: cambiarlo può duplicare ordini.
                 result = None
                 for attempt in range(2):
                     try:
-                        result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                        result = await revx_request(
+                            "POST", "/api/1.0/orders", order_body,
+                            key_id=revx_key_id, private_key=revx_priv
+                        )
                         break
                     except Exception as net_err:
                         if attempt == 0:
                             print(f"[REVX ORDER] tentativo 1 fallito: {net_err}, riprovo...")
                             await asyncio.sleep(2)
-                            order_body["client_order_id"] = str(_uuid.uuid4())  # nuovo ID per il retry
                         else:
                             raise
                 print(f"[REVX ORDER RESULT] {sym}: {result}")
@@ -1009,10 +1044,15 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                     add_log(state, "info", "ERRORE", f"Ordine RevX {sym} fallito: {err_msg}")
                     await notify(state, f"ERRORE ORDINE RevX {sym}: {err_msg[:100]}")
                     return
-                # Fetch dati reali del fill per P&L accurato
-                od = await get_revx_order_details(order_id, revx_key_id, revx_priv)
-                actual_price = od.get("average_fill_price") or price
-                qty_purchased = od.get("filled_quantity") or (size / actual_price if actual_price > 0 else 0.0)
+                # Fetch dati reali del fill per P&L accurato. Non creare posizioni stimate.
+                od = await wait_revx_order_fill(order_id, revx_key_id, revx_priv)
+                actual_price = od.get("average_fill_price", 0.0)
+                qty_purchased = od.get("filled_quantity", 0.0)
+                if actual_price <= 0 or qty_purchased <= 0:
+                    state_txt = od.get("state") or "sconosciuto"
+                    add_log(state, "info", "ERRORE", f"Ordine RevX {sym} non fillato (state={state_txt}) — verifica su RevX")
+                    await notify(state, f"ERRORE ORDINE RevX {sym}: ordine non fillato (state={state_txt}). Verifica manualmente su RevX.")
+                    return
                 # Fee buy in base currency → converti in USD
                 buy_fee = od.get("total_fee", 0.0)
                 buy_fee_currency = od.get("fee_currency", "USD")
@@ -1044,6 +1084,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
                 "buy_fee_usd": round(buy_fee_usd, 4),
             }
             state["positions"].append(pos)
+            await persist_sessions()
             return
     else:
         actual_price = price
@@ -1111,6 +1152,19 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
             em_data = em_result.get("data") or em_result
             em_id = em_data.get("venue_order_id") or em_data.get("order_id") or em_data.get("id", "")
             if em_id:
+                od = await wait_revx_order_fill(em_id, revx_key_id, revx_priv)
+                sell_price = od.get("average_fill_price", 0.0)
+                filled_qty = od.get("filled_quantity", 0.0)
+                if sell_price <= 0 or filled_qty <= 0:
+                    add_log(state, "info", "ERRORE", f"{sym}: emergency market sell non confermato — verifica manualmente su RevX")
+                    await notify(state, f"🚨 {sym}: market sell emergenza non confermato. Verifica manualmente su RevX.")
+                    return
+                sell_fee = od.get("total_fee", 0.0)
+                fee_currency = od.get("fee_currency", "USD")
+                pos["currentPrice"] = sell_price
+                pos["sell_fee_usd"] = pos.get("sell_fee_usd", 0.0) + (sell_fee if fee_currency == "USD" else sell_fee * sell_price)
+                pos["_already_sold"] = True
+                pos["_sell_type"] = "Emergency Market"
                 await exit_position(state, pos, "EMERGENZA MARKET SELL (10 GTC falliti)", user_id=user_id)
             else:
                 err = em_result.get("message") or em_result.get("error") or str(em_result)
@@ -1262,7 +1316,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 try:
                     balances = await revx_request("GET", "/api/1.0/balances",
                                                   key_id=revx_key_id, private_key=revx_priv)
-                    bal_list = balances if isinstance(balances, list) else balances.get("balances", [])
+                    bal_list = parse_revx_balances(balances)
                     for b in bal_list:
                         if b.get("currency") == sym:
                             real_qty = float(b.get("available", 0) or 0)
@@ -1289,13 +1343,15 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     result = None
                     for attempt in range(2):
                         try:
-                            result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+                            result = await revx_request(
+                                "POST", "/api/1.0/orders", order_body,
+                                key_id=revx_key_id, private_key=revx_priv
+                            )
                             break
                         except Exception as net_err:
                             if attempt == 0:
                                 print(f"[REVX SELL] tentativo 1 fallito: {net_err}, riprovo...")
                                 await asyncio.sleep(2)
-                                order_body["client_order_id"] = str(_uuid.uuid4())
                             else:
                                 raise
                     print(f"[REVX SELL RESULT] {sym}: {result}")
@@ -1310,9 +1366,9 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                             add_log(state, "info", "WARN", f"{sym}: Insufficient balance su market order ({pos['_sell_failures']}x) — balance locked su RevX, riprova")
                             await notify(state, f"WARN {sym}: balance insufficiente su RevX (tentativo {pos['_sell_failures']}). Posizione mantenuta, riprovando.")
                             if pos.get("_sell_failures", 0) >= 3:
-                                add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — vendi manualmente su RevX")
-                                await notify(state, f"WARN: {sym} rimosso dopo 3 errori. Vendi manualmente su RevX.")
-                                if pos in state["positions"]: state["positions"].remove(pos)
+                                pos["_manual_action_required"] = True
+                                add_log(state, "info", "WARN", f"{sym}: 3 vendite fallite — posizione mantenuta, verifica manualmente su RevX")
+                                await notify(state, f"WARN: {sym} ha 3 vendite fallite. Posizione mantenuta in Zentra, verifica manualmente su RevX.")
                                 _exiting.discard(sym); return
                             else:
                                 _exiting.discard(sym); return
@@ -1330,17 +1386,23 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                             add_log(state, "info", "ERRORE", f"Vendita RevX {sym} fallita ({pos['_sell_failures']}x): {err_msg}")
                             await notify(state, f"ERRORE VENDITA RevX {sym}: {err_msg[:100]}")
                             if pos.get("_sell_failures", 0) >= 3:
-                                add_log(state, "info", "WARN", f"{sym} rimosso dalla memoria dopo 3 vendite fallite — vendi manualmente su RevX")
-                                await notify(state, f"WARN: {sym} rimosso dopo 3 errori. Vendi manualmente su RevX.")
-                                if pos in state["positions"]: state["positions"].remove(pos)
+                                pos["_manual_action_required"] = True
+                                add_log(state, "info", "WARN", f"{sym}: 3 vendite fallite — posizione mantenuta, verifica manualmente su RevX")
+                                await notify(state, f"WARN: {sym} ha 3 vendite fallite. Posizione mantenuta in Zentra, verifica manualmente su RevX.")
                                 _exiting.discard(sym); return
                             else:
                                 _exiting.discard(sym); return
                     if not sold_externally and order_id and not market_cancelled:
-                        od = await get_revx_order_details(order_id, revx_key_id, revx_priv)
-                        filled_price = od.get("average_fill_price") or float(data.get("average_price") or data.get("price") or cur)
-                        if filled_price > 0:
-                            cur = filled_price
+                        od = await wait_revx_order_fill(order_id, revx_key_id, revx_priv)
+                        filled_price = od.get("average_fill_price", 0.0)
+                        filled_qty = od.get("filled_quantity", 0.0)
+                        if filled_price <= 0 or filled_qty <= 0:
+                            state_txt = od.get("state") or "sconosciuto"
+                            pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
+                            add_log(state, "info", "WARN", f"{sym}: vendita market non confermata (state={state_txt}) — posizione mantenuta")
+                            await notify(state, f"WARN {sym}: vendita market non confermata (state={state_txt}). Posizione mantenuta, verifica RevX.")
+                            _exiting.discard(sym); return
+                        cur = filled_price
                         sell_fee_usd = od.get("total_fee", 0.0) if od.get("fee_currency", "USD") == "USD" else od.get("total_fee", 0.0) * cur
                         pos["sell_fee_usd"] = pos.get("sell_fee_usd", 0.0) + sell_fee_usd
                         pos["_sell_type"] = "Market"
@@ -1377,6 +1439,8 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         pos["tp1_pnl"]         = pnl  # salviamo per il messaggio finale
         pos["qty_tp1_sold"]    = qty_to_sell  # qty venduta a TP1 per calcolo proporzione
         _exiting.discard(sym)
+        if pos.get("realMode") and user_id:
+            await persist_sessions()
         return  # posizione resta aperta per TP2
 
     # Chiusura totale
@@ -1435,6 +1499,8 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
             print(f"DB trade save error: {e}")
     state["positions"] = [p for p in state["positions"] if p is not pos]
     _exiting.discard(sym)
+    if user_id:
+        await persist_sessions()
     mode = "REALE" if pos.get("realMode") else "SIM"
     add_log(state, "sell", f"{reason} {mode}",
         f"{sym} @ {_fp(cur)} | {total_pnl:+.2f}$ ({total_pct:+.2f}%) | fee: ${exit_fee:.2f} | {dur:.0f} min")
@@ -1557,7 +1623,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             state["_revx_agent_sync_last"] = now_ts
             try:
                 result   = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
-                bal_list = result if isinstance(result, list) else result.get("balances", [])
+                bal_list = parse_revx_balances(result)
                 bal_map  = {b["currency"]: float(b.get("available", 0) or 0) for b in bal_list if isinstance(b, dict)}
                 for pos in list(revx_positions):
                     sym      = pos["symbol"]
@@ -2139,7 +2205,7 @@ async def poll_telegram():
                         if state:
                             pos = next((p for p in state["positions"] if p["symbol"] == sym), None)
                             if pos:
-                                await exit_position(state, pos, "TELEGRAM")
+                                await exit_position(state, pos, "TELEGRAM", user_id=uid)
                                 await send_telegram_to(chat_id, f"✅ Posizione {sym} chiusa")
                             else:
                                 await send_telegram_to(chat_id, f"Nessuna posizione aperta su {sym}")
@@ -2160,7 +2226,7 @@ async def monitor_manual_positions(state: dict, user_id: int):
     if use_revx and revx_key_id and revx_priv:
         try:
             result = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
-            balances = result if isinstance(result, list) else result.get("balances", [])
+            balances = parse_revx_balances(result)
             bal_map = {b["currency"]: float(b.get("available", 0) or 0) for b in balances if isinstance(b, dict)}
             for pos in list(state["positions"]):
                 if not pos.get("manual") or pos.get("exchange") != "revx":
@@ -2207,7 +2273,7 @@ async def monitor_manual_positions(state: dict, user_id: int):
 # ── binance websocket stream ──────────────────────────────────────────────────
 
 async def binance_ws_loop():
-    global _ws_connected
+    global _ws_connected, _ws_last_msg_ts
     urls = [
         "wss://stream.binance.com:9443/ws/!miniTicker@arr",
         "wss://stream.binance.us:9443/ws/!miniTicker@arr",
@@ -2585,10 +2651,17 @@ async def restore_sessions_from_db(pool):
                 updated_at = row["updated_at"]
                 stale = (datetime.utcnow() - updated_at.replace(tzinfo=None)).total_seconds() > 600
                 if stale:
-                    # Sessione troppo vecchia (>10 min) — non ripristinare
+                    # Non cancellare posizioni reali senza riconciliazione exchange.
+                    if state.get("positions"):
+                        state["revx_key_id"] = decrypt_key(row["revx_key_id"] or "")
+                        state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
+                        state["_auto_stop_on_restore"] = True
+                        user_sessions[uid] = state
+                        print(f"[RESTORE] Sessione stale user {uid} ripristinata per auto-stop ({len(state.get('positions', []))} posizioni)")
+                        continue
                     async with pool.acquire() as conn:
                         await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
-                    print(f"[RESTORE] Sessione user {uid} scartata: updated_at troppo vecchio ({updated_at})")
+                    print(f"[RESTORE] Sessione user {uid} scartata: updated_at troppo vecchio e senza posizioni ({updated_at})")
                     tg_chat = state.get("telegram_chat_id", "")
                     msg = ("⚠️ <b>Zentra — sessione scaduta</b>\n"
                            "Una sessione precedente è stata trovata nel DB ma era troppo vecchia (>10 min). "
@@ -2604,6 +2677,13 @@ async def restore_sessions_from_db(pool):
                 if session_dur > 0:
                     elapsed = (datetime.now().timestamp() - session_start) * 1000
                     if elapsed >= session_dur:
+                        if state.get("positions"):
+                            state["revx_key_id"] = decrypt_key(row["revx_key_id"] or "")
+                            state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
+                            state["_auto_stop_on_restore"] = True
+                            user_sessions[uid] = state
+                            print(f"[RESTORE] Sessione scaduta user {uid} ripristinata per auto-stop ({len(state.get('positions', []))} posizioni)")
+                            continue
                         async with pool.acquire() as conn:
                             await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
                         continue
@@ -3099,6 +3179,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     real_mode = False
     revx_key_id, revx_private_key, use_revx = "", "", False
     user_plan = "free"
+    free_session_counter_update = None
     row = None
     if db_pool:
         try:
@@ -3131,19 +3212,15 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
                                 "message": f"Hai già usato la tua sessione gratuita di oggi. Torna domani o passa a Pro.",
                                 "plan": "free",
                             }
-                        # Aggiorna contatore
-                        new_count = sessions_today + 1
-                        await conn.execute(
-                            "UPDATE users SET last_session_date = $1, sessions_today = $2 WHERE id = $3",
-                            today, new_count, user_id
-                        )
+                        free_session_counter_update = (today, sessions_today + 1)
         except Exception as e:
             print(f"DB key fetch error: {e}")
 
     # Override configurazione per utenti free
     if user_plan == "free":
         cfg["allocPct"]        = FREE_ALLOC_PCT
-        cfg["sessionDuration"] = min(int(cfg.get("sessionDuration", FREE_MAX_SESSION_HOURS)), FREE_MAX_SESSION_HOURS)
+        free_duration = int(cfg.get("sessionDuration", FREE_MAX_SESSION_HOURS))
+        cfg["sessionDuration"] = FREE_MAX_SESSION_HOURS if free_duration <= 0 else min(free_duration, FREE_MAX_SESSION_HOURS)
         cfg["rsiMin"]          = FREE_RSI_MIN
         cfg["rsiMax"]          = FREE_RSI_MAX
         cfg["trend1hFilter"]   = True
@@ -3170,6 +3247,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         "sessionDuration": int(cfg.get("sessionDuration", 8)) * 3600 * 1000,
         "config": {
             "allocPct":            float(cfg.get("allocPct", 0.20)),
+            "tradeAmountUsd":      float(cfg.get("tradeAmountUsd", 0)),
             "capitalPct":          float(cfg.get("capitalPct", 1.0)),
             "stopLoss":            float(cfg.get("stopLoss", 0.01)),
             "cooldown":            float(cfg.get("cooldown", 1)),
@@ -3200,7 +3278,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
             "circuitBreakerEnabled":  bool(cfg.get("circuitBreakerEnabled", False)),
             "dailyLossLimit":         float(cfg.get("dailyLossLimit", 0.03)),
         },
-        "daily_capital_start": float(cfg.get("capitalUsd", 1000)),
+        "daily_capital_start": capital,
         "daily_date":          datetime.utcnow().strftime("%Y-%m-%d"),
         "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
         "revx_key_id": revx_key_id, "revx_private_key": revx_private_key,
@@ -3228,6 +3306,16 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         f"Momentum: +{mom_thr_pct:.1f}% | Vol: {vol_mult_s}x | Stop: -{max_stop_pct_s:.1f}% | "
         f"BTC: {btc_filt_s} | MaxHold: {mxh}h | MaxLoss: {mcl}"
     )
+    if free_session_counter_update and db_pool:
+        try:
+            today, new_count = free_session_counter_update
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE users SET last_session_date = $1, sessions_today = $2 WHERE id = $3",
+                    today, new_count, user_id
+                )
+        except Exception as e:
+            print(f"DB free session counter update error: {e}")
     _sessions_starting.discard(user_id)
     return {"ok": True}
 
@@ -3262,12 +3350,46 @@ async def update_config_live(body: dict, request: Request, user_id: int = Depend
     if not state["running"]:
         return {"error": "Nessuna sessione attiva"}
     LOCKED = {"capital", "realMode", "capitalPct", "sessionDuration"}
+    def _clamp_live(key: str, value):
+        ranges = {
+            "allocPct": (0.001, 1.0),
+            "tradeAmountUsd": (0.0, 100_000.0),
+            "momentumPct": (0.001, 0.10),
+            "volMultiplier": (0.1, 10.0),
+            "maxStopPct": (0.005, 0.20),
+            "profitTolerance": (0.01, 0.80),
+            "profitActivation": (0.0, 0.20),
+            "trailAtrMultiplier": (0.1, 10.0),
+            "dailyLossLimit": (0.001, 0.50),
+            "minVolume": (0.0, 10_000_000_000.0),
+            "cooldown": (0.0, 24.0),
+            "maxHoldHours": (0.25, 72.0),
+            "tp1R": (0.5, 10.0),
+            "tp2R": (1.0, 20.0),
+            "minR": (0.001, 0.10),
+        }
+        int_ranges = {
+            "maxTrades": (0, 100),
+            "maxConsecutiveLosses": (1, 20),
+        }
+        if key in ranges:
+            lo, hi = ranges[key]
+            return max(lo, min(hi, float(value)))
+        if key in int_ranges:
+            lo, hi = int_ranges[key]
+            return max(lo, min(hi, int(value)))
+        if key in {"btcEmaFilter", "timeFilter", "trailingStop", "circuitBreakerEnabled", "rsiFilter", "trend1hFilter"}:
+            return bool(value)
+        return value
     cfg = state["config"]
     changed = []
     for k, v in body.items():
         if k not in LOCKED and k in cfg:
-            cfg[k] = v
-            changed.append(k)
+            try:
+                cfg[k] = _clamp_live(k, v)
+                changed.append(k)
+            except (TypeError, ValueError):
+                continue
     if changed:
         add_log(state, "info", "CONFIG", f"Parametri aggiornati: {', '.join(changed)}")
     return {"ok": True}
@@ -3358,13 +3480,14 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
             result = None
             for attempt in range(2):
                 try:
-                    result = await revx_request("POST", "/api/1.0/orders", order_body,
-                                                key_id=revx_key_id, private_key=revx_priv)
+                    result = await revx_request(
+                        "POST", "/api/1.0/orders", order_body,
+                        key_id=revx_key_id, private_key=revx_priv
+                    )
                     break
                 except Exception:
                     if attempt == 0:
                         await asyncio.sleep(2)
-                        order_body["client_order_id"] = str(_uuid.uuid4())
                     else:
                         raise
             data     = result.get("data") or result
@@ -3372,9 +3495,13 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
             if not order_id:
                 err_msg = result.get("message") or result.get("error") or str(result)
                 raise HTTPException(status_code=400, detail=f"Ordine RevX fallito: {err_msg[:120]}")
-            od            = await get_revx_order_details(order_id, revx_key_id, revx_priv)
-            actual_price  = od.get("average_fill_price") or price
-            qty           = od.get("filled_quantity") or (amount / actual_price if actual_price else 0.0)
+            od            = await wait_revx_order_fill(order_id, revx_key_id, revx_priv)
+            actual_price  = od.get("average_fill_price", 0.0)
+            qty           = od.get("filled_quantity", 0.0)
+            if actual_price <= 0 or qty <= 0:
+                state_txt = od.get("state") or "sconosciuto"
+                add_log(state, "info", "ERRORE", f"Manual trade {sym} non fillato (state={state_txt}) — verifica su RevX")
+                raise HTTPException(status_code=400, detail=f"Ordine RevX non fillato (state={state_txt}). Verifica su RevX.")
             buy_fee       = od.get("total_fee", 0.0)
             fee_usd       = buy_fee * actual_price if od.get("fee_currency", "USD") != "USD" else buy_fee
             stop_price    = actual_price * (1 - R_pct)
@@ -3572,11 +3699,7 @@ async def test_revx(request: Request, user_id: int = Depends(get_current_user)):
     private_key = decrypt_key(row["revx_private_key"])
     try:
         result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
-        # Revolut X può restituire lista diretta o dict con "balances"
-        if isinstance(result, list):
-            balances_raw = result
-        else:
-            balances_raw = result.get("balances", [])
+        balances_raw = parse_revx_balances(result)
         balances = [
             {"currency": b.get("currency", ""), "available": b.get("available", "0")}
             for b in balances_raw
@@ -3588,6 +3711,8 @@ async def test_revx(request: Request, user_id: int = Depends(get_current_user)):
 
 @app.get("/debug/revx_orders")
 async def debug_revx_orders(request: Request, user_id: int = Depends(get_current_user)):
+    if not ENABLE_DEBUG_REVX:
+        raise HTTPException(status_code=404, detail="Not found")
     check_rate_limit(request, max_attempts=15, window=60, key_suffix="debug_revx_orders")
     if not db_pool:
         return {"ok": False, "error": "DB non disponibile"}
@@ -3605,6 +3730,8 @@ async def debug_revx_orders(request: Request, user_id: int = Depends(get_current
 
 @app.get("/debug/revx_order")
 async def debug_revx_order(request: Request, order_id: str, user_id: int = Depends(get_current_user)):
+    if not ENABLE_DEBUG_REVX:
+        raise HTTPException(status_code=404, detail="Not found")
     check_rate_limit(request, max_attempts=15, window=60, key_suffix="debug_revx_order")
     if not db_pool:
         return {"ok": False, "error": "DB non disponibile"}
@@ -3622,6 +3749,8 @@ async def debug_revx_order(request: Request, order_id: str, user_id: int = Depen
 
 @app.delete("/debug/revx_cancel_order")
 async def debug_revx_cancel_order(request: Request, order_id: str, user_id: int = Depends(get_current_user)):
+    if not ENABLE_DEBUG_REVX:
+        raise HTTPException(status_code=404, detail="Not found")
     check_rate_limit(request, max_attempts=15, window=60, key_suffix="debug_revx_cancel")
     if not db_pool:
         return {"ok": False, "error": "DB non disponibile"}
