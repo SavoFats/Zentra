@@ -2823,6 +2823,10 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "macd_bullish":  sig.get("macd_ok", False),
             "macd_bearish":  cd.get("macd_hist", 0.0) < 0 and cd.get("macd_hist", 0.0) < cd.get("macd_hist_prev", 0.0),
             "tsi_bullish":   sig.get("tsi_ok", False),
+            # NUOVI:
+            "ema_stack":     (cd.get("last_close_5m", 0) > cd.get("ema20_5m", 0) > cd.get("ema50_5m", 0)) if cd.get("ema50_5m", 0) > 0 else False,
+            "volume_spike":  (cd.get("vol_last", 0) > 2.0 * cd.get("vol_avg_20", 0)) if cd.get("vol_avg_20", 0) > 0 else False,
+            "vol_ratio":     round(cd.get("vol_last", 0) / cd.get("vol_avg_20", 1), 2) if cd.get("vol_avg_20", 0) > 0 else 0.0,
         }
         items.append(item)
 
