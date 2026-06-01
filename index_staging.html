@@ -4324,9 +4324,11 @@ function renderScanner() {
     const starred = _watchlist.has(sym);
     return `<div class="scan-row">
       <img src="${getLogo(sym)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;margin-right:12px;flex-shrink:0" onerror="coinImgErr(this,'${esc(base[0])}',38)">
-      <div style="flex:1;min-width:0">
+      <div style="min-width:60px;max-width:80px">
         <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(base)}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px">${fmtPrice(c.price)}</div>
+      </div>
+      <div style="flex:1;min-width:0;text-align:right;padding-right:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${fmtPrice(c.price)}</div>
       </div>
       <span style="font-size:10px;font-weight:700;background:${badgeColor};color:#fff;padding:4px 9px;border-radius:20px;margin-right:10px;white-space:nowrap;flex-shrink:0">${esc(label)}</span>
       <span style="font-size:11px;font-weight:600;color:var(--text3);margin-right:10px;min-width:58px;text-align:right;flex-shrink:0">${esc(val)}</span>
