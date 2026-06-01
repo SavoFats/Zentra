@@ -3608,6 +3608,7 @@ function renderTransazioni() {
 
   const reasonLabel = r => {
     const rl = (r||'').toLowerCase();
+    if (rl.includes('revolut'))                    return 'Chiuso su Revolut X';
     if (rl.includes('tp2') || rl.includes('tp1')) return 'Take profit';
     if (rl.includes('trailing'))                  return 'Trailing profit';
     if (rl.includes('stop loss') || rl.includes('sl')) return 'Stop loss';
@@ -3621,6 +3622,7 @@ function renderTransazioni() {
 
   const fmtP = p => p >= 1000 ? p.toFixed(1) : p >= 1 ? p.toFixed(2) : p.toFixed(4);
   const reasonBadge = (r, pnl) => {
+    if ((r||'').toLowerCase().includes('revolut')) return 'background:rgba(99,102,241,0.15);color:#818cf8';
     if (pnl >= 0) return 'background:rgba(5,193,104,0.15);color:var(--green)';
     return 'background:rgba(246,70,93,0.15);color:var(--red)';
   };

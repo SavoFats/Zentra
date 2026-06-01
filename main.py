@@ -1517,6 +1517,31 @@ async def scan_and_trade(state: dict, user_id: int = None):
                 await persist_sessions()
                 return
 
+    # Sync RevX: rileva posizioni agente chiuse esternamente (ogni 30s)
+    use_revx     = state.get("use_revx", False)
+    revx_key_id  = state.get("revx_key_id", "")
+    revx_priv    = state.get("revx_private_key", "")
+    revx_positions = [p for p in state["positions"] if p.get("exchange") == "revx" and p.get("realMode") and not p.get("manual")]
+    if use_revx and revx_key_id and revx_priv and revx_positions:
+        now_ts = time.time()
+        if now_ts - state.get("_revx_agent_sync_last", 0) >= 30:
+            state["_revx_agent_sync_last"] = now_ts
+            try:
+                result   = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
+                bal_list = result if isinstance(result, list) else result.get("balances", [])
+                bal_map  = {b["currency"]: float(b.get("available", 0) or 0) for b in bal_list if isinstance(b, dict)}
+                for pos in list(revx_positions):
+                    sym      = pos["symbol"]
+                    qty      = pos.get("qty_purchased", 0.0)
+                    coin_bal = bal_map.get(sym, 0.0)
+                    if qty > 0 and coin_bal < qty * 0.05:
+                        cur = market_data.get(sym, {}).get("price", pos["currentPrice"])
+                        pos["currentPrice"]  = cur
+                        pos["_already_sold"] = True
+                        await exit_position(state, pos, "CHIUSO SU REVOLUT X", user_id=user_id)
+            except Exception as e:
+                print(f"[revx_agent_sync] user {user_id}: {e}")
+
     # Poll ordini GTC limit in attesa di fill
     for pos in list(state["positions"]):
         if pos.get("_sell_mode") == "retry_limit" and pos.get("realMode") and pos.get("exchange") == "revx":
