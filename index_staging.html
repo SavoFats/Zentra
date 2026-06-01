@@ -358,6 +358,62 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .scan-chip.bear.active { background:var(--red); border-color:var(--red); color:#fff; }
 .scan-row { display:flex; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
 .scan-row:last-child { border-bottom:none; }
+/* ── SIDEBAR ─────────────────────────────────────────────────────────── */
+:root { --sb-w: 240px; }
+.sidebar { position:fixed; top:0; left:0; bottom:0; width:var(--sb-w); background:var(--bg); border-right:1px solid var(--border); z-index:200; display:flex; flex-direction:column; overflow:hidden; transform:translateX(-100%); transition:transform 0.28s cubic-bezier(0.4,0,0.2,1); }
+body.sidebar-open .sidebar { transform:translateX(0); }
+@media (min-width:768px) {
+  .hdr, .pages { transition:left 0.28s cubic-bezier(0.4,0,0.2,1); }
+  body.sidebar-open .hdr { left:var(--sb-w); }
+  body.sidebar-open .pages { left:var(--sb-w); }
+  .tabbar { display:none !important; }
+  .pages { bottom:0 !important; }
+  .hdr-hamburger { display:flex !important; }
+  .hdr-avatar-wrap { display:none !important; }
+}
+@media (max-width:767px) { .sidebar { display:none !important; } .hdr-hamburger { display:none !important; } }
+.hdr-hamburger { display:none; }
+.sb-hdr { display:flex; align-items:center; gap:10px; padding:0 14px; padding-top:var(--safe-t); height:calc(var(--hdr-h) + var(--safe-t)); border-bottom:1px solid var(--border); flex-shrink:0; }
+.sb-btn { width:32px; height:32px; display:flex; align-items:center; justify-content:center; border:none; background:none; cursor:pointer; color:var(--text2); border-radius:8px; transition:background 0.15s; flex-shrink:0; }
+.sb-btn:hover { background:var(--surface2); }
+.sb-logo { display:flex; align-items:center; gap:8px; font-size:17px; font-weight:700; letter-spacing:-0.03em; color:var(--text); }
+.sb-nav { flex:1; padding:10px 8px; overflow-y:auto; }
+.sb-item { display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; font-size:13px; font-weight:600; color:var(--text2); font-family:var(--sans); text-align:left; transition:background 0.15s,color 0.15s; margin-bottom:2px; }
+.sb-item:hover { background:var(--surface2); color:var(--text); }
+.sb-item.active { background:var(--surface2); color:var(--text); font-weight:700; }
+[data-theme="dark"] .sb-item.active { background:rgba(255,255,255,0.08); }
+.sb-item.danger { color:var(--red); }
+.sb-item.danger:hover { background:rgba(246,70,93,0.08); color:var(--red); }
+.sb-item svg { flex-shrink:0; opacity:0.65; }
+.sb-item.active svg, .sb-item:hover svg { opacity:1; }
+.sb-sep { height:1px; background:var(--border); margin:6px 12px; }
+.sb-foot { padding:8px; border-top:1px solid var(--border); flex-shrink:0; }
+.sb-user { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; text-align:left; transition:background 0.15s; font-family:var(--sans); }
+.sb-user:hover { background:var(--surface2); }
+.sb-uname { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sb-uplan { font-size:11px; color:var(--text3); margin-top:1px; }
+/* ── ACCOUNT PAGE ──────────────────────────────────────────────────────── */
+.acc-hero { display:flex; align-items:center; gap:16px; padding:20px; background:var(--surface); border-radius:var(--radius); margin-bottom:14px; }
+.acc-avatar { width:56px; height:56px; border-radius:50%; background:var(--blue); border:2px solid var(--border); overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; color:#fff; flex-shrink:0; }
+.acc-avatar img { width:100%; height:100%; object-fit:cover; }
+.acc-name { font-size:17px; font-weight:700; color:var(--text); }
+.acc-email { font-size:12px; color:var(--text3); margin-top:3px; }
+.acc-section { background:var(--surface); border-radius:var(--radius); margin-bottom:14px; overflow:hidden; }
+.acc-sec-title { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.1em; padding:14px 16px 8px; }
+.acc-row { display:flex; align-items:center; gap:12px; padding:13px 16px; border-top:1px solid var(--border); transition:background 0.15s; }
+.acc-row.clickable { cursor:pointer; }
+.acc-row.clickable:hover { background:var(--surface2); }
+.acc-row.danger { color:var(--red); cursor:pointer; }
+.acc-row.danger:hover { background:rgba(246,70,93,0.06); }
+.acc-icon { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.acc-row-body { flex:1; min-width:0; }
+.acc-row-label { font-size:13px; font-weight:700; color:var(--text); }
+.acc-row-sub { font-size:12px; color:var(--text3); margin-top:2px; }
+.acc-row-right { color:var(--text3); display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.acc-feat-row { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; font-size:13px; color:var(--text2); border-top:1px solid var(--border); }
+.acc-feat-val { font-size:12px; font-weight:600; color:var(--text3); }
+.acc-upgrade-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:14px; background:linear-gradient(135deg,#7c3aed,#db2777); border:none; border-radius:12px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; font-family:var(--sans); margin-top:8px; transition:opacity 0.15s; }
+.acc-upgrade-btn:hover { opacity:0.9; }
 /* ── POSITION BAR SL→TP ── */
 .pos-rl-wrap { padding:4px 16px 14px; }
 .pos-rl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:18px 0 16px; }
@@ -597,13 +653,18 @@ body.auth-active .tabbar { display:none !important; }
 </div>
 
 <div class="hdr">
-  <div class="hdr-logo">
-    <div class="hdr-logo-dot inactive" id="logoDot"></div>
-    Zentra
+  <div style="display:flex;align-items:center;gap:10px">
+    <button class="sb-btn hdr-hamburger" onclick="toggleSidebar()" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="hdr-logo">
+      <div class="hdr-logo-dot inactive" id="logoDot"></div>
+      Zentra
+    </div>
   </div>
-  <div class="hdr-right" style="display:flex;align-items:center;gap:8px">
+  <div class="hdr-right hdr-avatar-wrap" style="display:flex;align-items:center;gap:8px">
     <span id="planBadge" class="plan-badge free" style="display:none">FREE</span>
-    <div class="avatar-btn" id="avatarBtn" onclick="toggleProfileMenu()">
+    <div class="avatar-btn" id="avatarBtn" onclick="navigateToAccount()">
       <span id="avatarInitial">?</span>
     </div>
   </div>
@@ -998,6 +1059,48 @@ body.auth-active .tabbar { display:none !important; }
 
 <!-- Tooltip EMA -->
 <div class="ema-tooltip" id="emaTooltip"></div>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="sb-hdr">
+    <button class="sb-btn" onclick="toggleSidebar()" aria-label="Chiudi menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="sb-logo">
+      <div class="hdr-logo-dot inactive" id="sbDot"></div>
+      Zentra
+    </div>
+  </div>
+  <div class="sb-nav">
+    <button class="sb-item active" data-tab="home" onclick="showTab('home',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
+    </button>
+    <button class="sb-item" data-tab="monitor" onclick="showTab('monitor',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Monitor
+    </button>
+    <button class="sb-item" data-tab="market" onclick="showTab('market',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Mercato
+    </button>
+    <button class="sb-item" data-tab="scanner" onclick="showTab('scanner',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>Scanner
+    </button>
+    <button class="sb-item" data-tab="transazioni" onclick="showTab('transazioni',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Transazioni
+    </button>
+  </div>
+  <div class="sb-foot">
+    <button class="sb-user" onclick="navigateToAccount()">
+      <div class="avatar-btn" id="sbAvatar" style="pointer-events:none;flex-shrink:0">
+        <span id="sbAvatarInitial">?</span>
+      </div>
+      <div style="min-width:0">
+        <div class="sb-uname" id="sbUsername">--</div>
+        <div class="sb-uplan" id="sbPlanLbl">--</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;opacity:0.4;margin-left:auto"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+</nav>
 
 <div class="pages">
 
@@ -1447,6 +1550,103 @@ body.auth-active .tabbar { display:none !important; }
     </div>
   </div>
 
+  <!-- ACCOUNT -->
+  <div class="page" id="page-account">
+    <div class="ptr-indicator" id="ptr-page-account"><div class="ptr-spinner"></div></div>
+
+    <!-- Hero profilo -->
+    <div class="acc-hero">
+      <div class="acc-avatar" id="accAvatar"><span id="accAvatarInitial">?</span></div>
+      <div>
+        <div class="acc-name" id="accName">--</div>
+        <div class="acc-email" id="accEmail"></div>
+      </div>
+    </div>
+
+    <!-- Piano attuale -->
+    <div class="acc-section">
+      <div class="acc-sec-title">Piano attuale</div>
+      <div id="accPlanBlock"></div>
+    </div>
+
+    <!-- Exchange -->
+    <div class="acc-section">
+      <div class="acc-sec-title">Exchange</div>
+      <div class="acc-row clickable" onclick="showRevxConfig()">
+        <div class="acc-icon" style="background:rgba(80,90,200,0.12)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </div>
+        <div class="acc-row-body">
+          <div class="acc-row-label">Revolut X</div>
+          <div class="acc-row-sub" id="accRevxSub">Configura le API key</div>
+        </div>
+        <div class="acc-row-right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+      <div class="acc-row" id="accSimRow" style="display:none">
+        <div class="acc-icon" style="background:rgba(80,90,200,0.12)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg>
+        </div>
+        <div class="acc-row-body">
+          <div class="acc-row-label">Modalità Simulazione</div>
+          <div class="acc-row-sub">Testa la strategia senza rischi</div>
+        </div>
+        <div class="acc-row-right"><div class="toggle-switch" id="accSimToggle" onclick="setSimMode(!_simMode)"></div></div>
+      </div>
+    </div>
+
+    <!-- Telegram -->
+    <div class="acc-section">
+      <div class="acc-sec-title">Notifiche</div>
+      <div class="acc-row clickable" onclick="showTelegramConfig()">
+        <div class="acc-icon" style="background:rgba(0,136,204,0.12)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0088cc" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </div>
+        <div class="acc-row-body">
+          <div class="acc-row-label">Telegram</div>
+          <div class="acc-row-sub" id="accTgSub">Non collegato</div>
+        </div>
+        <div class="acc-row-right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+
+    <!-- Impostazioni -->
+    <div class="acc-section">
+      <div class="acc-sec-title">Impostazioni</div>
+      <div class="acc-row">
+        <div class="acc-icon" style="background:rgba(246,200,61,0.12)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f6c83d" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </div>
+        <div class="acc-row-body">
+          <div class="acc-row-label">Tema chiaro</div>
+        </div>
+        <div class="acc-row-right"><div class="toggle-switch" id="accThemeToggle" onclick="toggleTheme()"></div></div>
+      </div>
+      <div class="acc-row clickable" onclick="changeAvatar()">
+        <div class="acc-icon" style="background:rgba(5,193,104,0.12)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        </div>
+        <div class="acc-row-body">
+          <div class="acc-row-label">Foto profilo</div>
+        </div>
+        <div class="acc-row-right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+      </div>
+    </div>
+
+    <!-- Sessione -->
+    <div class="acc-section" style="margin-bottom:32px">
+      <div class="acc-sec-title">Sessione</div>
+      <div class="acc-row danger" onclick="logout()">
+        <div class="acc-icon" style="background:rgba(246,70,93,0.1)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </div>
+        <div class="acc-row-body">
+          <div class="acc-row-label" style="color:var(--red)">Logout</div>
+          <div class="acc-row-sub">Esci dal tuo account</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- TradingView Modal -->
@@ -1560,10 +1760,17 @@ function handleAvatarChange(e) {
 }
 function applyAvatar(src) {
   const btn = document.getElementById('avatarBtn');
+  const sbAv = document.getElementById('sbAvatar');
+  const accAv = document.getElementById('accAvatar');
   if (src) {
-    btn.innerHTML = '<img src="' + src + '">';
+    if (btn) btn.innerHTML = '<img src="' + src + '">';
+    if (sbAv) sbAv.innerHTML = '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover">';
+    if (accAv) accAv.innerHTML = '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover">';
   } else {
-    btn.innerHTML = '<span id="avatarInitial">' + (_username[0]||'?').toUpperCase() + '</span>';
+    const init = (_username[0]||'?').toUpperCase();
+    if (btn) btn.innerHTML = '<span id="avatarInitial">' + init + '</span>';
+    if (sbAv) sbAv.innerHTML = '<span id="sbAvatarInitial">' + init + '</span>';
+    if (accAv) accAv.innerHTML = '<span id="accAvatarInitial">' + init + '</span>';
   }
 }
 function updateProfileMenu() {
@@ -1765,6 +1972,7 @@ function initApp() {
   // Avatar: mostra iniziale subito, poi sovrascrive con foto dal server
   applyAvatar(null); // mostra iniziale username
   updateProfileMenu();
+  initSidebar();
   loadUserProfile();
   startupSession();
   applyIOSSafeAreaFix();
@@ -1811,6 +2019,7 @@ async function loadUserProfile() {
     renderHome();
     renderMarketStars();
     updatePlanUI();
+    syncSidebar();
   } catch(e) {
     applyAvatar(localStorage.getItem('ca_avatar'));
   }
@@ -2262,11 +2471,13 @@ function showTab(name, el) {
   if (!page) return;
   page.classList.add('active');
   page.scrollTop = 0;
-  el.classList.add('active');
+  if (el) el.classList.add('active');
   localStorage.setItem('ca_active_tab', name);
+  updateSidebarActive(name);
   if (name === 'home') renderHome();
   if (name === 'market') refreshMarket();
   if (name === 'scanner') refreshMarket().then(() => renderScanner());
+  if (name === 'account') renderAccountPage();
   if (name === 'transazioni') {
     renderTransazioni();
     _newTradeCount = 0;
@@ -2774,6 +2985,8 @@ function render() {
     } else {
       dot.className = 'hdr-logo-dot sim';
     }
+    const sbDot = document.getElementById('sbDot');
+    if (sbDot) sbDot.className = dot.className;
     if (heroCard) heroCard.classList.remove('off');
     if (liveBadge) liveBadge.style.display = window._realMode ? '' : 'none';
     if (sessionBtns) sessionBtns.style.display = 'flex';
@@ -2793,6 +3006,8 @@ function render() {
     }
   } else {
     dot.className = 'hdr-logo-dot inactive';
+    const sbDot2 = document.getElementById('sbDot');
+    if (sbDot2) sbDot2.className = 'hdr-logo-dot inactive';
     if (heroCard) heroCard.classList.add('off');
     if (liveBadge) liveBadge.style.display = 'none';
     if (sessionBtns) sessionBtns.style.display = 'none';
@@ -3781,6 +3996,103 @@ async function refreshMarket() {
     // universeCount rimosso dall'header
     renderMarket();
   } catch(e) {}
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────────────
+let _sidebarOpen = localStorage.getItem('sb_open') !== 'false';
+
+function initSidebar() {
+  if (window.innerWidth >= 768) {
+    document.body.classList.toggle('sidebar-open', _sidebarOpen);
+  }
+  syncSidebar();
+}
+
+function toggleSidebar() {
+  _sidebarOpen = !_sidebarOpen;
+  document.body.classList.toggle('sidebar-open', _sidebarOpen);
+  localStorage.setItem('sb_open', _sidebarOpen ? 'true' : 'false');
+}
+
+function updateSidebarActive(name) {
+  document.querySelectorAll('.sb-item[data-tab]').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === name);
+  });
+  // user section highlighted when on account
+  const sbUser = document.querySelector('.sb-user');
+  if (sbUser) sbUser.style.background = (name === 'account') ? 'var(--surface2)' : '';
+}
+
+function syncSidebar() {
+  const uname = document.getElementById('sbUsername');
+  const uplan = document.getElementById('sbPlanLbl');
+  const uinit = document.getElementById('sbAvatarInitial');
+  const sbAv  = document.getElementById('sbAvatar');
+  if (uname) uname.textContent = _username || '--';
+  if (uplan) uplan.textContent = (_plan === 'pro') ? 'Zentra Pro' : 'Piano Free';
+  if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
+  // sync avatar image
+  const cached = localStorage.getItem('ca_avatar');
+  if (sbAv && cached) sbAv.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
+  else if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
+}
+
+function navigateToAccount() {
+  document.getElementById('profileMenu')?.classList.remove('open');
+  showTab('account', null);
+  renderAccountPage();
+}
+
+function renderAccountPage() {
+  // Hero
+  const nameEl  = document.getElementById('accName');
+  const initEl  = document.getElementById('accAvatarInitial');
+  const avEl    = document.getElementById('accAvatar');
+  if (nameEl) nameEl.textContent = _username || '--';
+  if (initEl) initEl.textContent = (_username[0]||'?').toUpperCase();
+  const cached = localStorage.getItem('ca_avatar');
+  if (avEl && cached) avEl.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
+
+  // Plan block
+  const planBlock = document.getElementById('accPlanBlock');
+  if (planBlock) {
+    const isPro = _plan === 'pro';
+    planBlock.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
+        <div style="width:34px;height:34px;border-radius:9px;background:${isPro?'rgba(124,58,237,0.15)':'rgba(80,90,200,0.10)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${isPro?'#7c3aed':'var(--blue)'}" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${isPro?'Zentra Pro':'Piano Free'} <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:${isPro?'rgba(124,58,237,0.2)':'rgba(80,90,200,0.12)'};color:${isPro?'#a78bfa':'var(--blue)'};vertical-align:middle">${isPro?'PRO':'FREE'}</span></div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${isPro?'Accesso completo':'Funzionalità base'}</div>
+        </div>
+      </div>
+      <div class="acc-feat-row"><span>Sessioni giornaliere</span><span class="acc-feat-val">${isPro?'Illimitate':'1/giorno'}</span></div>
+      <div class="acc-feat-row"><span>Durata massima</span><span class="acc-feat-val">${isPro?'Illimitata':'2h'}</span></div>
+      <div class="acc-feat-row"><span>Posizioni simultanee</span><span class="acc-feat-val">${isPro?'Multiple':'1'}</span></div>
+      <div class="acc-feat-row"><span>Notifiche Telegram</span><span class="acc-feat-val">${isPro?'Si':'No'}</span></div>
+      ${!isPro && STRIPE_ENABLED ? '<button class="acc-upgrade-btn" onclick="navigateToAccount(); showPaywall()">Passa a Zentra Pro</button>' : ''}
+      ${!isPro && STRIPE_ENABLED ? '<div style="height:12px"></div>' : ''}
+    `;
+  }
+
+  // RevX status
+  const revxSub = document.getElementById('accRevxSub');
+  if (revxSub) revxSub.textContent = _hasRevxKeys ? 'API key configurate' : 'Configura le API key';
+
+  // Sim toggle
+  const simRow = document.getElementById('accSimRow');
+  const simTog = document.getElementById('accSimToggle');
+  if (simRow) simRow.style.display = _hasRevxKeys ? 'flex' : 'none';
+  if (simTog) simTog.classList.toggle('on', _simMode);
+
+  // Telegram
+  const tgSub = document.getElementById('accTgSub');
+  if (tgSub) tgSub.textContent = window._tgLinked ? 'Collegato' : 'Non collegato';
+
+  // Theme toggle
+  const accTheme = document.getElementById('accThemeToggle');
+  if (accTheme) accTheme.classList.toggle('on', document.documentElement.getAttribute('data-theme') === 'light');
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
