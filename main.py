@@ -457,6 +457,8 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
 
         # RSI(14) su 5m (su candele chiuse)
         rsi_14 = calc_rsi(closes5[:-1], 14)
+        # RSI(14) su 1h (su candele chiuse) — usato per rsi_oversold
+        rsi_1h = calc_rsi(closes1h[:-1], 14)
 
         # Corpo dell'ultima candela CHIUSA (klines5[-2], non la corrente aperta [-1])
         last_candle  = klines5[-2]
@@ -517,7 +519,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         ema30_5m      = calc_ema(closes5[:-1], 30)
         golden_cross  = ema9_5m > ema30_5m
         death_cross   = ema9_5m < ema30_5m
-        rsi_oversold  = rsi_14 < 30.0
+        rsi_oversold  = rsi_1h < 30.0
         rsi_overbought = rsi_14 > 70.0
 
         return {
@@ -537,6 +539,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "vol_avg_20":       vol_avg_20,
             "vol_last":         vol_last,
             "rsi_14":           rsi_14,
+            "rsi_1h":           rsi_1h,
             "candle_body":      candle_body,
             "body_ratio":       body_ratio,
             "ema20_5m_prev3":   ema20_5m_prev3,
