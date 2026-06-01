@@ -195,6 +195,25 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertTrue(pos.get("_manual_action_required"))
         self.assertEqual(pos.get("_sell_failures"), 3)
 
+    def test_redirect_urls_require_exact_allowed_origin(self):
+        main = self.main
+        original_any = main._ORIGINS_ANY
+        original_set = set(main._ORIGIN_SET)
+        main._ORIGINS_ANY = False
+        main._ORIGIN_SET = {"https://zentra.trading"}
+        try:
+            self.assertTrue(main.is_allowed_redirect_url("https://zentra.trading/account?tab=billing"))
+            self.assertFalse(main.is_allowed_redirect_url("https://zentra.trading.evil.example/account"))
+            self.assertFalse(main.is_allowed_redirect_url("http://zentra.trading/account"))
+            self.assertFalse(main.is_allowed_redirect_url("javascript:alert(1)"))
+        finally:
+            main._ORIGINS_ANY = original_any
+            main._ORIGIN_SET = original_set
+
+    def test_with_query_param_preserves_existing_query(self):
+        url = self.main.with_query_param("https://zentra.trading/account?tab=billing", "upgraded", "1")
+        self.assertEqual(url, "https://zentra.trading/account?tab=billing&upgraded=1")
+
 
 if __name__ == "__main__":
     unittest.main()

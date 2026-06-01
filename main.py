@@ -18,6 +18,7 @@ import uvicorn
 import asyncpg
 import bcrypt
 from cryptography.fernet import Fernet
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -34,6 +35,34 @@ else:
 
 _CORS_METHODS = "GET, POST, PATCH, DELETE, OPTIONS"
 _CORS_HEADERS = "Authorization, Content-Type"
+
+def _url_origin(url: str) -> str:
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return ""
+    if not parts.scheme or not parts.netloc:
+        return ""
+    return f"{parts.scheme.lower()}://{parts.netloc.lower()}".rstrip("/")
+
+def is_allowed_redirect_url(url: str) -> bool:
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    if parts.scheme not in ("https", "http") or not parts.netloc:
+        return False
+    if parts.scheme == "http" and parts.hostname not in ("localhost", "127.0.0.1"):
+        return False
+    if _ORIGINS_ANY:
+        return True
+    return _url_origin(url) in _ORIGIN_SET
+
+def with_query_param(url: str, key: str, value: str) -> str:
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query[key] = value
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 @app.middleware("http")
 async def cors_middleware(request: Request, call_next):
@@ -3848,12 +3877,10 @@ async def billing_checkout(body: dict, request: Request, user_id: int = Depends(
     cancel_url  = body.get("cancel_url", "")
     if not success_url or not cancel_url:
         raise HTTPException(status_code=400, detail="success_url e cancel_url obbligatori")
-    _allowed = tuple(o for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip().startswith("https://"))
-    if _allowed:
-        if not any(success_url.startswith(o.strip()) for o in _allowed):
-            raise HTTPException(status_code=400, detail="success_url non autorizzata")
-        if not any(cancel_url.startswith(o.strip()) for o in _allowed):
-            raise HTTPException(status_code=400, detail="cancel_url non autorizzata")
+    if not is_allowed_redirect_url(success_url):
+        raise HTTPException(status_code=400, detail="success_url non autorizzata")
+    if not is_allowed_redirect_url(cancel_url):
+        raise HTTPException(status_code=400, detail="cancel_url non autorizzata")
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
@@ -3874,7 +3901,7 @@ async def billing_checkout(body: dict, request: Request, user_id: int = Depends(
             payment_method_types=["card"],
             line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
             mode="subscription",
-            success_url=success_url + "?upgraded=1",
+            success_url=with_query_param(success_url, "upgraded", "1"),
             cancel_url=cancel_url,
         )
         return {"url": session["url"]}
@@ -3889,6 +3916,8 @@ async def billing_portal(body: dict, request: Request, user_id: int = Depends(ge
     return_url = body.get("return_url", "")
     if not return_url:
         raise HTTPException(status_code=400, detail="return_url obbligatorio")
+    if not is_allowed_redirect_url(return_url):
+        raise HTTPException(status_code=400, detail="return_url non autorizzata")
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
