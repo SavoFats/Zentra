@@ -1651,12 +1651,12 @@ body.auth-active .tabbar { display:none !important; }
 
 <!-- TradingView Modal -->
 <div id="tvModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center">
-  <div style="width:min(94vw,520px);height:72vh;background:#000;border-radius:20px;overflow:hidden;position:relative;display:flex;flex-direction:column">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#131722;flex-shrink:0">
+  <div style="width:min(94vw,560px);height:72vh;background:#131722;border-radius:20px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#131722;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,0.08)">
       <div id="tvSymbolLabel" style="font-size:15px;font-weight:700;color:#fff"></div>
       <button onclick="closeTVChart()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;line-height:1">&times;</button>
     </div>
-    <iframe id="tvFrame" style="flex:1;border:none;width:100%" allow="fullscreen" src=""></iframe>
+    <div id="tvWidgetContainer" style="flex:1;width:100%;min-height:0"></div>
   </div>
 </div>
 
@@ -4172,17 +4172,49 @@ function renderScanner() {
   }).join('');
 }
 
+let _tvScriptLoaded = false;
+let _tvScriptLoading = false;
+let _tvScriptCbs = [];
+
+function _loadTVScript(cb) {
+  if (_tvScriptLoaded) { cb(); return; }
+  _tvScriptCbs.push(cb);
+  if (_tvScriptLoading) return;
+  _tvScriptLoading = true;
+  const s = document.createElement('script');
+  s.src = 'https://s3.tradingview.com/tv.js';
+  s.onload = () => { _tvScriptLoaded = true; _tvScriptLoading = false; _tvScriptCbs.forEach(f => f()); _tvScriptCbs = []; };
+  document.head.appendChild(s);
+}
+
 function openTVChart(symbol) {
   const base = symbol.replace('USDT','');
   document.getElementById('tvSymbolLabel').textContent = base + ' / USDT';
-  const frame = document.getElementById('tvFrame');
-  frame.src = `https://s.tradingview.com/widgetembed/?symbol=BINANCE:${base}USDT&interval=5&theme=dark&style=1&locale=it&hide_side_toolbar=0&allow_symbol_change=false&save_image=false`;
   document.getElementById('tvModal').style.display = 'flex';
+  const container = document.getElementById('tvWidgetContainer');
+  container.innerHTML = '<div id="tv_chart_div" style="height:100%;width:100%"></div>';
+  _loadTVScript(() => {
+    new TradingView.widget({
+      autosize: true,
+      symbol: 'BINANCE:' + base + 'USDT',
+      interval: '5',
+      timezone: 'Etc/UTC',
+      theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
+      style: '1',
+      locale: 'it',
+      toolbar_bg: '#131722',
+      enable_publishing: false,
+      hide_top_toolbar: false,
+      save_image: false,
+      container_id: 'tv_chart_div'
+    });
+  });
 }
 
 function closeTVChart() {
   document.getElementById('tvModal').style.display = 'none';
-  document.getElementById('tvFrame').src = '';
+  const c = document.getElementById('tvWidgetContainer');
+  if (c) c.innerHTML = '';
 }
 
 // ── EMA TOOLTIP ───────────────────────────────────────────────────────────────
