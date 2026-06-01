@@ -296,7 +296,7 @@ _revoked_tokens: set = set()     # token revocati al logout
 # }
 candle_data: dict = {}
 _candles_last_update: float = 0
-CANDLE_UPDATE_INTERVAL = 120   # secondi (2 minuti)
+CANDLE_UPDATE_INTERVAL = 60    # secondi (1 minuto)
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
 
