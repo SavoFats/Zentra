@@ -70,10 +70,10 @@ body { background:var(--bg); color:var(--text); font-family:var(--sans); height:
 
 .hdr { position:fixed; top:0; left:0; right:0; height:calc(var(--hdr-h) + var(--safe-t)); padding-top:var(--safe-t); background:var(--bg); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding-left:20px; padding-right:16px; z-index:100; }
 .hdr-logo { font-size:18px; font-weight:700; letter-spacing:-0.03em; color:var(--text); display:flex; align-items:center; gap:8px; cursor:pointer; }
-.hdr-logo-dot { width:8px; height:8px; border-radius:50%; background:var(--text3); flex-shrink:0; transition:all 0.3s; }
-.hdr-logo-dot.inactive { background:var(--text3); box-shadow:none; }
-.hdr-logo-dot.sim { background:var(--blue); box-shadow:0 0 10px var(--blue-glow); animation:pulse 2s infinite; }
-.hdr-logo-dot.real { background:var(--green); box-shadow:0 0 10px rgba(5,193,104,0.5); animation:pulse 1.5s infinite; }
+.hdr-logo-dot { color:var(--text3); flex-shrink:0; transition:all 0.3s; }
+.hdr-logo-dot.inactive { color:var(--text3); filter:none; }
+.hdr-logo-dot.sim { color:var(--blue); filter:drop-shadow(0 0 6px var(--blue-glow)); animation:pulse 2s infinite; }
+.hdr-logo-dot.real { color:var(--green); filter:drop-shadow(0 0 6px rgba(5,193,104,0.5)); animation:pulse 1.5s infinite; }
 .hdr-right { display:flex; align-items:center; gap:10px; }
 
 /* Avatar profilo */
@@ -658,7 +658,10 @@ body.auth-active .tabbar { display:none !important; }
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="hdr-logo">
-      <div class="hdr-logo-dot inactive" id="logoDot"></div>
+      <svg id="logoDot" class="hdr-logo-dot inactive" width="22" height="16" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+        <polyline points="0,100 40,62 68,82 100,32 140,48" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="140" cy="48" r="11" fill="currentColor"/>
+      </svg>
       Zentra
     </div>
   </div>
@@ -676,25 +679,12 @@ body.auth-active .tabbar { display:none !important; }
     <div class="profile-menu-user" id="pmUsername">--</div>
     <div class="profile-menu-sub" id="pmMode" style="display:none"></div>
   </div>
-  <!-- Configura Revolut X -->
-  <div class="profile-menu-item" onclick="showRevxConfig()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-    Configura Revolut X
-  </div>
   <div class="profile-menu-toggle" id="simModeRow" style="display:none">
     <div class="profile-menu-toggle-label">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg>
       Simulazione
     </div>
     <div class="toggle-switch" id="simModeToggle" onclick="setSimMode(!_simMode)"></div>
-  </div>
-  <div class="profile-menu-item" onclick="showTelegramConfig()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-    <span id="pmTelegram">Collega Telegram</span>
-  </div>
-  <div class="profile-menu-item" onclick="changeAvatar()">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-    Foto profilo
   </div>
   <div class="profile-menu-toggle">
     <div class="profile-menu-toggle-label">
@@ -703,11 +693,14 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <div class="toggle-switch" id="themeToggle" onclick="toggleTheme()"></div>
   </div>
+  <div class="profile-menu-item" onclick="showTelegramConfig()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    <span id="pmTelegram">Collega Telegram</span>
+  </div>
   <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? (_plan==='pro' ? manageSubscriptionClick() : (document.getElementById('profileMenu').classList.remove('open'), showPaywall())) : null" style="display:none">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
     <span id="pmBillingLabel">Abbonamento</span>
   </div>
-  <!-- CTA upgrade Pro — visibile solo per free -->
   <div id="pmProCta" style="display:none;margin:8px 4px 4px;background:linear-gradient(135deg,#78350f,#92400e);border-radius:10px;padding:12px 14px;cursor:pointer" onclick="document.getElementById('profileMenu').classList.remove('open'); showPaywall()">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div>
@@ -1064,10 +1057,13 @@ body.auth-active .tabbar { display:none !important; }
 <nav class="sidebar" id="sidebar">
   <div class="sb-hdr">
     <button class="sb-btn" onclick="toggleSidebar()" aria-label="Chiudi menu">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
     <div class="sb-logo">
-      <div class="hdr-logo-dot inactive" id="sbDot"></div>
+      <svg id="sbDot" class="hdr-logo-dot inactive" width="22" height="16" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+        <polyline points="0,100 40,62 68,82 100,32 140,48" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="140" cy="48" r="11" fill="currentColor"/>
+      </svg>
       Zentra
     </div>
   </div>
@@ -1409,6 +1405,7 @@ body.auth-active .tabbar { display:none !important; }
     <div class="mon-tabs">
       <button class="mon-tab active" id="posTabAperte" onclick="switchPosTab('aperte')">Aperte</button>
       <button class="mon-tab" id="posTabChiuse" onclick="switchPosTab('chiuse')">Chiuse</button>
+      <button class="mon-tab" id="posTabAttivita" onclick="switchPosTab('attivita')">Attività</button>
     </div>
 
     <!-- Panel Aperte -->
@@ -1459,20 +1456,24 @@ body.auth-active .tabbar { display:none !important; }
       </div>
       <div id="transazioniList"><div class="empty"><div class="empty-text">Nessuna posizione chiusa</div></div></div>
     </div>
+
+    <!-- Panel Attività -->
+    <div id="posPanelAttivita" style="display:none">
+      <div id="agentActivityList"><div class="empty" style="padding:20px 0"><div class="empty-text">Nessuna attività</div></div></div>
+    </div>
   </div>
 
   <!-- elementi di compatibilità (page-market/monitor/transazioni eliminati ma JS null-safe) -->
   <div style="display:none" id="page-market"></div>
   <div style="display:none" id="page-monitor"></div>
   <div style="display:none" id="page-transazioni"></div>
-  <div style="display:none" id="agentActivityList"></div>
 
   <!-- SCANNER -->
   <div class="page" id="page-scanner">
     <div class="ptr-indicator" id="ptr-page-scanner"><div class="ptr-spinner"></div></div>
 
     <!-- Bullish signals -->
-    <div style="margin-bottom:16px">
+    <div style="margin-bottom:20px">
       <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">Bullish</div>
       <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none">
         <button class="scan-chip active" id="schip-breakout"     onclick="selectScanSignal('breakout',this)">Breakout</button>
@@ -1480,16 +1481,6 @@ body.auth-active .tabbar { display:none !important; }
         <button class="scan-chip"        id="schip-macd_bullish" onclick="selectScanSignal('macd_bullish',this)">MACD Bullish</button>
         <button class="scan-chip"        id="schip-rsi_oversold" onclick="selectScanSignal('rsi_oversold',this)">RSI Oversold</button>
         <button class="scan-chip"        id="schip-tsi_bullish"  onclick="selectScanSignal('tsi_bullish',this)">TSI Bullish</button>
-      </div>
-    </div>
-
-    <!-- Bearish signals -->
-    <div style="margin-bottom:20px">
-      <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">Bearish</div>
-      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none">
-        <button class="scan-chip bear" id="schip-death_cross"   onclick="selectScanSignal('death_cross',this)">Death Cross</button>
-        <button class="scan-chip bear" id="schip-macd_bearish"  onclick="selectScanSignal('macd_bearish',this)">MACD Bearish</button>
-        <button class="scan-chip bear" id="schip-rsi_overbought" onclick="selectScanSignal('rsi_overbought',this)">RSI Overbought</button>
       </div>
     </div>
 
@@ -1509,7 +1500,10 @@ body.auth-active .tabbar { display:none !important; }
 
     <!-- Hero profilo -->
     <div class="acc-hero">
-      <div class="acc-avatar" id="accAvatar"><span id="accAvatarInitial">?</span></div>
+      <div class="acc-avatar" id="accAvatar" onclick="changeAvatar()" style="cursor:pointer;position:relative" title="Cambia foto">
+        <span id="accAvatarInitial">?</span>
+        <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+      </div>
       <div>
         <div class="acc-name" id="accName">--</div>
         <div class="acc-email" id="accEmail"></div>
@@ -1573,15 +1567,6 @@ body.auth-active .tabbar { display:none !important; }
           <div class="acc-row-label">Tema chiaro</div>
         </div>
         <div class="acc-row-right"><div class="toggle-switch" id="accThemeToggle" onclick="toggleTheme()"></div></div>
-      </div>
-      <div class="acc-row clickable" onclick="changeAvatar()">
-        <div class="acc-icon" style="background:rgba(5,193,104,0.12)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-        </div>
-        <div class="acc-row-body">
-          <div class="acc-row-label">Foto profilo</div>
-        </div>
-        <div class="acc-row-right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
       </div>
     </div>
 
@@ -3252,12 +3237,14 @@ function drawMiniChart(canvas, closes, entryPrice) {
 }
 
 function switchPosTab(tab) {
-  document.getElementById('posPanelAperte').style.display = tab === 'aperte' ? '' : 'none';
-  document.getElementById('posPanelChiuse').style.display = tab === 'chiuse'  ? '' : 'none';
-  document.getElementById('posTabAperte').classList.toggle('active', tab === 'aperte');
-  document.getElementById('posTabChiuse').classList.toggle('active',  tab === 'chiuse');
-  if (tab === 'chiuse') renderTransazioni();
-  if (tab === 'aperte') renderPositions();
+  document.getElementById('posPanelAperte').style.display   = tab === 'aperte'   ? '' : 'none';
+  document.getElementById('posPanelChiuse').style.display   = tab === 'chiuse'   ? '' : 'none';
+  document.getElementById('posPanelAttivita').style.display = tab === 'attivita' ? '' : 'none';
+  document.getElementById('posTabAperte').classList.toggle('active',   tab === 'aperte');
+  document.getElementById('posTabChiuse').classList.toggle('active',   tab === 'chiuse');
+  document.getElementById('posTabAttivita').classList.toggle('active', tab === 'attivita');
+  if (tab === 'chiuse')   renderTransazioni();
+  if (tab === 'aperte')   renderPositions();
 }
 
 function drawHeroSparkline() {
@@ -3866,7 +3853,7 @@ function renderHomeHeroPills() {
   }
   if (capEl) {
     const capVal = parseFloat(document.getElementById('capitalUsd')?.value || 0);
-    capEl.textContent = capVal > 0 ? `Capitale ${capVal.toFixed(0)}` : 'Capitale --';
+    capEl.textContent = capVal > 0 ? `Capitale ${getCurrSym()}${capVal.toFixed(0)}` : 'Capitale --';
   }
 }
 
@@ -4242,43 +4229,18 @@ function renderScanner() {
   }).join('');
 }
 
-let _tvScriptLoaded = false;
-let _tvScriptLoading = false;
-let _tvScriptCbs = [];
-
-function _loadTVScript(cb) {
-  if (_tvScriptLoaded) { cb(); return; }
-  _tvScriptCbs.push(cb);
-  if (_tvScriptLoading) return;
-  _tvScriptLoading = true;
-  const s = document.createElement('script');
-  s.src = 'https://s3.tradingview.com/tv.js';
-  s.onload = () => { _tvScriptLoaded = true; _tvScriptLoading = false; _tvScriptCbs.forEach(f => f()); _tvScriptCbs = []; };
-  document.head.appendChild(s);
-}
-
 function openTVChart(symbol) {
   const base = symbol.replace('USDT','');
   document.getElementById('tvSymbolLabel').textContent = base + ' / USDT';
   document.getElementById('tvModal').style.display = 'flex';
   const container = document.getElementById('tvWidgetContainer');
-  container.innerHTML = '<div id="tv_chart_div" style="height:100%;width:100%"></div>';
-  _loadTVScript(() => {
-    new TradingView.widget({
-      autosize: true,
-      symbol: 'BINANCE:' + base + 'USDT',
-      interval: '5',
-      timezone: 'Etc/UTC',
-      theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
-      style: '1',
-      locale: 'it',
-      toolbar_bg: '#131722',
-      enable_publishing: false,
-      hide_top_toolbar: false,
-      save_image: false,
-      container_id: 'tv_chart_div'
-    });
-  });
+  const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  container.innerHTML = `<iframe
+    src="https://s.tradingview.com/widgetembed/?symbol=BINANCE:${encodeURIComponent(base)}USDT&interval=5&theme=${theme}&style=1&locale=it&hidesidetoolbar=0&hidetoptoolbar=0&saveimage=0&studies=[]"
+    style="width:100%;height:100%;border:none"
+    allowtransparency="true"
+    scrolling="no"
+    allowfullscreen></iframe>`;
 }
 
 function closeTVChart() {
