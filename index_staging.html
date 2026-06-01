@@ -1609,12 +1609,20 @@ body.auth-active .tabbar { display:none !important; }
     <div id="tcmSub" style="font-size:13px;color:var(--text3);margin-bottom:20px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px;text-align:left">
       <div style="background:var(--surface2);border-radius:12px;padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Investito</div>
+        <div id="tcmInvestito" style="font-size:14px;font-weight:700;color:var(--text)"></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 14px">
         <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Quantità</div>
         <div id="tcmQty" style="font-size:14px;font-weight:700;color:var(--text)"></div>
       </div>
       <div style="background:var(--surface2);border-radius:12px;padding:12px 14px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Prezzo</div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Prezzo eseguito</div>
         <div id="tcmPrice" style="font-size:14px;font-weight:700;color:var(--text)"></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 14px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Simbolo</div>
+        <div id="tcmSymbol" style="font-size:14px;font-weight:700;color:var(--text)"></div>
       </div>
       <div style="background:rgba(246,70,93,0.1);border-radius:12px;padding:12px 14px">
         <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Stop Loss</div>
@@ -4230,7 +4238,7 @@ function closeTVChart() {
 }
 
 // ── TRADE CONFIRM MODAL ───────────────────────────────────────────────────────
-function openTradeConfirmModal(sym, price, qty, slPct, tpPct) {
+function openTradeConfirmModal(sym, price, qty, slPct, tpPct, amountUsdt) {
   const base = sym.replace('USDT', '');
   const logo = document.getElementById('tcmLogo');
   logo.style.display = '';
@@ -4238,10 +4246,14 @@ function openTradeConfirmModal(sym, price, qty, slPct, tpPct) {
   document.getElementById('tcmTitle').textContent = base + ' acquistato';
   document.getElementById('tcmSub').textContent = 'Ordine eseguito su Revolut X';
   const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
-  document.getElementById('tcmQty').textContent  = qtyFmt + ' ' + base;
-  document.getElementById('tcmPrice').textContent = fmtPrice(price);
-  document.getElementById('tcmSL').textContent   = fmtPrice(price * (1 - slPct / 100));
-  document.getElementById('tcmTP').textContent   = fmtPrice(price * (1 + tpPct / 100));
+  document.getElementById('tcmQty').textContent     = qtyFmt + ' ' + base;
+  document.getElementById('tcmSymbol').textContent  = sym;
+  // Prezzo normalizzato alla stessa precisione del display — evita incoerenza SL/TP
+  const dispPrice = parseFloat(fmtPrice(price).replace(/[^0-9.]/g, ''));
+  document.getElementById('tcmPrice').textContent   = fmtPrice(dispPrice);
+  document.getElementById('tcmSL').textContent      = fmtPrice(dispPrice * (1 - slPct / 100));
+  document.getElementById('tcmTP').textContent      = fmtPrice(dispPrice * (1 + tpPct / 100));
+  document.getElementById('tcmInvestito').textContent = '$' + (amountUsdt || 0).toFixed(2);
   document.getElementById('tradeConfirmModal').style.display = 'flex';
 }
 
@@ -4325,11 +4337,12 @@ async function executeManualTrade() {
     });
     const data = await r.json();
     if (r.ok && data.ok) {
-      const _sl = parseFloat(document.getElementById('tmSL').value) || 2;
-      const _tp = parseFloat(document.getElementById('tmTP').value) || 4;
+      const _sl  = parseFloat(document.getElementById('tmSL').value) || 2;
+      const _tp  = parseFloat(document.getElementById('tmTP').value) || 4;
+      const _amt = parseFloat(document.getElementById('tmAmountInput').value) || amount;
       closeTradeModal();
       await poll();
-      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, _sl, _tp);
+      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, _sl, _tp, _amt);
     } else {
       errEl.textContent   = data.detail || data.error || 'Errore esecuzione ordine';
       errEl.style.display = 'block';
