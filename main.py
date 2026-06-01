@@ -1,6 +1,7 @@
 import asyncio
 import os
 import time
+import websockets
 import math
 import hashlib
 import json
@@ -301,6 +302,8 @@ COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON",
 _dynamic_universe: set = set(COIN_WHITELIST)  # aggiornato ogni 30 min
 _universe_last_update: float = 0
 UNIVERSE_UPDATE_INTERVAL = 1800  # 30 minuti
+
+_ws_connected: bool = False  # True quando il WebSocket Binance è attivo
 
 _cg_price_last_fetch: float = 0  # throttle fallback CoinGecko prezzi
 
@@ -2087,6 +2090,64 @@ async def monitor_manual_positions(state: dict, user_id: int):
 
     _update_pnl(state)
 
+# ── binance websocket stream ──────────────────────────────────────────────────
+
+async def binance_ws_loop():
+    global _ws_connected
+    url = "wss://stream.binance.com:9443/ws/!miniTicker@arr"
+    backoff = 5
+    while True:
+        try:
+            print(f"[WS] Connessione a {url} ...")
+            async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
+                _ws_connected = True
+                backoff = 5
+                print("[WS] ✅ Connesso — stream prezzi attivo")
+                async for raw in ws:
+                    try:
+                        tickers = json.loads(raw)
+                        if not isinstance(tickers, list):
+                            continue
+                        for t in tickers:
+                            pair = t.get("s", "")
+                            if not pair.endswith("USDT"):
+                                continue
+                            sym = pair[:-4]
+                            if not sym.isascii() or not sym.isalpha() or sym in STABLES:
+                                continue
+                            try:
+                                price    = float(t["c"])
+                                open_24h = float(t["o"])
+                                vol_usd  = float(t["q"])
+                            except (KeyError, ValueError, TypeError):
+                                continue
+                            if price <= 0:
+                                continue
+                            change24h = (price - open_24h) / open_24h * 100 if open_24h > 0 else 0.0
+                            if sym not in market_data:
+                                market_data[sym] = {"price": 0.0, "change1h": 0.0, "change24h": 0.0, "volume24h": 0.0, "icon": sym[0]}
+                            cd = candle_data.get(sym)
+                            change1h = ((price - cd["close_1h_ago"]) / cd["close_1h_ago"] * 100
+                                        if cd and cd.get("close_1h_ago", 0) > 0
+                                        else market_data[sym].get("change1h", 0.0))
+                            market_data[sym]["price"]     = price
+                            market_data[sym]["change1h"]  = change1h
+                            market_data[sym]["change24h"] = change24h
+                            market_data[sym]["volume24h"] = vol_usd
+                            for state in list(user_sessions.values()):
+                                for pos in list(state["positions"]):
+                                    if pos["symbol"] == sym:
+                                        pos["currentPrice"] = price
+                                        if price > pos["highPrice"]:
+                                            pos["highPrice"] = price
+                    except Exception as parse_err:
+                        print(f"[WS] Errore parsing: {parse_err}")
+        except Exception as e:
+            _ws_connected = False
+            print(f"[WS] ❌ Disconnesso: {e} — retry in {backoff}s")
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60)
+
 # ── background loop ───────────────────────────────────────────────────────────
 
 async def background_loop():
@@ -2094,7 +2155,8 @@ async def background_loop():
     last_persist = 0.0
     while True:
         try:
-            await fetch_prices()
+            if not _ws_connected:
+                await fetch_prices()
 
             if time.time() - _universe_last_update >= UNIVERSE_UPDATE_INTERVAL:
                 await fetch_dynamic_universe()
@@ -2271,6 +2333,7 @@ async def startup():
 
     for _name, _coro in [
         ("background_loop",      background_loop()),
+        ("binance_ws_loop",      binance_ws_loop()),
         ("load_global_revx_keys", load_global_revx_keys()),
         ("load_telegram_bot_info", load_telegram_bot_info()),
         ("fetch_coingecko_logos", fetch_coingecko_logos()),
