@@ -2171,6 +2171,7 @@ async def binance_ws_loop():
 # ── background loop ───────────────────────────────────────────────────────────
 
 async def background_loop():
+    global _rest_price_last_fetch, _ws_last_msg_ts
     consecutive_errors = 0
     last_persist = 0.0
     while True:
