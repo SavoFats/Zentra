@@ -2588,6 +2588,7 @@ async function stopAgent() {
   try {
     const res = await fetch(API + '/stop', { method:'POST', headers:authHeaders() });
     data = await res.json();
+    if (!res.ok) data.error = data.detail || data.error || String(res.status);
   } catch(e) { alert('Errore di rete: ' + e.message); return; }
 
   // Se alcune posizioni non sono state vendute, la sessione rimane aperta
@@ -3115,7 +3116,13 @@ async function confirmClosePosition() {
   hideCloseModal();
   try {
     const r = await fetch(API + '/close_position/' + symbol, { method:'POST', headers:authHeaders() });
-    if (!r.ok) { const d = await r.json().catch(()=>({})); alert('Errore chiusura: ' + (d.detail || d.error || r.status)); }
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok || d.error) {
+      alert('Errore chiusura: ' + (d.detail || d.error || r.status));
+      await poll().catch(()=>{});
+      return;
+    }
+    await poll().catch(()=>{});
   } catch(e) { alert('Errore di connessione durante la chiusura.'); }
 }
 
