@@ -2033,6 +2033,60 @@ async def poll_telegram():
         except Exception as e:
             print(f"Telegram poll error: {e}")
 
+async def monitor_manual_positions(state: dict, user_id: int):
+    """Monitora SL/TP e sync RevX per posizioni manuali quando l'agente è fermo."""
+    revx_key_id  = state.get("revx_key_id", "")
+    revx_priv    = state.get("revx_private_key", "")
+    use_revx     = state.get("use_revx", False)
+
+    # Sync RevX: rimuovi posizioni chiuse esternamente controllando i saldi
+    if use_revx and revx_key_id and revx_priv:
+        try:
+            result = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
+            balances = result if isinstance(result, list) else result.get("balances", [])
+            bal_map = {b["currency"]: float(b.get("available", 0) or 0) for b in balances if isinstance(b, dict)}
+            for pos in list(state["positions"]):
+                if not pos.get("manual") or pos.get("exchange") != "revx":
+                    continue
+                sym = pos["symbol"]
+                coin_bal = bal_map.get(sym, 0.0)
+                qty = pos.get("qty_purchased", 0.0)
+                if qty > 0 and coin_bal < qty * 0.05:  # meno del 5% rimasto → chiuso esternamente
+                    cur = market_data.get(sym, {}).get("price", pos["entryPrice"])
+                    pos["currentPrice"] = cur
+                    add_log(state, "sell", "CHIUSO ESTERNAMENTE",
+                            f"{sym} — posizione non trovata su Revolut X (saldo {coin_bal:.6f})")
+                    await notify(state, f"⚠️ {sym} chiuso esternamente su Revolut X")
+                    state["positions"].remove(pos)
+                    state["currentCapital"] += pos.get("size_remaining", pos["size"])
+        except Exception as e:
+            print(f"[revx_sync] user {user_id}: {e}")
+
+    # SL / TP per posizioni manuali
+    for pos in list(state["positions"]):
+        if not pos.get("manual"):
+            continue
+        sym = pos["symbol"]
+        cur = market_data.get(sym, {}).get("price", 0.0)
+        if cur <= 0:
+            continue
+        pos["currentPrice"] = cur
+        if cur > pos.get("peak_price", pos["entryPrice"]):
+            pos["peak_price"] = cur
+
+        # Hard stop
+        if cur <= pos["stopPrice"]:
+            await exit_position(state, pos, "STOP LOSS", user_id=user_id)
+            continue
+
+        # Take profit (fisso, senza trailing per posizioni manuali senza agente)
+        tp = pos.get("tp1Price", 0.0)
+        if tp > 0 and cur >= tp:
+            await exit_position(state, pos, "TAKE PROFIT", user_id=user_id)
+            continue
+
+    _update_pnl(state)
+
 # ── background loop ───────────────────────────────────────────────────────────
 
 async def background_loop():
@@ -2056,6 +2110,11 @@ async def background_loop():
                     except Exception as user_err:
                         import traceback as _tb
                         print(f"[scan_and_trade] user {uid}: {user_err}\n{_tb.format_exc()}")
+                elif any(p.get("manual") for p in state.get("positions", [])):
+                    try:
+                        await monitor_manual_positions(state, user_id=uid)
+                    except Exception as user_err:
+                        print(f"[manual_monitor] user {uid}: {user_err}")
 
             # Persisti sessioni ogni 30 secondi
             if time.time() - last_persist >= 30:
