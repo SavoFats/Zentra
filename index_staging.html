@@ -3361,7 +3361,13 @@ async function confirmClosePosition() {
   hideCloseModal();
   try {
     const r = await fetch(API + '/close_position/' + symbol, { method:'POST', headers:authHeaders() });
-    if (!r.ok) { const d = await r.json().catch(()=>({})); alert('Errore chiusura: ' + (d.detail || d.error || r.status)); }
+    if (r.ok) {
+      S.positions = (S.positions || []).filter(p => p.symbol !== symbol);
+      renderPositions();
+    } else {
+      const d = await r.json().catch(()=>({}));
+      alert('Errore chiusura: ' + (d.detail || d.error || r.status));
+    }
   } catch(e) { alert('Errore di connessione durante la chiusura.'); }
 }
 
