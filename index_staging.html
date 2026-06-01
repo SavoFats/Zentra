@@ -353,6 +353,11 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .mon-tabs { display:flex; gap:6px; margin-bottom:12px; }
 .mon-tab { padding:9px 18px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer; border:none; font-family:var(--sans); transition:all 0.15s; background:var(--surface2); color:var(--text3); }
 .mon-tab.active { background:var(--text); color:var(--bg); }
+.scan-chip { padding:8px 16px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); white-space:nowrap; font-family:var(--sans); transition:all 0.15s; }
+.scan-chip.active { background:var(--green); border-color:var(--green); color:#fff; }
+.scan-chip.bear.active { background:var(--red); border-color:var(--red); color:#fff; }
+.scan-row { display:flex; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
+.scan-row:last-child { border-bottom:none; }
 /* ── POSITION BAR SL→TP ── */
 .pos-rl-wrap { padding:4px 16px 14px; }
 .pos-rl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:18px 0 16px; }
@@ -1406,6 +1411,53 @@ body.auth-active .tabbar { display:none !important; }
     <div id="transazioniList"><div class="empty"><div class="empty-text">Nessuna transazione</div></div></div>
   </div>
 
+  <!-- SCANNER -->
+  <div class="page" id="page-scanner">
+    <div class="ptr-indicator" id="ptr-page-scanner"><div class="ptr-spinner"></div></div>
+
+    <!-- Bullish signals -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">Bullish</div>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none">
+        <button class="scan-chip active" id="schip-breakout"     onclick="selectScanSignal('breakout',this)">Breakout</button>
+        <button class="scan-chip"        id="schip-golden_cross" onclick="selectScanSignal('golden_cross',this)">Golden Cross</button>
+        <button class="scan-chip"        id="schip-macd_bullish" onclick="selectScanSignal('macd_bullish',this)">MACD Bullish</button>
+        <button class="scan-chip"        id="schip-rsi_oversold" onclick="selectScanSignal('rsi_oversold',this)">RSI Oversold</button>
+        <button class="scan-chip"        id="schip-tsi_bullish"  onclick="selectScanSignal('tsi_bullish',this)">TSI Bullish</button>
+      </div>
+    </div>
+
+    <!-- Bearish signals -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">Bearish</div>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none">
+        <button class="scan-chip bear" id="schip-death_cross"   onclick="selectScanSignal('death_cross',this)">Death Cross</button>
+        <button class="scan-chip bear" id="schip-macd_bearish"  onclick="selectScanSignal('macd_bearish',this)">MACD Bearish</button>
+        <button class="scan-chip bear" id="schip-rsi_overbought" onclick="selectScanSignal('rsi_overbought',this)">RSI Overbought</button>
+      </div>
+    </div>
+
+    <!-- Risultati -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700">Scan Results</div>
+        <div id="scanCount" style="font-size:11px;font-weight:700;color:#fff;background:var(--blue);padding:4px 12px;border-radius:20px">0 found</div>
+      </div>
+      <div id="scannerList"><div class="empty"><div class="empty-text">Caricamento...</div></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- TradingView Modal -->
+<div id="tvModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:center;justify-content:center">
+  <div style="width:min(94vw,520px);height:72vh;background:#000;border-radius:20px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#131722;flex-shrink:0">
+      <div id="tvSymbolLabel" style="font-size:15px;font-weight:700;color:#fff"></div>
+      <button onclick="closeTVChart()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;line-height:1">&times;</button>
+    </div>
+    <iframe id="tvFrame" style="flex:1;border:none;width:100%" allow="fullscreen" src=""></iframe>
+  </div>
 </div>
 
 <div class="tabbar">
@@ -1420,6 +1472,10 @@ body.auth-active .tabbar { display:none !important; }
   <button class="tab" onclick="showTab('market',this)">
     <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
     <span>Mercato</span>
+  </button>
+  <button class="tab" onclick="showTab('scanner',this)">
+    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></span>
+    <span>Scanner</span>
   </button>
 
   <button class="tab" onclick="showTab('transazioni',this)" id="tabTransazioni">
@@ -2210,6 +2266,7 @@ function showTab(name, el) {
   localStorage.setItem('ca_active_tab', name);
   if (name === 'home') renderHome();
   if (name === 'market') refreshMarket();
+  if (name === 'scanner') renderScanner();
   if (name === 'transazioni') {
     renderTransazioni();
     _newTradeCount = 0;
@@ -2221,7 +2278,7 @@ function showTab(name, el) {
 function restoreActiveTab() {
   const saved = localStorage.getItem('ca_active_tab') || 'home';
   const tabs = document.querySelectorAll('.tab');
-  const tabMap = { home: 0, monitor: 1, market: 2, transazioni: 3 };
+  const tabMap = { home: 0, monitor: 1, market: 2, scanner: 3, transazioni: 4 };
   const idx = tabMap[saved] ?? 0;
   if (tabs[idx]) showTab(saved, tabs[idx]);
 }
@@ -3423,6 +3480,9 @@ function renderMarket() {
           renderHome();
         } else if (active === 'market') {
           await refreshMarket();
+        } else if (active === 'scanner') {
+          await refreshMarket();
+          renderScanner();
         } else if (active === 'transazioni') {
           const [sRes, tRes] = await Promise.all([
             fetch(API + '/status', { headers: authHeaders() }),
@@ -3721,6 +3781,96 @@ async function refreshMarket() {
     // universeCount rimosso dall'header
     renderMarket();
   } catch(e) {}
+}
+
+// ── SCANNER ───────────────────────────────────────────────────────────────────
+let _scanSignal = 'breakout';
+
+const _scanSignalFn = {
+  breakout:      c => c.scanner?.breakout,
+  golden_cross:  c => c.scanner?.golden_cross,
+  macd_bullish:  c => c.scanner?.macd_bullish,
+  rsi_oversold:  c => c.scanner?.rsi_oversold,
+  tsi_bullish:   c => c.scanner?.tsi_bullish,
+  death_cross:   c => c.scanner?.death_cross,
+  macd_bearish:  c => c.scanner?.macd_bearish,
+  rsi_overbought:c => c.scanner?.rsi_overbought,
+};
+
+const _scanValueFn = {
+  breakout:       c => (c.change24h||0).toFixed(2) + '%',
+  golden_cross:   c => 'RSI ' + (c.scanner?.rsi_14||0).toFixed(1),
+  macd_bullish:   c => 'MACD ' + (c.scanner?.macd_hist||0).toFixed(5),
+  rsi_oversold:   c => 'RSI ' + (c.scanner?.rsi_14||0).toFixed(1),
+  tsi_bullish:    c => 'TSI',
+  death_cross:    c => 'RSI ' + (c.scanner?.rsi_14||0).toFixed(1),
+  macd_bearish:   c => 'MACD ' + (c.scanner?.macd_hist||0).toFixed(5),
+  rsi_overbought: c => 'RSI ' + (c.scanner?.rsi_14||0).toFixed(1),
+};
+
+const _scanLabelMap = {
+  breakout:'Breakout', golden_cross:'Golden Cross', macd_bullish:'MACD Bullish',
+  rsi_oversold:'RSI Oversold', tsi_bullish:'TSI Bullish',
+  death_cross:'Death Cross', macd_bearish:'MACD Bearish', rsi_overbought:'RSI Overbought',
+};
+
+const _scanBearish = new Set(['death_cross','macd_bearish','rsi_overbought']);
+
+function selectScanSignal(key, el) {
+  _scanSignal = key;
+  document.querySelectorAll('.scan-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderScanner();
+}
+
+function renderScanner() {
+  const list = document.getElementById('scannerList');
+  const countEl = document.getElementById('scanCount');
+  if (!list) return;
+  if (!mktData.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-text">Caricamento...</div></div>';
+    return;
+  }
+  const fn = _scanSignalFn[_scanSignal];
+  const matched = fn ? mktData.filter(c => c.scanner && fn(c)) : [];
+  if (countEl) countEl.textContent = matched.length + ' found';
+  if (!matched.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna coin trovata</div></div>';
+    return;
+  }
+  const isBear = _scanBearish.has(_scanSignal);
+  const badgeColor = isBear ? 'var(--red)' : 'var(--green)';
+  const label = _scanLabelMap[_scanSignal] || _scanSignal;
+  list.innerHTML = matched.map(c => {
+    const sym = c.symbol;
+    const base = sym.replace('USDT','');
+    const val = (_scanValueFn[_scanSignal]?.(c)) || '';
+    return `<div class="scan-row">
+      <img src="${getLogo(sym)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;margin-right:12px;flex-shrink:0" onerror="coinImgErr(this,'${esc(base[0])}',38)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(base)}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${fmtPrice(c.price)}</div>
+      </div>
+      <span style="font-size:10px;font-weight:700;background:${badgeColor};color:#fff;padding:4px 9px;border-radius:20px;margin-right:10px;white-space:nowrap;flex-shrink:0">${esc(label)}</span>
+      <span style="font-size:11px;font-weight:600;color:var(--text3);margin-right:10px;min-width:58px;text-align:right;flex-shrink:0">${esc(val)}</span>
+      <button onclick="openTVChart('${esc(sym)}')" title="Grafico" style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0;transition:background 0.15s" onmouseover="this.style.background='var(--blue)';this.style.color='#fff'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text3)'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function openTVChart(symbol) {
+  const base = symbol.replace('USDT','');
+  document.getElementById('tvSymbolLabel').textContent = base + ' / USDT';
+  const frame = document.getElementById('tvFrame');
+  frame.src = `https://s.tradingview.com/widgetembed/?symbol=BINANCE:${base}USDT&interval=5&theme=dark&style=1&locale=it&hide_side_toolbar=0&allow_symbol_change=false&save_image=false`;
+  document.getElementById('tvModal').style.display = 'flex';
+}
+
+function closeTVChart() {
+  document.getElementById('tvModal').style.display = 'none';
+  document.getElementById('tvFrame').src = '';
 }
 
 // ── EMA TOOLTIP ───────────────────────────────────────────────────────────────
