@@ -2276,8 +2276,9 @@ async def persist_sessions():
         try:
             state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_exiting", "_stopping")}
             state_json = json.dumps(state_to_save, default=str)
+            has_open_positions = bool(state.get("positions"))
             async with db_pool.acquire() as conn:
-                if state.get("running"):
+                if state.get("running") or has_open_positions:
                     await conn.execute("""
                         INSERT INTO active_sessions (user_id, state_json, updated_at)
                         VALUES ($1, $2, NOW())
@@ -2514,9 +2515,19 @@ async def restore_sessions_from_db(pool):
             try:
                 state = json.loads(row["state_json"])
                 if not state.get("running"):
-                    # Sessione già ferma nel DB — pulizia
-                    async with pool.acquire() as conn:
-                        await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
+                    # Bot fermo: ripristina solo se ci sono posizioni manuali aperte
+                    manual_positions = [p for p in state.get("positions", []) if p.get("manual")]
+                    if not manual_positions:
+                        async with pool.acquire() as conn:
+                            await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
+                        continue
+                    # Posizioni manuali: ripristina senza auto-stop — continua monitoraggio SL/TP
+                    state["revx_key_id"]      = decrypt_key(row["revx_key_id"] or "")
+                    state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
+                    state["positions"] = manual_positions  # scarta eventuali posizioni bot orfane
+                    user_sessions[uid] = state
+                    n = len(manual_positions)
+                    print(f"[RESTORE] Posizioni manuali user {uid} ripristinate ({n} posizioni, bot fermo)")
                     continue
 
                 updated_at = row["updated_at"]
