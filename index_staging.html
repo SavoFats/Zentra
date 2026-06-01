@@ -2947,10 +2947,11 @@ function startPolling() {
 
 async function poll() {
   try {
+    const noCache = { cache: 'no-store' };
     const [sRes, tRes, mRes] = await Promise.all([
-      fetch(API + '/status', { headers:authHeaders() }),
-      fetch(API + '/trades', { headers:authHeaders() }),
-      fetch(API + '/market', { headers:authHeaders() }),
+      fetch(API + '/status', { headers:authHeaders(), ...noCache }),
+      fetch(API + '/trades', { headers:authHeaders(), ...noCache }),
+      fetch(API + '/market', { headers:authHeaders(), ...noCache }),
     ]);
     if (sRes.status === 401) {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
@@ -4328,7 +4329,7 @@ function updateScannerPricesInPlace() {
   const listEl = document.getElementById('scannerList');
   if (!listEl) return;
   const existing = listEl.querySelectorAll('[id^="scan-price-"]');
-  const existingSyms = new Set([...existing].map(el => el.id.replace('scan-price-', '') + 'USDT'));
+  const existingSyms = new Set([...existing].map(el => el.id.replace('scan-price-', '')));
   const newSyms = new Set(matched.map(c => c.symbol));
   const sameSet = existingSyms.size === newSyms.size && [...newSyms].every(s => existingSyms.has(s));
   if (!sameSet || existing.length === 0) {
@@ -4382,7 +4383,9 @@ function renderScanner() {
       <div style="flex:1;min-width:0;text-align:right;padding-right:12px">
         <div id="scan-price-${esc(sym)}" data-price="${c.price}" style="font-size:13px;font-weight:700;color:var(--text)">${fmtPrice(c.price)}</div>
       </div>
-      <span style="font-size:10px;font-weight:700;background:${badgeColor};color:#fff;padding:4px 9px;border-radius:20px;margin-right:10px;white-space:nowrap;flex-shrink:0">${esc(label)}</span>
+      <div style="width:90px;flex-shrink:0;display:flex;justify-content:center;margin-right:10px">
+        <span style="font-size:10px;font-weight:700;background:${badgeColor};color:#fff;padding:4px 9px;border-radius:20px;white-space:nowrap">${esc(label)}</span>
+      </div>
       <span style="font-size:11px;font-weight:600;color:var(--text3);margin-right:10px;min-width:58px;text-align:right;flex-shrink:0">${esc(val)}</span>
       <button onclick="event.stopPropagation();scanToggleStar('${esc(sym)}')" title="${starred ? 'Rimuovi' : 'Aggiungi'} preferiti" class="star-btn ${starred ? 'starred' : ''}" style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:6px;transition:background 0.15s">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="${starred ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
