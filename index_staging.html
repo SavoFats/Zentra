@@ -4243,13 +4243,13 @@ function openTradeConfirmModal(sym, price, qty, slPct, tpPct) {
   document.getElementById('tcmSL').textContent   = fmtPrice(price * (1 - slPct / 100));
   document.getElementById('tcmTP').textContent   = fmtPrice(price * (1 + tpPct / 100));
   document.getElementById('tradeConfirmModal').style.display = 'flex';
-  // Badge sul tab Posizioni
-  _newTradeCount++;
-  updateStoricoBadge();
 }
 
 function closeTradeConfirmModal() {
   document.getElementById('tradeConfirmModal').style.display = 'none';
+  // Badge visibile sul tab Posizioni solo dopo che il modal è chiuso
+  _newTradeCount++;
+  updateStoricoBadge();
 }
 
 async function scanToggleStar(sym) {
