@@ -675,7 +675,7 @@ body.auth-active .tabbar { display:none !important; }
     <button class="sb-btn hdr-hamburger" onclick="toggleSidebar()" aria-label="Menu">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <div class="hdr-logo">
+    <div class="hdr-logo" onclick="showTab('home', document.querySelector('.sb-item[data-tab=home]'))">
       <svg id="logoDot" class="hdr-logo-dot inactive" width="22" height="16" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
         <polyline points="0,100 40,62 68,82 100,32 140,48" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
         <circle cx="140" cy="48" r="11" fill="currentColor"/>
@@ -1087,11 +1087,17 @@ body.auth-active .tabbar { display:none !important; }
   </div>
   <div style="padding:0 8px;border-top:1px solid var(--border)">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
-      <span style="font-size:13px;font-weight:500;color:var(--text2)">Conto Demo</span>
+      <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text2)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg>
+        Conto Demo
+      </span>
       <div class="toggle-switch" id="sbSimToggle" onclick="setSimMode(!_simMode)"></div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 8px">
-      <span style="font-size:13px;font-weight:500;color:var(--text2)">Dark Mode</span>
+      <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text2)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        Dark Mode
+      </span>
       <div class="toggle-switch" id="sbThemeToggle" onclick="toggleTheme()"></div>
     </div>
   </div>
