@@ -214,6 +214,27 @@ class RevxGuardrailTests(unittest.TestCase):
         url = self.main.with_query_param("https://zentra.trading/account?tab=billing", "upgraded", "1")
         self.assertEqual(url, "https://zentra.trading/account?tab=billing&upgraded=1")
 
+    def test_verify_token_accepts_valid_token(self):
+        token = self.main.create_token(42)
+        self.assertEqual(self.main.verify_token(token), 42)
+
+    def test_verify_token_rejects_revoked_token(self):
+        token = self.main.create_token(42)
+        self.main._revoked_tokens.add(token)
+        try:
+            with self.assertRaises(self.main.HTTPException) as ctx:
+                self.main.verify_token(token)
+            self.assertEqual(ctx.exception.status_code, 401)
+        finally:
+            self.main._revoked_tokens.discard(token)
+
+    def test_verify_token_rejects_malformed_tokens(self):
+        for token in ("not-base64!", "abc", "MToy"):
+            with self.subTest(token=token):
+                with self.assertRaises(self.main.HTTPException) as ctx:
+                    self.main.verify_token(token)
+                self.assertEqual(ctx.exception.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()

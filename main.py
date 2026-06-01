@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import binascii
 import os
 import time
 import websockets
@@ -155,6 +156,8 @@ def verify_token(token: str) -> int:
     try:
         decoded = base64.urlsafe_b64decode(token.encode()).decode()
         parts = decoded.split(":")
+        if len(parts) != 3:
+            raise ValueError("invalid token parts")
         user_id, expires, sig = int(parts[0]), int(parts[1]), parts[2]
         if int(time.time()) > expires:
             raise HTTPException(status_code=401, detail="Token scaduto")
@@ -165,7 +168,7 @@ def verify_token(token: str) -> int:
         if not _hmac.compare_digest(sig, expected):
             raise HTTPException(status_code=401, detail="Token non valido")
         return user_id
-    except (HTTPException, ValueError, IndexError, AttributeError):
+    except (HTTPException, ValueError, IndexError, AttributeError, binascii.Error, UnicodeDecodeError):
         raise HTTPException(status_code=401, detail="Token non valido")
 
 async def get_current_user(request: Request):
