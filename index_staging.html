@@ -1139,15 +1139,18 @@ body.auth-active .tabbar { display:none !important; }
     <!-- Hero P&L card — visibile quando l'agente è in esecuzione (stessa posizione di homeHeroCard) -->
     <div class="hero-card off" id="heroCard" style="margin-bottom:12px;display:none">
       <canvas class="hero-sparkline" id="heroSparkline"></canvas>
-      <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;flex-direction:column;align-items:flex-end;gap:6px">
-        <button id="stopBtn" onclick="stopAgent()" disabled
-          style="padding:7px 14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.28);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
-          <span style="width:7px;height:7px;border-radius:50%;background:#f6465d;box-shadow:0 0 6px #f6465d;flex-shrink:0;display:inline-block"></span>
-          Ferma
-        </button>
+      <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;flex-direction:row;align-items:center;gap:8px">
         <button id="pauseBtn" onclick="pauseAgent()" disabled
-          style="padding:5px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          style="padding:6px 13px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
           Pausa
+        </button>
+        <button onclick="openDrawer()"
+          style="padding:6px 13px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.22);border-radius:20px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          Modifica
+        </button>
+        <button id="stopBtn" onclick="stopAgent()" disabled
+          style="padding:6px 13px;background:rgba(246,70,93,0.25);border:1px solid rgba(246,70,93,0.5);border-radius:20px;color:#f6465d;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+          Ferma
         </button>
       </div>
       <div class="hero-label" style="margin-bottom:8px">P&amp;L SESSIONE</div>
@@ -2845,18 +2848,13 @@ async function stopAgent() {
     _newTradeCount = 0;
     updateStoricoBadge();
   } catch(e) {}
-  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-  // Svuota S immediatamente — le posizioni sono chiuse, non aspettare il prossimo poll
-  S.running = false;
-  S.positions = [];
-  localStorage.removeItem('ca_session');
-  document.getElementById('startBtn').disabled = false;
-  document.getElementById('stopBtn').disabled = true;
   if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
   _sessionEndTs = null;
   window._lastStatus = null;
-  unlockConfig();
-  render();
+  localStorage.removeItem('ca_session');
+  // Non azzerare S.positions: il backend ha già preservato le posizioni manuali.
+  // Lascia che il prossimo poll sincronizzi lo stato reale dal backend.
+  await poll();
 }
 
 function resetAgent() {
@@ -2928,7 +2926,9 @@ async function poll() {
     } else {
       document.getElementById('startBtn').disabled = false;
       document.getElementById('stopBtn').disabled = true;
-      if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+      // Mantieni il polling se ci sono posizioni manuali aperte (aggiornamento prezzi)
+      const hasManual = (S.positions || []).some(p => p.manual);
+      if (!hasManual && pollInterval) { clearInterval(pollInterval); pollInterval = null; }
       unlockConfig();
     }
     render();
