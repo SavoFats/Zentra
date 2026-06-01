@@ -648,47 +648,41 @@ def get_momentum_signal(sym: str, current_price: float,
 
     breakout_ok  = momentum_pct >= momentum_threshold
     vol_ok       = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
-    freshness_ok = last_close > close_3_ago
     rsi_ok       = 45 <= rsi_14 <= 72
     decomp_ok    = (recent_move / total_move) >= 0.25 if total_move > 0 else False
     wick_ok      = upper_wick_ratio <= 0.55
-    chop_ok      = chop_14 < 61.8
     keltner_ok   = last_close > keltner_upper if keltner_upper > 0 else False
-    tsi_ok       = (tsi_15m > 0 and tsi_15m >= tsi_15m_p) and (tsi_1h > 0 and tsi_1h >= tsi_1h_p)
+    tsi_ok       = tsi_1h > 0 and tsi_1h >= tsi_1h_p
     macd_ok      = macd_hist > 0 and macd_hist > macd_hist_prev
 
     stop_price = current_price * (1 - max_stop_pct)
 
-    signal = (breakout_ok and vol_ok and freshness_ok and rsi_ok and
-              decomp_ok and wick_ok and chop_ok and keltner_ok and tsi_ok and macd_ok)
+    signal = (breakout_ok and vol_ok and rsi_ok and
+              decomp_ok and wick_ok and keltner_ok and tsi_ok and macd_ok)
 
     if not breakout_ok:
         reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{momentum_threshold*100:.0f}%)"
     elif not vol_ok:
         ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
         reason = f"volume basso ({ratio:.2f}x < {vol_multiplier}x richiesto)"
-    elif not freshness_ok:
-        reason = f"momentum stantio | ultimi 15min negativi | RSI {rsi_14:.0f}"
     elif not rsi_ok:
         reason = f"RSI {rsi_14:.0f} fuori range [45-72]"
     elif not decomp_ok:
         pct = (recent_move / total_move * 100) if total_move > 0 else 0
         reason = f"move esaurito | solo {pct:.0f}% nelle ultime 3 candele (min 25%)"
     elif not wick_ok:
-        reason = f"rigetto venditori | fitino {upper_wick_ratio*100:.0f}% del range (max 55%)"
-    elif not chop_ok:
-        reason = f"mercato laterale | CHOP {chop_14:.1f} (max 61.8)"
+        reason = f"rigetto venditori | wick {upper_wick_ratio*100:.0f}% del range (max 55%)"
     elif not keltner_ok:
         reason = f"sotto Keltner upper | prezzo non ha rotto EMA20+2×ATR"
     elif not tsi_ok:
-        reason = f"TSI {tsi:.1f} negativo — momentum non confermato"
+        reason = f"TSI 1h {tsi_1h:.2f} — trend orario non confermato"
     elif not macd_ok:
         reason = f"MACD histogram non accelera | hist {macd_hist:.6f}"
     else:
         ratio = vol_last / vol_avg_20
         pct   = (recent_move / total_move * 100) if total_move > 0 else 0
         reason = (f"MOMENTUM +{momentum_pct*100:.2f}% | vol {ratio:.1f}x | RSI {rsi_14:.0f} | "
-                  f"TSI {tsi:.1f} | CHOP {chop_14:.1f} | fresco {pct:.0f}% | SL -{max_stop_pct*100:.1f}%")
+                  f"TSI1h {tsi_1h:.2f} | Keltner OK | decomp {pct:.0f}% | SL -{max_stop_pct*100:.1f}%")
 
     return {
         "signal":       signal,
@@ -1754,8 +1748,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     candidates   = []
     skipped      = 0
-    block_count = {"breakout": 0, "vol": 0, "freshness": 0, "rsi": 0,
-                    "decomp": 0, "wick": 0, "chop": 0, "keltner": 0, "tsi": 0, "macd": 0}
+    block_count = {"breakout": 0, "vol": 0, "rsi": 0,
+                    "decomp": 0, "wick": 0, "keltner": 0, "tsi": 0, "macd": 0}
 
     for d in universe_sorted:
         sym    = d["symbol"]
@@ -1764,11 +1758,9 @@ async def scan_and_trade(state: dict, user_id: int = None):
             skipped += 1
             if   not signal.get("breakout_ok"):  block_count["breakout"]  += 1
             elif not signal.get("vol_ok"):        block_count["vol"]       += 1
-            elif not signal.get("freshness_ok"):  block_count["freshness"] += 1
             elif not signal.get("rsi_ok"):        block_count["rsi"]       += 1
             elif not signal.get("decomp_ok"):     block_count["decomp"]    += 1
             elif not signal.get("wick_ok"):       block_count["wick"]      += 1
-            elif not signal.get("chop_ok"):       block_count["chop"]      += 1
             elif not signal.get("keltner_ok"):    block_count["keltner"]   += 1
             elif not signal.get("tsi_ok"):        block_count["tsi"]       += 1
             elif not signal.get("macd_ok"):       block_count["macd"]      += 1
@@ -1783,8 +1775,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
     bc = block_count
     add_log(state, "info", "SCAN",
         f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | Saltati: {skipped} | "
-        f"MOM:{bc['breakout']} VOL:{bc['vol']} FRSH:{bc['freshness']} RSI:{bc['rsi']} "
-        f"DCMP:{bc['decomp']} WICK:{bc['wick']} CHOP:{bc['chop']} KELT:{bc['keltner']} "
+        f"MOM:{bc['breakout']} VOL:{bc['vol']} RSI:{bc['rsi']} "
+        f"DCMP:{bc['decomp']} WICK:{bc['wick']} KELT:{bc['keltner']} "
         f"TSI:{bc['tsi']} MACD:{bc['macd']} | Candele:{len(candle_data)}"
     )
 
@@ -3369,6 +3361,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "entry_usd": amount, "buy_fee_usd": round(fee_usd, 4), "manual": True,
             }
             state["positions"].append(pos)
+            await persist_sessions()
             return {"ok": True, "price": actual_price, "qty": qty}
         except HTTPException:
             raise
@@ -3393,6 +3386,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
             "realMode": False, "fee_pct": 0.001, "qty_purchased": 0.0, "manual": True,
         }
         state["positions"].append(pos)
+        await persist_sessions()
         return {"ok": True, "price": price, "qty": qty}
 
 @app.post("/chat")
