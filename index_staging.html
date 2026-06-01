@@ -4340,7 +4340,7 @@ async function executeManualTrade() {
     if (r.ok && data.ok) {
       closeTradeModal();
       showToast(_tmSymbol.replace('USDT','') + ' acquistato @ ' + fmtPrice(data.price || _tmPrice));
-      await refreshMarket();
+      await poll();
     } else {
       errEl.textContent   = data.detail || data.error || 'Errore esecuzione ordine';
       errEl.style.display = 'block';
