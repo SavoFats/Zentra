@@ -3014,6 +3014,114 @@ async def close_symbol(symbol: str, request: Request, user_id: int = Depends(get
     await exit_position(state, pos, "CHIUSURA MANUALE", user_id=user_id)
     return {"ok": True}
 
+class ManualTradeReq(BaseModel):
+    symbol:       str
+    amount_usdt:  float
+    sl_pct:       float
+    tp_pct:       float
+    exchange:     str = "revx"
+
+@app.post("/trade/manual")
+async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=10, window=60, key_suffix="manual_trade")
+    sym = req.symbol.upper().replace("USDT", "")
+    if not sym.isalnum() or len(sym) > 20:
+        raise HTTPException(status_code=400, detail="Simbolo non valido")
+    amount = round(req.amount_usdt, 2)
+    if amount <= 0 or amount > 100_000:
+        raise HTTPException(status_code=400, detail="Amount non valido")
+    sl_pct = max(0.1, min(req.sl_pct, 50.0))
+    tp_pct = max(0.1, min(req.tp_pct, 200.0))
+    state = get_session(user_id)
+    is_real = state.get("isReal", False)
+    price = market_data.get(sym, {}).get("price", 0.0)
+    if not price:
+        raise HTTPException(status_code=400, detail="Prezzo non disponibile per questa coin")
+    R_pct      = sl_pct / 100
+    stop_price = price * (1 - R_pct)
+    tp_price   = price * (1 + tp_pct / 100)
+    icon       = market_data.get(sym, {}).get("icon", "")
+    if is_real and req.exchange == "revx":
+        revx_key_id = state.get("revx_key_id", "")
+        revx_priv   = state.get("revx_private_key", "")
+        if not revx_key_id or not revx_priv:
+            raise HTTPException(status_code=400, detail="Chiavi RevX non configurate")
+        try:
+            import uuid as _uuid
+            symbol_revx = f"{sym}-USD"
+            order_body = {
+                "client_order_id": str(_uuid.uuid4()),
+                "symbol": symbol_revx,
+                "side": "BUY",
+                "order_configuration": {"market": {"quote_size": str(amount)}}
+            }
+            result = None
+            for attempt in range(2):
+                try:
+                    result = await revx_request("POST", "/api/1.0/orders", order_body,
+                                                key_id=revx_key_id, private_key=revx_priv)
+                    break
+                except Exception:
+                    if attempt == 0:
+                        await asyncio.sleep(2)
+                        order_body["client_order_id"] = str(_uuid.uuid4())
+                    else:
+                        raise
+            data     = result.get("data") or result
+            order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+            if not order_id:
+                err_msg = result.get("message") or result.get("error") or str(result)
+                raise HTTPException(status_code=400, detail=f"Ordine RevX fallito: {err_msg[:120]}")
+            od            = await get_revx_order_details(order_id, revx_key_id, revx_priv)
+            actual_price  = od.get("average_fill_price") or price
+            qty           = od.get("filled_quantity") or (amount / actual_price if actual_price else 0.0)
+            buy_fee       = od.get("total_fee", 0.0)
+            fee_usd       = buy_fee * actual_price if od.get("fee_currency", "USD") != "USD" else buy_fee
+            stop_price    = actual_price * (1 - R_pct)
+            tp_price      = actual_price * (1 + tp_pct / 100)
+            add_log(state, "buy", "ACQUISTO MANUALE (RevX)",
+                    f"{sym} @ ${actual_price:.4f} | Size: ${amount:.0f} | SL: ${stop_price:.4f}")
+            await notify(state, f"ACQUISTO MANUALE RevX\n{sym} @ ${actual_price:.4f}\nSize: ${amount:.2f}")
+            state["currentCapital"] -= amount
+            pos = {
+                "symbol": sym, "icon": icon,
+                "entryPrice": actual_price, "currentPrice": actual_price,
+                "highPrice": actual_price, "peak_price": actual_price,
+                "size": amount, "size_remaining": amount, "tp1_hit": False,
+                "entryTime": datetime.utcnow().isoformat() + "Z",
+                "stopPrice": stop_price, "tp1Price": tp_price, "tp2Price": tp_price,
+                "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
+                "realMode": True, "fee_pct": 0.0009,
+                "qty_purchased": qty, "exchange": "revx", "symbol_pair": symbol_revx,
+                "entry_usd": amount, "buy_fee_usd": round(fee_usd, 4), "manual": True,
+            }
+            state["positions"].append(pos)
+            return {"ok": True, "price": actual_price, "qty": qty}
+        except HTTPException:
+            raise
+        except Exception as e:
+            add_log(state, "info", "ERRORE", f"Manual trade error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    else:
+        qty       = amount / price if price else 0.0
+        entry_fee = amount * 0.001
+        add_log(state, "buy", "ACQUISTO MANUALE SIM",
+                f"{sym} @ ${price:.4f} | Size: ${amount:.0f} | SL: ${stop_price:.4f}")
+        await notify(state, f"ACQUISTO MANUALE SIM\n{sym} @ ${price:.4f}\nSize: ${amount:.2f}")
+        state["currentCapital"] -= amount + entry_fee
+        pos = {
+            "symbol": sym, "icon": icon,
+            "entryPrice": price, "currentPrice": price,
+            "highPrice": price, "peak_price": price,
+            "size": amount, "size_remaining": amount, "tp1_hit": False,
+            "entryTime": datetime.utcnow().isoformat() + "Z",
+            "stopPrice": stop_price, "tp1Price": tp_price, "tp2Price": tp_price,
+            "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
+            "realMode": False, "fee_pct": 0.001, "qty_purchased": 0.0, "manual": True,
+        }
+        state["positions"].append(pos)
+        return {"ok": True, "price": price, "qty": qty}
+
 @app.post("/chat")
 async def chat(body: dict, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=20, window=60)
