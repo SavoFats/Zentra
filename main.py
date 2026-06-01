@@ -496,6 +496,14 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         macd_hist      = hist_list[-1] if hist_list else 0.0
         macd_hist_prev = hist_list[-2] if len(hist_list) >= 2 else 0.0
 
+        # Golden Cross / Death Cross (EMA9 vs EMA30 su 5m)
+        ema9_5m       = calc_ema(closes5[:-1], 9)
+        ema30_5m      = calc_ema(closes5[:-1], 30)
+        golden_cross  = ema9_5m > ema30_5m
+        death_cross   = ema9_5m < ema30_5m
+        rsi_oversold  = rsi_14 < 30.0
+        rsi_overbought = rsi_14 > 70.0
+
         return {
             "ema20_5m":          ema20_5m_cur,
             "ema50_5m":          calc_ema(closes5[:-1], 50),
@@ -526,6 +534,10 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "tsi":              tsi,
             "macd_hist":        macd_hist,
             "macd_hist_prev":   macd_hist_prev,
+            "golden_cross":     golden_cross,
+            "death_cross":      death_cross,
+            "rsi_oversold":     rsi_oversold,
+            "rsi_overbought":   rsi_overbought,
             "sparkline":        closes1h[-25:-1],
             "updated_at":       time.time(),
         }
@@ -2649,6 +2661,19 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "reason":       sig["reason"],
         }
         item["sparkline"] = candle_data.get(s, {}).get("sparkline", [])
+        cd = candle_data.get(s, {})
+        item["scanner"] = {
+            "rsi_14":        round(cd.get("rsi_14", 0.0), 1),
+            "macd_hist":     round(cd.get("macd_hist", 0.0), 6),
+            "golden_cross":  cd.get("golden_cross", False),
+            "death_cross":   cd.get("death_cross", False),
+            "rsi_oversold":  cd.get("rsi_oversold", False),
+            "rsi_overbought":cd.get("rsi_overbought", False),
+            "breakout":      sig.get("breakout_ok", False),
+            "macd_bullish":  sig.get("macd_ok", False),
+            "macd_bearish":  cd.get("macd_hist", 0.0) < 0 and cd.get("macd_hist", 0.0) < cd.get("macd_hist_prev", 0.0),
+            "tsi_bullish":   sig.get("tsi_ok", False),
+        }
         items.append(item)
 
     # Filtra sempre alle coin RevX se disponibili — sim e reale mostrano le stesse coin
