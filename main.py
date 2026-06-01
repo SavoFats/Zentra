@@ -1650,15 +1650,24 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     candidates   = []
     skipped      = 0
-    block_count  = {"breakout": 0, "vol": 0}
+    block_count = {"breakout": 0, "vol": 0, "freshness": 0, "rsi": 0,
+                    "decomp": 0, "wick": 0, "chop": 0, "keltner": 0, "tsi": 0, "macd": 0}
 
     for d in universe_sorted:
         sym    = d["symbol"]
         signal = get_momentum_signal(sym, d["price"], max_stop_pct, vol_mult, momentum_thr)
         if not signal["signal"]:
             skipped += 1
-            if not signal.get("breakout_ok"): block_count["breakout"] += 1
-            elif not signal.get("vol_ok"):    block_count["vol"] += 1
+            if   not signal.get("breakout_ok"):  block_count["breakout"]  += 1
+            elif not signal.get("vol_ok"):        block_count["vol"]       += 1
+            elif not signal.get("freshness_ok"):  block_count["freshness"] += 1
+            elif not signal.get("rsi_ok"):        block_count["rsi"]       += 1
+            elif not signal.get("decomp_ok"):     block_count["decomp"]    += 1
+            elif not signal.get("wick_ok"):       block_count["wick"]      += 1
+            elif not signal.get("chop_ok"):       block_count["chop"]      += 1
+            elif not signal.get("keltner_ok"):    block_count["keltner"]   += 1
+            elif not signal.get("tsi_ok"):        block_count["tsi"]       += 1
+            elif not signal.get("macd_ok"):       block_count["macd"]      += 1
             continue
         d["ema_reason"] = signal["reason"]
         d["stop_price"] = signal["stop_price"]
@@ -1667,10 +1676,12 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if len(candidates) >= slots:
             break
 
+    bc = block_count
     add_log(state, "info", "SCAN",
-        f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | "
-        f"Saltati: {skipped} | no-momentum: {block_count['breakout']} | low-vol: {block_count['vol']} | "
-        f"Candele: {len(candle_data)}"
+        f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | Saltati: {skipped} | "
+        f"MOM:{bc['breakout']} VOL:{bc['vol']} FRSH:{bc['freshness']} RSI:{bc['rsi']} "
+        f"DCMP:{bc['decomp']} WICK:{bc['wick']} CHOP:{bc['chop']} KELT:{bc['keltner']} "
+        f"TSI:{bc['tsi']} MACD:{bc['macd']} | Candele:{len(candle_data)}"
     )
 
     for d in candidates:
