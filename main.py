@@ -3037,18 +3037,21 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
     revx_key_id = state.get("revx_key_id", "")
     revx_priv   = state.get("revx_private_key", "")
     is_real     = state.get("use_revx", False)
-    if (not is_real or not revx_key_id) and db_pool:
+    if (not is_real or not revx_key_id or not state.get("telegram_chat_id")) and db_pool:
         try:
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT sim_mode, revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
-            if row and not row["sim_mode"] and row["revx_key_id"]:
-                revx_key_id = decrypt_key(row["revx_key_id"])
-                revx_priv   = decrypt_key(row["revx_private_key"])
-                is_real     = True
-                state["revx_key_id"]      = revx_key_id
-                state["revx_private_key"] = revx_priv
-                state["use_revx"]         = True
+                    "SELECT sim_mode, revx_key_id, revx_private_key, telegram_chat_id FROM users WHERE id = $1", user_id)
+            if row:
+                if not state.get("telegram_chat_id") and row["telegram_chat_id"]:
+                    state["telegram_chat_id"] = row["telegram_chat_id"]
+                if not row["sim_mode"] and row["revx_key_id"]:
+                    revx_key_id = decrypt_key(row["revx_key_id"])
+                    revx_priv   = decrypt_key(row["revx_private_key"])
+                    is_real     = True
+                    state["revx_key_id"]      = revx_key_id
+                    state["revx_private_key"] = revx_priv
+                    state["use_revx"]         = True
         except Exception as _e:
             print(f"[MANUAL TRADE] DB lookup: {_e}")
     price = market_data.get(sym, {}).get("price", 0.0)
