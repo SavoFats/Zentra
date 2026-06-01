@@ -4206,7 +4206,7 @@ const _scanSignalFn = {
 };
 
 const _scanValueFn = {
-  breakout:       c => (c.change24h||0).toFixed(2) + '%',
+  breakout:       c => '',
   golden_cross:   c => (c.scanner?.rsi_14||0).toFixed(1),
   macd_bullish:   c => (c.scanner?.macd_hist||0).toFixed(5),
   rsi_oversold:   c => (c.scanner?.rsi_14||0).toFixed(1),
@@ -4219,7 +4219,7 @@ const _scanValueFn = {
 };
 
 const _scanValHdrMap = {
-  breakout:'Var. 24h', golden_cross:'RSI', macd_bullish:'MACD',
+  breakout:'', golden_cross:'RSI', macd_bullish:'MACD',
   rsi_oversold:'RSI', tsi_bullish:'RSI', ema_stack:'Var. 24h',
   volume_spike:'Vol. ratio', death_cross:'RSI', macd_bearish:'MACD', rsi_overbought:'RSI',
 };
