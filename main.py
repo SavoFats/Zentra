@@ -240,10 +240,9 @@ async def get_eur_usd_rate() -> float:
 async def revx_request(method: str, path: str, body: dict = None,
                         key_id: str = None, private_key: str = None,
                         params: dict = None) -> dict:
-    """Esegue una richiesta autenticata a Revolut X."""
+    """Esegue una richiesta autenticata a Revolut X con retry su 429."""
     from urllib.parse import urlsplit, urlencode
     body_str = json.dumps(body, separators=(',', ':')) if body else ""
-    # Separa path e query string per la firma (RevX non vuole il '?' nel messaggio)
     parsed = urlsplit(path)
     clean_path = parsed.path
     if params:
@@ -253,14 +252,28 @@ async def revx_request(method: str, path: str, body: dict = None,
     else:
         query_str = ""
     headers = make_revx_signature(key_id, private_key, method, clean_path, query_str, body_str)
-    async with httpx.AsyncClient(timeout=30) as client:
-        if method == "GET":
-            r = await client.get(f"{REVX_BASE}{path}", headers=headers, params=params or {})
-        elif method == "DELETE":
-            r = await client.delete(f"{REVX_BASE}{path}", headers=headers)
-        else:
-            r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
-    return r.json() if r.content else {"ok": True}
+    backoff = 2
+    for attempt in range(4):
+        async with httpx.AsyncClient(timeout=30) as client:
+            if method == "GET":
+                r = await client.get(f"{REVX_BASE}{path}", headers=headers, params=params or {})
+            elif method == "DELETE":
+                r = await client.delete(f"{REVX_BASE}{path}", headers=headers)
+            else:
+                r = await client.post(f"{REVX_BASE}{path}", headers=headers, content=body_str)
+        if r.status_code == 429:
+            retry_after = int(r.headers.get("Retry-After", backoff))
+            print(f"[RevX] 429 rate limit su {path} — attesa {retry_after}s (tentativo {attempt+1}/4)")
+            await asyncio.sleep(retry_after)
+            backoff = min(backoff * 2, 30)
+            continue
+        if r.status_code >= 500:
+            print(f"[RevX] {r.status_code} server error su {path} — attesa {backoff}s (tentativo {attempt+1}/4)")
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30)
+            continue
+        return r.json() if r.content else {"ok": True}
+    raise Exception(f"RevX {method} {path} fallito dopo 4 tentativi")
 
 
 async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -> dict:
@@ -296,7 +309,7 @@ _revoked_tokens: set = set()     # token revocati al logout
 # }
 candle_data: dict = {}
 _candles_last_update: float = 0
-CANDLE_UPDATE_INTERVAL = 120   # secondi (2 minuti)
+CANDLE_UPDATE_INTERVAL = 60    # secondi (1 minuto)
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
 
@@ -307,6 +320,8 @@ UNIVERSE_UPDATE_INTERVAL = 1800  # 30 minuti
 _ws_connected: bool = False  # True quando il WebSocket Binance è attivo
 
 _cg_price_last_fetch: float = 0  # throttle fallback CoinGecko prezzi
+_ws_last_msg_ts: float = 0       # timestamp ultimo messaggio ricevuto dal WebSocket
+_rest_price_last_fetch: float = 0  # throttle fetch REST periodico prezzi
 
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
@@ -353,9 +368,13 @@ async def fetch_dynamic_universe():
     """Scarica top-50 coin per volume 24h da Binance. Aggiorna _dynamic_universe."""
     global _dynamic_universe, _universe_last_update
     try:
+        r = None
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(f"{BINANCE_BASE}/api/v3/ticker/24hr")
-        if r.status_code != 200:
+            for base in (BINANCE_BASE, BINANCE_US_BASE):
+                r = await client.get(f"{base}/api/v3/ticker/24hr")
+                if r.status_code != 451:
+                    break
+        if r is None or r.status_code != 200:
             return
         tickers = r.json()
         candidates = []
@@ -451,6 +470,8 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
 
         # RSI(14) su 5m (su candele chiuse)
         rsi_14 = calc_rsi(closes5[:-1], 14)
+        # RSI(14) su 1h (su candele chiuse) — usato per rsi_oversold
+        rsi_1h = calc_rsi(closes1h[:-1], 14)
 
         # Corpo dell'ultima candela CHIUSA (klines5[-2], non la corrente aperta [-1])
         last_candle  = klines5[-2]
@@ -485,15 +506,24 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         # Keltner Channel upper band: EMA20 + 2×ATR
         keltner_upper = ema20_5m_cur + 2 * atr_5m
 
-        # TSI(25, 13) su candele chiuse
-        closed5 = closes5[:-1]
-        pc5     = [closed5[i] - closed5[i-1] for i in range(1, len(closed5))]
-        abs_pc5 = [abs(x) for x in pc5]
-        ema1_pc  = calc_ema_list(pc5, 25)
-        ema2_pc  = calc_ema_list(ema1_pc, 13)
-        ema1_abs = calc_ema_list(abs_pc5, 25)
-        ema2_abs = calc_ema_list(ema1_abs, 13)
-        tsi = round(100 * ema2_pc[-1] / ema2_abs[-1], 2) if ema2_abs and ema2_abs[-1] != 0 else 0.0
+        # TSI(25, 13) su 15m e 1h — confluenza + slope per tsi_bullish
+        def _calc_tsi(closes):
+            pc     = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+            abs_pc = [abs(x) for x in pc]
+            e1     = calc_ema_list(pc, 25)
+            e2     = calc_ema_list(e1, 13)
+            a1     = calc_ema_list(abs_pc, 25)
+            a2     = calc_ema_list(a1, 13)
+            if not a2 or len(a2) < 2:
+                return 0.0, 0.0
+            cur  = round(100 * e2[-1]  / a2[-1],  2) if a2[-1]  != 0 else 0.0
+            prev = round(100 * e2[-2]  / a2[-2],  2) if a2[-2]  != 0 else 0.0
+            return cur, prev
+
+        closed5              = closes5[:-1]
+        tsi,      _          = _calc_tsi(closed5)   # mantenuto per compatibilità segnale bot
+        tsi_15m,  tsi_15m_p  = _calc_tsi(closes15[:-1])
+        tsi_1h,   tsi_1h_p   = _calc_tsi(closes1h[:-1])
 
         # MACD(5, 13, 3) su candele chiuse
         ema5_list  = calc_ema_list(closed5, 5)
@@ -511,7 +541,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         ema30_5m      = calc_ema(closes5[:-1], 30)
         golden_cross  = ema9_5m > ema30_5m
         death_cross   = ema9_5m < ema30_5m
-        rsi_oversold  = rsi_14 < 30.0
+        rsi_oversold  = rsi_1h < 30.0
         rsi_overbought = rsi_14 > 70.0
 
         return {
@@ -531,6 +561,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "vol_avg_20":       vol_avg_20,
             "vol_last":         vol_last,
             "rsi_14":           rsi_14,
+            "rsi_1h":           rsi_1h,
             "candle_body":      candle_body,
             "body_ratio":       body_ratio,
             "ema20_5m_prev3":   ema20_5m_prev3,
@@ -542,6 +573,10 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "chop_14":          chop_14,
             "keltner_upper":    keltner_upper,
             "tsi":              tsi,
+            "tsi_15m":          tsi_15m,
+            "tsi_15m_prev":     tsi_15m_p,
+            "tsi_1h":           tsi_1h,
+            "tsi_1h_prev":      tsi_1h_p,
             "macd_hist":        macd_hist,
             "macd_hist_prev":   macd_hist_prev,
             "golden_cross":     golden_cross,
@@ -574,9 +609,13 @@ async def fetch_all_candles():
     syms = [sym for sym, _ in universe]
     print(f"Aggiornamento candele per {len(syms)} coin...")
 
-    # Fetch parallelo con un unico client (rispetta rate limit Binance)
+    # Fetch parallelo con concorrenza limitata per rispettare rate limit Binance
     async with httpx.AsyncClient(timeout=15) as client:
-        tasks = [fetch_candles_for_symbol(sym, client) for sym in syms]
+        sem = asyncio.Semaphore(8)
+        async def _fetch_limited(s):
+            async with sem:
+                return await fetch_candles_for_symbol(s, client)
+        tasks = [_fetch_limited(sym) for sym in syms]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     updated = 0
@@ -613,6 +652,10 @@ def get_momentum_signal(sym: str, current_price: float,
     chop_14          = cd.get("chop_14", 100.0)
     keltner_upper    = cd.get("keltner_upper", 0.0)
     tsi              = cd.get("tsi", -1.0)
+    tsi_15m          = cd.get("tsi_15m", -1.0)
+    tsi_15m_p        = cd.get("tsi_15m_prev", -1.0)
+    tsi_1h           = cd.get("tsi_1h", -1.0)
+    tsi_1h_p         = cd.get("tsi_1h_prev", -1.0)
     macd_hist        = cd.get("macd_hist", -1.0)
     macd_hist_prev   = cd.get("macd_hist_prev", 0.0)
 
@@ -622,47 +665,41 @@ def get_momentum_signal(sym: str, current_price: float,
 
     breakout_ok  = momentum_pct >= momentum_threshold
     vol_ok       = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
-    freshness_ok = last_close > close_3_ago
     rsi_ok       = 45 <= rsi_14 <= 72
     decomp_ok    = (recent_move / total_move) >= 0.25 if total_move > 0 else False
     wick_ok      = upper_wick_ratio <= 0.55
-    chop_ok      = chop_14 < 61.8
     keltner_ok   = last_close > keltner_upper if keltner_upper > 0 else False
-    tsi_ok       = tsi > 0
+    tsi_ok       = tsi_1h > 0 and tsi_1h >= tsi_1h_p
     macd_ok      = macd_hist > 0 and macd_hist > macd_hist_prev
 
     stop_price = current_price * (1 - max_stop_pct)
 
-    signal = (breakout_ok and vol_ok and freshness_ok and rsi_ok and
-              decomp_ok and wick_ok and chop_ok and keltner_ok and tsi_ok and macd_ok)
+    signal = (breakout_ok and vol_ok and rsi_ok and
+              decomp_ok and wick_ok and keltner_ok and tsi_ok and macd_ok)
 
     if not breakout_ok:
         reason = f"momentum debole | +{momentum_pct*100:.2f}% in 50min (soglia +{momentum_threshold*100:.0f}%)"
     elif not vol_ok:
         ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
         reason = f"volume basso ({ratio:.2f}x < {vol_multiplier}x richiesto)"
-    elif not freshness_ok:
-        reason = f"momentum stantio | ultimi 15min negativi | RSI {rsi_14:.0f}"
     elif not rsi_ok:
         reason = f"RSI {rsi_14:.0f} fuori range [45-72]"
     elif not decomp_ok:
         pct = (recent_move / total_move * 100) if total_move > 0 else 0
         reason = f"move esaurito | solo {pct:.0f}% nelle ultime 3 candele (min 25%)"
     elif not wick_ok:
-        reason = f"rigetto venditori | fitino {upper_wick_ratio*100:.0f}% del range (max 55%)"
-    elif not chop_ok:
-        reason = f"mercato laterale | CHOP {chop_14:.1f} (max 61.8)"
+        reason = f"rigetto venditori | wick {upper_wick_ratio*100:.0f}% del range (max 55%)"
     elif not keltner_ok:
         reason = f"sotto Keltner upper | prezzo non ha rotto EMA20+2×ATR"
     elif not tsi_ok:
-        reason = f"TSI {tsi:.1f} negativo — momentum non confermato"
+        reason = f"TSI 1h {tsi_1h:.2f} — trend orario non confermato"
     elif not macd_ok:
         reason = f"MACD histogram non accelera | hist {macd_hist:.6f}"
     else:
         ratio = vol_last / vol_avg_20
         pct   = (recent_move / total_move * 100) if total_move > 0 else 0
         reason = (f"MOMENTUM +{momentum_pct*100:.2f}% | vol {ratio:.1f}x | RSI {rsi_14:.0f} | "
-                  f"TSI {tsi:.1f} | CHOP {chop_14:.1f} | fresco {pct:.0f}% | SL -{max_stop_pct*100:.1f}%")
+                  f"TSI1h {tsi_1h:.2f} | Keltner OK | decomp {pct:.0f}% | SL -{max_stop_pct*100:.1f}%")
 
     return {
         "signal":       signal,
@@ -670,11 +707,9 @@ def get_momentum_signal(sym: str, current_price: float,
         "stop_price":   round(stop_price, 8),
         "breakout_ok":  breakout_ok,
         "vol_ok":       vol_ok,
-        "freshness_ok": freshness_ok,
         "rsi_ok":       rsi_ok,
         "decomp_ok":    decomp_ok,
         "wick_ok":      wick_ok,
-        "chop_ok":      chop_ok,
         "keltner_ok":   keltner_ok,
         "tsi_ok":       tsi_ok,
         "macd_ok":      macd_ok,
@@ -904,7 +939,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     sym      = sym_data["symbol"]
     is_real  = cfg.get("realMode", False)
 
-    alloc_pct  = cfg.get("allocPct", 0.20)
+    alloc_pct  = min(cfg.get("allocPct", 0.20), 1.0)
     use_revx   = state.get("use_revx", False)
     TRADING_FEE = 0.0009  # RevX taker fee 0.09%
     fixed_amt  = cfg.get("tradeAmountUsd", 0)
@@ -1060,10 +1095,30 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
         return
 
     if attempt >= len(REVX_LIMIT_DROPS):
-        add_log(state, "info", "ERRORE", f"{sym}: 10 tentativi GTC limit esauriti — vendi manualmente su RevX")
-        await notify(state, f"ERRORE {sym}: 10 tentativi GTC limit falliti. Vendi manualmente su RevX.")
+        add_log(state, "info", "WARN", f"{sym}: 10 tentativi GTC limit esauriti — market sell emergenza")
+        await notify(state, f"⚠️ {sym}: 10 GTC falliti. Tentativo market sell emergenza...")
         pos.pop("_sell_mode", None)
         pos.pop("_sell_limit_order_id", None)
+        try:
+            emergency_body = {
+                "client_order_id": str(_uuid.uuid4()),
+                "symbol": symbol_pair,
+                "side": "SELL",
+                "order_configuration": {"market": {"base_size": str(qty_to_sell)}}
+            }
+            em_result = await revx_request("POST", "/api/1.0/orders", emergency_body,
+                                           key_id=revx_key_id, private_key=revx_priv)
+            em_data = em_result.get("data") or em_result
+            em_id = em_data.get("venue_order_id") or em_data.get("order_id") or em_data.get("id", "")
+            if em_id:
+                await exit_position(state, pos, "EMERGENZA MARKET SELL (10 GTC falliti)", user_id=user_id)
+            else:
+                err = em_result.get("message") or em_result.get("error") or str(em_result)
+                add_log(state, "info", "ERRORE", f"{sym}: market sell emergenza fallito: {err[:80]} — vendi manualmente su RevX")
+                await notify(state, f"🚨 {sym}: impossibile vendere automaticamente. Vendi manualmente su RevX!")
+        except Exception as _em_e:
+            add_log(state, "info", "ERRORE", f"{sym}: market sell emergenza eccezione: {_em_e} — vendi manualmente su RevX")
+            await notify(state, f"🚨 {sym}: errore market sell ({_em_e}). Vendi manualmente su RevX!")
         return
 
     drop = REVX_LIMIT_DROPS[attempt]
@@ -1341,9 +1396,9 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         state["consecutiveLosses"] = state.get("consecutiveLosses", 0) + 1
 
     cfg = state["config"]
-    # Dopo uno stop loss secco (senza TP1), cooldown più lungo per proteggere da re-entry su trend avverso
+    # SL secco (senza TP1): cooldown doppio per evitare re-entry immediato su trend avverso
     is_clean_stop = ("STOP" in reason) and not pos.get("tp1_hit", False)
-    cooldown_h = cfg.get("cooldown", 1)
+    cooldown_h = cfg.get("cooldown", 1) * (2.0 if is_clean_stop else 1.0)
     state["cooldowns"][sym] = (datetime.now().timestamp() + cooldown_h * 3600) * 1000
     buy_fee_usd  = pos.get("buy_fee_usd", 0.0)
     sell_fee_usd = pos.get("sell_fee_usd", exit_fee)
@@ -1469,6 +1524,53 @@ async def scan_and_trade(state: dict, user_id: int = None):
             add_log(state, "info", "STOP AUTO", f"Raggiunto limite di {max_trades} trade — sessione fermata")
             return
 
+    # Circuit breaker: perdita giornaliera massima
+    today_utc = datetime.utcnow().strftime("%Y-%m-%d")
+    if state.get("daily_date") != today_utc:
+        state["daily_date"]          = today_utc
+        state["daily_capital_start"] = state["currentCapital"]
+    if cfg.get("circuitBreakerEnabled", False):
+        daily_start = state.get("daily_capital_start", state["currentCapital"])
+        if daily_start > 0:
+            daily_loss_pct = (daily_start - state["currentCapital"]) / daily_start
+            limit = cfg.get("dailyLossLimit", 0.03)
+            if daily_loss_pct >= limit:
+                state["running"] = False
+                add_log(state, "info", "CIRCUIT BREAKER",
+                    f"Perdita giornaliera {daily_loss_pct*100:.1f}% — soglia {limit*100:.0f}% raggiunta. Bot fermato per oggi.")
+                await notify(state,
+                    f"🚨 CIRCUIT BREAKER\n"
+                    f"Perdita giornaliera: {daily_loss_pct*100:.1f}%\n"
+                    f"Soglia: {limit*100:.0f}%\n"
+                    f"Bot fermato fino a mezzanotte UTC.")
+                await persist_sessions()
+                return
+
+    # Sync RevX: rileva posizioni agente chiuse esternamente (ogni 30s)
+    use_revx     = state.get("use_revx", False)
+    revx_key_id  = state.get("revx_key_id", "")
+    revx_priv    = state.get("revx_private_key", "")
+    revx_positions = [p for p in state["positions"] if p.get("exchange") == "revx" and p.get("realMode") and not p.get("manual")]
+    if use_revx and revx_key_id and revx_priv and revx_positions:
+        now_ts = time.time()
+        if now_ts - state.get("_revx_agent_sync_last", 0) >= 30:
+            state["_revx_agent_sync_last"] = now_ts
+            try:
+                result   = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
+                bal_list = result if isinstance(result, list) else result.get("balances", [])
+                bal_map  = {b["currency"]: float(b.get("available", 0) or 0) for b in bal_list if isinstance(b, dict)}
+                for pos in list(revx_positions):
+                    sym      = pos["symbol"]
+                    qty      = pos.get("qty_purchased", 0.0)
+                    coin_bal = bal_map.get(sym, 0.0)
+                    if qty > 0 and coin_bal < qty * 0.05:
+                        cur = market_data.get(sym, {}).get("price", pos["currentPrice"])
+                        pos["currentPrice"]  = cur
+                        pos["_already_sold"] = True
+                        await exit_position(state, pos, "CHIUSO SU REVOLUT X", user_id=user_id)
+            except Exception as e:
+                print(f"[revx_agent_sync] user {user_id}: {e}")
+
     # Poll ordini GTC limit in attesa di fill
     for pos in list(state["positions"]):
         if pos.get("_sell_mode") == "retry_limit" and pos.get("realMode") and pos.get("exchange") == "revx":
@@ -1511,10 +1613,13 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if net_pnl_pct > profit_activation:
             pos["trailingActive"] = True
         if pos.get("trailingActive"):
-            peak         = pos.get("peak_price", cur)
-            profit_move  = peak - entry
-            tolerance    = cfg.get("profitTolerance", 0.20)
-            trail_price  = peak - profit_move * tolerance
+            peak = pos.get("peak_price", cur)
+            atr  = pos.get("atr_5m", 0.0)
+            mult = cfg.get("trailAtrMultiplier", 2.0)
+            if atr > 0:
+                trail_price = peak - atr * mult
+            else:
+                trail_price = peak - (peak - entry) * cfg.get("profitTolerance", 0.20)
             if cur <= trail_price:
                 await exit_position(state, pos, "TRAILING PROFIT", user_id=user_id)
                 continue
@@ -1531,7 +1636,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             _update_pnl(state)
         return
 
-    alloc_pct   = cfg.get("allocPct", 0.20)
+    alloc_pct   = min(cfg.get("allocPct", 0.20), 1.0)
     fixed_amt   = cfg.get("tradeAmountUsd", 0)
     capital_pct = cfg.get("capitalPct", 1.0)
     TRADING_FEE = 0.0009  # RevX taker fee 0.09%
@@ -1678,8 +1783,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     candidates   = []
     skipped      = 0
-    block_count = {"breakout": 0, "vol": 0, "freshness": 0, "rsi": 0,
-                    "decomp": 0, "wick": 0, "chop": 0, "keltner": 0, "tsi": 0, "macd": 0}
+    block_count = {"breakout": 0, "vol": 0, "rsi": 0,
+                    "decomp": 0, "wick": 0, "keltner": 0, "tsi": 0, "macd": 0}
 
     for d in universe_sorted:
         sym    = d["symbol"]
@@ -1688,11 +1793,9 @@ async def scan_and_trade(state: dict, user_id: int = None):
             skipped += 1
             if   not signal.get("breakout_ok"):  block_count["breakout"]  += 1
             elif not signal.get("vol_ok"):        block_count["vol"]       += 1
-            elif not signal.get("freshness_ok"):  block_count["freshness"] += 1
             elif not signal.get("rsi_ok"):        block_count["rsi"]       += 1
             elif not signal.get("decomp_ok"):     block_count["decomp"]    += 1
             elif not signal.get("wick_ok"):       block_count["wick"]      += 1
-            elif not signal.get("chop_ok"):       block_count["chop"]      += 1
             elif not signal.get("keltner_ok"):    block_count["keltner"]   += 1
             elif not signal.get("tsi_ok"):        block_count["tsi"]       += 1
             elif not signal.get("macd_ok"):       block_count["macd"]      += 1
@@ -1707,8 +1810,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
     bc = block_count
     add_log(state, "info", "SCAN",
         f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | Saltati: {skipped} | "
-        f"MOM:{bc['breakout']} VOL:{bc['vol']} FRSH:{bc['freshness']} RSI:{bc['rsi']} "
-        f"DCMP:{bc['decomp']} WICK:{bc['wick']} CHOP:{bc['chop']} KELT:{bc['keltner']} "
+        f"MOM:{bc['breakout']} VOL:{bc['vol']} RSI:{bc['rsi']} "
+        f"DCMP:{bc['decomp']} WICK:{bc['wick']} KELT:{bc['keltner']} "
         f"TSI:{bc['tsi']} MACD:{bc['macd']} | Candele:{len(candle_data)}"
     )
 
@@ -2120,6 +2223,7 @@ async def binance_ws_loop():
                 backoff = 5
                 print("[WS] ✅ Connesso — stream prezzi attivo")
                 async for raw in ws:
+                    _ws_last_msg_ts = time.time()
                     try:
                         tickers = json.loads(raw)
                         if not isinstance(tickers, list):
@@ -2168,11 +2272,16 @@ async def binance_ws_loop():
 # ── background loop ───────────────────────────────────────────────────────────
 
 async def background_loop():
+    global _rest_price_last_fetch, _ws_last_msg_ts
     consecutive_errors = 0
     last_persist = 0.0
     while True:
         try:
-            if not _ws_connected:
+            # Fetch REST prezzi: ogni 5s se WS silente, ogni 30s se WS attivo
+            ws_live = _ws_connected and _ws_last_msg_ts > 0 and (time.time() - _ws_last_msg_ts < 10)
+            rest_interval = 30 if ws_live else 5
+            if time.time() - _rest_price_last_fetch >= rest_interval:
+                _rest_price_last_fetch = time.time()
                 await fetch_prices()
 
             if time.time() - _universe_last_update >= UNIVERSE_UPDATE_INTERVAL:
@@ -2219,8 +2328,9 @@ async def persist_sessions():
         try:
             state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_exiting", "_stopping")}
             state_json = json.dumps(state_to_save, default=str)
+            has_open_positions = bool(state.get("positions"))
             async with db_pool.acquire() as conn:
-                if state.get("running"):
+                if state.get("running") or has_open_positions:
                     await conn.execute("""
                         INSERT INTO active_sessions (user_id, state_json, updated_at)
                         VALUES ($1, $2, NOW())
@@ -2457,9 +2567,19 @@ async def restore_sessions_from_db(pool):
             try:
                 state = json.loads(row["state_json"])
                 if not state.get("running"):
-                    # Sessione già ferma nel DB — pulizia
-                    async with pool.acquire() as conn:
-                        await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
+                    # Bot fermo: ripristina solo se ci sono posizioni manuali aperte
+                    manual_positions = [p for p in state.get("positions", []) if p.get("manual")]
+                    if not manual_positions:
+                        async with pool.acquire() as conn:
+                            await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
+                        continue
+                    # Posizioni manuali: ripristina senza auto-stop — continua monitoraggio SL/TP
+                    state["revx_key_id"]      = decrypt_key(row["revx_key_id"] or "")
+                    state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
+                    state["positions"] = manual_positions  # scarta eventuali posizioni bot orfane
+                    user_sessions[uid] = state
+                    n = len(manual_positions)
+                    print(f"[RESTORE] Posizioni manuali user {uid} ripristinate ({n} posizioni, bot fermo)")
                     continue
 
                 updated_at = row["updated_at"]
@@ -2823,6 +2943,10 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "macd_bullish":  sig.get("macd_ok", False),
             "macd_bearish":  cd.get("macd_hist", 0.0) < 0 and cd.get("macd_hist", 0.0) < cd.get("macd_hist_prev", 0.0),
             "tsi_bullish":   sig.get("tsi_ok", False),
+            # NUOVI:
+            "ema_stack":     (cd.get("last_close_5m", 0) > cd.get("ema20_5m", 0) > cd.get("ema50_5m", 0)) if cd.get("ema50_5m", 0) > 0 else False,
+            "volume_spike":  (cd.get("vol_last", 0) > 2.0 * cd.get("vol_avg_20", 0)) if cd.get("vol_avg_20", 0) > 0 else False,
+            "vol_ratio":     round(cd.get("vol_last", 0) / cd.get("vol_avg_20", 1), 2) if cd.get("vol_avg_20", 0) > 0 else 0.0,
         }
         items.append(item)
 
@@ -3070,9 +3194,14 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
             "maxHoldHours":        float(cfg.get("maxHoldHours", 4.0)),
             "timeFilter":          bool(cfg.get("timeFilter", True)),
             "momentumPct":         float(cfg.get("momentumPct", 0.01)),
-            "profitTolerance":     float(cfg.get("profitTolerance", 0.20)),
-            "profitActivation":    float(cfg.get("profitActivation", 0.003)),
+            "profitTolerance":        float(cfg.get("profitTolerance", 0.20)),
+            "profitActivation":       float(cfg.get("profitActivation", 0.003)),
+            "trailAtrMultiplier":     float(cfg.get("trailAtrMultiplier", 2.0)),
+            "circuitBreakerEnabled":  bool(cfg.get("circuitBreakerEnabled", False)),
+            "dailyLossLimit":         float(cfg.get("dailyLossLimit", 0.03)),
         },
+        "daily_capital_start": float(cfg.get("capitalUsd", 1000)),
+        "daily_date":          datetime.utcnow().strftime("%Y-%m-%d"),
         "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
         "revx_key_id": revx_key_id, "revx_private_key": revx_private_key,
         "use_revx": use_revx,
@@ -3267,6 +3396,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "entry_usd": amount, "buy_fee_usd": round(fee_usd, 4), "manual": True,
             }
             state["positions"].append(pos)
+            await persist_sessions()
             return {"ok": True, "price": actual_price, "qty": qty}
         except HTTPException:
             raise
@@ -3291,6 +3421,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
             "realMode": False, "fee_pct": 0.001, "qty_purchased": 0.0, "manual": True,
         }
         state["positions"].append(pos)
+        await persist_sessions()
         return {"ok": True, "price": price, "qty": qty}
 
 @app.post("/chat")
@@ -3375,10 +3506,17 @@ async def candles_status(request: Request, user_id: int = Depends(get_current_us
     for sym in list(candle_data.keys())[:5]:
         price = market_data.get(sym, {}).get("price", 0)
         sample[sym] = get_momentum_signal(sym, price)
+    now = time.time()
+    ws_ago = round(now - _ws_last_msg_ts, 1) if _ws_last_msg_ts else None
+    sample_prices = {sym: market_data.get(sym, {}).get("price", 0) for sym in list(_dynamic_universe)[:5]}
     return {
         "candles_count": len(candle_data),
         "last_update": datetime.fromtimestamp(_candles_last_update).isoformat() if _candles_last_update else None,
-        "next_update_in_sec": max(0, CANDLE_UPDATE_INTERVAL - (time.time() - _candles_last_update)) if _candles_last_update else 0,
+        "next_update_in_sec": max(0, CANDLE_UPDATE_INTERVAL - (now - _candles_last_update)) if _candles_last_update else 0,
+        "ws_connected": _ws_connected,
+        "ws_last_msg_ago_sec": ws_ago,
+        "universe_size": len(_dynamic_universe),
+        "sample_prices": sample_prices,
         "sample_signals": sample,
     }
 
