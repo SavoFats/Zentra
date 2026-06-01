@@ -893,7 +893,8 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     alloc_pct  = cfg.get("allocPct", 0.20)
     use_revx   = state.get("use_revx", False)
     TRADING_FEE = 0.0009  # RevX taker fee 0.09%
-    size = tradable_capital * alloc_pct
+    fixed_amt  = cfg.get("tradeAmountUsd", 0)
+    size = round(fixed_amt, 2) if fixed_amt and fixed_amt > 0 else tradable_capital * alloc_pct
     if size < 1:
         return
 
@@ -1517,6 +1518,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         return
 
     alloc_pct   = cfg.get("allocPct", 0.20)
+    fixed_amt   = cfg.get("tradeAmountUsd", 0)
     capital_pct = cfg.get("capitalPct", 1.0)
     TRADING_FEE = 0.0009  # RevX taker fee 0.09%
 
@@ -1588,7 +1590,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     # Sottrai le commissioni round-trip attese per tutte le posizioni apribili
     # fee_totale = size_per_trade * 1.2% * slot_disponibili
-    size_per_trade = tradable_capital * alloc_pct
+    size_per_trade = round(fixed_amt, 2) if fixed_amt and fixed_amt > 0 else tradable_capital * alloc_pct
     fee_reserve = size_per_trade * TRADING_FEE * 2 * slots  # entrata + uscita per ogni slot
     tradable_capital_net = tradable_capital - fee_reserve
 
