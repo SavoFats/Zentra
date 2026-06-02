@@ -653,6 +653,17 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "rsi_overbought":   rsi_overbought,
             "sparkline":        closes1h[-25:-1],
             "updated_at":       time.time(),
+            # ── consolidation breakout ────────────────────────────────────────
+            "atr_avg_30":       sum(trs[-31:-1]) / 30 if len(trs) >= 31 else atr_5m,
+            "range_high_60":    max(highs5[-63:-3]) if len(highs5) >= 63 else max(highs5[:-2]),
+            "range_low_60":     min(lows5[-63:-3])  if len(lows5)  >= 63 else min(lows5[:-2]),
+            "close_7_ago":      closes5[-9] if len(closes5) >= 9 else closes5[0],
+            "chop_long": round(
+                100 * math.log10(
+                    (sum(trs[-37:-1]) if len(trs) >= 37 else sum(trs)) /
+                    ((max(highs5[-39:-1]) - min(lows5[-39:-1])) if len(highs5) >= 39 else (max(highs5) - min(lows5)))
+                ) / math.log10(36), 2
+            ) if len(trs) >= 36 and (max(highs5[-39:-1]) - min(lows5[-39:-1])) > 0 else 50.0,
         }
     except Exception as e:
         print(f"Candle error {sym}: {e}")
@@ -781,6 +792,74 @@ def get_momentum_signal(sym: str, current_price: float,
         "keltner_ok":   keltner_ok,
         "tsi_ok":       tsi_ok,
         "macd_ok":      macd_ok,
+    }
+
+def get_breakout_signal(sym: str, current_price: float, max_stop_pct: float = 0.02) -> dict:
+    """Segnale consolidation breakout: rileva compressione poi rottura del range con volume."""
+    cd = candle_data.get(sym, {})
+    if not cd:
+        return {"signal": False, "reason": "no candle data", "stop_price": 0.0,
+                "consolidation_ok": False, "atr_contracted": False,
+                "breakout_ok": False, "vol_ok": False, "fresh_ok": False}
+
+    atr_5m       = cd.get("atr_5m", 0.0)
+    atr_avg_30   = cd.get("atr_avg_30", atr_5m)
+    range_high   = cd.get("range_high_60", 0.0)
+    range_low    = cd.get("range_low_60", 0.0)
+    chop_long    = cd.get("chop_long", 50.0)
+    last_close   = cd.get("last_close_5m", current_price)
+    close_7_ago  = cd.get("close_7_ago", current_price)
+    vol_last     = cd.get("vol_last", 0.0)
+    vol_avg_20   = cd.get("vol_avg_20", 0.0)
+
+    # 1. Consolidazione: CHOP alto su 3h = mercato laterale
+    consolidation_ok = chop_long >= 61.8
+
+    # 2. ATR contratto: volatilità compressa rispetto alla sua media
+    atr_contracted = (atr_5m < atr_avg_30 * 0.85) if atr_avg_30 > 0 else False
+
+    # 3. Breakout: chiusura sopra il tetto del range (con piccolo buffer 0.1%)
+    breakout_ok = (last_close > range_high * 1.001) if range_high > 0 else False
+
+    # 4. Volume: spike sul breakout (almeno 1.5x la media)
+    vol_ok = (vol_last >= vol_avg_20 * 1.5) if vol_avg_20 > 0 else False
+
+    # 5. Freshness: 35 minuti fa era ancora dentro il range (breakout appena avvenuto)
+    fresh_ok = close_7_ago < range_high if range_high > 0 else False
+
+    # Stop sotto il range di consolidazione (supporto naturale)
+    stop_price = max(range_low * 0.998, current_price * (1 - max_stop_pct)) if range_low > 0 else current_price * (1 - max_stop_pct)
+
+    signal = consolidation_ok and atr_contracted and breakout_ok and vol_ok and fresh_ok
+
+    if not consolidation_ok:
+        reason = f"nessuna consolidazione | CHOP3h {chop_long:.1f} (min 61.8)"
+    elif not atr_contracted:
+        ratio = atr_5m / atr_avg_30 if atr_avg_30 > 0 else 1.0
+        reason = f"ATR non contratto | {ratio:.2f}x vs media (max 0.85x)"
+    elif not breakout_ok:
+        pct_to = (range_high / last_close - 1) * 100 if last_close > 0 else 0
+        reason = f"nessun breakout | -{pct_to:.2f}% dal tetto range {range_high:.6f}"
+    elif not vol_ok:
+        ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
+        reason = f"volume breakout basso ({ratio:.2f}x < 1.5x)"
+    elif not fresh_ok:
+        reason = f"breakout non fresco | prezzo sopra range da >35min"
+    else:
+        pct = (last_close / range_high - 1) * 100
+        vol_r = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
+        atr_r = atr_5m / atr_avg_30 if atr_avg_30 > 0 else 0
+        reason = f"BREAKOUT +{pct:.2f}% dal range | CHOP3h {chop_long:.1f} | vol {vol_r:.1f}x | ATR {atr_r:.2f}x"
+
+    return {
+        "signal":           signal,
+        "reason":           reason,
+        "stop_price":       round(stop_price, 8),
+        "consolidation_ok": consolidation_ok,
+        "atr_contracted":   atr_contracted,
+        "breakout_ok":      breakout_ok,
+        "vol_ok":           vol_ok,
+        "fresh_ok":         fresh_ok,
     }
 
 # ── rest of market data ───────────────────────────────────────────────────────
@@ -1891,23 +1970,38 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     candidates   = []
     skipped      = 0
-    block_count = {"breakout": 0, "vol": 0, "rsi": 0,
-                    "decomp": 0, "wick": 0, "keltner": 0, "tsi": 0, "macd": 0}
+    strategy = cfg.get("strategy", "momentum")
+    if strategy == "breakout":
+        block_count = {"consolidation": 0, "atr": 0, "breakout": 0, "vol": 0, "fresh": 0}
+    else:
+        block_count = {"breakout": 0, "vol": 0, "rsi": 0,
+                        "decomp": 0, "wick": 0, "keltner": 0, "tsi": 0, "macd": 0}
 
     for d in universe_sorted:
-        sym    = d["symbol"]
-        signal = get_momentum_signal(sym, d["price"], max_stop_pct, vol_mult, momentum_thr)
-        if not signal["signal"]:
-            skipped += 1
-            if   not signal.get("breakout_ok"):  block_count["breakout"]  += 1
-            elif not signal.get("vol_ok"):        block_count["vol"]       += 1
-            elif not signal.get("rsi_ok"):        block_count["rsi"]       += 1
-            elif not signal.get("decomp_ok"):     block_count["decomp"]    += 1
-            elif not signal.get("wick_ok"):       block_count["wick"]      += 1
-            elif not signal.get("keltner_ok"):    block_count["keltner"]   += 1
-            elif not signal.get("tsi_ok"):        block_count["tsi"]       += 1
-            elif not signal.get("macd_ok"):       block_count["macd"]      += 1
-            continue
+        sym = d["symbol"]
+        if strategy == "breakout":
+            signal = get_breakout_signal(sym, d["price"], max_stop_pct)
+            if not signal["signal"]:
+                skipped += 1
+                if   not signal.get("consolidation_ok"): block_count["consolidation"] += 1
+                elif not signal.get("atr_contracted"):    block_count["atr"]           += 1
+                elif not signal.get("breakout_ok"):       block_count["breakout"]      += 1
+                elif not signal.get("vol_ok"):            block_count["vol"]           += 1
+                elif not signal.get("fresh_ok"):          block_count["fresh"]         += 1
+                continue
+        else:
+            signal = get_momentum_signal(sym, d["price"], max_stop_pct, vol_mult, momentum_thr)
+            if not signal["signal"]:
+                skipped += 1
+                if   not signal.get("breakout_ok"):  block_count["breakout"]  += 1
+                elif not signal.get("vol_ok"):        block_count["vol"]       += 1
+                elif not signal.get("rsi_ok"):        block_count["rsi"]       += 1
+                elif not signal.get("decomp_ok"):     block_count["decomp"]    += 1
+                elif not signal.get("wick_ok"):       block_count["wick"]      += 1
+                elif not signal.get("keltner_ok"):    block_count["keltner"]   += 1
+                elif not signal.get("tsi_ok"):        block_count["tsi"]       += 1
+                elif not signal.get("macd_ok"):       block_count["macd"]      += 1
+                continue
         d["ema_reason"] = signal["reason"]
         d["stop_price"] = signal["stop_price"]
         d["R_pct"]      = max_stop_pct
@@ -3319,6 +3413,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
             "trailAtrMultiplier":     float(cfg.get("trailAtrMultiplier", 2.0)),
             "circuitBreakerEnabled":  bool(cfg.get("circuitBreakerEnabled", False)),
             "dailyLossLimit":         float(cfg.get("dailyLossLimit", 0.03)),
+            "strategy":               cfg.get("strategy", "momentum"),
         },
         "daily_capital_start": capital,
         "daily_date":          datetime.utcnow().strftime("%Y-%m-%d"),
@@ -3422,6 +3517,8 @@ async def update_config_live(body: dict, request: Request, user_id: int = Depend
             return max(lo, min(hi, int(value)))
         if key in {"btcEmaFilter", "timeFilter", "trailingStop", "circuitBreakerEnabled", "rsiFilter", "trend1hFilter"}:
             return bool(value)
+        if key == "strategy":
+            return value if value in ("momentum", "breakout") else "momentum"
         return value
     cfg = state["config"]
     changed = []
