@@ -1084,6 +1084,9 @@ body.auth-active .tabbar { display:none !important; }
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Posizioni
       <span id="sbPosBadge" style="display:none;width:8px;height:8px;background:var(--red);border-radius:50%;margin-left:auto;flex-shrink:0"></span>
     </button>
+    <button class="sb-item" data-tab="exchange" onclick="showTab('exchange',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M2 10h20"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Exchange
+    </button>
   </div>
   <div style="padding:0 8px;border-top:1px solid var(--border)">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
@@ -1592,6 +1595,42 @@ body.auth-active .tabbar { display:none !important; }
         <div style="width:106px;flex-shrink:0"></div>
       </div>
       <div id="scannerList"><div class="empty"><div class="empty-text">Caricamento...</div></div></div>
+    </div>
+  </div>
+
+  <!-- EXCHANGE -->
+  <div class="page" id="page-exchange">
+    <div class="ptr-indicator" id="ptr-page-exchange"><div class="ptr-spinner"></div></div>
+
+    <div style="padding:20px 0 16px">
+      <div class="home-welcome-sub">Connessioni</div>
+      <div class="home-username">Exchange</div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:42px;height:42px;border-radius:12px;background:rgba(80,90,200,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:800;color:var(--text)">Revolut X</div>
+            <span id="exchangeRevxStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
+          </div>
+          <div id="exchangeRevxSub" style="font-size:13px;color:var(--text3);margin-top:4px">Configura le API key</div>
+        </div>
+        <button id="exchangeRevxBtn" onclick="showRevxConfig()" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
+      </div>
+      <div style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
+        L'exchange collegato viene usato per gli ordini reali. Il conto demo resta disponibile anche senza chiavi API.
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
+      <div class="card-label" style="padding:16px 18px 10px">Prossimamente</div>
+      <div class="acc-feat-row"><span>Binance</span><span class="acc-feat-val">In arrivo</span></div>
+      <div class="acc-feat-row"><span>Coinbase</span><span class="acc-feat-val">In arrivo</span></div>
+      <div class="acc-feat-row"><span>Kraken</span><span class="acc-feat-val">In arrivo</span></div>
     </div>
   </div>
 
@@ -2114,6 +2153,7 @@ async function loadUserProfile() {
     renderMarketStars();
     updatePlanUI();
     syncSidebar();
+    renderExchangePage();
   } catch(e) {
     applyAvatar(localStorage.getItem('ca_avatar'));
   }
@@ -2141,6 +2181,7 @@ async function disconnectRevx() {
       window._realMode = false;
       closeRevxModal();
       updateUI();
+      renderExchangePage();
       showToast('Revolut X scollegato');
     }
   } catch(e) {
@@ -2321,6 +2362,7 @@ async function saveRevxKeys() {
       document.getElementById('revxWizardView').style.display = 'none';
       document.getElementById('revxModalTitle').textContent = 'Revolut X';
       updateUI();
+      renderExchangePage();
       // Test connessione
       const tr = await fetch(API + '/test_revx', { headers: authHeaders() });
       if (tr.status === 429) {
@@ -2580,6 +2622,7 @@ function showTab(name, el) {
   updateSidebarActive(name);
   if (name === 'home') renderHome();
   if (name === 'scanner') refreshMarket().then(() => renderScanner());
+  if (name === 'exchange') renderExchangePage();
   if (name === 'account') renderAccountPage();
   if (name === 'posizioni') {
     const chiuseActive = document.getElementById('posPanelChiuse')?.style.display !== 'none';
@@ -2595,8 +2638,9 @@ function restoreActiveTab() {
   const saved = localStorage.getItem('ca_active_tab') || 'home';
   const tabs = document.querySelectorAll('.tab');
   const tabMap = { home: 0, scanner: 1, posizioni: 2, monitor: 2, transazioni: 2, market: 1 };
-  const idx = tabMap[saved] ?? 0;
-  if (tabs[idx]) showTab(saved, tabs[idx]);
+  const idx = tabMap[saved];
+  const el = (idx !== undefined) ? tabs[idx] : document.querySelector(`.sb-item[data-tab="${saved}"]`);
+  showTab(saved, el || tabs[0]);
 }
 
 async function clearTrades() {
@@ -4291,6 +4335,22 @@ function renderAccountPage() {
   // Telegram
   const tgSub = document.getElementById('accTgSub');
   if (tgSub) tgSub.textContent = window._tgLinked ? 'Collegato' : 'Non collegato';
+}
+
+function renderExchangePage() {
+  const connected = !!_hasRevxKeys;
+  const status = document.getElementById('exchangeRevxStatus');
+  if (status) {
+    status.textContent = connected ? 'Collegato' : 'Non collegato';
+    status.style.background = connected ? 'rgba(34,197,94,0.14)' : 'var(--surface2)';
+    status.style.color = connected ? 'var(--green)' : 'var(--text3)';
+  }
+  const sub = document.getElementById('exchangeRevxSub');
+  if (sub) sub.textContent = connected
+    ? 'API key configurate. Disponibile per il trading reale.'
+    : 'Collega le API key Revolut X per abilitare gli ordini reali.';
+  const btn = document.getElementById('exchangeRevxBtn');
+  if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
