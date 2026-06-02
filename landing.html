@@ -187,7 +187,10 @@ nav {
 .ticker-card .t-icon {
   width: 36px; height: 36px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 900; flex-shrink: 0;
+  flex-shrink: 0; overflow: hidden;
+}
+.ticker-card .t-icon img {
+  width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
 }
 .ticker-card .t-name { font-size: 13px; font-weight: 700; }
 .ticker-card .t-price { font-size: 13px; font-weight: 700; }
@@ -583,23 +586,23 @@ footer {
 
   <!-- floating tickers -->
   <div class="ticker-card tc1">
-    <div class="t-icon" style="background:rgba(247,147,26,0.15);color:#f7931a;">₿</div>
+    <div class="t-icon" style="background:rgba(247,147,26,0.15);"><img src="https://assets.coingecko.com/coins/images/1/small/bitcoin.png" alt="BTC"></div>
     <div><div class="t-name">BTC</div><div class="t-price">$68,420</div><div class="t-chg up">+2.84%</div></div>
   </div>
   <div class="ticker-card tc2">
-    <div class="t-icon" style="background:rgba(98,126,234,0.15);color:#627eea;">Ξ</div>
+    <div class="t-icon" style="background:rgba(98,126,234,0.15);"><img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH"></div>
     <div><div class="t-name">ETH</div><div class="t-price">$3,512</div><div class="t-chg up">+1.63%</div></div>
   </div>
   <div class="ticker-card tc3">
-    <div class="t-icon" style="background:rgba(20,241,149,0.15);color:#14f195;">◎</div>
+    <div class="t-icon" style="background:rgba(20,241,149,0.15);"><img src="https://assets.coingecko.com/coins/images/4128/small/solana.png" alt="SOL"></div>
     <div><div class="t-name">SOL</div><div class="t-price">$178.4</div><div class="t-chg dn">-0.92%</div></div>
   </div>
   <div class="ticker-card tc4">
-    <div class="t-icon" style="background:rgba(0,82,255,0.15);color:#0052ff;">◆</div>
+    <div class="t-icon" style="background:rgba(0,82,255,0.15);"><img src="https://assets.coingecko.com/coins/images/25244/small/Optimism.png" alt="OP"></div>
     <div><div class="t-name">OP</div><div class="t-price">$2.34</div><div class="t-chg up">+4.12%</div></div>
   </div>
   <div class="ticker-card tc5">
-    <div class="t-icon" style="background:rgba(240,185,11,0.15);color:#f0b90b;">B</div>
+    <div class="t-icon" style="background:rgba(240,185,11,0.15);"><img src="https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png" alt="BNB"></div>
     <div><div class="t-name">BNB</div><div class="t-price">$612</div><div class="t-chg up">+0.74%</div></div>
   </div>
 
