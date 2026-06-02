@@ -5001,6 +5001,8 @@ function openTradeModal(sym, price) {
   tmUpdatePrices();
   document.getElementById('tradeModal').style.display = 'flex';
   tmExchangeChanged();
+  if (_tmPriceInterval) clearInterval(_tmPriceInterval);
+  _tmPriceInterval = setInterval(tmFetchPrice, 5000);
 }
 
 function renderTradeExchangeOptions() {
@@ -5015,27 +5017,31 @@ function renderTradeExchangeOptions() {
   sel.value = options.some(([value]) => value === previous) ? previous : options[0][0];
 }
 
-async function tmExchangeChanged() {
-  const exchange = document.getElementById('tmExchange').value;
-  const priceEl  = document.getElementById('tmPrice');
-  priceEl.textContent = 'Caricamento...';
+let _tmPriceInterval = null;
+
+async function tmFetchPrice() {
+  const exchange = document.getElementById('tmExchange')?.value;
+  if (!exchange || !_tmSymbol) return;
   try {
     const r = await fetch(API + `/exchange_price/${exchange}/${_tmSymbol}`, { headers: authHeaders() });
     const d = await r.json();
     if (r.ok && d.price) {
       _tmPrice = d.price;
-      priceEl.textContent = 'Prezzo: ' + fmtPrice(_tmPrice);
+      const src = d.source === 'binance_fallback' ? ' (Binance)' : '';
+      document.getElementById('tmPrice').textContent = 'Prezzo: ' + fmtPrice(_tmPrice) + src;
       tmUpdatePrices();
-    } else {
-      priceEl.textContent = d.detail || 'Prezzo non disponibile';
     }
-  } catch (_) {
-    priceEl.textContent = 'Errore di rete';
-  }
+  } catch (_) {}
+}
+
+async function tmExchangeChanged() {
+  document.getElementById('tmPrice').textContent = 'Caricamento...';
+  await tmFetchPrice();
 }
 
 function closeTradeModal() {
   document.getElementById('tradeModal').style.display = 'none';
+  if (_tmPriceInterval) { clearInterval(_tmPriceInterval); _tmPriceInterval = null; }
 }
 
 function tmSliderSync() {
