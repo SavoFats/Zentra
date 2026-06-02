@@ -703,9 +703,17 @@ footer {
       <p data-i18n="f2_desc">Live market scanner with RSI, MACD, Keltner, EMA stack, volume spikes, golden cross and more — all visualized in one dashboard.</p>
     </div>
     <div class="feature-card reveal delay-1">
-      <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v7c0 5-4 8.5-8 10-4-1.5-8-5-8-10V5l8-3z"/><path d="m9 12 2 2 4-4"/></svg></div>
-      <h3 data-i18n="f3_title">Smart Risk Management</h3>
-      <p data-i18n="f3_desc">ATR-based trailing stop, configurable hard stop-loss, take-profit targets, max hold time, and daily circuit breaker to protect your capital.</p>
+      <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/></svg></div>
+      <h3 data-i18n="f3_title">Non-Custodial &amp; Secure</h3>
+      <p data-i18n="f3_desc">Your funds never leave your exchange. Zentra executes orders via API — we never hold, move, or access your capital. API keys are never stored in plaintext.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">
+          <span style="color:var(--green);">●</span><span data-i18n="f3_p1">Funds always stay on your exchange</span>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">
+          <span style="color:var(--blue);">●</span><span data-i18n="f3_p2">AES-256 encrypted API credentials</span>
+        </div>
+      </div>
     </div>
     <div class="feature-card reveal delay-2">
       <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
@@ -1004,7 +1012,8 @@ const T = {
     feat_sub:'Zentra combines momentum analysis, breakout detection, and real-time risk management in a single platform.',
     f1_title:'Autonomous Agent', f1_desc:'The AI agent monitors 200+ coins 24/7, scans for high-probability momentum and breakout setups, and executes entries automatically on your exchange.',
     f2_title:'Real-time Scanner', f2_desc:'Live market scanner with RSI, MACD, Keltner, EMA stack, volume spikes, golden cross and more — all visualized in one dashboard.',
-    f3_title:'Smart Risk Management', f3_desc:'ATR-based trailing stop, configurable hard stop-loss, take-profit targets, max hold time, and daily circuit breaker to protect your capital.',
+    f3_title:'Non-Custodial &amp; Secure', f3_desc:'Your funds never leave your exchange. Zentra executes orders via API — we never hold, move, or access your capital. API keys are never stored in plaintext.',
+    f3_p1:'Funds always stay on your exchange', f3_p2:'AES-256 encrypted API credentials',
     f4_title:'Multi-Exchange Support', f4_desc:'Connect your exchange via API keys. Real buy/sell orders with market execution, automatic fill confirmation, and end-to-end encrypted credentials.',
     f5_title:'Two Strategies, One Platform', f5_desc:'Switch between <strong>Momentum</strong> (EMA breakout + volume + TSI + MACD) and <strong>Consolidation Breakout</strong> (CHOP + ATR compression + range break) from the config panel.',
     how_tag:'How it works', how_title:'Up and running in minutes', how_sub:'Connect your account, configure your strategy, and let Zentra handle the rest.',
@@ -1031,7 +1040,8 @@ const T = {
     feat_sub:'Zentra combina analisi momentum, rilevamento breakout e gestione del rischio in tempo reale in un\'unica piattaforma.',
     f1_title:'Agente Autonomo', f1_desc:'L\'agente AI monitora 200+ coin 24/7, cerca setup ad alta probabilità e apre posizioni automaticamente sul tuo exchange.',
     f2_title:'Scanner in Tempo Reale', f2_desc:'Scanner di mercato live con RSI, MACD, Keltner, EMA stack, picchi di volume, golden cross e molto altro — tutto in un unico dashboard.',
-    f3_title:'Gestione del Rischio Smart', f3_desc:'Trailing stop basato su ATR, stop-loss fisso configurabile, target di take-profit, tempo massimo di mantenimento e circuit breaker giornaliero.',
+    f3_title:'Non-Custodiale &amp; Sicuro', f3_desc:'I tuoi fondi non lasciano mai il tuo exchange. Zentra esegue ordini via API — non deteniamo, spostiamo o accediamo al tuo capitale. Le chiavi API non vengono mai salvate in chiaro.',
+    f3_p1:'I fondi restano sempre sul tuo exchange', f3_p2:'Credenziali API cifrate con AES-256',
     f4_title:'Multi-Exchange', f4_desc:'Connetti il tuo exchange tramite chiavi API. Ordini reali con esecuzione market, conferma automatica del fill e credenziali cifrate end-to-end.',
     f5_title:'Due Strategie, Una Piattaforma', f5_desc:'Scegli tra <strong>Momentum</strong> (breakout EMA + volume + TSI + MACD) e <strong>Breakout da Consolidamento</strong> (CHOP + compressione ATR + rottura di range) dal pannello config.',
     how_tag:'Come funziona', how_title:'Operativo in pochi minuti', how_sub:'Collega il tuo account, configura la strategia e lascia fare a Zentra.',
