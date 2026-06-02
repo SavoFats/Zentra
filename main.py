@@ -1665,7 +1665,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     cfg = state["config"]
 
-    elapsed_ms = (datetime.now().timestamp() - state["sessionStart"]) * 1000
+    elapsed_ms = (datetime.now().timestamp() - (state["sessionStart"] or 0)) * 1000
     session_duration = state["sessionDuration"]
     if session_duration > 0 and elapsed_ms >= session_duration:
         if state["positions"]:
@@ -2337,7 +2337,7 @@ async def poll_telegram():
             print(f"Telegram poll error: {e}")
 
 async def monitor_manual_positions(state: dict, user_id: int):
-    """Monitora SL/TP e sync RevX per posizioni manuali quando l'agente è fermo."""
+    """Monitora SL/TP e sync RevX per tutte le posizioni aperte quando l'agente è fermo."""
     revx_key_id  = state.get("revx_key_id", "")
     revx_priv    = state.get("revx_private_key", "")
     use_revx     = state.get("use_revx", False)
@@ -2349,12 +2349,12 @@ async def monitor_manual_positions(state: dict, user_id: int):
             balances = parse_revx_balances(result)
             bal_map = {b["currency"]: float(b.get("available", 0) or 0) for b in balances if isinstance(b, dict)}
             for pos in list(state["positions"]):
-                if not pos.get("manual") or pos.get("exchange") != "revx":
+                if pos.get("exchange") != "revx":
                     continue
                 sym = pos["symbol"]
                 coin_bal = bal_map.get(sym, 0.0)
                 qty = pos.get("qty_purchased", 0.0)
-                if qty > 0 and coin_bal < qty * 0.05:  # meno del 5% rimasto → chiuso esternamente
+                if qty > 0 and coin_bal < qty * 0.05:
                     cur = market_data.get(sym, {}).get("price", pos["entryPrice"])
                     pos["currentPrice"] = cur
                     add_log(state, "sell", "CHIUSO ESTERNAMENTE",
@@ -2365,10 +2365,8 @@ async def monitor_manual_positions(state: dict, user_id: int):
         except Exception as e:
             print(f"[revx_sync] user {user_id}: {e}")
 
-    # SL / TP per posizioni manuali
+    # SL / TP per tutte le posizioni (manuali e agente)
     for pos in list(state["positions"]):
-        if not pos.get("manual"):
-            continue
         sym = pos["symbol"]
         cur = market_data.get(sym, {}).get("price", 0.0)
         if cur <= 0:
@@ -2377,12 +2375,10 @@ async def monitor_manual_positions(state: dict, user_id: int):
         if cur > pos.get("peak_price", pos["entryPrice"]):
             pos["peak_price"] = cur
 
-        # Hard stop
         if cur <= pos["stopPrice"]:
             await exit_position(state, pos, "STOP LOSS", user_id=user_id)
             continue
 
-        # Take profit (fisso, senza trailing per posizioni manuali senza agente)
         tp = pos.get("tp1Price", 0.0)
         if tp > 0 and cur >= tp:
             await exit_position(state, pos, "TAKE PROFIT", user_id=user_id)
@@ -2484,7 +2480,7 @@ async def background_loop():
                     except Exception as user_err:
                         import traceback as _tb
                         print(f"[scan_and_trade] user {uid}: {user_err}\n{_tb.format_exc()}")
-                elif any(p.get("manual") for p in state.get("positions", [])):
+                elif state.get("positions"):
                     try:
                         await monitor_manual_positions(state, user_id=uid)
                     except Exception as user_err:
@@ -2737,8 +2733,9 @@ async def fetch_coingecko_logos():
 
 async def restore_sessions_from_db(pool):
     """Ripristina sessioni dal DB dopo un riavvio.
-    Se ci sono posizioni aperte le ripristina in paused mode: monitoraggio
-    SL/TP attivo, nessun nuovo ingresso finché l'utente non riavvia manualmente.
+    Sessioni con posizioni aperte sopravvivono al deploy con SL/TP attivi:
+    - running=True  → rimane True, paused=True  (scan_and_trade monitora, no nuovi ingressi)
+    - running=False → rimane False               (monitor_all_positions monitora SL/TP)
     """
     try:
         async with pool.acquire() as conn:
@@ -2756,36 +2753,44 @@ async def restore_sessions_from_db(pool):
                 if not positions:
                     async with pool.acquire() as conn:
                         await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
-                    print(f"[RESTORE] Sessione user {uid} senza posizioni: rimossa dal DB")
+                    print(f"[RESTORE] User {uid}: nessuna posizione, rimossa dal DB")
                     continue
 
                 state["revx_key_id"]      = decrypt_key(row["revx_key_id"] or "")
                 state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
-                state["running"] = True
-                state["paused"]  = True
                 state.pop("_auto_stop_on_restore", None)
                 state.pop("_stopping", None)
+
+                was_running = state.get("running", False)
+                if was_running:
+                    # Bot era attivo: pausa per evitare nuovi ingressi automatici
+                    state["paused"] = True
+
                 user_sessions[uid] = state
 
                 n    = len(positions)
                 syms = ", ".join(p.get("symbol", "?") for p in positions)
-                print(f"[RESTORE] User {uid}: {n} posizioni ripristinate in paused mode ({syms})")
+                mode = "paused" if was_running else "monitor"
+                print(f"[RESTORE] User {uid}: {n} posizioni ({syms}) — modalità {mode}")
 
                 tg_chat = state.get("telegram_chat_id", "")
+                pausa_note = ("L'agente è in <b>PAUSA</b> — riavvialo dall'app quando sei pronto."
+                              if was_running else
+                              "Monitoraggio SL/TP attivo.")
                 msg = (
                     f"🔄 <b>Zentra — server riavviato</b>\n"
                     f"Trovate <b>{n}</b> posizioni aperte: {syms}\n"
-                    "Le posizioni sono attive e monitorate (SL/TP operativi).\n"
-                    "L'agente è in <b>PAUSA</b> — riavvialo dall'app quando sei pronto."
+                    f"Le posizioni sono attive e monitorate (SL/TP operativi).\n"
+                    f"{pausa_note}"
                 )
                 if tg_chat:
                     await send_telegram_to(tg_chat, msg)
                 else:
                     await send_telegram(msg)
             except Exception as e:
-                print(f"Errore ripristino sessione user {uid}: {e}")
+                print(f"[RESTORE] Errore user {uid}: {e}")
     except Exception as e:
-        print(f"Errore restore sessioni: {e}")
+        print(f"[RESTORE] Errore: {e}")
 
 # ── RATE LIMITING ─────────────────────────────────────────────────────────────
 from collections import defaultdict
