@@ -342,13 +342,18 @@ def normalize_coinbase_api_secret(api_secret: str) -> str:
         secret = secret.replace("\\n", "\n")
     return secret
 
+def coinbase_jwt_uri(method: str, path: str) -> str:
+    from urllib.parse import urlsplit
+    clean_path = urlsplit(path).path
+    return f"{method.upper()} {COINBASE_HOST}{clean_path}"
+
 def make_coinbase_jwt(api_key: str, api_secret: str, method: str, path: str) -> str:
     """Genera JWT Coinbase Advanced Trade (ES256) per una singola richiesta."""
     import jwt
     import secrets
     from cryptography.hazmat.primitives import serialization
     now = int(time.time())
-    uri = f"{method.upper()} {COINBASE_HOST}{path}"
+    uri = coinbase_jwt_uri(method, path)
     api_secret = normalize_coinbase_api_secret(api_secret)
     private_key = serialization.load_pem_private_key(api_secret.encode("utf-8"), password=None)
     payload = {

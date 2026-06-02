@@ -115,6 +115,10 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertIn("\nabc\n", normalized)
         self.assertNotIn("\\n", normalized)
 
+    def test_coinbase_jwt_uri_strips_query_string(self):
+        uri = self.main.coinbase_jwt_uri("GET", "/api/v3/brokerage/accounts?limit=250&cursor=abc")
+        self.assertEqual(uri, "GET api.coinbase.com/api/v3/brokerage/accounts")
+
     def test_parse_coinbase_accounts_accepts_known_shape(self):
         accounts = self.main.parse_coinbase_accounts({
             "accounts": [
