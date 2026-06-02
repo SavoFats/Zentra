@@ -920,6 +920,7 @@ body.auth-active .tabbar { display:none !important; }
         <button class="modal-btn cancel" id="externalExchangeTestBtn" onclick="testExternalExchangeConnection()">Test connessione</button>
         <button class="modal-btn cancel" id="externalExchangePreflightBtn" onclick="preflightExternalExchange()">Preflight BTC $1</button>
         <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroBuyBtn" onclick="microBuyCoinbase()">Compra BTC $1</button>
+        <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroSellBtn" onclick="microSellCoinbase()">Vendi BTC test</button>
         <button class="modal-btn cancel" style="color:var(--red);border-color:var(--red)" onclick="disconnectExternalExchange()">Scollega</button>
       </div>
     </div>
@@ -2284,6 +2285,7 @@ function showExternalExchangeConfig(exchange) {
   const testBtn = document.getElementById('externalExchangeTestBtn');
   const preflightBtn = document.getElementById('externalExchangePreflightBtn');
   const microBuyBtn = document.getElementById('externalExchangeMicroBuyBtn');
+  const microSellBtn = document.getElementById('externalExchangeMicroSellBtn');
   if (testBtn) {
     testBtn.style.display = exchange === 'coinbase' ? '' : 'none';
     testBtn.disabled = false;
@@ -2298,6 +2300,11 @@ function showExternalExchangeConfig(exchange) {
     microBuyBtn.style.display = exchange === 'coinbase' ? '' : 'none';
     microBuyBtn.disabled = false;
     microBuyBtn.textContent = 'Compra BTC $1';
+  }
+  if (microSellBtn) {
+    microSellBtn.style.display = exchange === 'coinbase' ? '' : 'none';
+    microSellBtn.disabled = false;
+    microSellBtn.textContent = 'Vendi BTC test';
   }
   const testResult = document.getElementById('externalExchangeTestResult');
   if (testResult) {
@@ -2505,6 +2512,48 @@ async function microBuyCoinbase() {
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Compra BTC $1';
+    }
+  }
+}
+
+async function microSellCoinbase() {
+  const box = document.getElementById('externalExchangeTestResult');
+  const btn = document.getElementById('externalExchangeMicroSellBtn');
+  if (_activeExternalExchange !== 'coinbase') return;
+  const qty = 0.00001455;
+  if (!confirm(`Confermi micro-sell REALE Coinbase di ${qty} BTC?`)) return;
+  if (box) {
+    box.style.display = '';
+    box.style.color = 'var(--text2)';
+    box.textContent = 'Invio micro-sell Coinbase...';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Invio...';
+  }
+  try {
+    const r = await fetch(API + '/trade/coinbase_micro_sell', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ symbol: 'BTC', base_size: qty })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Micro-sell fallito');
+    const status = d.order?.status ? ` · status ${d.order.status}` : '';
+    const filled = d.order?.filled_size ? ` · filled ${d.order.filled_size}` : '';
+    if (box) {
+      box.style.color = 'var(--green)';
+      box.textContent = `Micro-sell inviato: ${d.product_id} ${Number(d.base_size).toFixed(8)} BTC · order ${d.order_id}${status}${filled}`;
+    }
+  } catch(e) {
+    if (box) {
+      box.style.color = 'var(--red)';
+      box.textContent = e.message || 'Micro-sell Coinbase fallito';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Vendi BTC test';
     }
   }
 }

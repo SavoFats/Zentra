@@ -236,6 +236,58 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(summary["product_id"], "BTC-USDC")
         self.assertEqual(summary["status"], "FILLED")
 
+    def test_coinbase_micro_sell_places_small_btc_market_sell(self):
+        main = self.main
+        calls = []
+
+        async def fake_load_keys(user_id):
+            self.assertEqual(user_id, 123)
+            return "api-key", "api-secret"
+
+        async def fake_fetch_accounts(api_key, api_secret):
+            return [{"currency": "BTC", "available": 0.00001455}]
+
+        async def fake_coinbase_request(method, path, body=None, api_key="", api_secret=""):
+            calls.append((method, path, body))
+            if method == "GET" and path == "/api/v3/brokerage/products/BTC-USDC":
+                return {"product_id": "BTC-USDC", "trading_disabled": False, "cancel_only": False}
+            if method == "POST" and path == "/api/v3/brokerage/orders":
+                return {"success": True, "success_response": {"order_id": "ord-sell"}}
+            if method == "GET" and path == "/api/v3/brokerage/orders/historical/ord-sell":
+                return {"order": {"order_id": "ord-sell", "product_id": "BTC-USDC", "status": "FILLED", "filled_size": "0.00001455"}}
+            raise AssertionError((method, path, body))
+
+        async def fake_sleep(*args, **kwargs):
+            return None
+
+        original_load = main.load_coinbase_keys_for_user
+        original_fetch = main.fetch_coinbase_accounts
+        original_request = main.coinbase_request
+        original_rate_limit = main.check_rate_limit
+        original_sleep = main.asyncio.sleep
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.fetch_coinbase_accounts = fake_fetch_accounts
+        main.coinbase_request = fake_coinbase_request
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.asyncio.sleep = fake_sleep
+        try:
+            req = types.SimpleNamespace(symbol="BTC", base_size=0.00001455)
+            result = asyncio.run(main.coinbase_micro_sell(req, request=object(), user_id=123))
+        finally:
+            main.load_coinbase_keys_for_user = original_load
+            main.fetch_coinbase_accounts = original_fetch
+            main.coinbase_request = original_request
+            main.check_rate_limit = original_rate_limit
+            main.asyncio.sleep = original_sleep
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["product_id"], "BTC-USDC")
+        self.assertEqual(result["order_id"], "ord-sell")
+        post_body = next(body for method, path, body in calls if method == "POST" and path == "/api/v3/brokerage/orders")
+        self.assertEqual(post_body["side"], "SELL")
+        self.assertEqual(post_body["product_id"], "BTC-USDC")
+        self.assertEqual(post_body["order_configuration"]["market_market_ioc"]["base_size"], "0.00001455")
+
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances
 

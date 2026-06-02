@@ -3749,6 +3749,10 @@ class CoinbaseMicroBuyReq(BaseModel):
     symbol: str = "BTC"
     amount_usd: float = 1.0
 
+class CoinbaseMicroSellReq(BaseModel):
+    symbol: str = "BTC"
+    base_size: float = 0.00001455
+
 async def load_coinbase_keys_for_user(user_id: int) -> tuple[str, str]:
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
@@ -3839,6 +3843,81 @@ async def coinbase_micro_buy(req: CoinbaseMicroBuyReq, request: Request, user_id
             "ok": True,
             "product_id": product_id,
             "amount_usd": amount,
+            "order_id": order_id,
+            "order": summary,
+        }
+    except Exception as e:
+        return {"ok": False, "error": public_error(e, api_key, api_secret)}
+
+@app.post("/trade/coinbase_micro_sell")
+async def coinbase_micro_sell(req: CoinbaseMicroSellReq, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=3, window=300, key_suffix="coinbase_micro_sell")
+    sym = req.symbol.upper().replace("USDT", "").replace("USD", "")
+    if sym != "BTC":
+        raise HTTPException(status_code=400, detail="Micro-sell Coinbase abilitato solo su BTC")
+    base_size = round(float(req.base_size), 8)
+    if base_size <= 0 or base_size > 0.0001:
+        raise HTTPException(status_code=400, detail="Quantità micro-sell consentita: 0-0.0001 BTC")
+    api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+    try:
+        accounts = await fetch_coinbase_accounts(api_key, api_secret)
+        btc_available = sum(float(a.get("available") or 0) for a in accounts if a.get("currency") == "BTC")
+        if btc_available < base_size:
+            return {
+                "ok": False,
+                "error": "BTC insufficiente disponibile su Coinbase",
+                "available_btc": btc_available,
+                "required_btc": base_size,
+            }
+        product = None
+        product_errors = []
+        for product_id in ("BTC-USDC", "BTC-USD"):
+            try:
+                product = await coinbase_request(
+                    "GET", f"/api/v3/brokerage/products/{product_id}",
+                    api_key=api_key, api_secret=api_secret
+                )
+                if not (product.get("is_disabled") or product.get("trading_disabled") or product.get("cancel_only")):
+                    break
+            except Exception as product_exc:
+                product_errors.append(public_error(product_exc, api_key, api_secret, max_len=120))
+                product = None
+        if not product:
+            return {"ok": False, "error": "Prodotto BTC Coinbase non disponibile", "errors": product_errors[:2]}
+        import uuid as _uuid
+        client_order_id = str(_uuid.uuid4())
+        product_id = product["product_id"]
+        order_body = {
+            "client_order_id": client_order_id,
+            "product_id": product_id,
+            "side": "SELL",
+            "order_configuration": {
+                "market_market_ioc": {
+                    "base_size": f"{base_size:.8f}",
+                    "rfq_disabled": True,
+                }
+            },
+        }
+        result = await coinbase_request(
+            "POST", "/api/v3/brokerage/orders",
+            body=order_body, api_key=api_key, api_secret=api_secret
+        )
+        if result.get("success") is False:
+            err = result.get("error_response") or result.get("failure_reason") or result
+            return {"ok": False, "error": public_error(Exception(str(err)), api_key, api_secret)}
+        order_id = extract_coinbase_order_id(result)
+        if not order_id:
+            return {"ok": False, "error": "Ordine Coinbase creato senza order_id", "raw": public_error(Exception(str(result)), api_key, api_secret)}
+        await asyncio.sleep(1)
+        details = await coinbase_request(
+            "GET", f"/api/v3/brokerage/orders/historical/{order_id}",
+            api_key=api_key, api_secret=api_secret
+        )
+        summary = summarize_coinbase_order(details)
+        return {
+            "ok": True,
+            "product_id": product_id,
+            "base_size": base_size,
             "order_id": order_id,
             "order": summary,
         }
