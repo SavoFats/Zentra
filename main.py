@@ -1059,13 +1059,12 @@ def get_breakout_signal(sym: str, current_price: float, max_stop_pct: float = 0.
     # Stop sotto il range di consolidazione (supporto naturale)
     stop_price = max(range_low * 0.998, current_price * (1 - max_stop_pct)) if range_low > 0 else current_price * (1 - max_stop_pct)
 
-    signal = consolidation_ok and atr_contracted and breakout_ok and vol_ok and fresh_ok
+    # atr_contracted non è nel gate: la candela di breakout ha ATR elevato per definizione.
+    # Viene calcolato e restituito come metadato ma non blocca il segnale.
+    signal = consolidation_ok and breakout_ok and vol_ok and fresh_ok
 
     if not consolidation_ok:
-        reason = f"nessuna consolidazione | CHOP3h {chop_long:.1f} (min 61.8)"
-    elif not atr_contracted:
-        ratio = atr_5m / atr_avg_30 if atr_avg_30 > 0 else 1.0
-        reason = f"ATR non contratto | {ratio:.2f}x vs media (max 0.85x)"
+        reason = f"nessuna consolidazione | CHOP3h {chop_long:.1f} (min {chop_min:.0f})"
     elif not breakout_ok:
         pct_to = (range_high / last_close - 1) * 100 if last_close > 0 else 0
         reason = f"nessun breakout | -{pct_to:.2f}% dal tetto range {range_high:.6f}"
