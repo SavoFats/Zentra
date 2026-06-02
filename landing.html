@@ -275,6 +275,7 @@ section { padding: 120px 40px; }
 .section-sub {
   font-size: 18px; color: var(--text2); font-weight: 500;
   line-height: 1.6; max-width: 520px;
+  margin: 0 auto; text-align: center;
 }
 
 /* ─── FEATURES ──────────────────────────────── */
@@ -420,6 +421,45 @@ section { padding: 120px 40px; }
   box-shadow: 0 4px 24px rgba(0,82,255,0.35);
 }
 .btn-plan.primary:hover { box-shadow: 0 8px 32px rgba(0,82,255,0.5); transform: translateY(-1px); }
+
+/* ─── TESTIMONIALS ──────────────────────────── */
+.testimonials { padding: 120px 0; overflow: hidden; }
+.testimonials-header { text-align: center; margin-bottom: 60px; padding: 0 40px; }
+.testi-track-wrap { overflow: hidden; width: 100%; position: relative; }
+.testi-track-wrap::before,
+.testi-track-wrap::after {
+  content:''; position:absolute; top:0; bottom:0; width:120px; z-index:2; pointer-events:none;
+}
+.testi-track-wrap::before { left:0; background:linear-gradient(90deg, var(--bg), transparent); }
+.testi-track-wrap::after  { right:0; background:linear-gradient(-90deg, var(--bg), transparent); }
+.testi-track {
+  display: flex; gap: 24px; padding: 12px 0;
+  animation: testi-scroll 50s linear infinite;
+  width: max-content;
+}
+.testi-track:hover { animation-play-state: paused; }
+@keyframes testi-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.testi-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 32px;
+  width: 320px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 24px;
+  transition: border-color 0.2s;
+}
+.testi-card:hover { border-color: var(--border2); }
+.testi-stars { color: #f59e0b; font-size: 14px; letter-spacing: 2px; }
+.testi-text { font-size: 15px; line-height: 1.65; color: var(--text2); flex: 1; }
+.testi-author { display: flex; align-items: center; gap: 12px; }
+.testi-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+.testi-name { font-size: 14px; font-weight: 700; }
+.testi-handle { font-size: 12px; color: var(--text3); }
 
 /* ─── FINAL CTA ─────────────────────────────── */
 .final-cta {
@@ -720,6 +760,147 @@ footer {
   </div>
 </section>
 
+<!-- TESTIMONIALS -->
+<section class="testimonials">
+  <div class="testimonials-header reveal">
+    <div class="section-tag" data-i18n="testi_tag">Testimonials</div>
+    <h2 class="section-title" data-i18n="testi_title">Loved by traders worldwide</h2>
+    <p class="section-sub" data-i18n="testi_sub">Real results from traders who made Zentra part of their daily workflow.</p>
+  </div>
+  <div class="testi-track-wrap">
+    <div class="testi-track" id="testiTrack">
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Finally an algo tool that doesn't need a PhD to configure. Set my risk parameters in 10 minutes and let it run. Up 14% in my first month of automated trading."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#3b82f6;">LK</div>
+          <div><div class="testi-name">Lena K.</div><div class="testi-handle">Crypto trader, Berlin</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"The agent caught a SOL breakout at 3 AM while I was asleep. That single trade covered my Pro subscription for the entire year. Absolute game changer."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#10b981;">MR</div>
+          <div><div class="testi-name">Marco R.</div><div class="testi-handle">Full-time trader, Milan</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"I was skeptical about automation, but Zentra changed my mind. The breakout strategy is uncannily accurate during volatile sessions. My win rate went from 48% to 61%."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#8b5cf6;">AT</div>
+          <div><div class="testi-name">Alex T.</div><div class="testi-handle">Quant investor, London</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"ATR-based trailing stops actually adapt to volatility instead of being static. That alone is worth the subscription — I stopped getting shaken out of winning trades."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#f59e0b;">DM</div>
+          <div><div class="testi-name">Davide M.</div><div class="testi-handle">Swing trader, Rome</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Telegram alerts mean I never miss an entry or exit, even with a full-time job. It's like having a professional trading assistant available 24/7 on my phone."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#ec4899;">SN</div>
+          <div><div class="testi-name">Sara N.</div><div class="testi-handle">Part-time trader, Barcelona</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Scanning 50+ pairs manually is humanly impossible. My entry quality improved the moment I stopped guessing and let Zentra's scanner decide. Fewer trades, better results."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#06b6d4;">JO</div>
+          <div><div class="testi-name">James O.</div><div class="testi-handle">Algo trader, Amsterdam</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#ef4444;">GF</div>
+          <div><div class="testi-name">Giulia F.</div><div class="testi-handle">Trader privato, Napoli</div></div>
+        </div>
+      </div>
+
+      <!-- duplicated for seamless loop -->
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Finally an algo tool that doesn't need a PhD to configure. Set my risk parameters in 10 minutes and let it run. Up 14% in my first month of automated trading."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#3b82f6;">LK</div>
+          <div><div class="testi-name">Lena K.</div><div class="testi-handle">Crypto trader, Berlin</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"The agent caught a SOL breakout at 3 AM while I was asleep. That single trade covered my Pro subscription for the entire year. Absolute game changer."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#10b981;">MR</div>
+          <div><div class="testi-name">Marco R.</div><div class="testi-handle">Full-time trader, Milan</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"I was skeptical about automation, but Zentra changed my mind. The breakout strategy is uncannily accurate during volatile sessions. My win rate went from 48% to 61%."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#8b5cf6;">AT</div>
+          <div><div class="testi-name">Alex T.</div><div class="testi-handle">Quant investor, London</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"ATR-based trailing stops actually adapt to volatility instead of being static. That alone is worth the subscription — I stopped getting shaken out of winning trades."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#f59e0b;">DM</div>
+          <div><div class="testi-name">Davide M.</div><div class="testi-handle">Swing trader, Rome</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Telegram alerts mean I never miss an entry or exit, even with a full-time job. It's like having a professional trading assistant available 24/7 on my phone."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#ec4899;">SN</div>
+          <div><div class="testi-name">Sara N.</div><div class="testi-handle">Part-time trader, Barcelona</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Scanning 50+ pairs manually is humanly impossible. My entry quality improved the moment I stopped guessing and let Zentra's scanner decide. Fewer trades, better results."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#06b6d4;">JO</div>
+          <div><div class="testi-name">James O.</div><div class="testi-handle">Algo trader, Amsterdam</div></div>
+        </div>
+      </div>
+
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."</p>
+        <div class="testi-author">
+          <div class="testi-avatar" style="background:#ef4444;">GF</div>
+          <div><div class="testi-name">Giulia F.</div><div class="testi-handle">Trader privato, Napoli</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
 <!-- PLANS -->
 <section class="plans" id="plans">
   <div class="plans-header reveal">
@@ -830,6 +1011,7 @@ const T = {
     step1_title:'Connect', step1_desc:'Link your exchange API keys. Zentra never stores them in plaintext — end-to-end encrypted.',
     step2_title:'Configure', step2_desc:'Choose your strategy, set risk parameters (SL%, TP%, max positions), and pick your session duration.',
     step3_title:'Trade', step3_desc:'Start the agent and get Telegram notifications for every entry, exit, and alert — in real time.',
+    testi_tag:'Testimonials', testi_title:'Loved by traders worldwide', testi_sub:'Real results from traders who made Zentra part of their daily workflow.',
     plans_tag:'Pricing', plans_title:'Simple, transparent pricing', plans_sub:'Start for free, upgrade when you\'re ready.',
     plan_free_period:'Forever free', pf1:'Manual trading', pf2:'Market scanner', pf3:'1 open position at a time', pf4:'Automated agent', pf5:'Telegram notifications', pf6:'Real exchange trading',
     plan_free_btn:'Get started free', plan_pro_badge:'Most Popular',
@@ -856,6 +1038,7 @@ const T = {
     step1_title:'Connetti', step1_desc:'Collega le tue chiavi API del tuo exchange. Zentra non le salva mai in chiaro — cifratura end-to-end.',
     step2_title:'Configura', step2_desc:'Scegli la strategia, imposta i parametri di rischio (SL%, TP%, max posizioni) e la durata della sessione.',
     step3_title:'Tradata', step3_desc:'Avvia l\'agente e ricevi notifiche Telegram per ogni ingresso, uscita e avviso — in tempo reale.',
+    testi_tag:'Testimonianze', testi_title:'Amato dai trader di tutto il mondo', testi_sub:'Risultati reali da trader che hanno fatto di Zentra parte del loro workflow quotidiano.',
     plans_tag:'Prezzi', plans_title:'Prezzi semplici e trasparenti', plans_sub:'Inizia gratis, aggiorna quando sei pronto.',
     plan_free_period:'Gratis per sempre', pf1:'Trading manuale', pf2:'Scanner di mercato', pf3:'1 posizione aperta alla volta', pf4:'Agente automatico', pf5:'Notifiche Telegram', pf6:'Trading reale su exchange',
     plan_free_btn:'Inizia gratis', plan_pro_badge:'Più Popolare',
