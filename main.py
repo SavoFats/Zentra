@@ -1322,8 +1322,9 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
     is_real  = cfg.get("realMode", False)
 
     alloc_pct  = min(cfg.get("allocPct", 0.20), 1.0)
-    use_revx   = state.get("use_revx", False)
-    TRADING_FEE = 0.0009  # RevX taker fee 0.09%
+    use_revx         = state.get("use_revx", False)
+    use_coinbase_pos = state.get("use_coinbase", False)
+    TRADING_FEE = 0.012 if use_coinbase_pos else 0.0009  # Coinbase ~1.2%, RevX taker 0.09%
     fixed_amt  = cfg.get("tradeAmountUsd", 0)
     size = round(fixed_amt, 2) if fixed_amt and fixed_amt > 0 else tradable_capital * alloc_pct
     if size < 1:
@@ -1434,6 +1435,88 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
             }
             state["positions"].append(pos)
             await persist_sessions()
+            return
+        elif state.get("use_coinbase"):
+            # ── COINBASE ──────────────────────────────────────────────────────
+            cb_key = state.get("coinbase_api_key_agent", "")
+            cb_sec = state.get("coinbase_api_secret_agent", "")
+            if not cb_key:
+                try:
+                    cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
+                except Exception as ke:
+                    add_log(state, "info", "ERRORE", f"Coinbase keys mancanti: {ke}")
+                    return
+            try:
+                preflight = await get_coinbase_preflight_result(cb_key, cb_sec, sym, size)
+                if not preflight.get("ok"):
+                    blockers = preflight.get("blockers", [])
+                    add_log(state, "info", "ERRORE", f"Coinbase preflight {sym}: {blockers}")
+                    return
+                import uuid as _uuid
+                product_id = preflight["product_id"]
+                order_body = {
+                    "client_order_id": str(_uuid.uuid4()),
+                    "product_id": product_id,
+                    "side": "BUY",
+                    "order_configuration": {
+                        "market_market_ioc": {
+                            "quote_size": f"{size:.2f}",
+                            "rfq_disabled": True,
+                        }
+                    },
+                }
+                result = await coinbase_request(
+                    "POST", "/api/v3/brokerage/orders",
+                    body=order_body, api_key=cb_key, api_secret=cb_sec
+                )
+                if result.get("success") is False:
+                    err = result.get("error_response") or result.get("failure_reason") or result
+                    add_log(state, "info", "ERRORE", f"Ordine Coinbase {sym} fallito: {str(err)[:120]}")
+                    await notify(state, f"ERRORE ORDINE Coinbase {sym}: {str(err)[:100]}")
+                    return
+                order_id = extract_coinbase_order_id(result)
+                if not order_id:
+                    add_log(state, "info", "ERRORE", f"Ordine Coinbase {sym} senza order_id: {result}")
+                    return
+                od = await wait_coinbase_order_fill(order_id, cb_key, cb_sec)
+                actual_price = float(od.get("average_filled_price") or 0)
+                qty_purchased = float(od.get("filled_size") or 0)
+                buy_fee_usd = float(od.get("total_fees") or 0)
+                if actual_price <= 0 or qty_purchased <= 0:
+                    state_txt = od.get("status") or "sconosciuto"
+                    add_log(state, "info", "ERRORE", f"Coinbase {sym} non fillato (state={state_txt})")
+                    await notify(state, f"ERRORE Coinbase {sym}: ordine non fillato (state={state_txt})")
+                    return
+                stop_price  = actual_price * (1 - R_pct)
+                tp1_price   = actual_price * (1 + R_pct * tp1_multiplier)
+                tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
+                add_log(state, "buy", "ACQUISTO REALE (Coinbase)",
+                    f"{sym} @ ${actual_price:.4f} | Size: ${size:.0f} | Qty: {qty_purchased:.8f} | "
+                    f"SL: ${stop_price:.4f} | Fee: ${buy_fee_usd:.4f}")
+                await notify(state, f"ACQUISTO REALE Coinbase\n{sym} @ ${actual_price:.4f}\nSize: ${size:.2f}")
+            except Exception as e:
+                add_log(state, "info", "ERRORE", f"Coinbase buy error: {e}")
+                return
+            state["currentCapital"] -= size
+            pos = {
+                "symbol": sym, "icon": sym_data["icon"],
+                "entryPrice": actual_price, "currentPrice": actual_price,
+                "highPrice": actual_price, "peak_price": actual_price,
+                "size": size, "size_remaining": size, "tp1_hit": False,
+                "entryTime": datetime.utcnow().isoformat() + "Z",
+                "stopPrice": stop_price, "tp1Price": tp1_price, "tp2Price": tp2_price,
+                "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
+                "realMode": True, "fee_pct": 0.012,
+                "qty_purchased": qty_purchased, "exchange": "coinbase",
+                "symbol_pair": product_id,
+                "entry_usd": round(size, 2),
+                "buy_fee_usd": round(buy_fee_usd, 4),
+            }
+            state["positions"].append(pos)
+            await persist_sessions()
+            return
+        else:
+            add_log(state, "info", "WARN", "Nessun exchange reale disponibile — trade annullato")
             return
     else:
         actual_price = price
@@ -3629,19 +3712,33 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     user_plan = "free"
     free_session_counter_update = None
     row = None
+    agent_exchange = cfg.get("agentExchange", "revx").lower()
+    use_coinbase = False
+    coinbase_api_key_agent, coinbase_api_secret_agent = "", ""
     if db_pool:
         try:
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow(
                     "SELECT sim_mode, revx_key_id, revx_private_key, username, display_name, "
-                    "telegram_chat_id, plan, subscription_expires_at, last_session_date, sessions_today "
+                    "telegram_chat_id, plan, subscription_expires_at, last_session_date, sessions_today, "
+                    "coinbase_api_key, coinbase_api_secret "
                     "FROM users WHERE id = $1", user_id)
                 if row:
                     revx_key_id      = decrypt_key(row["revx_key_id"] or "")
                     revx_private_key = decrypt_key(row["revx_private_key"] or "")
                     sim = row["sim_mode"] if row["sim_mode"] is not None else True
-                    use_revx = bool(revx_key_id) and not sim
-                    real_mode = use_revx
+                    if agent_exchange == "coinbase" and not sim:
+                        raw_cb_key = decrypt_key(row.get("coinbase_api_key") or "")
+                        raw_cb_sec = decrypt_key(row.get("coinbase_api_secret") or "")
+                        if raw_cb_key and raw_cb_sec:
+                            use_coinbase = True
+                            coinbase_api_key_agent = raw_cb_key
+                            coinbase_api_secret_agent = raw_cb_sec
+                            real_mode = True
+                        use_revx = False
+                    else:
+                        use_revx = bool(revx_key_id) and not sim
+                        real_mode = use_revx
                     # Piano effettivo
                     raw_plan = row["plan"] or "free"
                     exp = row["subscription_expires_at"]
@@ -3726,12 +3823,19 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
             "circuitBreakerEnabled":  bool(cfg.get("circuitBreakerEnabled", False)),
             "dailyLossLimit":         float(cfg.get("dailyLossLimit", 0.03)),
             "strategy":               cfg.get("strategy", "momentum"),
+            "chopMin":                float(cfg.get("chopMin", 61.8)),
+            "atrRatioMax":            float(cfg.get("atrRatioMax", 0.85)),
+            "breakoutVolMultiplier":  float(cfg.get("breakoutVolMultiplier", 1.5)),
+            "agentExchange":          agent_exchange,
         },
         "daily_capital_start": capital,
         "daily_date":          datetime.utcnow().strftime("%Y-%m-%d"),
         "cooldowns": {}, "tradeCount": 0, "wins": 0, "trades": [], "log": [],
         "revx_key_id": revx_key_id, "revx_private_key": revx_private_key,
         "use_revx": use_revx,
+        "use_coinbase": use_coinbase,
+        "coinbase_api_key_agent": coinbase_api_key_agent,
+        "coinbase_api_secret_agent": coinbase_api_secret_agent,
         "consecutiveLosses": 0,
         "username": (row["display_name"] or row["username"]) if (db_pool and row) else "",
         "telegram_chat_id": (row["telegram_chat_id"] or "") if (db_pool and row) else "",
@@ -3749,7 +3853,12 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     max_stop_pct_s = float(cfg.get("maxStopPct", 0.02)) * 100
     btc_filt_s   = "ON" if cfg.get("btcEmaFilter", True) else "OFF"
     curr_sym     = "$"
-    exchange_name = "Revolut X" if real_mode else "SIM"
+    if use_coinbase:
+        exchange_name = "Coinbase"
+    elif use_revx:
+        exchange_name = "Revolut X"
+    else:
+        exchange_name = "SIM"
     add_log(state, "info", "AVVIO",
         f"{curr_sym}{capital:.0f} | {mode} [{exchange_name}] | Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | "
         f"Momentum: +{mom_thr_pct:.1f}% | Vol: {vol_mult_s}x | Stop: -{max_stop_pct_s:.1f}% | "

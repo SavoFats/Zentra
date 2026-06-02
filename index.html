@@ -3315,7 +3315,9 @@ async function startAgent() {
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
   if (sessionDur < 0 || sessionDur > 24) { showToast('Durata sessione non valida (0–24h)', true); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const isReal = _hasRevxKeys && !_simMode;
+  const selectedExch = document.getElementById('agentExchange')?.value || 'revx';
+  const hasCoinbaseKeys = _exchangeKeys && _exchangeKeys.coinbase;
+  const isReal = !_simMode && (selectedExch === 'coinbase' ? !!hasCoinbaseKeys : _hasRevxKeys);
   const capitalVal = parseFloat(capitalUsdVal.toFixed(2));
   if (isReal && capitalVal <= 0) { showFieldError('capitalUsd', 'Saldo non ancora caricato — attendi e riprova'); return; }
   if (isReal && total > 0 && capitalVal > total) { showFieldError('capitalUsd', 'Supera il saldo disponibile (' + getCurrSym() + total.toFixed(2) + ')'); return; }
@@ -3335,11 +3337,15 @@ async function startAgent() {
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
-    realMode:              _hasRevxKeys && !_simMode,
+    realMode:              isReal,
     btcEmaFilter:          _btcEmaFilter,
     timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
     strategy:              document.getElementById('stratBreakoutBtn').classList.contains('active') ? 'breakout' : 'momentum',
+    chopMin:               parseFloat(document.getElementById('chopMin')?.value || 61.8),
+    atrRatioMax:           parseFloat(document.getElementById('atrRatioMax')?.value || 85) / 100,
+    breakoutVolMultiplier: parseFloat(document.getElementById('breakoutVolMultiplier')?.value || 1.5),
+    agentExchange:         selectedExch,
   };
   if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);
