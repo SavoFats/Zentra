@@ -1289,9 +1289,13 @@ body.auth-active .tabbar { display:none !important; }
 
     <div class="section-label">Capitale</div>
     <div class="field">
-      <div class="field-label">Saldo totale disponibile</div>
-      <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;font-size:16px;font-weight:700;color:var(--text3)" id="totalBalanceDisplay">--</div>
-      <div class="field-hint" id="balanceSourceHint">Aggiornato in tempo reale da Revolut X</div>
+      <div class="field-label">Exchange agente</div>
+      <select id="agentExchange" onchange="onAgentExchangeChange()" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:15px;font-weight:600;outline:none;font-family:var(--sans);margin-top:6px">
+        <option value="revx">Revolut X</option>
+        <option value="coinbase">Coinbase</option>
+      </select>
+      <div style="margin-top:10px;padding:13px 14px;font-size:16px;font-weight:700;color:var(--text3);background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm)" id="totalBalanceDisplay">--</div>
+      <div class="field-hint" id="balanceSourceHint">Seleziona l'exchange per vedere il saldo</div>
     </div>
     <!-- elemento nascosto per compatibilità JS (dataset.total) -->
     <input type="hidden" id="capital">
@@ -1319,6 +1323,16 @@ body.auth-active .tabbar { display:none !important; }
     <div class="field">
       <div class="field-label">Durata sessione <span id="sessionVal">0h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
       <input type="range" id="sessionDuration" min="0" max="24" value="0" step="1" oninput="document.getElementById('sessionVal').textContent=this.value+'h'">
+    </div>
+
+    <div class="section-label">Strategia</div>
+    <div class="field">
+      <div class="field-label">Strategia di ingresso</div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="ema-btn active" id="stratMomentumBtn" onclick="setStrategy('momentum')">Momentum</button>
+        <button class="ema-btn" id="stratBreakoutBtn" onclick="setStrategy('breakout')">Breakout</button>
+      </div>
+      <div class="field-hint" id="stratHint">Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata</div>
     </div>
 
     <div class="section-label">Filtri</div>
@@ -1364,7 +1378,7 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Distanza massima del prezzo da EMA20 per considerare un pullback valido</div>
     </div>
 
-    <div class="field">
+    <div class="field" id="momentumFilterField">
       <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
       <input type="range" id="momentumPct" min="0.5" max="3" value="1" step="0.5"
         oninput="document.getElementById('momentumPctVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
@@ -1408,15 +1422,6 @@ body.auth-active .tabbar { display:none !important; }
       <input type="range" id="maxHoldHours" min="1" max="24" value="4" step="1"
         oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
       <div class="field-hint">Chiude la posizione automaticamente se aperta da troppo tempo</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Strategia di ingresso</div>
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <button class="ema-btn active" id="stratMomentumBtn" onclick="setStrategy('momentum')">Momentum</button>
-        <button class="ema-btn" id="stratBreakoutBtn" onclick="setStrategy('breakout')">Breakout</button>
-      </div>
-      <div class="field-hint" id="stratHint">Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata</div>
     </div>
 
     <div class="field">
@@ -3217,6 +3222,69 @@ function setStrategy(s) {
   document.getElementById('stratHint').textContent = s === 'breakout'
     ? 'Entra su coin in consolidamento che rompono il range con volume — ingresso anticipato, prima del grande move'
     : 'Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata';
+  const mf = document.getElementById('momentumFilterField');
+  if (mf) mf.style.display = s === 'momentum' ? '' : 'none';
+}
+
+function renderAgentExchangeOptions() {
+  const sel = document.getElementById('agentExchange');
+  if (!sel) return;
+  const prev = sel.value;
+  const options = [];
+  if (_hasRevxKeys) options.push(['revx', 'Revolut X']);
+  if (_exchangeKeys && _exchangeKeys.coinbase) options.push(['coinbase', 'Coinbase']);
+  if (!options.length) options.push(['revx', 'Revolut X']);
+  sel.innerHTML = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  if (options.some(([v]) => v === prev)) sel.value = prev;
+}
+
+async function onAgentExchangeChange() {
+  const exchange = document.getElementById('agentExchange')?.value;
+  const display = document.getElementById('totalBalanceDisplay');
+  const hint    = document.getElementById('balanceSourceHint');
+  if (!display) return;
+  display.textContent = 'Caricamento...';
+  display.style.color = '';
+  try {
+    if (exchange === 'coinbase') {
+      const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
+      const d = await r.json();
+      if (d.ok) {
+        const qb = d.quote_balances || {};
+        const bal = parseFloat(qb.USD || qb.USDC || qb.EUR || 0);
+        display.textContent = '$' + bal.toFixed(2) + ' disponibili';
+        display.style.color = 'var(--green)';
+        hint.textContent = 'Aggiornato da Coinbase';
+        document.getElementById('capitalUsd').value = parseFloat((bal * 0.98).toFixed(2));
+        document.getElementById('capital').dataset.total = bal;
+        updateCapitalUsd();
+      } else {
+        display.textContent = 'Errore connessione Coinbase';
+        display.style.color = 'var(--red)';
+      }
+    } else {
+      const r = await fetch(API + '/test_revx', { headers: authHeaders() });
+      const d = await r.json();
+      if (d.ok) {
+        const usd = d.balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
+        const eur = d.balances.find(b => b.currency === 'EUR');
+        const best = usd || eur;
+        const bal = best ? parseFloat(best.available) : 0;
+        display.textContent = '$' + bal.toFixed(2) + ' disponibili';
+        display.style.color = 'var(--green)';
+        hint.textContent = 'Aggiornato in tempo reale da Revolut X';
+        document.getElementById('capitalUsd').value = parseFloat((bal * 0.98).toFixed(2));
+        document.getElementById('capital').dataset.total = bal;
+        updateCapitalUsd();
+      } else {
+        display.textContent = 'Errore connessione RevX';
+        display.style.color = 'var(--red)';
+      }
+    }
+  } catch(e) {
+    display.textContent = 'Errore di rete';
+    display.style.color = 'var(--red)';
+  }
 }
 function setCircuitBreaker(on) {
   document.getElementById('cbOnBtn').classList.toggle('active', on);
@@ -4542,6 +4610,8 @@ function openDrawer() {
   document.getElementById('drawerOverlay').classList.add('open');
   document.getElementById('configDrawer').classList.add('open');
   loadHomeBalance();
+  renderAgentExchangeOptions();
+  onAgentExchangeChange();
 }
 
 function closeDrawer() {
