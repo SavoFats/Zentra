@@ -373,6 +373,114 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(post_body["product_id"], "BTC-USDC")
         self.assertEqual(post_body["order_configuration"]["market_market_ioc"]["quote_size"], "10.00")
 
+    def test_monitor_coinbase_position_uses_coinbase_price_before_tp(self):
+        main = self.main
+        state = main.make_session()
+        pos = {
+            "symbol": "OCEAN",
+            "entryPrice": 0.1315,
+            "currentPrice": 0.6123,
+            "highPrice": 0.1315,
+            "peak_price": 0.1315,
+            "size": 1.0,
+            "size_remaining": 1.0,
+            "entryTime": "2026-06-02T17:35:00Z",
+            "stopPrice": 0.1289,
+            "tp1Price": 0.1360,
+            "realMode": True,
+            "exchange": "coinbase",
+            "symbol_pair": "OCEAN-USDC",
+            "qty_purchased": 7.6,
+            "manual": True,
+        }
+        state["positions"].append(pos)
+
+        async def fake_load_keys(user_id):
+            return "api-key", "api-secret"
+
+        async def fake_coinbase_price(product_id, api_key, api_secret):
+            self.assertEqual(product_id, "OCEAN-USDC")
+            return 0.1324
+
+        async def fail_exit(*args, **kwargs):
+            raise AssertionError("Coinbase position should not close from non-Coinbase market price")
+
+        original_market = main.market_data
+        original_load = main.load_coinbase_keys_for_user
+        original_price = main.get_coinbase_product_price
+        original_exit = main.exit_position
+        main.market_data = {"OCEAN": {"price": 0.6123}}
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.get_coinbase_product_price = fake_coinbase_price
+        main.exit_position = fail_exit
+        try:
+            asyncio.run(main.monitor_manual_positions(state, user_id=123))
+        finally:
+            main.market_data = original_market
+            main.load_coinbase_keys_for_user = original_load
+            main.get_coinbase_product_price = original_price
+            main.exit_position = original_exit
+
+        self.assertIn(pos, state["positions"])
+        self.assertEqual(pos["currentPrice"], 0.1324)
+
+    def test_coinbase_exit_keeps_position_when_available_balance_is_zero(self):
+        main = self.main
+        state = main.make_session()
+        state["currentCapital"] = 100.0
+        state["capital"] = 100.0
+        state["config"] = {}
+        pos = {
+            "symbol": "OCEAN",
+            "entryPrice": 0.1315,
+            "currentPrice": 0.1324,
+            "highPrice": 0.1324,
+            "peak_price": 0.1324,
+            "size": 1.0,
+            "size_remaining": 1.0,
+            "entryTime": "2026-06-02T17:35:00Z",
+            "stopPrice": 0.1289,
+            "tp1Price": 0.1360,
+            "realMode": True,
+            "exchange": "coinbase",
+            "symbol_pair": "OCEAN-USDC",
+            "qty_purchased": 7.6,
+            "manual": True,
+        }
+        state["positions"].append(pos)
+
+        async def fake_load_keys(user_id):
+            return "api-key", "api-secret"
+
+        async def fake_fetch_accounts(api_key, api_secret):
+            return [{"currency": "OCEAN", "available": 0.0}]
+
+        async def fail_coinbase_request(*args, **kwargs):
+            raise AssertionError("Should not place Coinbase sell when available balance is zero")
+
+        async def fake_notify(*args, **kwargs):
+            return None
+
+        original_load = main.load_coinbase_keys_for_user
+        original_fetch = main.fetch_coinbase_accounts
+        original_request = main.coinbase_request
+        original_notify = main.notify
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.fetch_coinbase_accounts = fake_fetch_accounts
+        main.coinbase_request = fail_coinbase_request
+        main.notify = fake_notify
+        try:
+            asyncio.run(main.exit_position(state, pos, "TAKE PROFIT", user_id=123))
+        finally:
+            main.load_coinbase_keys_for_user = original_load
+            main.fetch_coinbase_accounts = original_fetch
+            main.coinbase_request = original_request
+            main.notify = original_notify
+
+        self.assertIn(pos, state["positions"])
+        self.assertTrue(pos.get("_manual_action_required"))
+        self.assertFalse(state["trades"])
+
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances
 
