@@ -2300,10 +2300,12 @@ async def poll_telegram():
                 if cmd == "/CONFIGREVX":
                     await handle_revx_wizard(chat_id, uid, "start", "")
                 elif cmd == "/STATUS":
-                    if state and state.get("running"):
+                    if state and (state.get("running") or state.get("positions")):
                         pos_list = ", ".join([p["symbol"] for p in state["positions"]]) or "nessuna"
                         pnl = unrealized_pnl(state)
-                        await send_telegram_to(chat_id, f"Sessione attiva\nPosizioni: {pos_list}\nP&L: ${pnl:.2f}")
+                        status_label = "Sessione attiva" if state.get("running") else "Monitoraggio posizioni"
+                        paused_note = "\nStato: pausa, nessun nuovo ingresso" if state.get("paused") else ""
+                        await send_telegram_to(chat_id, f"{status_label}{paused_note}\nPosizioni: {pos_list}\nP&L: ${pnl:.2f}")
                     else:
                         await send_telegram_to(chat_id, "Nessuna sessione attiva")
 
