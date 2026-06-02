@@ -3145,7 +3145,13 @@ function restoreConfigFromStorage() {
 function getCurrSym() { return '$'; }
 
 function getFeePct() {
-  return 0.0009; // RevX taker fee 0.09%
+  const exchange = document.getElementById('agentExchange')?.value;
+  return exchange === 'coinbase' ? 0.012 : 0.0009;
+}
+
+function getExchangeLabel() {
+  const exchange = document.getElementById('agentExchange')?.value;
+  return exchange === 'coinbase' ? 'Coinbase (1.2%)' : 'Revolut X (0.09%)';
 }
 
 function updateCapitalUsd() {
@@ -3181,7 +3187,7 @@ function updateAlloc() {
   const allocPct   = usd / tradable * 100;
   hint.innerHTML =
     '<strong>' + sym + net.toFixed(2) + '</strong> netto per trade · max ' + maxPos + ' posizioni · ' + allocPct.toFixed(1) + '% del capitale' +
-    '<br><span style="color:var(--text3);font-size:10px">Fee Revolut X (0.09%): <span style="color:var(--red)">−' + sym + feePerTrade.toFixed(2) + '</span> · Capitale: ' + sym + tradable.toFixed(2) + '</span>';
+    '<br><span style="color:var(--text3);font-size:10px">Fee ' + getExchangeLabel() + ': <span style="color:var(--red)">−' + sym + feePerTrade.toFixed(2) + '</span> · Capitale: ' + sym + tradable.toFixed(2) + '</span>';
 }
 
 function onCapitalInput() { updateCapitalPct(); } // compat
@@ -3314,6 +3320,7 @@ async function onAgentExchangeChange() {
     display.textContent = 'Errore di rete';
     display.style.color = 'var(--red)';
   }
+  updateAlloc();
 }
 function setCircuitBreaker(on) {
   document.getElementById('cbOnBtn').classList.toggle('active', on);
