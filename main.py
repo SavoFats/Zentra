@@ -2762,7 +2762,8 @@ async def restore_sessions_from_db(pool):
         for row in rows:
             uid = row["user_id"]
             try:
-                state = json.loads(row["state_json"])
+                state = make_session()
+                state.update(json.loads(row["state_json"]))
                 positions = state.get("positions", [])
 
                 if not positions:

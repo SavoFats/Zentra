@@ -346,9 +346,7 @@ class RevxGuardrailTests(unittest.TestCase):
                         "state_json": (
                             '{"running": true, "paused": false, "positions": '
                             '[{"symbol": "ETH", "size": 25.0, "entryPrice": 100.0, '
-                            '"currentPrice": 100.0, "stopPrice": 95.0, "tp1Price": 110.0}], '
-                            '"config": {}, "currentCapital": 100.0, "capital": 100.0, '
-                            '"tradeCount": 0, "wins": 0, "cooldowns": {}, "log": []}'
+                            '"currentPrice": 100.0, "stopPrice": 95.0, "tp1Price": 110.0}]}'
                         ),
                         "updated_at": "2026-06-02T00:00:00",
                         "revx_key_id": "enc-key",
@@ -386,6 +384,10 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(restored["positions"][0]["symbol"], "ETH")
         self.assertEqual(restored["revx_key_id"], "dec:enc-key")
         self.assertEqual(restored["revx_private_key"], "dec:enc-pem")
+        self.assertEqual(restored["config"], {})
+        self.assertEqual(restored["cooldowns"], {})
+        self.assertEqual(restored["tradeCount"], 0)
+        self.assertEqual(restored["log"], [])
         self.assertTrue(sent_messages)
 
 
