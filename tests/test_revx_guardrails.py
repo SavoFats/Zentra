@@ -141,6 +141,34 @@ class RevxGuardrailTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.main.parse_coinbase_accounts({"error": "unauthorized"})
 
+    def test_coinbase_preflight_allows_tradable_product_with_balance(self):
+        result = self.main.build_coinbase_preflight(
+            [{"currency": "USD", "available": 12.0}],
+            {
+                "product_id": "BTC-USD",
+                "quote_currency_id": "USD",
+                "quote_min_size": "1",
+                "price": "50000",
+                "trading_disabled": False,
+                "cancel_only": False,
+                "post_only": False,
+                "limit_only": False,
+            },
+            1.0,
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["product_id"], "BTC-USD")
+        self.assertEqual(result["blockers"], [])
+
+    def test_coinbase_preflight_blocks_insufficient_balance(self):
+        result = self.main.build_coinbase_preflight(
+            [{"currency": "USD", "available": 0.5}],
+            {"product_id": "BTC-USD", "quote_currency_id": "USD", "quote_min_size": "1"},
+            1.0,
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("insufficient_quote_balance", result["blockers"])
+
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances
 

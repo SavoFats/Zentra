@@ -417,6 +417,48 @@ def parse_coinbase_accounts(result: object) -> list:
         })
     return parsed
 
+def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -> dict:
+    if not isinstance(product, dict):
+        raise ValueError("Formato prodotto Coinbase non riconosciuto")
+    product_id = product.get("product_id", "")
+    quote = product.get("quote_currency_id") or product.get("quote_display_symbol") or "USD"
+    try:
+        quote_min_size = float(product.get("quote_min_size") or 0)
+    except Exception:
+        quote_min_size = 0.0
+    try:
+        price = float(product.get("price") or product.get("mid_market_price") or 0)
+    except Exception:
+        price = 0.0
+    available = 0.0
+    for acc in accounts:
+        if acc.get("currency") == quote:
+            available += float(acc.get("available") or 0)
+    blockers = []
+    if product.get("is_disabled") or product.get("trading_disabled"):
+        blockers.append("trading_disabled")
+    if product.get("cancel_only"):
+        blockers.append("cancel_only")
+    if product.get("post_only"):
+        blockers.append("post_only")
+    if product.get("limit_only"):
+        blockers.append("limit_only")
+    if quote_min_size and amount_usd < quote_min_size:
+        blockers.append("below_min_order")
+    if available < amount_usd:
+        blockers.append("insufficient_quote_balance")
+    return {
+        "ok": not blockers,
+        "product_id": product_id,
+        "quote_currency": quote,
+        "available_quote": available,
+        "required_quote": amount_usd,
+        "quote_min_size": quote_min_size,
+        "price": price,
+        "status": product.get("status", ""),
+        "blockers": blockers,
+    }
+
 
 async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -> dict:
     """GET /api/1.0/orders/{id} — ritorna prezzi e fee reali del fill."""
@@ -4014,6 +4056,44 @@ async def test_coinbase(request: Request, user_id: int = Depends(get_current_use
             "accounts_count": len(accounts),
             "balances": nonzero[:12],
         }
+    except Exception as e:
+        return {"ok": False, "error": public_error(e, api_key, api_secret)}
+
+@app.get("/preflight_coinbase")
+async def preflight_coinbase(request: Request, symbol: str = "BTC", amount_usd: float = 1.0,
+                             user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=10, window=60, key_suffix="preflight_coinbase")
+    sym = symbol.upper().replace("USDT", "").replace("USD", "")
+    if not sym.isalnum() or len(sym) > 20:
+        raise HTTPException(status_code=400, detail="Simbolo non valido")
+    amount = round(float(amount_usd), 2)
+    if amount <= 0 or amount > 100_000:
+        raise HTTPException(status_code=400, detail="Amount non valido")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT coinbase_api_key, coinbase_api_secret FROM users WHERE id = $1", user_id)
+    if not row or not row["coinbase_api_key"]:
+        raise HTTPException(status_code=400, detail="Chiavi Coinbase non configurate")
+    api_key = decrypt_key(row["coinbase_api_key"])
+    api_secret = decrypt_key(row["coinbase_api_secret"])
+    try:
+        accounts_result = await coinbase_request(
+            "GET", "/api/v3/brokerage/accounts",
+            api_key=api_key, api_secret=api_secret
+        )
+        accounts = parse_coinbase_accounts(accounts_result)
+        product_errors = []
+        for product_id in (f"{sym}-USD", f"{sym}-USDC"):
+            try:
+                product = await coinbase_request(
+                    "GET", f"/api/v3/brokerage/products/{product_id}",
+                    api_key=api_key, api_secret=api_secret
+                )
+                return build_coinbase_preflight(accounts, product, amount)
+            except Exception as product_exc:
+                product_errors.append(public_error(product_exc, api_key, api_secret, max_len=120))
+        return {"ok": False, "symbol": sym, "blockers": ["product_unavailable"], "errors": product_errors[:2]}
     except Exception as e:
         return {"ok": False, "error": public_error(e, api_key, api_secret)}
 
