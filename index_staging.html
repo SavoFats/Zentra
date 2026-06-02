@@ -1369,6 +1369,15 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="field">
+      <div class="field-label">Strategia di ingresso</div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="ema-btn active" id="stratMomentumBtn" onclick="setStrategy('momentum')">Momentum</button>
+        <button class="ema-btn" id="stratBreakoutBtn" onclick="setStrategy('breakout')">Breakout</button>
+      </div>
+      <div class="field-hint" id="stratHint">Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata</div>
+    </div>
+
+    <div class="field">
       <div class="field-label">Circuit Breaker <span id="circuitBreakerLabel" style="color:var(--text3);font-weight:700">OFF</span></div>
       <div style="display:flex;gap:8px;margin-top:6px">
         <button class="ema-btn" id="cbOnBtn" onclick="setCircuitBreaker(true)">Attivo</button>
@@ -2692,6 +2701,7 @@ function restoreConfigFromStorage() {
   if (saved.cooldown !== undefined) { document.getElementById('cooldown').value=saved.cooldown; document.getElementById('cdVal').textContent=saved.cooldown+'h'; }
   if (saved.btcEmaFilter !== undefined) setBtcEma(saved.btcEmaFilter);
   if (saved.maxHoldHours) { document.getElementById('maxHoldHours').value=saved.maxHoldHours; document.getElementById('maxHoldVal').textContent=saved.maxHoldHours+'h'; }
+  if (saved.strategy) setStrategy(saved.strategy);
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
@@ -2790,6 +2800,13 @@ function setTrailing(on) {
   document.getElementById('trailingLabel').textContent = on ? 'ON' : 'OFF';
   document.getElementById('trailingLabel').style.color = on ? 'var(--green)' : 'var(--text3)';
 }
+function setStrategy(s) {
+  document.getElementById('stratMomentumBtn').classList.toggle('active', s === 'momentum');
+  document.getElementById('stratBreakoutBtn').classList.toggle('active', s === 'breakout');
+  document.getElementById('stratHint').textContent = s === 'breakout'
+    ? 'Entra su coin in consolidamento che rompono il range con volume — ingresso anticipato, prima del grande move'
+    : 'Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata';
+}
 function setCircuitBreaker(on) {
   document.getElementById('cbOnBtn').classList.toggle('active', on);
   document.getElementById('cbOffBtn').classList.toggle('active', !on);
@@ -2880,6 +2897,7 @@ async function startAgent() {
     btcEmaFilter:          _btcEmaFilter,
     timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
+    strategy:              document.getElementById('stratBreakoutBtn').classList.contains('active') ? 'breakout' : 'momentum',
   };
   if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);
