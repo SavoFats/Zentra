@@ -2353,7 +2353,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
     skipped      = 0
     strategy = cfg.get("strategy", "momentum")
     if strategy == "breakout":
-        block_count = {"consolidation": 0, "atr": 0, "breakout": 0, "vol": 0, "fresh": 0}
+        block_count = {"consolidation": 0, "breakout": 0, "vol": 0, "fresh": 0}
     else:
         block_count = {"breakout": 0, "vol": 0, "rsi": 0,
                         "decomp": 0, "wick": 0, "keltner": 0, "tsi": 0, "macd": 0}
@@ -2370,7 +2370,6 @@ async def scan_and_trade(state: dict, user_id: int = None):
             if not signal["signal"]:
                 skipped += 1
                 if   not signal.get("consolidation_ok"): block_count["consolidation"] += 1
-                elif not signal.get("atr_contracted"):    block_count["atr"]           += 1
                 elif not signal.get("breakout_ok"):       block_count["breakout"]      += 1
                 elif not signal.get("vol_ok"):            block_count["vol"]           += 1
                 elif not signal.get("fresh_ok"):          block_count["fresh"]         += 1
@@ -2398,8 +2397,8 @@ async def scan_and_trade(state: dict, user_id: int = None):
     bc = block_count
     if strategy == "breakout":
         scan_detail = (
-            f"CHOP:{bc.get('consolidation',0)} ATR:{bc.get('atr',0)} "
-            f"BRK:{bc.get('breakout',0)} VOL:{bc.get('vol',0)} FRESH:{bc.get('fresh',0)}"
+            f"CHOP:{bc.get('consolidation',0)} BRK:{bc.get('breakout',0)} "
+            f"VOL:{bc.get('vol',0)} FRESH:{bc.get('fresh',0)}"
         )
     else:
         scan_detail = (
