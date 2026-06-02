@@ -1385,6 +1385,27 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
     </div>
 
+    <div id="breakoutFilters" style="display:none">
+      <div class="field">
+        <div class="field-label">Soglia CHOP <span id="chopMinVal" style="color:var(--blue);font-weight:700">61.8</span></div>
+        <input type="range" id="chopMin" min="55" max="75" value="61.8" step="0.5"
+          oninput="document.getElementById('chopMinVal').textContent=parseFloat(this.value).toFixed(1)">
+        <div class="field-hint">Il mercato è in consolidamento quando il CHOP index supera questa soglia — 61.8 è il golden ratio classico, abbassa per trovare più setup, alza per consolidamenti più stretti</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Compressione ATR <span id="atrRatioVal" style="color:var(--blue);font-weight:700">85%</span></div>
+        <input type="range" id="atrRatioMax" min="60" max="95" value="85" step="5"
+          oninput="document.getElementById('atrRatioVal').textContent=this.value+'%'">
+        <div class="field-hint">L'ATR corrente deve essere sotto questa % della sua media — più basso = volatilità più compressa, quindi breakout più esplosivo atteso</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Volume Breakout <span id="breakoutVolVal" style="color:var(--blue);font-weight:700">1.5×</span></div>
+        <input type="range" id="breakoutVolMultiplier" min="1.2" max="3" value="1.5" step="0.1"
+          oninput="document.getElementById('breakoutVolVal').textContent=parseFloat(this.value).toFixed(1)+'×'">
+        <div class="field-hint">Volume minimo sul breakout in multipli della media a 20 candele — conferma che la rottura ha partecipazione reale, non è un falso segnale</div>
+      </div>
+    </div>
+
     <div class="section-label">Stop &amp; Take Profit</div>
 
     <div class="field">
@@ -3118,6 +3139,9 @@ function restoreConfigFromStorage() {
   if (saved.btcEmaFilter !== undefined) setBtcEma(saved.btcEmaFilter);
   if (saved.maxHoldHours) { document.getElementById('maxHoldHours').value=saved.maxHoldHours; document.getElementById('maxHoldVal').textContent=saved.maxHoldHours+'h'; }
   if (saved.strategy) setStrategy(saved.strategy);
+  if (saved.chopMin !== undefined) { document.getElementById('chopMin').value=saved.chopMin; document.getElementById('chopMinVal').textContent=parseFloat(saved.chopMin).toFixed(1); }
+  if (saved.atrRatioMax !== undefined) { const v=Math.round(saved.atrRatioMax*100); document.getElementById('atrRatioMax').value=v; document.getElementById('atrRatioVal').textContent=v+'%'; }
+  if (saved.breakoutVolMultiplier !== undefined) { document.getElementById('breakoutVolMultiplier').value=saved.breakoutVolMultiplier; document.getElementById('breakoutVolVal').textContent=parseFloat(saved.breakoutVolMultiplier).toFixed(1)+'×'; }
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
@@ -3224,6 +3248,8 @@ function setStrategy(s) {
     : 'Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata';
   const mf = document.getElementById('momentumFilterField');
   if (mf) mf.style.display = s === 'momentum' ? '' : 'none';
+  const bf = document.getElementById('breakoutFilters');
+  if (bf) bf.style.display = s === 'breakout' ? '' : 'none';
 }
 
 function renderAgentExchangeOptions() {
@@ -3377,6 +3403,9 @@ async function startAgent() {
     timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
     strategy:              document.getElementById('stratBreakoutBtn').classList.contains('active') ? 'breakout' : 'momentum',
+    chopMin:               parseFloat(document.getElementById('chopMin').value),
+    atrRatioMax:           parseFloat(document.getElementById('atrRatioMax').value) / 100,
+    breakoutVolMultiplier: parseFloat(document.getElementById('breakoutVolMultiplier').value),
   };
   if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);

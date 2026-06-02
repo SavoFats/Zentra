@@ -1020,7 +1020,9 @@ def get_momentum_signal(sym: str, current_price: float,
         "macd_ok":      macd_ok,
     }
 
-def get_breakout_signal(sym: str, current_price: float, max_stop_pct: float = 0.02) -> dict:
+def get_breakout_signal(sym: str, current_price: float, max_stop_pct: float = 0.02,
+                        chop_min: float = 61.8, atr_ratio_max: float = 0.85,
+                        vol_multiplier: float = 1.5) -> dict:
     """Segnale consolidation breakout: rileva compressione poi rottura del range con volume."""
     cd = candle_data.get(sym, {})
     if not cd:
@@ -1039,16 +1041,16 @@ def get_breakout_signal(sym: str, current_price: float, max_stop_pct: float = 0.
     vol_avg_20   = cd.get("vol_avg_20", 0.0)
 
     # 1. Consolidazione: CHOP alto su 3h = mercato laterale
-    consolidation_ok = chop_long >= 61.8
+    consolidation_ok = chop_long >= chop_min
 
     # 2. ATR contratto: volatilità compressa rispetto alla sua media
-    atr_contracted = (atr_5m < atr_avg_30 * 0.85) if atr_avg_30 > 0 else False
+    atr_contracted = (atr_5m < atr_avg_30 * atr_ratio_max) if atr_avg_30 > 0 else False
 
     # 3. Breakout: chiusura sopra il tetto del range (con piccolo buffer 0.1%)
     breakout_ok = (last_close > range_high * 1.001) if range_high > 0 else False
 
-    # 4. Volume: spike sul breakout (almeno 1.5x la media)
-    vol_ok = (vol_last >= vol_avg_20 * 1.5) if vol_avg_20 > 0 else False
+    # 4. Volume: spike sul breakout
+    vol_ok = (vol_last >= vol_avg_20 * vol_multiplier) if vol_avg_20 > 0 else False
 
     # 5. Freshness: 35 minuti fa era ancora dentro il range (breakout appena avvenuto)
     fresh_ok = close_7_ago < range_high if range_high > 0 else False
@@ -1068,7 +1070,7 @@ def get_breakout_signal(sym: str, current_price: float, max_stop_pct: float = 0.
         reason = f"nessun breakout | -{pct_to:.2f}% dal tetto range {range_high:.6f}"
     elif not vol_ok:
         ratio = vol_last / vol_avg_20 if vol_avg_20 > 0 else 0
-        reason = f"volume breakout basso ({ratio:.2f}x < 1.5x)"
+        reason = f"volume breakout basso ({ratio:.2f}x < {vol_multiplier}x)"
     elif not fresh_ok:
         reason = f"breakout non fresco | prezzo sopra range da >35min"
     else:
@@ -2275,7 +2277,12 @@ async def scan_and_trade(state: dict, user_id: int = None):
     for d in universe_sorted:
         sym = d["symbol"]
         if strategy == "breakout":
-            signal = get_breakout_signal(sym, d["price"], max_stop_pct)
+            signal = get_breakout_signal(
+                sym, d["price"], max_stop_pct,
+                chop_min=cfg.get("chopMin", 61.8),
+                atr_ratio_max=cfg.get("atrRatioMax", 0.85),
+                vol_multiplier=cfg.get("breakoutVolMultiplier", 1.5),
+            )
             if not signal["signal"]:
                 skipped += 1
                 if   not signal.get("consolidation_ok"): block_count["consolidation"] += 1
