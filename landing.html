@@ -591,7 +591,7 @@ footer {
       <span class="gradient-text" data-i18n="hero_title_2">Trade with AI.</span>
     </h1>
     <p class="hero-sub" data-i18n="hero_sub">
-      Automated entry signals, real-time market scanner, and smart risk management — all connected to your Revolut X account.
+      Automated entry signals, real-time market scanner, and smart risk management — all connected to your exchange account.
     </p>
     <div class="hero-btns">
       <a class="btn-hero-primary" href="/app">
@@ -612,8 +612,8 @@ footer {
       <div class="hero-stat-lbl" data-i18n="stat_2">Entry filters</div>
     </div>
     <div class="hero-stat">
-      <div class="hero-stat-val">0.09<span style="font-size:18px;font-weight:600;color:var(--text3)">%</span></div>
-      <div class="hero-stat-lbl" data-i18n="stat_3">RevX taker fee</div>
+      <div class="hero-stat-val"><span class="stat-num" data-target="2">0</span></div>
+      <div class="hero-stat-lbl" data-i18n="stat_3">Trading strategies</div>
     </div>
     <div class="hero-stat">
       <div class="hero-stat-val" data-i18n="stat_4_val">24/7</div>
@@ -633,7 +633,7 @@ footer {
     <div class="feature-card reveal delay-1">
       <div class="feature-icon">🤖</div>
       <h3 data-i18n="f1_title">Autonomous Agent</h3>
-      <p data-i18n="f1_desc">The AI agent monitors 200+ coins 24/7, scans for high-probability momentum and breakout setups, and executes entries automatically on Revolut X.</p>
+      <p data-i18n="f1_desc">The AI agent monitors 200+ coins 24/7, scans for high-probability momentum and breakout setups, and executes entries automatically on your exchange.</p>
     </div>
     <div class="feature-card reveal delay-2">
       <div class="feature-icon">📡</div>
@@ -647,8 +647,8 @@ footer {
     </div>
     <div class="feature-card reveal delay-2">
       <div class="feature-icon">⚡</div>
-      <h3 data-i18n="f4_title">Direct RevX Integration</h3>
-      <p data-i18n="f4_desc">Native Revolut X API integration. Real buy/sell orders with market execution, automatic fill confirmation, and GTC limit order fallback.</p>
+      <h3 data-i18n="f4_title">Multi-Exchange Support</h3>
+      <p data-i18n="f4_desc">Connect your exchange via API keys. Real buy/sell orders with market execution, automatic fill confirmation, and end-to-end encrypted credentials.</p>
     </div>
     <div class="feature-card feature-card-wide reveal delay-1">
       <div style="display:flex;gap:48px;align-items:center;flex-wrap:wrap;">
@@ -682,7 +682,7 @@ footer {
       <div class="step reveal delay-1">
         <div class="step-num">1</div>
         <h4 data-i18n="step1_title">Connect</h4>
-        <p data-i18n="step1_desc">Link your Revolut X API keys. Zentra never stores them in plaintext — end-to-end encrypted.</p>
+        <p data-i18n="step1_desc">Link your exchange API keys. Zentra never stores them in plaintext — end-to-end encrypted.</p>
       </div>
       <div class="step reveal delay-2">
         <div class="step-num">2</div>
@@ -716,7 +716,7 @@ footer {
         <li data-i18n="pf3">1 open position at a time</li>
         <li class="unavail" data-i18n="pf4">Automated agent</li>
         <li class="unavail" data-i18n="pf5">Telegram notifications</li>
-        <li class="unavail" data-i18n="pf6">RevX real trading</li>
+        <li class="unavail" data-i18n="pf6">Real exchange trading</li>
       </ul>
       <a href="/app" class="btn-plan secondary" data-i18n="plan_free_btn">Get started free</a>
     </div>
@@ -730,7 +730,7 @@ footer {
         <li data-i18n="pp2">Automated AI agent</li>
         <li data-i18n="pp3">Unlimited positions</li>
         <li data-i18n="pp4">Telegram notifications</li>
-        <li data-i18n="pp5">RevX real-money trading</li>
+        <li data-i18n="pp5">Real-money trading</li>
         <li data-i18n="pp6">Both strategies (Momentum + Breakout)</li>
       </ul>
       <a href="/app" class="btn-plan primary" data-i18n="plan_pro_btn">Start with Pro</a>
@@ -742,7 +742,7 @@ footer {
 <section class="final-cta">
   <div class="section-tag reveal" data-i18n="cta_tag">Ready?</div>
   <h2 class="final-cta-title reveal" data-i18n="cta_title">Start trading smarter today.</h2>
-  <p class="final-cta-sub reveal" data-i18n="cta_sub">Join traders using Zentra to automate their crypto strategy on Revolut X.</p>
+  <p class="final-cta-sub reveal" data-i18n="cta_sub">Join traders using Zentra to automate their crypto strategy.</p>
   <a class="btn-cta-xl reveal" href="/app">
     <span data-i18n="cta_btn">Open Zentra</span>
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10h12M10 4l6 6-6 6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -775,26 +775,26 @@ const T = {
     nav_features:'Features', nav_how:'How it works', nav_plans:'Plans', nav_open_app:'Open App ↗',
     hero_badge:'AI-powered trading agent',
     hero_title_1:'Trade smarter.', hero_title_2:'Trade with AI.',
-    hero_sub:'Automated entry signals, real-time market scanner, and smart risk management — all connected to your Revolut X account.',
+    hero_sub:'Automated entry signals, real-time market scanner, and smart risk management — all connected to your exchange account.',
     hero_cta_1:'Open App', hero_cta_2:'Explore features',
-    stat_1:'Coins monitored', stat_2:'Entry filters', stat_3:'RevX taker fee', stat_4:'Automated monitoring', stat_4_val:'24/7',
+    stat_1:'Coins monitored', stat_2:'Entry filters', stat_3:'Trading strategies', stat_4:'Automated monitoring', stat_4_val:'24/7',
     feat_tag:'Features', feat_title_1:'Everything you need', feat_title_2:'to trade like a pro',
     feat_sub:'Zentra combines momentum analysis, breakout detection, and real-time risk management in a single platform.',
-    f1_title:'Autonomous Agent', f1_desc:'The AI agent monitors 200+ coins 24/7, scans for high-probability momentum and breakout setups, and executes entries automatically on Revolut X.',
+    f1_title:'Autonomous Agent', f1_desc:'The AI agent monitors 200+ coins 24/7, scans for high-probability momentum and breakout setups, and executes entries automatically on your exchange.',
     f2_title:'Real-time Scanner', f2_desc:'Live market scanner with RSI, MACD, Keltner, EMA stack, volume spikes, golden cross and more — all visualized in one dashboard.',
     f3_title:'Smart Risk Management', f3_desc:'ATR-based trailing stop, configurable hard stop-loss, take-profit targets, max hold time, and daily circuit breaker to protect your capital.',
-    f4_title:'Direct RevX Integration', f4_desc:'Native Revolut X API integration. Real buy/sell orders with market execution, automatic fill confirmation, and GTC limit order fallback.',
+    f4_title:'Multi-Exchange Support', f4_desc:'Connect your exchange via API keys. Real buy/sell orders with market execution, automatic fill confirmation, and end-to-end encrypted credentials.',
     f5_title:'Two Strategies, One Platform', f5_desc:'Switch between <strong>Momentum</strong> (EMA breakout + volume + TSI + MACD) and <strong>Consolidation Breakout</strong> (CHOP + ATR compression + range break) from the config panel.',
     how_tag:'How it works', how_title:'Up and running in minutes', how_sub:'Connect your account, configure your strategy, and let Zentra handle the rest.',
-    step1_title:'Connect', step1_desc:'Link your Revolut X API keys. Zentra never stores them in plaintext — end-to-end encrypted.',
+    step1_title:'Connect', step1_desc:'Link your exchange API keys. Zentra never stores them in plaintext — end-to-end encrypted.',
     step2_title:'Configure', step2_desc:'Choose your strategy, set risk parameters (SL%, TP%, max positions), and pick your session duration.',
     step3_title:'Trade', step3_desc:'Start the agent and get Telegram notifications for every entry, exit, and alert — in real time.',
     plans_tag:'Pricing', plans_title:'Simple, transparent pricing', plans_sub:'Start for free, upgrade when you\'re ready.',
-    plan_free_period:'Forever free', pf1:'Manual trading', pf2:'Market scanner', pf3:'1 open position at a time', pf4:'Automated agent', pf5:'Telegram notifications', pf6:'RevX real trading',
+    plan_free_period:'Forever free', pf1:'Manual trading', pf2:'Market scanner', pf3:'1 open position at a time', pf4:'Automated agent', pf5:'Telegram notifications', pf6:'Real exchange trading',
     plan_free_btn:'Get started free', plan_pro_badge:'Most Popular',
-    plan_pro_period:'Billed monthly', pp1:'Everything in Free', pp2:'Automated AI agent', pp3:'Unlimited positions', pp4:'Telegram notifications', pp5:'RevX real-money trading', pp6:'Both strategies (Momentum + Breakout)',
+    plan_pro_period:'Billed monthly', pp1:'Everything in Free', pp2:'Automated AI agent', pp3:'Unlimited positions', pp4:'Telegram notifications', pp5:'Real-money trading', pp6:'Both strategies (Momentum + Breakout)',
     plan_pro_btn:'Start with Pro',
-    cta_tag:'Ready?', cta_title:'Start trading smarter today.', cta_sub:'Join traders using Zentra to automate their crypto strategy on Revolut X.',
+    cta_tag:'Ready?', cta_title:'Start trading smarter today.', cta_sub:'Join traders using Zentra to automate their crypto strategy.',
     cta_btn:'Open Zentra', cta_note:'Free to start. No credit card required.',
     footer_app:'Open App', footer_features:'Features', footer_plans:'Plans',
   },
@@ -802,26 +802,26 @@ const T = {
     nav_features:'Funzionalità', nav_how:'Come funziona', nav_plans:'Prezzi', nav_open_app:'Apri App ↗',
     hero_badge:'Agente di trading AI',
     hero_title_1:'Trading intelligente.', hero_title_2:'Trading con AI.',
-    hero_sub:'Segnali d\'ingresso automatici, scanner di mercato in tempo reale e gestione del rischio smart — tutto collegato al tuo account Revolut X.',
+    hero_sub:'Segnali d\'ingresso automatici, scanner di mercato in tempo reale e gestione del rischio smart — tutto collegato al tuo exchange.',
     hero_cta_1:'Apri App', hero_cta_2:'Esplora le funzioni',
-    stat_1:'Coin monitorate', stat_2:'Filtri d\'ingresso', stat_3:'Fee taker RevX', stat_4:'Monitoraggio automatico', stat_4_val:'24/7',
+    stat_1:'Coin monitorate', stat_2:'Filtri d\'ingresso', stat_3:'Strategie di trading', stat_4:'Monitoraggio automatico', stat_4_val:'24/7',
     feat_tag:'Funzionalità', feat_title_1:'Tutto quello che serve', feat_title_2:'per tradare da pro',
     feat_sub:'Zentra combina analisi momentum, rilevamento breakout e gestione del rischio in tempo reale in un\'unica piattaforma.',
-    f1_title:'Agente Autonomo', f1_desc:'L\'agente AI monitora 200+ coin 24/7, cerca setup ad alta probabilità e apre posizioni automaticamente su Revolut X.',
+    f1_title:'Agente Autonomo', f1_desc:'L\'agente AI monitora 200+ coin 24/7, cerca setup ad alta probabilità e apre posizioni automaticamente sul tuo exchange.',
     f2_title:'Scanner in Tempo Reale', f2_desc:'Scanner di mercato live con RSI, MACD, Keltner, EMA stack, picchi di volume, golden cross e molto altro — tutto in un unico dashboard.',
     f3_title:'Gestione del Rischio Smart', f3_desc:'Trailing stop basato su ATR, stop-loss fisso configurabile, target di take-profit, tempo massimo di mantenimento e circuit breaker giornaliero.',
-    f4_title:'Integrazione Diretta RevX', f4_desc:'Integrazione nativa con le API Revolut X. Ordini reali con esecuzione market, conferma automatica del fill e fallback su ordine limit GTC.',
+    f4_title:'Multi-Exchange', f4_desc:'Connetti il tuo exchange tramite chiavi API. Ordini reali con esecuzione market, conferma automatica del fill e credenziali cifrate end-to-end.',
     f5_title:'Due Strategie, Una Piattaforma', f5_desc:'Scegli tra <strong>Momentum</strong> (breakout EMA + volume + TSI + MACD) e <strong>Breakout da Consolidamento</strong> (CHOP + compressione ATR + rottura di range) dal pannello config.',
     how_tag:'Come funziona', how_title:'Operativo in pochi minuti', how_sub:'Collega il tuo account, configura la strategia e lascia fare a Zentra.',
-    step1_title:'Connetti', step1_desc:'Collega le tue chiavi API Revolut X. Zentra non le salva mai in chiaro — cifratura end-to-end.',
+    step1_title:'Connetti', step1_desc:'Collega le tue chiavi API del tuo exchange. Zentra non le salva mai in chiaro — cifratura end-to-end.',
     step2_title:'Configura', step2_desc:'Scegli la strategia, imposta i parametri di rischio (SL%, TP%, max posizioni) e la durata della sessione.',
     step3_title:'Tradata', step3_desc:'Avvia l\'agente e ricevi notifiche Telegram per ogni ingresso, uscita e avviso — in tempo reale.',
     plans_tag:'Prezzi', plans_title:'Prezzi semplici e trasparenti', plans_sub:'Inizia gratis, aggiorna quando sei pronto.',
-    plan_free_period:'Gratis per sempre', pf1:'Trading manuale', pf2:'Scanner di mercato', pf3:'1 posizione aperta alla volta', pf4:'Agente automatico', pf5:'Notifiche Telegram', pf6:'Trading reale RevX',
+    plan_free_period:'Gratis per sempre', pf1:'Trading manuale', pf2:'Scanner di mercato', pf3:'1 posizione aperta alla volta', pf4:'Agente automatico', pf5:'Notifiche Telegram', pf6:'Trading reale su exchange',
     plan_free_btn:'Inizia gratis', plan_pro_badge:'Più Popolare',
-    plan_pro_period:'Fatturazione mensile', pp1:'Tutto del piano Free', pp2:'Agente AI automatico', pp3:'Posizioni illimitate', pp4:'Notifiche Telegram', pp5:'Trading reale su Revolut X', pp6:'Entrambe le strategie (Momentum + Breakout)',
+    plan_pro_period:'Fatturazione mensile', pp1:'Tutto del piano Free', pp2:'Agente AI automatico', pp3:'Posizioni illimitate', pp4:'Notifiche Telegram', pp5:'Trading reale', pp6:'Entrambe le strategie (Momentum + Breakout)',
     plan_pro_btn:'Inizia con Pro',
-    cta_tag:'Pronti?', cta_title:'Inizia a tradare in modo più intelligente.', cta_sub:'Unisciti ai trader che usano Zentra per automatizzare la loro strategia su Revolut X.',
+    cta_tag:'Pronti?', cta_title:'Inizia a tradare in modo più intelligente.', cta_sub:'Unisciti ai trader che usano Zentra per automatizzare la loro strategia.',
     cta_btn:'Apri Zentra', cta_note:'Gratuito per iniziare. Nessuna carta di credito.',
     footer_app:'Apri App', footer_features:'Funzionalità', footer_plans:'Prezzi',
   }
