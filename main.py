@@ -486,6 +486,35 @@ def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -
         "blockers": blockers,
     }
 
+def extract_coinbase_order_id(result: object) -> str:
+    if not isinstance(result, dict):
+        return ""
+    success_response = result.get("success_response") if isinstance(result.get("success_response"), dict) else {}
+    order_configuration = result.get("order_configuration") if isinstance(result.get("order_configuration"), dict) else {}
+    candidates = (
+        result.get("order_id"),
+        result.get("id"),
+        success_response.get("order_id"),
+        success_response.get("id"),
+        order_configuration.get("order_id"),
+    )
+    return next((str(c) for c in candidates if c), "")
+
+def summarize_coinbase_order(order_result: object) -> dict:
+    order = order_result.get("order") if isinstance(order_result, dict) else {}
+    if not isinstance(order, dict):
+        order = {}
+    return {
+        "order_id": order.get("order_id") or order.get("id", ""),
+        "status": order.get("status") or order.get("order_status", ""),
+        "product_id": order.get("product_id", ""),
+        "side": order.get("side", ""),
+        "completion_percentage": order.get("completion_percentage", ""),
+        "filled_size": order.get("filled_size", ""),
+        "average_filled_price": order.get("average_filled_price", ""),
+        "total_fees": order.get("total_fees", ""),
+    }
+
 
 async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -> dict:
     """GET /api/1.0/orders/{id} — ritorna prezzi e fee reali del fill."""
@@ -3716,6 +3745,106 @@ class ManualTradeReq(BaseModel):
     tp_pct:       float
     exchange:     str = "revx"
 
+class CoinbaseMicroBuyReq(BaseModel):
+    symbol: str = "BTC"
+    amount_usd: float = 1.0
+
+async def load_coinbase_keys_for_user(user_id: int) -> tuple[str, str]:
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT coinbase_api_key, coinbase_api_secret FROM users WHERE id = $1", user_id)
+    if not row or not row["coinbase_api_key"]:
+        raise HTTPException(status_code=400, detail="Chiavi Coinbase non configurate")
+    return decrypt_key(row["coinbase_api_key"]), decrypt_key(row["coinbase_api_secret"])
+
+async def get_coinbase_preflight_result(api_key: str, api_secret: str, sym: str, amount: float) -> dict:
+    accounts = await fetch_coinbase_accounts(api_key, api_secret)
+    product_errors = []
+    preflight_candidates = []
+    for product_id in (f"{sym}-USD", f"{sym}-USDC"):
+        try:
+            product = await coinbase_request(
+                "GET", f"/api/v3/brokerage/products/{product_id}",
+                api_key=api_key, api_secret=api_secret
+            )
+            candidate = build_coinbase_preflight(accounts, product, amount)
+            preflight_candidates.append(candidate)
+            if candidate["ok"]:
+                return candidate
+        except Exception as product_exc:
+            product_errors.append(public_error(product_exc, api_key, api_secret, max_len=120))
+    if preflight_candidates:
+        best = sorted(
+            preflight_candidates,
+            key=lambda c: (len(c.get("blockers", [])), -float(c.get("available_quote") or 0))
+        )[0]
+        best["candidates"] = [
+            {
+                "product_id": c.get("product_id"),
+                "quote_currency": c.get("quote_currency"),
+                "available_quote": c.get("available_quote"),
+                "blockers": c.get("blockers", []),
+            }
+            for c in preflight_candidates
+        ]
+        return best
+    return {"ok": False, "symbol": sym, "blockers": ["product_unavailable"], "errors": product_errors[:2]}
+
+@app.post("/trade/coinbase_micro_buy")
+async def coinbase_micro_buy(req: CoinbaseMicroBuyReq, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=3, window=300, key_suffix="coinbase_micro_buy")
+    sym = req.symbol.upper().replace("USDT", "").replace("USD", "")
+    if sym != "BTC":
+        raise HTTPException(status_code=400, detail="Micro-buy Coinbase abilitato solo su BTC")
+    amount = round(float(req.amount_usd), 2)
+    if amount < 1.0 or amount > 2.0:
+        raise HTTPException(status_code=400, detail="Importo micro-buy consentito: 1.00-2.00")
+    api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+    try:
+        preflight = await get_coinbase_preflight_result(api_key, api_secret, sym, amount)
+        if not preflight.get("ok"):
+            return {"ok": False, "preflight": preflight, "error": "Preflight Coinbase non pronto"}
+        import uuid as _uuid
+        client_order_id = str(_uuid.uuid4())
+        product_id = preflight["product_id"]
+        order_body = {
+            "client_order_id": client_order_id,
+            "product_id": product_id,
+            "side": "BUY",
+            "order_configuration": {
+                "market_market_ioc": {
+                    "quote_size": f"{amount:.2f}",
+                    "rfq_disabled": True,
+                }
+            },
+        }
+        result = await coinbase_request(
+            "POST", "/api/v3/brokerage/orders",
+            body=order_body, api_key=api_key, api_secret=api_secret
+        )
+        if result.get("success") is False:
+            err = result.get("error_response") or result.get("failure_reason") or result
+            return {"ok": False, "error": public_error(Exception(str(err)), api_key, api_secret)}
+        order_id = extract_coinbase_order_id(result)
+        if not order_id:
+            return {"ok": False, "error": "Ordine Coinbase creato senza order_id", "raw": public_error(Exception(str(result)), api_key, api_secret)}
+        await asyncio.sleep(1)
+        details = await coinbase_request(
+            "GET", f"/api/v3/brokerage/orders/historical/{order_id}",
+            api_key=api_key, api_secret=api_secret
+        )
+        summary = summarize_coinbase_order(details)
+        return {
+            "ok": True,
+            "product_id": product_id,
+            "amount_usd": amount,
+            "order_id": order_id,
+            "order": summary,
+        }
+    except Exception as e:
+        return {"ok": False, "error": public_error(e, api_key, api_secret)}
+
 @app.post("/trade/manual")
 async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=10, window=60, key_suffix="manual_trade")
@@ -4098,46 +4227,9 @@ async def preflight_coinbase(request: Request, symbol: str = "BTC", amount_usd: 
     amount = round(float(amount_usd), 2)
     if amount <= 0 or amount > 100_000:
         raise HTTPException(status_code=400, detail="Amount non valido")
-    if not db_pool:
-        raise HTTPException(status_code=500, detail="DB non disponibile")
-    async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT coinbase_api_key, coinbase_api_secret FROM users WHERE id = $1", user_id)
-    if not row or not row["coinbase_api_key"]:
-        raise HTTPException(status_code=400, detail="Chiavi Coinbase non configurate")
-    api_key = decrypt_key(row["coinbase_api_key"])
-    api_secret = decrypt_key(row["coinbase_api_secret"])
+    api_key, api_secret = await load_coinbase_keys_for_user(user_id)
     try:
-        accounts = await fetch_coinbase_accounts(api_key, api_secret)
-        product_errors = []
-        preflight_candidates = []
-        for product_id in (f"{sym}-USD", f"{sym}-USDC"):
-            try:
-                product = await coinbase_request(
-                    "GET", f"/api/v3/brokerage/products/{product_id}",
-                    api_key=api_key, api_secret=api_secret
-                )
-                candidate = build_coinbase_preflight(accounts, product, amount)
-                preflight_candidates.append(candidate)
-                if candidate["ok"]:
-                    return candidate
-            except Exception as product_exc:
-                product_errors.append(public_error(product_exc, api_key, api_secret, max_len=120))
-        if preflight_candidates:
-            best = sorted(
-                preflight_candidates,
-                key=lambda c: (len(c.get("blockers", [])), -float(c.get("available_quote") or 0))
-            )[0]
-            best["candidates"] = [
-                {
-                    "product_id": c.get("product_id"),
-                    "quote_currency": c.get("quote_currency"),
-                    "available_quote": c.get("available_quote"),
-                    "blockers": c.get("blockers", []),
-                }
-                for c in preflight_candidates
-            ]
-            return best
-        return {"ok": False, "symbol": sym, "blockers": ["product_unavailable"], "errors": product_errors[:2]}
+        return await get_coinbase_preflight_result(api_key, api_secret, sym, amount)
     except Exception as e:
         return {"ok": False, "error": public_error(e, api_key, api_secret)}
 

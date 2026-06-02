@@ -216,6 +216,26 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(best["product_id"], "BTC-USDC")
         self.assertTrue(best["ok"])
 
+    def test_extract_coinbase_order_id_accepts_success_response(self):
+        order_id = self.main.extract_coinbase_order_id({
+            "success": True,
+            "success_response": {"order_id": "ord-123"},
+        })
+        self.assertEqual(order_id, "ord-123")
+
+    def test_summarize_coinbase_order_accepts_historical_shape(self):
+        summary = self.main.summarize_coinbase_order({
+            "order": {
+                "order_id": "ord-123",
+                "product_id": "BTC-USDC",
+                "status": "FILLED",
+                "filled_size": "0.00001",
+            }
+        })
+        self.assertEqual(summary["order_id"], "ord-123")
+        self.assertEqual(summary["product_id"], "BTC-USDC")
+        self.assertEqual(summary["status"], "FILLED")
+
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances
 
