@@ -2732,7 +2732,7 @@ async function saveRevxKeys() {
   const keyId = document.getElementById('revxKeyId').value.trim();
   const privateKey = document.getElementById('revxPrivateKey').value.trim();
   if (!keyId || !privateKey) {
-    alert('Inserisci sia il Key ID che la chiave privata');
+    showToast('Inserisci sia il Key ID che la chiave privata', true);
     return;
   }
   try {
@@ -2765,7 +2765,7 @@ async function saveRevxKeys() {
       }
     }
   } catch(e) {
-    alert('Errore: ' + e.message);
+    showToast('Errore: ' + e.message, true);
   }
 }
 
@@ -3041,7 +3041,7 @@ async function clearTrades() {
     _expandedTrades.clear();
     updateStoricoBadge();
     renderTransazioni();
-  } catch(e) { alert('Errore: ' + e.message); }
+  } catch(e) { showToast('Errore: ' + e.message, true); }
 }
 
 function updateStoricoBadge() {
@@ -3176,6 +3176,7 @@ function updateCapitalUsd() {
 function updateCapitalPct() { updateCapitalUsd(); } // compat
 
 function updateAlloc() {
+  clearFieldError('allocUsd');
   const usd = parseFloat(document.getElementById('allocUsd').value) || 0;
   const hint = document.getElementById('allocHint');
   if (usd <= 0) { hint.textContent = "Inserisci un importo valido"; return; }
@@ -3195,7 +3196,7 @@ function updateAlloc() {
     '<br><span style="color:var(--text3);font-size:10px">Fee ' + getExchangeLabel() + ': <span style="color:var(--red)">−' + sym + feePerTrade.toFixed(2) + '</span> · Capitale: ' + sym + tradable.toFixed(2) + '</span>';
 }
 
-function onCapitalInput() { updateCapitalPct(); } // compat
+function onCapitalInput() { clearFieldError('capitalUsd'); updateCapitalPct(); } // compat
 
 let _trend1hFilter = true;
 let _btcEmaFilter  = true;
@@ -3384,20 +3385,45 @@ async function setMode(real) {
   updateProfileMenu();
 }
 
+// ── FIELD VALIDATION HELPERS ─────────────────────────────────────────────────
+function showFieldError(fieldId, message) {
+  const el = document.getElementById(fieldId);
+  if (el) {
+    el.style.borderColor = 'var(--red)';
+    el.style.boxShadow = '0 0 0 3px rgba(255,59,48,0.15)';
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  const hintMap = { capitalUsd: 'capitalHint', allocUsd: 'allocHint' };
+  const hintId = hintMap[fieldId];
+  if (hintId) {
+    const hint = document.getElementById(hintId);
+    if (hint) hint.innerHTML = '<span style="color:var(--red);font-weight:600">⚠ ' + message + '</span>';
+  }
+  showToast(message, true);
+}
+
+function clearFieldError(fieldId) {
+  const el = document.getElementById(fieldId);
+  if (el) { el.style.borderColor = ''; el.style.boxShadow = ''; }
+}
+
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
+  clearFieldError('capitalUsd');
+  clearFieldError('allocUsd');
   const capitalUsdVal = parseFloat(document.getElementById('capitalUsd').value);
-  if (!capitalUsdVal || capitalUsdVal <= 0) { alert('Capitale da tradare non valido.'); return; }
+  if (!capitalUsdVal || capitalUsdVal <= 0) { showFieldError('capitalUsd', 'Inserisci un capitale valido'); return; }
+  if (capitalUsdVal > 1000000) { showFieldError('capitalUsd', 'Capitale troppo alto (max $1,000,000)'); return; }
   const allocUsdVal = parseFloat(document.getElementById('allocUsd').value);
-  if (!allocUsdVal || allocUsdVal <= 0) { alert("Importo per trade non valido."); return; }
+  if (!allocUsdVal || allocUsdVal <= 0) { showFieldError('allocUsd', 'Inserisci un importo per trade valido'); return; }
+  if (allocUsdVal > capitalUsdVal) { showFieldError('allocUsd', 'Importo per trade superiore al capitale'); return; }
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
-  if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
+  if (sessionDur < 0 || sessionDur > 24) { showToast('Durata sessione non valida (0–24h)', true); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const isReal = _hasRevxKeys && !_simMode;
   const capitalVal = parseFloat(capitalUsdVal.toFixed(2));
-  if (isReal && total > 0 && capitalVal > total) { alert('Capitale superiore al saldo disponibile (' + getCurrSym() + total.toFixed(2) + ').'); return; }
-  if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
-  if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
+  if (isReal && capitalVal <= 0) { showFieldError('capitalUsd', 'Saldo non ancora caricato — attendi e riprova'); return; }
+  if (isReal && total > 0 && capitalVal > total) { showFieldError('capitalUsd', 'Supera il saldo disponibile (' + getCurrSym() + total.toFixed(2) + ')'); return; }
   const cfg = {
     capital:               capitalVal,
     capitalPct:            total > 0 ? capitalVal / total : 1.0,
@@ -3432,7 +3458,7 @@ async function doStartAgent(cfg) {
     const r = await fetch(API + '/start', { method:'POST', headers:authHeaders(), body:JSON.stringify({config:cfg}) });
     const d = await r.json();
     if (d.error === 'session_limit') { showPaywall(d.message); return; }
-    if (d.error) { alert(d.error); return; }
+    if (d.error) { showToast(d.error, true); return; }
     saveConfigToStorage(cfg);
     document.getElementById('startBtn').disabled = true;
     document.getElementById('stopBtn').disabled = false;
@@ -3440,7 +3466,7 @@ async function doStartAgent(cfg) {
     closeDrawer();
     showTab('posizioni', document.querySelectorAll('.tab')[2]);
     startPolling();
-  } catch(e) { alert('Errore connessione: ' + e.message); }
+  } catch(e) { showToast('Errore di connessione: ' + e.message, true); }
 }
 
 async function pauseAgent() {
@@ -3453,7 +3479,7 @@ async function pauseAgent() {
     }
     S.paused = d.paused;
     render();
-  } catch(e) { alert('Errore di rete: ' + e.message); }
+  } catch(e) { showToast('Errore di rete: ' + e.message, true); }
 }
 
 async function saveConfigLive() {
@@ -3474,9 +3500,9 @@ async function saveConfigLive() {
   try {
     const res = await fetch(API + '/config', { method:'PATCH', headers:{...authHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(patch) });
     const d = await res.json();
-    if (d.error) { alert(d.error); return; }
+    if (d.error) { showToast(d.error, true); return; }
     closeDrawer();
-  } catch(e) { alert('Errore di rete: ' + e.message); }
+  } catch(e) { showToast('Errore di rete: ' + e.message, true); }
 }
 
 async function stopAgent() {
@@ -3485,11 +3511,11 @@ async function stopAgent() {
     const res = await fetch(API + '/stop', { method:'POST', headers:authHeaders() });
     data = await res.json();
     if (!res.ok) data.error = data.detail || data.error || String(res.status);
-  } catch(e) { alert('Errore di rete: ' + e.message); return; }
+  } catch(e) { showToast('Errore di rete: ' + e.message, true); return; }
 
   // Se alcune posizioni non sono state vendute, la sessione rimane aperta
   if (data.error && !data.ok) {
-    alert('⚠️ ' + data.error);
+    showToast(data.error, true);
     return;
   }
 
@@ -3512,7 +3538,7 @@ async function stopAgent() {
 }
 
 function resetAgent() {
-  if (S.running) { alert('Ferma prima la sessione.'); return; }
+  if (S.running) { showToast('Ferma prima la sessione', true); return; }
   S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
   trades = []; _newTradeCount = 0; _lastSeenTradeCount = 0; updateStoricoBadge();
   localStorage.removeItem('ca_config'); localStorage.removeItem('ca_session');
@@ -4063,12 +4089,12 @@ async function confirmClosePosition() {
     const r = await fetch(API + '/close_position/' + symbol, { method:'POST', headers:authHeaders() });
     const d = await r.json().catch(()=>({}));
     if (!r.ok || d.error) {
-      alert('Errore chiusura: ' + (d.detail || d.error || r.status));
+      showToast('Errore chiusura: ' + (d.detail || d.error || r.status), true);
       await poll().catch(()=>{});
       return;
     }
     await poll().catch(()=>{});
-  } catch(e) { alert('Errore di connessione durante la chiusura.'); }
+  } catch(e) { showToast('Errore di connessione durante la chiusura', true); }
 }
 
 // ── FILTRI TRANSAZIONI ───────────────────────────────────────────────────────
@@ -5330,7 +5356,7 @@ function closePaywall() {
 }
 
 async function upgradeToProClick() {
-  if (!STRIPE_ENABLED) { alert('Pagamenti non ancora configurati.'); return; }
+  if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
   try {
     const r = await fetch(API + '/billing/checkout', {
       method: 'POST', headers: authHeaders(),
@@ -5338,8 +5364,8 @@ async function upgradeToProClick() {
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
-    else { alert(d.detail || 'Errore checkout'); }
-  } catch(e) { alert('Errore: ' + e.message); }
+    else { showToast(d.detail || 'Errore checkout', true); }
+  } catch(e) { showToast('Errore: ' + e.message, true); }
 }
 
 async function manageSubscriptionClick() {
@@ -5350,8 +5376,8 @@ async function manageSubscriptionClick() {
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
-    else { alert(d.detail || 'Nessun abbonamento attivo'); }
-  } catch(e) { alert('Errore: ' + e.message); }
+    else { showToast(d.detail || 'Nessun abbonamento attivo', true); }
+  } catch(e) { showToast('Errore: ' + e.message, true); }
 }
 
 // Aggiorna badge piano nell'header e sessioni home
