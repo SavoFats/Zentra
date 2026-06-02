@@ -162,12 +162,13 @@ class RevxGuardrailTests(unittest.TestCase):
 
     def test_coinbase_preflight_blocks_insufficient_balance(self):
         result = self.main.build_coinbase_preflight(
-            [{"currency": "USD", "available": 0.5}],
+            [{"currency": "USD", "available": 0.5}, {"currency": "USDC", "available": 5.0}],
             {"product_id": "BTC-USD", "quote_currency_id": "USD", "quote_min_size": "1"},
             1.0,
         )
         self.assertFalse(result["ok"])
         self.assertIn("insufficient_quote_balance", result["blockers"])
+        self.assertEqual(result["quote_balances"]["USDC"], 5.0)
 
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances

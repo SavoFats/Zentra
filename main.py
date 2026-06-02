@@ -430,6 +430,11 @@ def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -
         price = float(product.get("price") or product.get("mid_market_price") or 0)
     except Exception:
         price = 0.0
+    quote_balances = {
+        a.get("currency"): float(a.get("available") or 0)
+        for a in accounts
+        if a.get("currency") in ("USD", "USDC", "EUR")
+    }
     available = 0.0
     for acc in accounts:
         if acc.get("currency") == quote:
@@ -452,6 +457,7 @@ def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -
         "product_id": product_id,
         "quote_currency": quote,
         "available_quote": available,
+        "quote_balances": quote_balances,
         "required_quote": amount_usd,
         "quote_min_size": quote_min_size,
         "price": price,

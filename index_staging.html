@@ -2430,9 +2430,13 @@ async function preflightExternalExchange() {
       }
     } else {
       const blockers = (d.blockers || []).join(', ') || d.error || 'blocco sconosciuto';
+      const quoteBalances = d.quote_balances
+        ? Object.entries(d.quote_balances).map(([k, v]) => `${k}: ${Number(v).toFixed(2)}`).join(' · ')
+        : '';
+      const detail = quoteBalances ? ` · saldi visti: ${quoteBalances}` : '';
       if (box) {
         box.style.color = 'var(--red)';
-        box.textContent = `Preflight non pronto: ${blockers}`;
+        box.textContent = `Preflight non pronto: ${blockers}${detail}`;
       }
     }
   } catch(e) {
