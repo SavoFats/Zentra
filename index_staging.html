@@ -1335,18 +1335,20 @@ body.auth-active .tabbar { display:none !important; }
       <div class="field-hint" id="stratHint">Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata</div>
     </div>
 
-    <div class="section-label">Filtri</div>
-
-    <div class="field" style="display:none">
-      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span></div>
-      <div class="ema-toggle-row">
-        <button class="ema-btn active" id="trend1hOnBtn" onclick="setTrend1h(true)">Attivo</button>
-        <button class="ema-btn" id="trend1hOffBtn" onclick="setTrend1h(false)">Disattivo</button>
-      </div>
+    <!-- Filtri nascosti per compatibilità JS -->
+    <div style="display:none">
+      <input type="range" id="minR" value="1.0"><input type="range" id="tp1R" value="2.0"><input type="range" id="tp2R" value="4.0">
+      <button id="trailingOnBtn"></button><button id="trailingOffBtn"></button><span id="trailingLabel"></span>
+      <button id="rsiOnBtn"></button><button id="rsiOffBtn"></button><span id="rsiFilterLabel"></span>
+      <input type="range" id="rsiMin" min="20" max="50" value="35" step="5">
+      <input type="range" id="rsiMax" min="50" max="80" value="65" step="5">
+      <input type="range" id="pullbackTolerance" min="0.1" max="3" value="2.0" step="0.1">
+      <span id="pullbackVal">2.0%</span>
+      <button id="trend1hOnBtn"></button><button id="trend1hOffBtn"></button><span id="trend1hLabel"></span>
     </div>
 
     <div class="field">
-      <div class="field-label">Filtro BTC EMA1h <span id="btcEmaLabel" style="color:var(--green);font-weight:700">ON</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
+      <div class="field-label">Filtro BTC EMA1h <span id="btcEmaLabel" style="color:var(--green);font-weight:700">ON</span></div>
       <div class="ema-toggle-row">
         <button class="ema-btn active" id="btcEmaOnBtn" onclick="setBtcEma(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1357,155 +1359,143 @@ body.auth-active .tabbar { display:none !important; }
           Disattivo
         </button>
       </div>
-      <div class="field-hint">Pausa se BTC è sotto la propria EMA50 su 1h — filtro medio-termine più stabile, meno falsi blocchi</div>
+      <div class="field-hint">Pausa se BTC è sotto la propria EMA50 su 1h — riduce i falsi segnali nei mercati deboli</div>
     </div>
-
-
-    <div class="field" style="display:none">
-      <div class="field-label">Filtro RSI <span id="rsiFilterLabel">ON</span></div>
-      <div class="ema-toggle-row">
-        <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">Attivo</button>
-        <button class="ema-btn" id="rsiOffBtn" onclick="setRsiFilter(false)">Disattivo</button>
-      </div>
-      <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" style="display:none">
-      <input type="range" id="rsiMax" min="50" max="80" value="65" step="5" style="display:none">
-    </div>
-
-    <div class="field" style="display:none">
-      <div class="field-label">Pullback Tolerance <span id="pullbackVal">2.0%</span></div>
-      <input type="range" id="pullbackTolerance" min="0.1" max="3" value="2.0" step="0.1"
-        oninput="document.getElementById('pullbackVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Distanza massima del prezzo da EMA20 per considerare un pullback valido</div>
-    </div>
-
-    <div class="field" id="momentumFilterField">
-      <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
-      <input type="range" id="momentumPct" min="0.5" max="3" value="1" step="0.5"
-        oninput="document.getElementById('momentumPctVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
-    </div>
-
-    <div id="breakoutFilters" style="display:none">
-      <div class="field">
-        <div class="field-label">Soglia CHOP <span id="chopMinVal" style="color:var(--blue);font-weight:700">61.8</span></div>
-        <input type="range" id="chopMin" min="55" max="75" value="61.8" step="0.5"
-          oninput="document.getElementById('chopMinVal').textContent=parseFloat(this.value).toFixed(1)">
-        <div class="field-hint">Il mercato è in consolidamento quando il CHOP index supera questa soglia — 61.8 è il golden ratio classico, abbassa per trovare più setup, alza per consolidamenti più stretti</div>
-      </div>
-      <div class="field">
-        <div class="field-label">Compressione ATR <span id="atrRatioVal" style="color:var(--blue);font-weight:700">85%</span></div>
-        <input type="range" id="atrRatioMax" min="60" max="95" value="85" step="5"
-          oninput="document.getElementById('atrRatioVal').textContent=this.value+'%'">
-        <div class="field-hint">L'ATR corrente deve essere sotto questa % della sua media — più basso = volatilità più compressa, quindi breakout più esplosivo atteso</div>
-      </div>
-      <div class="field">
-        <div class="field-label">Volume Breakout <span id="breakoutVolVal" style="color:var(--blue);font-weight:700">1.5×</span></div>
-        <input type="range" id="breakoutVolMultiplier" min="1.2" max="3" value="1.5" step="0.1"
-          oninput="document.getElementById('breakoutVolVal').textContent=parseFloat(this.value).toFixed(1)+'×'">
-        <div class="field-hint">Volume minimo sul breakout in multipli della media a 20 candele — conferma che la rottura ha partecipazione reale, non è un falso segnale</div>
-      </div>
-    </div>
-
-    <div class="section-label">Stop &amp; Take Profit</div>
 
     <div class="field">
       <div class="field-label">Stop Loss massimo <span id="slVal">2.5%</span></div>
-      <input type="range" id="stopLoss" min="0.5" max="5" value="2.0" step="0.1"
+      <input type="range" id="stopLoss" min="0.5" max="5" value="2.5" step="0.1"
         oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%';updateTpSchema()">
       <div class="field-hint">Stop fisso sotto il prezzo di entrata — protezione catastrofica, non si muove mai</div>
     </div>
 
-    <div class="field" style="display:none">
-      <input type="range" id="minR" value="1.0" style="display:none">
-      <input type="range" id="tp1R" value="2.0" style="display:none">
-      <input type="range" id="tp2R" value="4.0" style="display:none">
-      <button id="trailingOnBtn" style="display:none"></button>
-      <button id="trailingOffBtn" style="display:none"></button>
-      <span id="trailingLabel" style="display:none"></span>
-    </div>
+    <!-- Toggle avanzati -->
+    <button id="advancedToggleBtn" onclick="toggleAdvanced()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:var(--sans);color:var(--text2);font-size:13px;font-weight:600;transition:all 0.2s">
+      <span style="display:flex;align-items:center;gap:8px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
+        Impostazioni avanzate
+      </span>
+      <svg id="advancedChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="transition:transform 0.25s"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
 
-    <div class="field">
-      <div class="field-label">Trail ATR <span id="trailAtrVal" style="color:var(--blue);font-weight:700">2.0×</span></div>
-      <input type="range" id="trailAtrMultiplier" min="1" max="4" value="2" step="0.5"
-        oninput="document.getElementById('trailAtrVal').textContent=parseFloat(this.value).toFixed(1)+'×';updateTpSchema()">
-      <div class="field-hint">Distanza del trailing stop in multipli di ATR — più alto = più respiro alla coin, più basso = protegge prima i profitti</div>
-    </div>
+    <div id="advancedSection" style="display:none">
 
-    <div class="field">
-      <div class="field-label">Profit Activation <span id="profitActVal" style="color:var(--blue);font-weight:700">0.3%</span></div>
-      <input type="range" id="profitActivation" min="0" max="2" value="0.3" step="0.1"
-        oninput="document.getElementById('profitActVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Il trailing scatta solo dopo questo profitto netto — più alto = lascia respirare la posizione, meno uscite precoci</div>
-    </div>
+      <div class="section-label" style="margin-top:16px">Filtri strategia</div>
 
-    <div class="field">
-      <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">4h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="maxHoldHours" min="1" max="24" value="4" step="1"
-        oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
-      <div class="field-hint">Chiude la posizione automaticamente se aperta da troppo tempo</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Circuit Breaker <span id="circuitBreakerLabel" style="color:var(--text3);font-weight:700">OFF</span></div>
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <button class="ema-btn" id="cbOnBtn" onclick="setCircuitBreaker(true)">Attivo</button>
-        <button class="ema-btn active" id="cbOffBtn" onclick="setCircuitBreaker(false)">Disattivo</button>
+      <div class="field" id="momentumFilterField">
+        <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
+        <input type="range" id="momentumPct" min="0.5" max="3" value="1" step="0.5"
+          oninput="document.getElementById('momentumPctVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+        <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
       </div>
-      <div class="field-hint">Ferma il bot automaticamente se la perdita giornaliera supera la soglia — protegge il capitale nei giorni negativi</div>
-    </div>
 
-    <div class="field" id="cbLimitField" style="display:none">
-      <div class="field-label">Max Perdita Giornaliera <span id="dailyLossVal" style="color:var(--red);font-weight:700">3%</span></div>
-      <input type="range" id="dailyLossLimit" min="1" max="10" value="3" step="0.5"
-        oninput="document.getElementById('dailyLossVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Se il bot perde questa percentuale del capitale in un giorno, si ferma automaticamente fino a mezzanotte UTC</div>
-    </div>
-
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Come funziona l'uscita</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Hard Stop</div>
-          <div style="font-size:13px;font-weight:700;color:var(--red)">−<span id="tp1Label">2</span>%</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Protezione catastrofica</div>
+      <div id="breakoutFilters" style="display:none">
+        <div class="field">
+          <div class="field-label">Soglia CHOP <span id="chopMinVal" style="color:var(--blue);font-weight:700">61.8</span></div>
+          <input type="range" id="chopMin" min="55" max="75" value="61.8" step="0.5"
+            oninput="document.getElementById('chopMinVal').textContent=parseFloat(this.value).toFixed(1)">
+          <div class="field-hint">Consolidamento confermato sopra questa soglia — 61.8 (golden ratio) è il valore classico, abbassa per trovare più setup</div>
         </div>
-        <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Trailing Profit</div>
-          <div style="font-size:13px;font-weight:700;color:var(--green)"><span id="tp2Label">2.0</span>× ATR dal picco</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Solo quando in profitto netto</div>
+        <div class="field">
+          <div class="field-label">Compressione ATR <span id="atrRatioVal" style="color:var(--blue);font-weight:700">85%</span></div>
+          <input type="range" id="atrRatioMax" min="60" max="95" value="85" step="5"
+            oninput="document.getElementById('atrRatioVal').textContent=this.value+'%'">
+          <div class="field-hint">L'ATR corrente deve essere sotto questa % della sua media — volatilità compressa significa breakout potenzialmente più esplosivo</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Volume Breakout <span id="breakoutVolVal" style="color:var(--blue);font-weight:700">1.5×</span></div>
+          <input type="range" id="breakoutVolMultiplier" min="1.2" max="3" value="1.5" step="0.1"
+            oninput="document.getElementById('breakoutVolVal').textContent=parseFloat(this.value).toFixed(1)+'×'">
+          <div class="field-hint">Spike di volume minimo sul breakout — conferma partecipazione reale, non un falso segnale su volumi bassi</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">Il trailing profit si attiva solo dopo aver coperto le commissioni (~0.18% round-trip)</div>
-    </div>
 
-    <div class="section-label">Gestione Rischio</div>
+      <div class="section-label" style="margin-top:16px">Uscita posizioni</div>
 
-    <div class="field">
-      <div class="field-label">Volume minimo universe <span id="volVal">$0M</span></div>
-      <input type="range" id="minVolume" min="0" max="500" value="0" step="1"
-        oninput="document.getElementById('volVal').textContent=getCurrSym()+this.value+'M'">
-      <div class="field-hint">Coin con volume inferiore vengono escluse dall'universo</div>
-    </div>
+      <div class="field">
+        <div class="field-label">Trail ATR <span id="trailAtrVal" style="color:var(--blue);font-weight:700">2.0×</span></div>
+        <input type="range" id="trailAtrMultiplier" min="1" max="4" value="2" step="0.5"
+          oninput="document.getElementById('trailAtrVal').textContent=parseFloat(this.value).toFixed(1)+'×';updateTpSchema()">
+        <div class="field-hint">Distanza del trailing stop in multipli di ATR dal picco — 2× è il compromesso standard tra respiro e protezione profitti</div>
+      </div>
 
-    <div class="field">
-      <div class="field-label">Max trade per sessione <span id="maxTradesVal">Illimitato</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="maxTrades" min="0" max="20" value="0" step="1"
-        oninput="updateMaxTrades()">
-      <div class="field-hint" id="maxTradesHint">Nessun limite — l'agente opera per tutta la durata</div>
-    </div>
+      <div class="field">
+        <div class="field-label">Profit Activation <span id="profitActVal" style="color:var(--blue);font-weight:700">0.5%</span></div>
+        <input type="range" id="profitActivation" min="0" max="2" value="0.5" step="0.1"
+          oninput="document.getElementById('profitActVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+        <div class="field-hint">Il trailing si attiva solo dopo questo profitto netto — sotto 0.3% si rischia di uscire sul rumore, sopra 1% si lascia troppo profitto sul tavolo</div>
+      </div>
 
-    <div class="field">
-      <div class="field-label">Stop dopo N perdite consecutive <span id="maxLossVal">3</span></div>
-      <input type="range" id="maxConsecutiveLosses" min="1" max="10" value="3" step="1"
-        oninput="updateMaxLoss()">
-      <div class="field-hint" id="maxLossHint">Sessione fermata automaticamente dopo 3 loss di fila</div>
-    </div>
+      <div class="field">
+        <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">6h</span></div>
+        <input type="range" id="maxHoldHours" min="1" max="24" value="6" step="1"
+          oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
+        <div class="field-hint">Chiude forzatamente se la posizione è aperta da troppo — evita di tenere zombie che non si muovono</div>
+      </div>
 
-    <div class="field">
-      <div class="field-label">Cooldown post-uscita <span id="cdVal">0h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="cooldown" min="0" max="6" value="0" step="0.5"
-        oninput="document.getElementById('cdVal').textContent=this.value+'h'">
-    </div>
+      <div class="field">
+        <div class="field-label">Circuit Breaker <span id="circuitBreakerLabel" style="color:var(--text3);font-weight:700">OFF</span></div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="ema-btn" id="cbOnBtn" onclick="setCircuitBreaker(true)">Attivo</button>
+          <button class="ema-btn active" id="cbOffBtn" onclick="setCircuitBreaker(false)">Disattivo</button>
+        </div>
+        <div class="field-hint">Ferma il bot se la perdita giornaliera supera la soglia — utile nei giorni con mercato erratico</div>
+      </div>
+
+      <div class="field" id="cbLimitField" style="display:none">
+        <div class="field-label">Max Perdita Giornaliera <span id="dailyLossVal" style="color:var(--red);font-weight:700">5%</span></div>
+        <input type="range" id="dailyLossLimit" min="1" max="10" value="5" step="0.5"
+          oninput="document.getElementById('dailyLossVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+        <div class="field-hint">Soglia consigliata 3-5% — sotto il 3% troppi falsi scatti su volatilità normale crypto</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Schema uscita</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Hard Stop</div>
+            <div style="font-size:13px;font-weight:700;color:var(--red)">−<span id="tp1Label">2.5</span>%</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">Protezione catastrofica</div>
+          </div>
+          <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Trailing Profit</div>
+            <div style="font-size:13px;font-weight:700;color:var(--green)"><span id="tp2Label">2.0</span>× ATR dal picco</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">Solo quando in profitto netto</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label">Rischio operativo</div>
+
+      <div class="field">
+        <div class="field-label">Volume minimo universe <span id="volVal">$10M</span></div>
+        <input type="range" id="minVolume" min="0" max="500" value="10" step="1"
+          oninput="document.getElementById('volVal').textContent=getCurrSym()+this.value+'M'">
+        <div class="field-hint">Esclude coin con liquidità insufficiente — sotto $10M lo slippage e i falsi segnali aumentano significativamente</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Max trade per sessione <span id="maxTradesVal">Illimitato</span></div>
+        <input type="range" id="maxTrades" min="0" max="20" value="0" step="1"
+          oninput="updateMaxTrades()">
+        <div class="field-hint" id="maxTradesHint">Nessun limite — l'agente opera per tutta la durata della sessione</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Stop dopo N perdite consecutive <span id="maxLossVal">3</span></div>
+        <input type="range" id="maxConsecutiveLosses" min="1" max="10" value="3" step="1"
+          oninput="updateMaxLoss()">
+        <div class="field-hint" id="maxLossHint">Sessione fermata dopo 3 loss di fila — segnale che il mercato non è favorevole alla strategia</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Cooldown post-uscita <span id="cdVal">0.5h</span></div>
+        <input type="range" id="cooldown" min="0" max="6" value="0.5" step="0.5"
+          oninput="document.getElementById('cdVal').textContent=this.value+'h'">
+        <div class="field-hint">Attesa minima prima del prossimo ingresso dopo ogni uscita — evita di rientrare subito in un mercato ancora instabile</div>
+      </div>
+
+    </div><!-- /advancedSection -->
 
     <button class="start-btn" id="startBtn" onclick="startAgent()">Avvia sessione</button>
     <button class="start-btn" id="saveConfigBtn" onclick="saveConfigLive()" style="display:none">Salva modifiche</button>
@@ -3250,6 +3240,19 @@ function setStrategy(s) {
   if (mf) mf.style.display = s === 'momentum' ? '' : 'none';
   const bf = document.getElementById('breakoutFilters');
   if (bf) bf.style.display = s === 'breakout' ? '' : 'none';
+}
+
+function toggleAdvanced() {
+  const sec = document.getElementById('advancedSection');
+  const chevron = document.getElementById('advancedChevron');
+  const open = sec.style.display === 'none' || sec.style.display === '';
+  if (open) {
+    sec.style.display = 'block';
+    chevron.style.transform = 'rotate(180deg)';
+  } else {
+    sec.style.display = 'none';
+    chevron.style.transform = 'rotate(0deg)';
+  }
 }
 
 function renderAgentExchangeOptions() {
