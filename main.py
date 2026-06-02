@@ -2395,11 +2395,20 @@ async def scan_and_trade(state: dict, user_id: int = None):
             break
 
     bc = block_count
+    if strategy == "breakout":
+        scan_detail = (
+            f"CHOP:{bc.get('consolidation',0)} ATR:{bc.get('atr',0)} "
+            f"BRK:{bc.get('breakout',0)} VOL:{bc.get('vol',0)} FRESH:{bc.get('fresh',0)}"
+        )
+    else:
+        scan_detail = (
+            f"MOM:{bc.get('breakout',0)} VOL:{bc.get('vol',0)} RSI:{bc.get('rsi',0)} "
+            f"DCMP:{bc.get('decomp',0)} WICK:{bc.get('wick',0)} KELT:{bc.get('keltner',0)} "
+            f"TSI:{bc.get('tsi',0)} MACD:{bc.get('macd',0)}"
+        )
     add_log(state, "info", "SCAN",
         f"Universe: {len(universe_sorted)} | Candidati: {len(candidates)} | Saltati: {skipped} | "
-        f"MOM:{bc['breakout']} VOL:{bc['vol']} RSI:{bc['rsi']} "
-        f"DCMP:{bc['decomp']} WICK:{bc['wick']} KELT:{bc['keltner']} "
-        f"TSI:{bc['tsi']} MACD:{bc['macd']} | Candele:{len(candle_data)}"
+        f"{scan_detail} | Candele:{len(candle_data)}"
     )
 
     for d in candidates:
