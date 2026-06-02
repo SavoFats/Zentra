@@ -109,6 +109,12 @@ class RevxGuardrailTests(unittest.TestCase):
             self.main.validate_external_exchange_keys("coinbase", "api-key-123", "short")
         self.assertEqual(ctx.exception.status_code, 400)
 
+    def test_coinbase_secret_normalizes_escaped_newlines(self):
+        raw = "-----BEGIN EC PRIVATE KEY-----\\nabc\\n-----END EC PRIVATE KEY-----\\n"
+        normalized = self.main.normalize_coinbase_api_secret(raw)
+        self.assertIn("\nabc\n", normalized)
+        self.assertNotIn("\\n", normalized)
+
     def test_parse_coinbase_accounts_accepts_known_shape(self):
         accounts = self.main.parse_coinbase_accounts({
             "accounts": [

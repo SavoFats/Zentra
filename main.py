@@ -335,6 +335,13 @@ async def revx_request(method: str, path: str, body: dict = None,
 COINBASE_BASE = "https://api.coinbase.com"
 COINBASE_HOST = "api.coinbase.com"
 
+def normalize_coinbase_api_secret(api_secret: str) -> str:
+    """Normalizza private key Coinbase copiate con newline escapati."""
+    secret = (api_secret or "").strip()
+    if "\\n" in secret and "\n" not in secret:
+        secret = secret.replace("\\n", "\n")
+    return secret
+
 def make_coinbase_jwt(api_key: str, api_secret: str, method: str, path: str) -> str:
     """Genera JWT Coinbase Advanced Trade (ES256) per una singola richiesta."""
     import jwt
@@ -342,6 +349,7 @@ def make_coinbase_jwt(api_key: str, api_secret: str, method: str, path: str) -> 
     from cryptography.hazmat.primitives import serialization
     now = int(time.time())
     uri = f"{method.upper()} {COINBASE_HOST}{path}"
+    api_secret = normalize_coinbase_api_secret(api_secret)
     private_key = serialization.load_pem_private_key(api_secret.encode("utf-8"), password=None)
     payload = {
         "sub": api_key,
@@ -3893,6 +3901,8 @@ def validate_external_exchange_keys(exchange: str, api_key: str, api_secret: str
         raise HTTPException(status_code=400, detail="API key non valida")
     if len(api_secret) < 8 or len(api_secret) > 4096:
         raise HTTPException(status_code=400, detail="API secret non valida")
+    if (exchange or "").lower() == "coinbase":
+        api_secret = normalize_coinbase_api_secret(api_secret)
     return api_key, api_secret, cfg
 
 @app.post("/auth/save_revx_keys")
