@@ -2376,11 +2376,13 @@ async def monitor_manual_positions(state: dict, user_id: int):
             pos["peak_price"] = cur
 
         if cur <= pos["stopPrice"]:
+            print(f"[MONITOR] User {user_id}: SL hit {sym} cur={cur:.6f} stop={pos['stopPrice']:.6f}")
             await exit_position(state, pos, "STOP LOSS", user_id=user_id)
             continue
 
         tp = pos.get("tp1Price", 0.0)
         if tp > 0 and cur >= tp:
+            print(f"[MONITOR] User {user_id}: TP hit {sym} cur={cur:.6f} tp={tp:.6f}")
             await exit_position(state, pos, "TAKE PROFIT", user_id=user_id)
             continue
 
@@ -2511,6 +2513,7 @@ async def persist_sessions():
             state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_exiting", "_stopping")}
             state_json = json.dumps(state_to_save, default=str)
             has_open_positions = bool(state.get("positions"))
+            n_pos = len(state.get("positions", []))
             async with db_pool.acquire() as conn:
                 if state.get("running") or has_open_positions:
                     await conn.execute("""
@@ -2519,8 +2522,10 @@ async def persist_sessions():
                         ON CONFLICT (user_id) DO UPDATE
                         SET state_json = $2, updated_at = NOW()
                     """, uid, state_json)
+                    print(f"[PERSIST] User {uid}: SAVED running={state.get('running')} pos={n_pos}")
                 else:
                     await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
+                    print(f"[PERSIST] User {uid}: DELETED (running=False, no positions)")
         except Exception as e:
             print(f"Errore persist sessione user {uid}: {e}")
 
@@ -2737,6 +2742,7 @@ async def restore_sessions_from_db(pool):
     - running=True  → rimane True, paused=True  (scan_and_trade monitora, no nuovi ingressi)
     - running=False → rimane False               (monitor_all_positions monitora SL/TP)
     """
+    print("[RESTORE] Avvio restore sessioni dal DB...")
     try:
         async with pool.acquire() as conn:
             rows = await conn.fetch("""
@@ -2744,11 +2750,15 @@ async def restore_sessions_from_db(pool):
                        u.revx_key_id, u.revx_private_key
                 FROM active_sessions s JOIN users u ON u.id = s.user_id
             """)
+        print(f"[RESTORE] Trovate {len(rows)} righe in active_sessions")
         for row in rows:
             uid = row["user_id"]
             try:
-                state = json.loads(row["state_json"])
+                raw_json = row["state_json"]
+                print(f"[RESTORE] User {uid}: JSON len={len(raw_json)}, updated_at={row['updated_at']}")
+                state = json.loads(raw_json)
                 positions = state.get("positions", [])
+                print(f"[RESTORE] User {uid}: running={state.get('running')}, posizioni={len(positions)}")
 
                 if not positions:
                     async with pool.acquire() as conn:
@@ -2763,7 +2773,6 @@ async def restore_sessions_from_db(pool):
 
                 was_running = state.get("running", False)
                 if was_running:
-                    # Bot era attivo: pausa per evitare nuovi ingressi automatici
                     state["paused"] = True
 
                 user_sessions[uid] = state
@@ -2771,7 +2780,7 @@ async def restore_sessions_from_db(pool):
                 n    = len(positions)
                 syms = ", ".join(p.get("symbol", "?") for p in positions)
                 mode = "paused" if was_running else "monitor"
-                print(f"[RESTORE] User {uid}: {n} posizioni ({syms}) — modalità {mode}")
+                print(f"[RESTORE] User {uid}: RIPRISTINATO {n} posizioni ({syms}) — modalità {mode}")
 
                 tg_chat = state.get("telegram_chat_id", "")
                 pausa_note = ("L'agente è in <b>PAUSA</b> — riavvialo dall'app quando sei pronto."
@@ -2788,9 +2797,11 @@ async def restore_sessions_from_db(pool):
                 else:
                     await send_telegram(msg)
             except Exception as e:
-                print(f"[RESTORE] Errore user {uid}: {e}")
+                import traceback as _tb
+                print(f"[RESTORE] Errore user {uid}: {e}\n{_tb.format_exc()}")
     except Exception as e:
-        print(f"[RESTORE] Errore: {e}")
+        import traceback as _tb
+        print(f"[RESTORE] Errore fatale: {e}\n{_tb.format_exc()}")
 
 # ── RATE LIMITING ─────────────────────────────────────────────────────────────
 from collections import defaultdict
