@@ -2343,7 +2343,10 @@ async def poll_telegram():
                             pos = next((p for p in state["positions"] if p["symbol"] == sym), None)
                             if pos:
                                 await exit_position(state, pos, "TELEGRAM", user_id=uid)
-                                await send_telegram_to(chat_id, f"✅ Posizione {sym} chiusa")
+                                if pos in state.get("positions", []):
+                                    await send_telegram_to(chat_id, f"⚠️ Chiusura {sym} non confermata. Posizione ancora aperta, verifica su Zentra/Revolut X.")
+                                else:
+                                    await send_telegram_to(chat_id, f"✅ Posizione {sym} chiusa")
                             else:
                                 await send_telegram_to(chat_id, f"Nessuna posizione aperta su {sym}")
                         else:
