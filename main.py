@@ -4090,15 +4090,34 @@ async def preflight_coinbase(request: Request, symbol: str = "BTC", amount_usd: 
         )
         accounts = parse_coinbase_accounts(accounts_result)
         product_errors = []
+        preflight_candidates = []
         for product_id in (f"{sym}-USD", f"{sym}-USDC"):
             try:
                 product = await coinbase_request(
                     "GET", f"/api/v3/brokerage/products/{product_id}",
                     api_key=api_key, api_secret=api_secret
                 )
-                return build_coinbase_preflight(accounts, product, amount)
+                candidate = build_coinbase_preflight(accounts, product, amount)
+                preflight_candidates.append(candidate)
+                if candidate["ok"]:
+                    return candidate
             except Exception as product_exc:
                 product_errors.append(public_error(product_exc, api_key, api_secret, max_len=120))
+        if preflight_candidates:
+            best = sorted(
+                preflight_candidates,
+                key=lambda c: (len(c.get("blockers", [])), -float(c.get("available_quote") or 0))
+            )[0]
+            best["candidates"] = [
+                {
+                    "product_id": c.get("product_id"),
+                    "quote_currency": c.get("quote_currency"),
+                    "available_quote": c.get("available_quote"),
+                    "blockers": c.get("blockers", []),
+                }
+                for c in preflight_candidates
+            ]
+            return best
         return {"ok": False, "symbol": sym, "blockers": ["product_unavailable"], "errors": product_errors[:2]}
     except Exception as e:
         return {"ok": False, "error": public_error(e, api_key, api_secret)}

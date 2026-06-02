@@ -2433,7 +2433,12 @@ async function preflightExternalExchange() {
       const quoteBalances = d.quote_balances
         ? Object.entries(d.quote_balances).map(([k, v]) => `${k}: ${Number(v).toFixed(2)}`).join(' · ')
         : '';
-      const detail = quoteBalances ? ` · saldi visti: ${quoteBalances}` : '';
+      const candidates = (d.candidates || []).map(c =>
+        `${c.product_id}: ${Number(c.available_quote || 0).toFixed(2)} ${c.quote_currency} (${(c.blockers || []).join('/') || 'OK'})`
+      ).join(' · ');
+      const detail = candidates
+        ? ` · candidati: ${candidates}`
+        : (quoteBalances ? ` · saldi visti: ${quoteBalances}` : '');
       if (box) {
         box.style.color = 'var(--red)';
         box.textContent = `Preflight non pronto: ${blockers}${detail}`;
