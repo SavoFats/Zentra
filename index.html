@@ -5027,8 +5027,9 @@ async function tmFetchPrice() {
     const d = await r.json();
     if (r.ok && d.price) {
       _tmPrice = d.price;
-      const src = d.source === 'binance_fallback' ? ' (Binance)' : '';
-      document.getElementById('tmPrice').textContent = 'Prezzo: ' + fmtPrice(_tmPrice) + src;
+      const srcLabel = { revx: 'RevX', coinbase: 'Coinbase', binance: 'Binance' };
+      const src = d.source === 'binance_fallback' ? 'Binance' : (srcLabel[d.exchange] || d.exchange || '');
+      document.getElementById('tmPrice').textContent = 'Prezzo: ' + fmtPrice(_tmPrice) + (src ? ` · ${src}` : '');
       tmUpdatePrices();
     }
   } catch (_) {}
