@@ -3106,7 +3106,7 @@ function restoreConfigFromStorage() {
   if (saved.circuitBreakerEnabled !== undefined) setCircuitBreaker(saved.circuitBreakerEnabled);
   if (saved.dailyLossLimit !== undefined) { const dl=(saved.dailyLossLimit*100).toFixed(1); document.getElementById('dailyLossLimit').value=dl; document.getElementById('dailyLossVal').textContent=dl+'%'; }
   if (saved.profitActivation !== undefined) { const pa=(saved.profitActivation*100).toFixed(1); document.getElementById('profitActivation').value=parseFloat(pa); document.getElementById('profitActVal').textContent=pa+'%'; }
-  if (saved.minVolume) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
+  if (saved.minVolume !== undefined) { const mv=saved.minVolume/1000000; document.getElementById('minVolume').value=mv; document.getElementById('volVal').textContent=getCurrSym()+mv+'M'; }
   if (saved.maxTrades !== undefined) { document.getElementById('maxTrades').value=saved.maxTrades; updateMaxTrades(); }
   if (saved.maxConsecutiveLosses) { document.getElementById('maxConsecutiveLosses').value=saved.maxConsecutiveLosses; updateMaxLoss(); }
   if (saved.cooldown !== undefined) { document.getElementById('cooldown').value=saved.cooldown; document.getElementById('cdVal').textContent=saved.cooldown+'h'; }
