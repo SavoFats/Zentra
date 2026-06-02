@@ -100,6 +100,11 @@ STRIPE_PRICE_ID       = os.environ.get("STRIPE_PRICE_ID", "")
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 ENABLE_DEBUG_REVX = os.environ.get("ENABLE_DEBUG_REVX", "").lower() in ("1", "true", "yes")
+ENABLE_RESTORE_DEBUG = os.environ.get("ENABLE_RESTORE_DEBUG", "").lower() in ("1", "true", "yes")
+
+def restore_debug_log(msg: str):
+    if ENABLE_RESTORE_DEBUG:
+        print(msg)
 
 # ── FREE PLAN LIMITS ──────────────────────────────────────────────────────────
 FREE_SESSIONS_PER_DAY  = 1
@@ -2763,7 +2768,7 @@ async def restore_sessions_from_db(pool):
                 if not positions:
                     async with pool.acquire() as conn:
                         await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
-                    print(f"[RESTORE] User {uid}: nessuna posizione, rimossa dal DB")
+                    restore_debug_log(f"[RESTORE] User {uid}: nessuna posizione, rimossa dal DB")
                     continue
 
                 state["revx_key_id"]      = decrypt_key(row["revx_key_id"] or "")
@@ -2780,7 +2785,7 @@ async def restore_sessions_from_db(pool):
                 n    = len(positions)
                 syms = ", ".join(p.get("symbol", "?") for p in positions)
                 mode = "paused" if was_running else "monitor"
-                print(f"[RESTORE] User {uid}: RIPRISTINATO {n} posizioni ({syms}) — modalità {mode}")
+                restore_debug_log(f"[RESTORE] User {uid}: RIPRISTINATO {n} posizioni ({syms}) — modalità {mode}")
 
                 tg_chat = state.get("telegram_chat_id", "")
                 pausa_note = ("L'agente è in <b>PAUSA</b> — riavvialo dall'app quando sei pronto."
