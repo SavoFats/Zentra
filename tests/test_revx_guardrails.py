@@ -141,6 +141,33 @@ class RevxGuardrailTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.main.parse_coinbase_accounts({"error": "unauthorized"})
 
+    def test_fetch_coinbase_accounts_follows_cursor(self):
+        main = self.main
+        calls = []
+
+        async def fake_coinbase_request(method, path, body=None, api_key="", api_secret=""):
+            calls.append(path)
+            if "cursor=next" in path:
+                return {
+                    "accounts": [{"currency": "USDC", "available_balance": {"value": "5", "currency": "USDC"}}],
+                    "has_next": False,
+                }
+            return {
+                "accounts": [{"currency": "USD", "available_balance": {"value": "0", "currency": "USD"}}],
+                "has_next": True,
+                "cursor": "next",
+            }
+
+        original = main.coinbase_request
+        main.coinbase_request = fake_coinbase_request
+        try:
+            accounts = asyncio.run(main.fetch_coinbase_accounts("key", "secret"))
+        finally:
+            main.coinbase_request = original
+
+        self.assertEqual([a["currency"] for a in accounts], ["USD", "USDC"])
+        self.assertIn("cursor=next", calls[1])
+
     def test_coinbase_preflight_allows_tradable_product_with_balance(self):
         result = self.main.build_coinbase_preflight(
             [{"currency": "USD", "available": 12.0}],

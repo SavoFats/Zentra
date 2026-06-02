@@ -417,6 +417,22 @@ def parse_coinbase_accounts(result: object) -> list:
         })
     return parsed
 
+async def fetch_coinbase_accounts(api_key: str, api_secret: str, limit: int = 250, max_pages: int = 5) -> list:
+    accounts = []
+    cursor = ""
+    for _ in range(max_pages):
+        path = f"/api/v3/brokerage/accounts?limit={limit}"
+        if cursor:
+            path += f"&cursor={cursor}"
+        result = await coinbase_request("GET", path, api_key=api_key, api_secret=api_secret)
+        accounts.extend(parse_coinbase_accounts(result))
+        if not isinstance(result, dict) or not result.get("has_next"):
+            break
+        cursor = result.get("cursor") or ""
+        if not cursor:
+            break
+    return accounts
+
 def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -> dict:
     if not isinstance(product, dict):
         raise ValueError("Formato prodotto Coinbase non riconosciuto")
@@ -4051,15 +4067,17 @@ async def test_coinbase(request: Request, user_id: int = Depends(get_current_use
     api_key = decrypt_key(row["coinbase_api_key"])
     api_secret = decrypt_key(row["coinbase_api_secret"])
     try:
-        result = await coinbase_request(
-            "GET", "/api/v3/brokerage/accounts",
-            api_key=api_key, api_secret=api_secret
-        )
-        accounts = parse_coinbase_accounts(result)
+        accounts = await fetch_coinbase_accounts(api_key, api_secret)
         nonzero = [a for a in accounts if a["available"] > 0]
+        quote_balances = {
+            a.get("currency"): float(a.get("available") or 0)
+            for a in accounts
+            if a.get("currency") in ("USD", "USDC", "EUR")
+        }
         return {
             "ok": True,
             "accounts_count": len(accounts),
+            "quote_balances": quote_balances,
             "balances": nonzero[:12],
         }
     except Exception as e:
@@ -4084,11 +4102,7 @@ async def preflight_coinbase(request: Request, symbol: str = "BTC", amount_usd: 
     api_key = decrypt_key(row["coinbase_api_key"])
     api_secret = decrypt_key(row["coinbase_api_secret"])
     try:
-        accounts_result = await coinbase_request(
-            "GET", "/api/v3/brokerage/accounts",
-            api_key=api_key, api_secret=api_secret
-        )
-        accounts = parse_coinbase_accounts(accounts_result)
+        accounts = await fetch_coinbase_accounts(api_key, api_secret)
         product_errors = []
         preflight_candidates = []
         for product_id in (f"{sym}-USD", f"{sym}-USDC"):

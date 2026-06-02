@@ -2386,11 +2386,15 @@ async function testExternalExchangeConnection() {
     const d = await r.json();
     if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Test fallito');
     const balances = (d.balances || []).map(b => `${Number(b.available).toFixed(6)} ${b.currency}`).join(' · ');
+    const quoteBalances = d.quote_balances
+      ? Object.entries(d.quote_balances).map(([k, v]) => `${k}: ${Number(v).toFixed(2)}`).join(' · ')
+      : '';
     if (box) {
       box.style.color = 'var(--green)';
+      const quoteDetail = quoteBalances ? ` Quote: ${quoteBalances}.` : '';
       box.textContent = balances
-        ? `Connessione OK. Account: ${d.accounts_count}. Saldi: ${balances}`
-        : `Connessione OK. Account: ${d.accounts_count}. Nessun saldo disponibile.`;
+        ? `Connessione OK. Account: ${d.accounts_count}.${quoteDetail} Saldi: ${balances}`
+        : `Connessione OK. Account: ${d.accounts_count}.${quoteDetail} Nessun saldo non-zero disponibile.`;
     }
   } catch(e) {
     if (box) {
