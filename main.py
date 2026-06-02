@@ -2348,10 +2348,15 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if state["cooldowns"].get(sym, 0) >= _now_ms:                                _f_cool   += 1; continue
         universe.append({**d, "symbol": sym})
     if not universe:
+        # Campiona i volumi reali delle prime 5 coin che falliscono il filtro vol
+        _vol_samples = [(sym, round(d.get("volume24h",0)/1e6,1))
+                        for sym, d in market_data.items()
+                        if d["price"] > 0 and sym in _dynamic_universe][:5]
         add_log(state, "info", "DEBUG",
             f"Universe vuoto | mkt={len(market_data)} univ={len(_dynamic_universe)} cdl={len(candle_data)} "
             f"min_vol={min_vol/1e6:.0f}M revx_filt={use_revx_filter} revx_pairs={len(_revx_pairs)} | "
-            f"price={_f_price} univ={_f_univ} vol={_f_vol} open={_f_open} revx={_f_revx} candle={_f_candle} cool={_f_cool}"
+            f"price={_f_price} univ={_f_univ} vol={_f_vol} open={_f_open} revx={_f_revx} candle={_f_candle} cool={_f_cool} | "
+            f"samples_vol={_vol_samples}"
         )
     universe_sorted = sorted(universe, key=lambda d: d.get("volume24h", 0), reverse=True)
 
