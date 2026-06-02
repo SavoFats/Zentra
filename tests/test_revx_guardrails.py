@@ -69,6 +69,25 @@ def import_main():
     return importlib.import_module("main")
 
 
+class FakeAcquire:
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def __aenter__(self):
+        return self.conn
+
+    async def __aexit__(self, *args):
+        return False
+
+
+class FakePool:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def acquire(self):
+        return FakeAcquire(self.conn)
+
+
 class RevxGuardrailTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -272,6 +291,102 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertNotIn("very-secret", msg)
         self.assertIn("[REDACTED]", msg)
         self.assertLessEqual(len(msg), 123)
+
+    def test_persist_sessions_keeps_stopped_sessions_with_open_positions(self):
+        main = self.main
+
+        class Conn:
+            def __init__(self):
+                self.calls = []
+
+            async def execute(self, sql, *args):
+                self.calls.append((sql, args))
+
+        conn = Conn()
+        original_pool = main.db_pool
+        original_sessions = main.user_sessions
+        main.db_pool = FakePool(conn)
+        main.user_sessions = {
+            7: {
+                "running": False,
+                "positions": [{"symbol": "BTC", "size": 10.0}],
+                "revx_key_id": "secret-key",
+                "revx_private_key": "secret-pem",
+                "log": [{"desc": "not persisted"}],
+            }
+        }
+        try:
+            asyncio.run(main.persist_sessions())
+        finally:
+            main.db_pool = original_pool
+            main.user_sessions = original_sessions
+
+        self.assertEqual(len(conn.calls), 1)
+        sql, args = conn.calls[0]
+        self.assertIn("INSERT INTO active_sessions", sql)
+        self.assertEqual(args[0], 7)
+        saved_json = args[1]
+        self.assertIn("BTC", saved_json)
+        self.assertNotIn("secret-key", saved_json)
+        self.assertNotIn("secret-pem", saved_json)
+        self.assertNotIn("not persisted", saved_json)
+
+    def test_restore_running_session_sets_paused_and_rehydrates_keys(self):
+        main = self.main
+
+        class Row(dict):
+            def __getitem__(self, key):
+                return self.get(key)
+
+        class Conn:
+            async def fetch(self, sql):
+                return [
+                    Row({
+                        "user_id": 9,
+                        "state_json": (
+                            '{"running": true, "paused": false, "positions": '
+                            '[{"symbol": "ETH", "size": 25.0, "entryPrice": 100.0, '
+                            '"currentPrice": 100.0, "stopPrice": 95.0, "tp1Price": 110.0}], '
+                            '"config": {}, "currentCapital": 100.0, "capital": 100.0, '
+                            '"tradeCount": 0, "wins": 0, "cooldowns": {}, "log": []}'
+                        ),
+                        "updated_at": "2026-06-02T00:00:00",
+                        "revx_key_id": "enc-key",
+                        "revx_private_key": "enc-pem",
+                    })
+                ]
+
+            async def execute(self, sql, *args):
+                raise AssertionError("restore should not delete a row with positions")
+
+        sent_messages = []
+
+        async def fake_send(*args):
+            sent_messages.append(args)
+
+        original_sessions = main.user_sessions
+        original_decrypt = main.decrypt_key
+        original_send_to = main.send_telegram_to
+        original_send = main.send_telegram
+        main.user_sessions = {}
+        main.decrypt_key = lambda value: f"dec:{value}"
+        main.send_telegram_to = fake_send
+        main.send_telegram = fake_send
+        try:
+            asyncio.run(main.restore_sessions_from_db(FakePool(Conn())))
+            restored = main.user_sessions[9]
+        finally:
+            main.user_sessions = original_sessions
+            main.decrypt_key = original_decrypt
+            main.send_telegram_to = original_send_to
+            main.send_telegram = original_send
+
+        self.assertTrue(restored["running"])
+        self.assertTrue(restored["paused"])
+        self.assertEqual(restored["positions"][0]["symbol"], "ETH")
+        self.assertEqual(restored["revx_key_id"], "dec:enc-key")
+        self.assertEqual(restored["revx_private_key"], "dec:enc-pem")
+        self.assertTrue(sent_messages)
 
 
 if __name__ == "__main__":

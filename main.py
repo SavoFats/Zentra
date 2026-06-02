@@ -2304,10 +2304,20 @@ async def poll_telegram():
 
                 elif cmd == "/STOP":
                     if state and state.get("running"):
-                        closed = [p["symbol"] for p in list(state["positions"])]
+                        closed = [p["symbol"] for p in list(state["positions"]) if not p.get("manual")]
+                        state["_stopping"] = True
                         for p in list(state["positions"]):
-                            await exit_position(state, p, "STOP MANUALE", user_id=uid)
+                            if not p.get("manual"):
+                                await exit_position(state, p, "STOP MANUALE", user_id=uid)
+                        remaining_agent = [p for p in state.get("positions", []) if not p.get("manual")]
+                        if remaining_agent:
+                            state.pop("_stopping", None)
+                            syms = ", ".join(p["symbol"] for p in remaining_agent)
+                            add_log(state, "info", "ERRORE", f"Stop Telegram annullato: vendita fallita per {syms} — riprova")
+                            await send_telegram_to(chat_id, f"⚠️ Stop annullato: vendita fallita per {syms}. Sessione ancora attiva.")
+                            continue
                         state["running"] = False
+                        state.pop("_stopping", None)
                         pnl = state["currentCapital"] - state["capital"]
                         add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
                         await persist_sessions()
