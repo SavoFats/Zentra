@@ -1470,10 +1470,10 @@ body.auth-active .tabbar { display:none !important; }
       <div class="section-label">Rischio operativo</div>
 
       <div class="field">
-        <div class="field-label">Volume minimo universe <span id="volVal">$10M</span></div>
-        <input type="range" id="minVolume" min="0" max="500" value="10" step="1"
+        <div class="field-label">Volume minimo universe <span id="volVal">$0M</span></div>
+        <input type="range" id="minVolume" min="0" max="500" value="0" step="1"
           oninput="document.getElementById('volVal').textContent=getCurrSym()+this.value+'M'">
-        <div class="field-hint">Esclude coin con liquidità insufficiente — sotto $10M lo slippage e i falsi segnali aumentano significativamente</div>
+        <div class="field-hint">Filtra coin per volume 24h minimo. Lascia a 0 per usare tutto l'universo (già curato per liquidità).</div>
       </div>
 
       <div class="field">
