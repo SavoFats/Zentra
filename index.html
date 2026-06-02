@@ -898,6 +898,48 @@ body.auth-active .tabbar { display:none !important; }
   </div>
 </div>
 
+<!-- Modal external exchange API keys -->
+<div class="modal-overlay" id="externalExchangeModal" onclick="if(event.target===this)closeExternalExchangeModal()">
+  <div class="modal-card" style="max-width:420px;width:100%">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="modal-title" style="margin-bottom:0" id="externalExchangeTitle">Collega exchange</div>
+      <button onclick="closeExternalExchangeModal()" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:4px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div id="externalExchangeConnectedView" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px;background:rgba(0,200,100,0.1);border:1px solid rgba(0,200,100,0.3);border-radius:10px;margin-bottom:16px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00c864" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span style="font-size:14px;font-weight:600;color:var(--text)" id="externalExchangeConnectedLabel">Exchange collegato</span>
+      </div>
+      <p style="font-size:13px;color:var(--text2);margin:0 0 20px;line-height:1.6">Le credenziali API sono salvate e crittografate. Il trading reale su questo exchange verra abilitato quando il modulo ordini dedicato sara pronto.</p>
+      <div id="externalExchangeTestResult" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.45;margin-bottom:14px"></div>
+      <div class="modal-actions">
+        <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Chiudi</button>
+        <button class="modal-btn cancel" id="externalExchangeTestBtn" onclick="testExternalExchangeConnection()">Test connessione</button>
+        <button class="modal-btn cancel" id="externalExchangePreflightBtn" onclick="preflightExternalExchange()">Preflight BTC $1</button>
+        <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroBuyBtn" onclick="microBuyCoinbase()">Compra BTC $1</button>
+        <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroSellBtn" onclick="microSellCoinbase()">Vendi BTC test</button>
+        <button class="modal-btn cancel" style="color:var(--red);border-color:var(--red)" onclick="disconnectExternalExchange()">Scollega</button>
+      </div>
+    </div>
+
+    <div id="externalExchangeFormView">
+      <div style="font-size:13px;color:var(--text2);line-height:1.55;margin-bottom:16px">Incolla le credenziali API create sull'exchange. Sono salvate cifrate e non vengono mostrate di nuovo dopo il salvataggio.</div>
+      <label style="font-size:12px;font-weight:700;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.04em">API key</label>
+      <input type="text" id="externalExchangeKey" placeholder="API key" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;color:var(--text);font-size:13px;font-family:monospace;outline:none;box-sizing:border-box;margin-bottom:12px" oninput="validateExternalExchangeForm()">
+      <label style="font-size:12px;font-weight:700;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.04em">API secret / private key</label>
+      <textarea id="externalExchangeSecret" rows="4" placeholder="API secret o private key" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);font-size:12px;font-family:monospace;outline:none;box-sizing:border-box;resize:none" oninput="validateExternalExchangeForm()"></textarea>
+      <div style="font-size:11px;color:var(--red);min-height:16px;margin-top:6px;margin-bottom:14px" id="externalExchangeErr"></div>
+      <div class="modal-actions" style="grid-template-columns:1fr 1fr">
+        <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Annulla</button>
+        <button class="modal-btn confirm-real" style="background:var(--blue)" id="externalExchangeSaveBtn" onclick="saveExternalExchangeKeys()" disabled>Salva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
 .revx-step-dot { width:10px;height:10px;border-radius:50%;background:var(--border2);transition:background 0.2s,transform 0.2s;flex-shrink:0; }
 .revx-step-dot.active { background:var(--blue);transform:scale(1.2); }
@@ -1084,6 +1126,9 @@ body.auth-active .tabbar { display:none !important; }
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Posizioni
       <span id="sbPosBadge" style="display:none;width:8px;height:8px;background:var(--red);border-radius:50%;margin-left:auto;flex-shrink:0"></span>
     </button>
+    <button class="sb-item" data-tab="exchange" onclick="showTab('exchange',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M2 10h20"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Exchange
+    </button>
   </div>
   <div style="padding:0 8px;border-top:1px solid var(--border)">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
@@ -1127,10 +1172,7 @@ body.auth-active .tabbar { display:none !important; }
         <div class="home-welcome-sub">Benvenuto</div>
         <div class="home-username" id="homeUsername">--</div>
       </div>
-      <div class="home-mode-badge sim" id="homeModeBadge">
-        <span id="homeModeDot" style="width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;animation:pulse 2s infinite"></span>
-        <span id="homeModeText">SIMULAZIONE</span>
-      </div>
+      <span id="homeModeBadge" style="display:none"></span><span id="homeModeDot" style="display:none"></span><span id="homeModeText" style="display:none"></span>
     </div>
 
     <!-- Hero card — nascosta quando sessione attiva -->
@@ -1595,6 +1637,73 @@ body.auth-active .tabbar { display:none !important; }
     </div>
   </div>
 
+  <!-- EXCHANGE -->
+  <div class="page" id="page-exchange">
+    <div class="ptr-indicator" id="ptr-page-exchange"><div class="ptr-spinner"></div></div>
+
+    <div style="padding:20px 0 16px">
+      <div class="home-welcome-sub">Connessioni</div>
+      <div class="home-username">Exchange</div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
+          <img src="assets/exchanges/revolut.svg" alt="Revolut" style="width:24px;height:24px;display:block">
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:800;color:var(--text)">Revolut X</div>
+            <span id="exchangeRevxStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
+          </div>
+          <div id="exchangeRevxSub" style="font-size:13px;color:var(--text3);margin-top:4px">Configura le API key</div>
+        </div>
+        <button id="exchangeRevxBtn" onclick="showRevxConfig()" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
+      </div>
+      <div style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
+        L'exchange collegato viene usato per gli ordini reali. Il conto demo resta disponibile anche senza chiavi API.
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
+          <img src="assets/exchanges/binance.svg" alt="Binance" style="width:27px;height:27px;display:block">
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:800;color:var(--text)">Binance</div>
+            <span id="exchangeBinanceStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
+          </div>
+          <div id="exchangeBinanceSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+        </div>
+        <button id="exchangeBinanceBtn" onclick="showExternalExchangeConfig('binance')" style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
+      </div>
+      <div style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
+        Collegamento credenziali disponibile. L'esecuzione ordini Binance verra abilitata in uno step dedicato.
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
+          <img src="assets/exchanges/coinbase.ico" alt="Coinbase" style="width:27px;height:27px;display:block">
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:800;color:var(--text)">Coinbase</div>
+            <span id="exchangeCoinbaseStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
+          </div>
+          <div id="exchangeCoinbaseSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+        </div>
+        <button id="exchangeCoinbaseBtn" onclick="showExternalExchangeConfig('coinbase')" style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
+      </div>
+      <div style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
+        Collegamento credenziali disponibile. L'esecuzione ordini Coinbase verra abilitata in uno step dedicato.
+      </div>
+    </div>
+  </div>
+
   <!-- ACCOUNT -->
   <div class="page" id="page-account">
     <div class="ptr-indicator" id="ptr-page-account"><div class="ptr-spinner"></div></div>
@@ -1726,8 +1835,9 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <div style="margin-bottom:16px">
       <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.5px">Exchange</label>
-      <select id="tmExchange" style="width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:500;outline:none">
+      <select id="tmExchange" onchange="tmExchangeChanged()" style="width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:500;outline:none">
         <option value="revx">Revolut X</option>
+        <option value="coinbase">Coinbase</option>
       </select>
     </div>
     <div style="margin-bottom:16px">
@@ -1786,6 +1896,8 @@ let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
 let _simMode = true;
 let _hasRevxKeys = false;
+let _exchangeKeys = { binance: false, coinbase: false };
+let _activeExternalExchange = '';
 let _plan = 'free';
 let _sessionsToday = 0;
 let _sessionsPerDay = 1;
@@ -2090,6 +2202,8 @@ async function loadUserProfile() {
     }
 
     _hasRevxKeys = me.has_revx_keys || false;
+    _exchangeKeys.binance = me.has_binance_keys || false;
+    _exchangeKeys.coinbase = me.has_coinbase_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
     window._realMode = _hasRevxKeys && !_simMode;
     window._tgLinked = me.telegram_linked || false;
@@ -2114,6 +2228,7 @@ async function loadUserProfile() {
     renderMarketStars();
     updatePlanUI();
     syncSidebar();
+    renderExchangePage();
   } catch(e) {
     applyAvatar(localStorage.getItem('ca_avatar'));
   }
@@ -2141,10 +2256,303 @@ async function disconnectRevx() {
       window._realMode = false;
       closeRevxModal();
       updateUI();
+      renderExchangePage();
       showToast('Revolut X scollegato');
     }
   } catch(e) {
     showToast('Errore durante la disconnessione', true);
+  }
+}
+
+const EXTERNAL_EXCHANGE_LABELS = { binance: 'Binance', coinbase: 'Coinbase' };
+
+function showExternalExchangeConfig(exchange) {
+  if (S.running) {
+    document.getElementById('profileMenu').classList.remove('open');
+    document.getElementById('sessionActiveModal').classList.add('open');
+    return;
+  }
+  if (!EXTERNAL_EXCHANGE_LABELS[exchange]) return;
+  _activeExternalExchange = exchange;
+  const label = EXTERNAL_EXCHANGE_LABELS[exchange];
+  const connected = !!_exchangeKeys[exchange];
+  document.getElementById('externalExchangeTitle').textContent = connected ? label : 'Collega ' + label;
+  document.getElementById('externalExchangeConnectedLabel').textContent = label + ' collegato';
+  document.getElementById('externalExchangeConnectedView').style.display = connected ? '' : 'none';
+  document.getElementById('externalExchangeFormView').style.display = connected ? 'none' : '';
+  const testBtn = document.getElementById('externalExchangeTestBtn');
+  const preflightBtn = document.getElementById('externalExchangePreflightBtn');
+  const microBuyBtn = document.getElementById('externalExchangeMicroBuyBtn');
+  const microSellBtn = document.getElementById('externalExchangeMicroSellBtn');
+  if (testBtn) {
+    testBtn.style.display = exchange === 'coinbase' ? '' : 'none';
+    testBtn.disabled = false;
+    testBtn.textContent = 'Test connessione';
+  }
+  if (preflightBtn) {
+    preflightBtn.style.display = exchange === 'coinbase' ? '' : 'none';
+    preflightBtn.disabled = false;
+    preflightBtn.textContent = 'Preflight BTC $1';
+  }
+  if (microBuyBtn) {
+    microBuyBtn.style.display = exchange === 'coinbase' ? '' : 'none';
+    microBuyBtn.disabled = false;
+    microBuyBtn.textContent = 'Compra BTC $1';
+  }
+  if (microSellBtn) {
+    microSellBtn.style.display = exchange === 'coinbase' ? '' : 'none';
+    microSellBtn.disabled = false;
+    microSellBtn.textContent = 'Vendi BTC test';
+  }
+  const testResult = document.getElementById('externalExchangeTestResult');
+  if (testResult) {
+    testResult.style.display = 'none';
+    testResult.textContent = '';
+  }
+  document.getElementById('externalExchangeKey').value = '';
+  document.getElementById('externalExchangeSecret').value = '';
+  document.getElementById('externalExchangeErr').textContent = '';
+  validateExternalExchangeForm();
+  document.getElementById('externalExchangeModal').classList.add('open');
+}
+
+function closeExternalExchangeModal() {
+  document.getElementById('externalExchangeModal').classList.remove('open');
+  _activeExternalExchange = '';
+}
+
+function validateExternalExchangeForm() {
+  const key = document.getElementById('externalExchangeKey')?.value.trim() || '';
+  const secret = document.getElementById('externalExchangeSecret')?.value.trim() || '';
+  const btn = document.getElementById('externalExchangeSaveBtn');
+  const ok = key.length >= 8 && secret.length >= 8;
+  if (btn) btn.disabled = !ok;
+}
+
+async function saveExternalExchangeKeys() {
+  const exchange = _activeExternalExchange;
+  if (!EXTERNAL_EXCHANGE_LABELS[exchange]) return;
+  const key = document.getElementById('externalExchangeKey').value.trim();
+  const secret = document.getElementById('externalExchangeSecret').value.trim();
+  const err = document.getElementById('externalExchangeErr');
+  const btn = document.getElementById('externalExchangeSaveBtn');
+  if (key.length < 8 || secret.length < 8) {
+    err.textContent = 'Inserisci API key e secret validi';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Salvo...';
+  err.textContent = '';
+  try {
+    const r = await fetch(API + '/auth/exchange_keys/' + exchange, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ api_key: key, api_secret: secret })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Errore salvataggio');
+    _exchangeKeys[exchange] = true;
+    closeExternalExchangeModal();
+    renderExchangePage();
+    showToast(EXTERNAL_EXCHANGE_LABELS[exchange] + ' collegato');
+  } catch(e) {
+    err.textContent = e.message || 'Errore salvataggio';
+  } finally {
+    btn.textContent = 'Salva';
+    validateExternalExchangeForm();
+  }
+}
+
+async function disconnectExternalExchange() {
+  const exchange = _activeExternalExchange;
+  if (!EXTERNAL_EXCHANGE_LABELS[exchange]) return;
+  try {
+    const r = await fetch(API + '/auth/exchange_keys/' + exchange, { method: 'DELETE', headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Errore disconnessione');
+    _exchangeKeys[exchange] = false;
+    closeExternalExchangeModal();
+    renderExchangePage();
+    showToast(EXTERNAL_EXCHANGE_LABELS[exchange] + ' scollegato');
+  } catch(e) {
+    showToast(e.message || 'Errore durante la disconnessione', true);
+  }
+}
+
+async function testExternalExchangeConnection() {
+  const exchange = _activeExternalExchange;
+  const box = document.getElementById('externalExchangeTestResult');
+  const btn = document.getElementById('externalExchangeTestBtn');
+  if (exchange !== 'coinbase') return;
+  if (box) {
+    box.style.display = '';
+    box.style.color = 'var(--text2)';
+    box.textContent = 'Test Coinbase in corso...';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Test...';
+  }
+  try {
+    const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Test fallito');
+    const balances = (d.balances || []).map(b => `${Number(b.available).toFixed(6)} ${b.currency}`).join(' · ');
+    const quoteBalances = d.quote_balances
+      ? Object.entries(d.quote_balances).map(([k, v]) => `${k}: ${Number(v).toFixed(2)}`).join(' · ')
+      : '';
+    if (box) {
+      box.style.color = 'var(--green)';
+      const quoteDetail = quoteBalances ? ` Quote: ${quoteBalances}.` : '';
+      box.textContent = balances
+        ? `Connessione OK. Account: ${d.accounts_count}.${quoteDetail} Saldi: ${balances}`
+        : `Connessione OK. Account: ${d.accounts_count}.${quoteDetail} Nessun saldo non-zero disponibile.`;
+    }
+  } catch(e) {
+    if (box) {
+      box.style.color = 'var(--red)';
+      box.textContent = e.message || 'Test Coinbase fallito';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Test connessione';
+    }
+  }
+}
+
+async function preflightExternalExchange() {
+  const exchange = _activeExternalExchange;
+  const box = document.getElementById('externalExchangeTestResult');
+  const btn = document.getElementById('externalExchangePreflightBtn');
+  if (exchange !== 'coinbase') return;
+  if (box) {
+    box.style.display = '';
+    box.style.color = 'var(--text2)';
+    box.textContent = 'Preflight Coinbase in corso...';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Preflight...';
+  }
+  try {
+    const r = await fetch(API + '/preflight_coinbase?symbol=BTC&amount_usd=1', { headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || d.error || 'Preflight fallito');
+    if (d.ok) {
+      if (box) {
+        box.style.color = 'var(--green)';
+        box.textContent = `Preflight OK: ${d.product_id}, saldo ${Number(d.available_quote).toFixed(2)} ${d.quote_currency}, min ordine ${Number(d.quote_min_size || 0).toFixed(2)}.`;
+      }
+    } else {
+      const blockers = (d.blockers || []).join(', ') || d.error || 'blocco sconosciuto';
+      const quoteBalances = d.quote_balances
+        ? Object.entries(d.quote_balances).map(([k, v]) => `${k}: ${Number(v).toFixed(2)}`).join(' · ')
+        : '';
+      const candidates = (d.candidates || []).map(c =>
+        `${c.product_id}: ${Number(c.available_quote || 0).toFixed(2)} ${c.quote_currency} (${(c.blockers || []).join('/') || 'OK'})`
+      ).join(' · ');
+      const detail = candidates
+        ? ` · candidati: ${candidates}`
+        : (quoteBalances ? ` · saldi visti: ${quoteBalances}` : '');
+      if (box) {
+        box.style.color = 'var(--red)';
+        box.textContent = `Preflight non pronto: ${blockers}${detail}`;
+      }
+    }
+  } catch(e) {
+    if (box) {
+      box.style.color = 'var(--red)';
+      box.textContent = e.message || 'Preflight Coinbase fallito';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Preflight BTC $1';
+    }
+  }
+}
+
+async function microBuyCoinbase() {
+  const box = document.getElementById('externalExchangeTestResult');
+  const btn = document.getElementById('externalExchangeMicroBuyBtn');
+  if (_activeExternalExchange !== 'coinbase') return;
+  if (!confirm('Confermi micro-buy REALE Coinbase da 1 USDC/USD su BTC?')) return;
+  if (box) {
+    box.style.display = '';
+    box.style.color = 'var(--text2)';
+    box.textContent = 'Invio micro-buy Coinbase...';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Invio...';
+  }
+  try {
+    const r = await fetch(API + '/trade/coinbase_micro_buy', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ symbol: 'BTC', amount_usd: 1 })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Micro-buy fallito');
+    const status = d.order?.status ? ` · status ${d.order.status}` : '';
+    const filled = d.order?.filled_size ? ` · filled ${d.order.filled_size}` : '';
+    if (box) {
+      box.style.color = 'var(--green)';
+      box.textContent = `Micro-buy inviato: ${d.product_id} $${Number(d.amount_usd).toFixed(2)} · order ${d.order_id}${status}${filled}`;
+    }
+  } catch(e) {
+    if (box) {
+      box.style.color = 'var(--red)';
+      box.textContent = e.message || 'Micro-buy Coinbase fallito';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Compra BTC $1';
+    }
+  }
+}
+
+async function microSellCoinbase() {
+  const box = document.getElementById('externalExchangeTestResult');
+  const btn = document.getElementById('externalExchangeMicroSellBtn');
+  if (_activeExternalExchange !== 'coinbase') return;
+  const qty = 0.00001455;
+  if (!confirm(`Confermi micro-sell REALE Coinbase di ${qty} BTC?`)) return;
+  if (box) {
+    box.style.display = '';
+    box.style.color = 'var(--text2)';
+    box.textContent = 'Invio micro-sell Coinbase...';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Invio...';
+  }
+  try {
+    const r = await fetch(API + '/trade/coinbase_micro_sell', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ symbol: 'BTC', base_size: qty })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Micro-sell fallito');
+    const status = d.order?.status ? ` · status ${d.order.status}` : '';
+    const filled = d.order?.filled_size ? ` · filled ${d.order.filled_size}` : '';
+    if (box) {
+      box.style.color = 'var(--green)';
+      box.textContent = `Micro-sell inviato: ${d.product_id} ${Number(d.base_size).toFixed(8)} BTC · order ${d.order_id}${status}${filled}`;
+    }
+  } catch(e) {
+    if (box) {
+      box.style.color = 'var(--red)';
+      box.textContent = e.message || 'Micro-sell Coinbase fallito';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Vendi BTC test';
+    }
   }
 }
 
@@ -2306,7 +2714,7 @@ async function saveRevxKeys() {
   const keyId = document.getElementById('revxKeyId').value.trim();
   const privateKey = document.getElementById('revxPrivateKey').value.trim();
   if (!keyId || !privateKey) {
-    alert('Inserisci sia il Key ID che la chiave privata');
+    showToast('Inserisci sia il Key ID che la chiave privata', true);
     return;
   }
   try {
@@ -2321,6 +2729,7 @@ async function saveRevxKeys() {
       document.getElementById('revxWizardView').style.display = 'none';
       document.getElementById('revxModalTitle').textContent = 'Revolut X';
       updateUI();
+      renderExchangePage();
       // Test connessione
       const tr = await fetch(API + '/test_revx', { headers: authHeaders() });
       if (tr.status === 429) {
@@ -2338,7 +2747,7 @@ async function saveRevxKeys() {
       }
     }
   } catch(e) {
-    alert('Errore: ' + e.message);
+    showToast('Errore: ' + e.message, true);
   }
 }
 
@@ -2580,6 +2989,7 @@ function showTab(name, el) {
   updateSidebarActive(name);
   if (name === 'home') renderHome();
   if (name === 'scanner') refreshMarket().then(() => renderScanner());
+  if (name === 'exchange') renderExchangePage();
   if (name === 'account') renderAccountPage();
   if (name === 'posizioni') {
     const chiuseActive = document.getElementById('posPanelChiuse')?.style.display !== 'none';
@@ -2595,8 +3005,9 @@ function restoreActiveTab() {
   const saved = localStorage.getItem('ca_active_tab') || 'home';
   const tabs = document.querySelectorAll('.tab');
   const tabMap = { home: 0, scanner: 1, posizioni: 2, monitor: 2, transazioni: 2, market: 1 };
-  const idx = tabMap[saved] ?? 0;
-  if (tabs[idx]) showTab(saved, tabs[idx]);
+  const idx = tabMap[saved];
+  const el = (idx !== undefined) ? tabs[idx] : document.querySelector(`.sb-item[data-tab="${saved}"]`);
+  showTab(saved, el || tabs[0]);
 }
 
 async function clearTrades() {
@@ -2609,7 +3020,7 @@ async function clearTrades() {
     _expandedTrades.clear();
     updateStoricoBadge();
     renderTransazioni();
-  } catch(e) { alert('Errore: ' + e.message); }
+  } catch(e) { showToast('Errore: ' + e.message, true); }
 }
 
 function updateStoricoBadge() {
@@ -2715,7 +3126,34 @@ function restoreConfigFromStorage() {
 function getCurrSym() { return '$'; }
 
 function getFeePct() {
-  return 0.0009; // RevX taker fee 0.09%
+  const exchange = document.getElementById('agentExchange')?.value;
+  return exchange === 'coinbase' ? 0.012 : 0.0009;
+}
+
+function getExchangeLabel() {
+  const exchange = document.getElementById('agentExchange')?.value;
+  return exchange === 'coinbase' ? 'Coinbase (1.2%)' : 'Revolut X (0.09%)';
+}
+
+function showFieldError(fieldId, message) {
+  const el = document.getElementById(fieldId);
+  if (el) {
+    el.style.borderColor = 'var(--red)';
+    el.style.boxShadow = '0 0 0 3px rgba(255,59,48,0.15)';
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  const hintMap = { capitalUsd: 'capitalHint', allocUsd: 'allocHint' };
+  const hintId = hintMap[fieldId];
+  if (hintId) {
+    const hint = document.getElementById(hintId);
+    if (hint) hint.innerHTML = '<span style="color:var(--red);font-weight:600">⚠ ' + message + '</span>';
+  }
+  showToast(message, true);
+}
+
+function clearFieldError(fieldId) {
+  const el = document.getElementById(fieldId);
+  if (el) { el.style.borderColor = ''; el.style.boxShadow = ''; }
 }
 
 function updateCapitalUsd() {
@@ -2735,6 +3173,7 @@ function updateCapitalUsd() {
 function updateCapitalPct() { updateCapitalUsd(); } // compat
 
 function updateAlloc() {
+  clearFieldError('allocUsd');
   const usd = parseFloat(document.getElementById('allocUsd').value) || 0;
   const hint = document.getElementById('allocHint');
   if (usd <= 0) { hint.textContent = "Inserisci un importo valido"; return; }
@@ -2751,10 +3190,10 @@ function updateAlloc() {
   const allocPct   = usd / tradable * 100;
   hint.innerHTML =
     '<strong>' + sym + net.toFixed(2) + '</strong> netto per trade · max ' + maxPos + ' posizioni · ' + allocPct.toFixed(1) + '% del capitale' +
-    '<br><span style="color:var(--text3);font-size:10px">Fee Revolut X (0.09%): <span style="color:var(--red)">−' + sym + feePerTrade.toFixed(2) + '</span> · Capitale: ' + sym + tradable.toFixed(2) + '</span>';
+    '<br><span style="color:var(--text3);font-size:10px">Fee ' + getExchangeLabel() + ': <span style="color:var(--red)">−' + sym + feePerTrade.toFixed(2) + '</span> · Capitale: ' + sym + tradable.toFixed(2) + '</span>';
 }
 
-function onCapitalInput() { updateCapitalPct(); } // compat
+function onCapitalInput() { clearFieldError('capitalUsd'); updateCapitalPct(); } // compat
 
 let _trend1hFilter = true;
 let _btcEmaFilter  = true;
@@ -2865,18 +3304,23 @@ async function setMode(real) {
 
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
+  clearFieldError('capitalUsd');
+  clearFieldError('allocUsd');
   const capitalUsdVal = parseFloat(document.getElementById('capitalUsd').value);
-  if (!capitalUsdVal || capitalUsdVal <= 0) { alert('Capitale da tradare non valido.'); return; }
+  if (!capitalUsdVal || capitalUsdVal <= 0) { showFieldError('capitalUsd', 'Inserisci un capitale valido'); return; }
+  if (capitalUsdVal > 1000000) { showFieldError('capitalUsd', 'Capitale troppo alto (max $1,000,000)'); return; }
   const allocUsdVal = parseFloat(document.getElementById('allocUsd').value);
-  if (!allocUsdVal || allocUsdVal <= 0) { alert("Importo per trade non valido."); return; }
+  if (!allocUsdVal || allocUsdVal <= 0) { showFieldError('allocUsd', 'Inserisci un importo per trade valido'); return; }
+  if (allocUsdVal > capitalUsdVal) { showFieldError('allocUsd', 'Importo per trade superiore al capitale'); return; }
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
-  if (sessionDur < 0 || sessionDur > 24) { alert("Durata sessione non valida (0-24h)."); return; }
+  if (sessionDur < 0 || sessionDur > 24) { showToast('Durata sessione non valida (0–24h)', true); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
-  const isReal = _hasRevxKeys && !_simMode;
+  const selectedExch = document.getElementById('agentExchange')?.value || 'revx';
+  const hasCoinbaseKeys = _exchangeKeys && _exchangeKeys.coinbase;
+  const isReal = !_simMode && (selectedExch === 'coinbase' ? !!hasCoinbaseKeys : _hasRevxKeys);
   const capitalVal = parseFloat(capitalUsdVal.toFixed(2));
-  if (isReal && total > 0 && capitalVal > total) { alert('Capitale superiore al saldo disponibile (' + getCurrSym() + total.toFixed(2) + ').'); return; }
-  if (isReal && capitalVal <= 0) { alert('Saldo non ancora caricato. Attendi qualche secondo e riprova.'); return; }
-  if (capitalVal > 1000000) { alert('Capitale troppo alto (max 1,000,000).'); return; }
+  if (isReal && capitalVal <= 0) { showFieldError('capitalUsd', 'Saldo non ancora caricato — attendi e riprova'); return; }
+  if (isReal && total > 0 && capitalVal > total) { showFieldError('capitalUsd', 'Supera il saldo disponibile (' + getCurrSym() + total.toFixed(2) + ')'); return; }
   const cfg = {
     capital:               capitalVal,
     capitalPct:            total > 0 ? capitalVal / total : 1.0,
@@ -2893,11 +3337,15 @@ async function startAgent() {
     maxTrades:             parseInt(document.getElementById('maxTrades').value),
     maxConsecutiveLosses:  parseInt(document.getElementById('maxConsecutiveLosses').value),
     cooldown:              parseFloat(document.getElementById('cooldown').value),
-    realMode:              _hasRevxKeys && !_simMode,
+    realMode:              isReal,
     btcEmaFilter:          _btcEmaFilter,
     timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
     strategy:              document.getElementById('stratBreakoutBtn').classList.contains('active') ? 'breakout' : 'momentum',
+    chopMin:               parseFloat(document.getElementById('chopMin')?.value || 61.8),
+    atrRatioMax:           parseFloat(document.getElementById('atrRatioMax')?.value || 85) / 100,
+    breakoutVolMultiplier: parseFloat(document.getElementById('breakoutVolMultiplier')?.value || 1.5),
+    agentExchange:         selectedExch,
   };
   if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);
@@ -2908,7 +3356,7 @@ async function doStartAgent(cfg) {
     const r = await fetch(API + '/start', { method:'POST', headers:authHeaders(), body:JSON.stringify({config:cfg}) });
     const d = await r.json();
     if (d.error === 'session_limit') { showPaywall(d.message); return; }
-    if (d.error) { alert(d.error); return; }
+    if (d.error) { showToast(d.error, true); return; }
     saveConfigToStorage(cfg);
     document.getElementById('startBtn').disabled = true;
     document.getElementById('stopBtn').disabled = false;
@@ -2916,7 +3364,7 @@ async function doStartAgent(cfg) {
     closeDrawer();
     showTab('posizioni', document.querySelectorAll('.tab')[2]);
     startPolling();
-  } catch(e) { alert('Errore connessione: ' + e.message); }
+  } catch(e) { showToast('Errore connessione: ' + e.message, true); }
 }
 
 async function pauseAgent() {
@@ -2929,7 +3377,7 @@ async function pauseAgent() {
     }
     S.paused = d.paused;
     render();
-  } catch(e) { alert('Errore di rete: ' + e.message); }
+  } catch(e) { showToast('Errore di rete: ' + e.message, true); }
 }
 
 async function saveConfigLive() {
@@ -2950,9 +3398,9 @@ async function saveConfigLive() {
   try {
     const res = await fetch(API + '/config', { method:'PATCH', headers:{...authHeaders(),'Content-Type':'application/json'}, body:JSON.stringify(patch) });
     const d = await res.json();
-    if (d.error) { alert(d.error); return; }
+    if (d.error) { showToast(d.error, true); return; }
     closeDrawer();
-  } catch(e) { alert('Errore di rete: ' + e.message); }
+  } catch(e) { showToast('Errore di rete: ' + e.message, true); }
 }
 
 async function stopAgent() {
@@ -2961,11 +3409,11 @@ async function stopAgent() {
     const res = await fetch(API + '/stop', { method:'POST', headers:authHeaders() });
     data = await res.json();
     if (!res.ok) data.error = data.detail || data.error || String(res.status);
-  } catch(e) { alert('Errore di rete: ' + e.message); return; }
+  } catch(e) { showToast('Errore di rete: ' + e.message, true); return; }
 
   // Se alcune posizioni non sono state vendute, la sessione rimane aperta
   if (data.error && !data.ok) {
-    alert('⚠️ ' + data.error);
+    showToast(data.error, true);
     return;
   }
 
@@ -2988,7 +3436,7 @@ async function stopAgent() {
 }
 
 function resetAgent() {
-  if (S.running) { alert('Ferma prima la sessione.'); return; }
+  if (S.running) { showToast('Ferma prima la sessione', true); return; }
   S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
   trades = []; _newTradeCount = 0; _lastSeenTradeCount = 0; updateStoricoBadge();
   localStorage.removeItem('ca_config'); localStorage.removeItem('ca_session');
@@ -3539,12 +3987,12 @@ async function confirmClosePosition() {
     const r = await fetch(API + '/close_position/' + symbol, { method:'POST', headers:authHeaders() });
     const d = await r.json().catch(()=>({}));
     if (!r.ok || d.error) {
-      alert('Errore chiusura: ' + (d.detail || d.error || r.status));
+      showToast('Errore chiusura: ' + (d.detail || d.error || r.status), true);
       await poll().catch(()=>{});
       return;
     }
     await poll().catch(()=>{});
-  } catch(e) { alert('Errore di connessione durante la chiusura.'); }
+  } catch(e) { showToast('Errore di connessione durante la chiusura', true); }
 }
 
 // ── FILTRI TRANSAZIONI ───────────────────────────────────────────────────────
@@ -4293,6 +4741,47 @@ function renderAccountPage() {
   if (tgSub) tgSub.textContent = window._tgLinked ? 'Collegato' : 'Non collegato';
 }
 
+function renderExchangePage() {
+  const connected = !!_hasRevxKeys;
+  const status = document.getElementById('exchangeRevxStatus');
+  if (status) {
+    status.textContent = connected ? 'Collegato' : 'Non collegato';
+    status.style.background = connected ? 'rgba(34,197,94,0.14)' : 'var(--surface2)';
+    status.style.color = connected ? 'var(--green)' : 'var(--text3)';
+  }
+  const sub = document.getElementById('exchangeRevxSub');
+  if (sub) sub.textContent = connected
+    ? 'API key configurate. Disponibile per il trading reale.'
+    : 'Collega le API key Revolut X per abilitare gli ordini reali.';
+  const btn = document.getElementById('exchangeRevxBtn');
+  if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
+  renderExternalExchangeStatus('binance');
+  renderExternalExchangeStatus('coinbase');
+}
+
+function renderExternalExchangeStatus(exchange) {
+  const label = EXTERNAL_EXCHANGE_LABELS[exchange];
+  if (!label) return;
+  const connected = !!_exchangeKeys[exchange];
+  const cap = exchange.charAt(0).toUpperCase() + exchange.slice(1);
+  const status = document.getElementById('exchange' + cap + 'Status');
+  if (status) {
+    status.textContent = connected ? 'Collegato' : 'Non collegato';
+    status.style.background = connected ? 'rgba(34,197,94,0.14)' : 'var(--surface2)';
+    status.style.color = connected ? 'var(--green)' : 'var(--text3)';
+  }
+  const sub = document.getElementById('exchange' + cap + 'Sub');
+  if (sub) sub.textContent = connected
+    ? 'Credenziali API salvate. Trading reale in arrivo.'
+    : 'Salva API key e secret';
+  const btn = document.getElementById('exchange' + cap + 'Btn');
+  if (btn) {
+    btn.textContent = connected ? 'Gestisci' : 'Collega';
+    btn.style.background = connected ? 'var(--blue)' : 'var(--surface2)';
+    btn.style.color = connected ? '#fff' : 'var(--text)';
+  }
+}
+
 // ── SCANNER ───────────────────────────────────────────────────────────────────
 let _scanSignal = 'breakout';
 
@@ -4496,13 +4985,14 @@ function closeTVChart() {
 }
 
 // ── TRADE CONFIRM MODAL ───────────────────────────────────────────────────────
-function openTradeConfirmModal(sym, price, qty, slPct, tpPct, amountUsdt) {
+function openTradeConfirmModal(sym, price, qty, slPct, tpPct, amountUsdt, exchange = 'revx') {
   const base = sym.replace('USDT', '');
   const logo = document.getElementById('tcmLogo');
   logo.style.display = '';
   logo.src = getLogo(sym);
   document.getElementById('tcmTitle').textContent = base + ' acquistato';
-  document.getElementById('tcmSub').textContent = 'Ordine eseguito su Revolut X';
+  const exchangeLabel = exchange === 'coinbase' ? 'Coinbase' : 'Revolut X';
+  document.getElementById('tcmSub').textContent = 'Ordine eseguito su ' + exchangeLabel;
   const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
   document.getElementById('tcmQty').textContent     = qtyFmt + ' ' + base;
   document.getElementById('tcmSymbol').textContent  = sym;
@@ -4531,6 +5021,7 @@ let _tmPrice  = 0;
 function openTradeModal(sym, price) {
   _tmSymbol = sym;
   _tmPrice  = price;
+  renderTradeExchangeOptions();
   const base = sym.replace('USDT', '');
   const logoEl = document.getElementById('tmLogo');
   logoEl.style.display = '';
@@ -4543,10 +5034,49 @@ function openTradeModal(sym, price) {
   btn.textContent = 'Acquista';
   tmUpdatePrices();
   document.getElementById('tradeModal').style.display = 'flex';
+  tmExchangeChanged();
+  if (_tmPriceInterval) clearInterval(_tmPriceInterval);
+  _tmPriceInterval = setInterval(tmFetchPrice, 5000);
+}
+
+function renderTradeExchangeOptions() {
+  const sel = document.getElementById('tmExchange');
+  if (!sel) return;
+  const previous = sel.value || 'revx';
+  const options = [];
+  if (_hasRevxKeys) options.push(['revx', 'Revolut X']);
+  if (_exchangeKeys.coinbase) options.push(['coinbase', 'Coinbase']);
+  if (!options.length) options.push(['revx', 'Revolut X']);
+  sel.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+  sel.value = options.some(([value]) => value === previous) ? previous : options[0][0];
+}
+
+let _tmPriceInterval = null;
+
+async function tmFetchPrice() {
+  const exchange = document.getElementById('tmExchange')?.value;
+  if (!exchange || !_tmSymbol) return;
+  try {
+    const r = await fetch(API + `/exchange_price/${exchange}/${_tmSymbol}`, { headers: authHeaders() });
+    const d = await r.json();
+    if (r.ok && d.price) {
+      _tmPrice = d.price;
+      const srcLabel = { revx: 'RevX', coinbase: 'Coinbase', binance: 'Binance' };
+      const src = d.source === 'binance_fallback' ? 'Binance' : (srcLabel[d.exchange] || d.exchange || '');
+      document.getElementById('tmPrice').textContent = 'Prezzo: ' + fmtPrice(_tmPrice) + (src ? ` · ${src}` : '');
+      tmUpdatePrices();
+    }
+  } catch (_) {}
+}
+
+async function tmExchangeChanged() {
+  document.getElementById('tmPrice').textContent = 'Caricamento...';
+  await tmFetchPrice();
 }
 
 function closeTradeModal() {
   document.getElementById('tradeModal').style.display = 'none';
+  if (_tmPriceInterval) { clearInterval(_tmPriceInterval); _tmPriceInterval = null; }
 }
 
 function tmSliderSync() {
@@ -4599,7 +5129,7 @@ async function executeManualTrade() {
       await poll();
       _newTradeCount++;
       updateStoricoBadge();
-      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, _sl, _tp, _amt);
+      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, _sl, _tp, _amt, data.exchange || exchange);
     } else {
       errEl.textContent   = data.detail || data.error || 'Errore esecuzione ordine';
       errEl.style.display = 'block';
@@ -4722,7 +5252,7 @@ function closePaywall() {
 }
 
 async function upgradeToProClick() {
-  if (!STRIPE_ENABLED) { alert('Pagamenti non ancora configurati.'); return; }
+  if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
   try {
     const r = await fetch(API + '/billing/checkout', {
       method: 'POST', headers: authHeaders(),
@@ -4730,8 +5260,8 @@ async function upgradeToProClick() {
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
-    else { alert(d.detail || 'Errore checkout'); }
-  } catch(e) { alert('Errore: ' + e.message); }
+    else { showToast(d.detail || 'Errore checkout', true); }
+  } catch(e) { showToast('Errore: ' + e.message, true); }
 }
 
 async function manageSubscriptionClick() {
@@ -4742,8 +5272,8 @@ async function manageSubscriptionClick() {
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
-    else { alert(d.detail || 'Nessun abbonamento attivo'); }
-  } catch(e) { alert('Errore: ' + e.message); }
+    else { showToast(d.detail || 'Nessun abbonamento attivo', true); }
+  } catch(e) { showToast('Errore: ' + e.message, true); }
 }
 
 // Aggiorna badge piano nell'header e sessioni home
