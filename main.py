@@ -2335,17 +2335,24 @@ async def scan_and_trade(state: dict, user_id: int = None):
     momentum_thr   = cfg.get("momentumPct", 0.01)
 
     use_revx_filter = state.get("use_revx", False)
-    universe = [
-        {**d, "symbol": sym}
-        for sym, d in market_data.items()
-        if d["price"] > 0
-        and sym in _dynamic_universe
-        and d.get("volume24h", 0) >= min_vol
-        and sym not in open_syms
-        and (not use_revx_filter or not _revx_pairs or sym in _revx_pairs)
-        and sym in candle_data
-        and (state["cooldowns"].get(sym, 0) < datetime.now().timestamp() * 1000)
-    ]
+    _now_ms = datetime.now().timestamp() * 1000
+    _f_price = _f_univ = _f_vol = _f_open = _f_revx = _f_candle = _f_cool = 0
+    universe = []
+    for sym, d in market_data.items():
+        if not (d["price"] > 0):                                                     _f_price  += 1; continue
+        if sym not in _dynamic_universe:                                              _f_univ   += 1; continue
+        if d.get("volume24h", 0) < min_vol:                                          _f_vol    += 1; continue
+        if sym in open_syms:                                                          _f_open   += 1; continue
+        if use_revx_filter and _revx_pairs and sym not in _revx_pairs:               _f_revx   += 1; continue
+        if sym not in candle_data:                                                    _f_candle += 1; continue
+        if state["cooldowns"].get(sym, 0) >= _now_ms:                                _f_cool   += 1; continue
+        universe.append({**d, "symbol": sym})
+    if not universe:
+        add_log(state, "info", "DEBUG",
+            f"Universe vuoto | mkt={len(market_data)} univ={len(_dynamic_universe)} cdl={len(candle_data)} "
+            f"min_vol={min_vol/1e6:.0f}M revx_filt={use_revx_filter} revx_pairs={len(_revx_pairs)} | "
+            f"price={_f_price} univ={_f_univ} vol={_f_vol} open={_f_open} revx={_f_revx} candle={_f_candle} cool={_f_cool}"
+        )
     universe_sorted = sorted(universe, key=lambda d: d.get("volume24h", 0), reverse=True)
 
     candidates   = []
