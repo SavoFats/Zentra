@@ -1838,7 +1838,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <div style="margin-bottom:16px">
       <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.5px">Exchange</label>
-      <select id="tmExchange" style="width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:500;outline:none">
+      <select id="tmExchange" onchange="tmExchangeChanged()" style="width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:500;outline:none">
         <option value="revx">Revolut X</option>
         <option value="coinbase">Coinbase</option>
       </select>
@@ -5000,6 +5000,9 @@ function openTradeModal(sym, price) {
   btn.textContent = 'Acquista';
   tmUpdatePrices();
   document.getElementById('tradeModal').style.display = 'flex';
+  tmExchangeChanged();
+  if (_tmPriceInterval) clearInterval(_tmPriceInterval);
+  _tmPriceInterval = setInterval(tmFetchPrice, 5000);
 }
 
 function renderTradeExchangeOptions() {
@@ -5014,8 +5017,32 @@ function renderTradeExchangeOptions() {
   sel.value = options.some(([value]) => value === previous) ? previous : options[0][0];
 }
 
+let _tmPriceInterval = null;
+
+async function tmFetchPrice() {
+  const exchange = document.getElementById('tmExchange')?.value;
+  if (!exchange || !_tmSymbol) return;
+  try {
+    const r = await fetch(API + `/exchange_price/${exchange}/${_tmSymbol}`, { headers: authHeaders() });
+    const d = await r.json();
+    if (r.ok && d.price) {
+      _tmPrice = d.price;
+      const srcLabel = { revx: 'RevX', coinbase: 'Coinbase', binance: 'Binance' };
+      const src = d.source === 'binance_fallback' ? 'Binance' : (srcLabel[d.exchange] || d.exchange || '');
+      document.getElementById('tmPrice').textContent = 'Prezzo: ' + fmtPrice(_tmPrice) + (src ? ` · ${src}` : '');
+      tmUpdatePrices();
+    }
+  } catch (_) {}
+}
+
+async function tmExchangeChanged() {
+  document.getElementById('tmPrice').textContent = 'Caricamento...';
+  await tmFetchPrice();
+}
+
 function closeTradeModal() {
   document.getElementById('tradeModal').style.display = 'none';
+  if (_tmPriceInterval) { clearInterval(_tmPriceInterval); _tmPriceInterval = null; }
 }
 
 function tmSliderSync() {
