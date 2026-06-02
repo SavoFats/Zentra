@@ -109,6 +109,32 @@ class RevxGuardrailTests(unittest.TestCase):
             self.main.validate_external_exchange_keys("coinbase", "api-key-123", "short")
         self.assertEqual(ctx.exception.status_code, 400)
 
+    def test_parse_coinbase_accounts_accepts_known_shape(self):
+        accounts = self.main.parse_coinbase_accounts({
+            "accounts": [
+                {
+                    "name": "USD Wallet",
+                    "currency": "USD",
+                    "active": True,
+                    "ready": True,
+                    "available_balance": {"value": "12.34", "currency": "USD"},
+                },
+                {
+                    "name": "BTC Wallet",
+                    "currency": "BTC",
+                    "available_balance": {"value": "0", "currency": "BTC"},
+                },
+            ]
+        })
+        self.assertEqual(accounts[0]["currency"], "USD")
+        self.assertEqual(accounts[0]["available"], 12.34)
+        self.assertTrue(accounts[0]["active"])
+        self.assertEqual(accounts[1]["available"], 0.0)
+
+    def test_parse_coinbase_accounts_rejects_unknown_shape(self):
+        with self.assertRaises(ValueError):
+            self.main.parse_coinbase_accounts({"error": "unauthorized"})
+
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances
 

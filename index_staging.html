@@ -914,8 +914,10 @@ body.auth-active .tabbar { display:none !important; }
         <span style="font-size:14px;font-weight:600;color:var(--text)" id="externalExchangeConnectedLabel">Exchange collegato</span>
       </div>
       <p style="font-size:13px;color:var(--text2);margin:0 0 20px;line-height:1.6">Le credenziali API sono salvate e crittografate. Il trading reale su questo exchange verra abilitato quando il modulo ordini dedicato sara pronto.</p>
+      <div id="externalExchangeTestResult" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.45;margin-bottom:14px"></div>
       <div class="modal-actions">
         <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Chiudi</button>
+        <button class="modal-btn cancel" id="externalExchangeTestBtn" onclick="testExternalExchangeConnection()">Test connessione</button>
         <button class="modal-btn cancel" style="color:var(--red);border-color:var(--red)" onclick="disconnectExternalExchange()">Scollega</button>
       </div>
     </div>
@@ -2277,6 +2279,17 @@ function showExternalExchangeConfig(exchange) {
   document.getElementById('externalExchangeConnectedLabel').textContent = label + ' collegato';
   document.getElementById('externalExchangeConnectedView').style.display = connected ? '' : 'none';
   document.getElementById('externalExchangeFormView').style.display = connected ? 'none' : '';
+  const testBtn = document.getElementById('externalExchangeTestBtn');
+  if (testBtn) {
+    testBtn.style.display = exchange === 'coinbase' ? '' : 'none';
+    testBtn.disabled = false;
+    testBtn.textContent = 'Test connessione';
+  }
+  const testResult = document.getElementById('externalExchangeTestResult');
+  if (testResult) {
+    testResult.style.display = 'none';
+    testResult.textContent = '';
+  }
   document.getElementById('externalExchangeKey').value = '';
   document.getElementById('externalExchangeSecret').value = '';
   document.getElementById('externalExchangeErr').textContent = '';
@@ -2344,6 +2357,44 @@ async function disconnectExternalExchange() {
     showToast(EXTERNAL_EXCHANGE_LABELS[exchange] + ' scollegato');
   } catch(e) {
     showToast(e.message || 'Errore durante la disconnessione', true);
+  }
+}
+
+async function testExternalExchangeConnection() {
+  const exchange = _activeExternalExchange;
+  const box = document.getElementById('externalExchangeTestResult');
+  const btn = document.getElementById('externalExchangeTestBtn');
+  if (exchange !== 'coinbase') return;
+  if (box) {
+    box.style.display = '';
+    box.style.color = 'var(--text2)';
+    box.textContent = 'Test Coinbase in corso...';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Test...';
+  }
+  try {
+    const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Test fallito');
+    const balances = (d.balances || []).map(b => `${Number(b.available).toFixed(6)} ${b.currency}`).join(' · ');
+    if (box) {
+      box.style.color = 'var(--green)';
+      box.textContent = balances
+        ? `Connessione OK. Account: ${d.accounts_count}. Saldi: ${balances}`
+        : `Connessione OK. Account: ${d.accounts_count}. Nessun saldo disponibile.`;
+    }
+  } catch(e) {
+    if (box) {
+      box.style.color = 'var(--red)';
+      box.textContent = e.message || 'Test Coinbase fallito';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Test connessione';
+    }
   }
 }
 

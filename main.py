@@ -332,6 +332,83 @@ async def revx_request(method: str, path: str, body: dict = None,
             raise Exception(f"RevX {method} {path} risposta JSON non valida: {e}")
     raise Exception(f"RevX {method} {path} fallito dopo 4 tentativi")
 
+COINBASE_BASE = "https://api.coinbase.com"
+COINBASE_HOST = "api.coinbase.com"
+
+def make_coinbase_jwt(api_key: str, api_secret: str, method: str, path: str) -> str:
+    """Genera JWT Coinbase Advanced Trade (ES256) per una singola richiesta."""
+    import jwt
+    import secrets
+    from cryptography.hazmat.primitives import serialization
+    now = int(time.time())
+    uri = f"{method.upper()} {COINBASE_HOST}{path}"
+    private_key = serialization.load_pem_private_key(api_secret.encode("utf-8"), password=None)
+    payload = {
+        "sub": api_key,
+        "iss": "cdp",
+        "nbf": now,
+        "exp": now + 120,
+        "uri": uri,
+    }
+    return jwt.encode(
+        payload,
+        private_key,
+        algorithm="ES256",
+        headers={"kid": api_key, "nonce": secrets.token_hex(16)},
+    )
+
+async def coinbase_request(method: str, path: str, body: dict = None,
+                           api_key: str = "", api_secret: str = "") -> dict:
+    """Esegue una richiesta autenticata a Coinbase Advanced Trade."""
+    method = method.upper()
+    token = make_coinbase_jwt(api_key, api_secret, method, path)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        if method == "GET":
+            r = await client.get(f"{COINBASE_BASE}{path}", headers=headers)
+        elif method == "DELETE":
+            r = await client.delete(f"{COINBASE_BASE}{path}", headers=headers)
+        else:
+            r = await client.post(f"{COINBASE_BASE}{path}", headers=headers, json=body or {})
+    if r.status_code >= 400:
+        try:
+            err_payload = r.json()
+        except Exception:
+            err_payload = r.text[:500]
+        raise Exception(f"Coinbase {method} {path} HTTP {r.status_code}: {err_payload}")
+    try:
+        return r.json() if r.content else {"ok": True}
+    except Exception as e:
+        raise Exception(f"Coinbase {method} {path} risposta JSON non valida: {e}")
+
+def parse_coinbase_accounts(result: object) -> list:
+    accounts = result.get("accounts") if isinstance(result, dict) else None
+    if not isinstance(accounts, list):
+        raise ValueError("Formato accounts Coinbase non riconosciuto")
+    parsed = []
+    for acc in accounts:
+        if not isinstance(acc, dict):
+            continue
+        bal = acc.get("available_balance") or {}
+        value = bal.get("value") if isinstance(bal, dict) else None
+        currency = bal.get("currency") if isinstance(bal, dict) else acc.get("currency", "")
+        try:
+            amount = float(value or 0)
+        except Exception:
+            amount = 0.0
+        parsed.append({
+            "currency": currency or acc.get("currency", ""),
+            "available": amount,
+            "name": acc.get("name", ""),
+            "active": bool(acc.get("active", False)),
+            "ready": bool(acc.get("ready", False)),
+        })
+    return parsed
+
 
 async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -> dict:
     """GET /api/1.0/orders/{id} — ritorna prezzi e fee reali del fill."""
@@ -3903,6 +3980,32 @@ async def test_revx(request: Request, user_id: int = Depends(get_current_user)):
         return {"ok": True, "balances": balances}
     except Exception as e:
         return {"ok": False, "error": public_error(e, key_id, private_key)}
+
+@app.get("/test_coinbase")
+async def test_coinbase(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=10, window=60, key_suffix="test_coinbase")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT coinbase_api_key, coinbase_api_secret FROM users WHERE id = $1", user_id)
+    if not row or not row["coinbase_api_key"]:
+        raise HTTPException(status_code=400, detail="Chiavi Coinbase non configurate")
+    api_key = decrypt_key(row["coinbase_api_key"])
+    api_secret = decrypt_key(row["coinbase_api_secret"])
+    try:
+        result = await coinbase_request(
+            "GET", "/api/v3/brokerage/accounts",
+            api_key=api_key, api_secret=api_secret
+        )
+        accounts = parse_coinbase_accounts(result)
+        nonzero = [a for a in accounts if a["available"] > 0]
+        return {
+            "ok": True,
+            "accounts_count": len(accounts),
+            "balances": nonzero[:12],
+        }
+    except Exception as e:
+        return {"ok": False, "error": public_error(e, api_key, api_secret)}
 
 @app.get("/debug/revx_orders")
 async def debug_revx_orders(request: Request, user_id: int = Depends(get_current_user)):
