@@ -4516,6 +4516,56 @@ async def preflight_coinbase(request: Request, symbol: str = "BTC", amount_usd: 
     except Exception as e:
         return {"ok": False, "error": public_error(e, api_key, api_secret)}
 
+@app.get("/exchange_price/{exchange}/{symbol}")
+async def exchange_price(exchange: str, symbol: str, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="exchange_price")
+    sym = symbol.upper().replace("USDT", "").replace("USD", "")
+    if not sym.isalnum() or len(sym) > 20:
+        raise HTTPException(status_code=400, detail="Simbolo non valido")
+    exchange = exchange.lower()
+    if exchange == "revx":
+        # Prova a prendere il prezzo live da RevX, fallback a Binance
+        state = get_session(user_id)
+        key_id = state.get("revx_key_id", "")
+        priv   = state.get("revx_private_key", "")
+        if not key_id and db_pool:
+            try:
+                async with db_pool.acquire() as conn:
+                    row = await conn.fetchrow("SELECT revx_key_id, revx_private_key, sim_mode FROM users WHERE id=$1", user_id)
+                if row and not row["sim_mode"] and row["revx_key_id"]:
+                    key_id = decrypt_key(row["revx_key_id"])
+                    priv   = decrypt_key(row["revx_private_key"])
+            except Exception:
+                pass
+        if key_id and priv:
+            try:
+                data = await revx_request("GET", "/api/1.0/tickers", key_id=key_id, private_key=priv, params={})
+                tickers = data.get("data", []) if isinstance(data, dict) else data
+                for t in (tickers if isinstance(tickers, list) else []):
+                    if t.get("symbol", "") == f"{sym}/USD":
+                        price = float(t.get("last_price") or t.get("mid") or t.get("ask") or 0)
+                        if price > 0:
+                            return {"price": price, "exchange": "revx", "symbol": sym}
+            except Exception:
+                pass
+        # Fallback Binance
+        price = market_data.get(sym, {}).get("price", 0.0)
+        if not price:
+            raise HTTPException(status_code=404, detail=f"Prezzo non disponibile per {sym} su RevX")
+        return {"price": price, "exchange": "revx", "symbol": sym, "source": "binance_fallback"}
+    elif exchange == "coinbase":
+        api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+        last_exc = None
+        for product_id in (f"{sym}-USDC", f"{sym}-USD"):
+            try:
+                price = await get_coinbase_product_price(product_id, api_key, api_secret)
+                if price > 0:
+                    return {"price": price, "exchange": "coinbase", "symbol": sym, "product_id": product_id}
+            except Exception as e:
+                last_exc = e
+        raise HTTPException(status_code=404, detail=public_error(last_exc or Exception("Prezzo non disponibile"), api_key, api_secret))
+    raise HTTPException(status_code=400, detail="Exchange non supportato")
+
 @app.get("/debug/revx_orders")
 async def debug_revx_orders(request: Request, user_id: int = Depends(get_current_user)):
     if not ENABLE_DEBUG_REVX:
