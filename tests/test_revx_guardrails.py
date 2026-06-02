@@ -288,6 +288,91 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(post_body["product_id"], "BTC-USDC")
         self.assertEqual(post_body["order_configuration"]["market_market_ioc"]["base_size"], "0.00001455")
 
+    def test_manual_trade_coinbase_creates_real_coinbase_position(self):
+        main = self.main
+        calls = []
+        state = main.make_session()
+        state["currentCapital"] = 100.0
+        state["capital"] = 100.0
+        state["config"] = {}
+
+        async def fake_load_keys(user_id):
+            self.assertEqual(user_id, 123)
+            return "api-key", "api-secret"
+
+        async def fake_preflight(api_key, api_secret, sym, amount):
+            self.assertEqual(sym, "BTC")
+            self.assertEqual(amount, 10.0)
+            return {"ok": True, "product_id": "BTC-USDC"}
+
+        async def fake_coinbase_request(method, path, body=None, api_key="", api_secret=""):
+            calls.append((method, path, body))
+            if method == "POST" and path == "/api/v3/brokerage/orders":
+                return {"success": True, "success_response": {"order_id": "ord-buy"}}
+            raise AssertionError((method, path, body))
+
+        async def fake_wait(order_id, api_key, api_secret):
+            self.assertEqual(order_id, "ord-buy")
+            return {
+                "order_id": "ord-buy",
+                "status": "FILLED",
+                "product_id": "BTC-USDC",
+                "filled_size": "0.0002",
+                "average_filled_price": "50000",
+                "total_fees": "0.01",
+            }
+
+        async def fake_notify(*args, **kwargs):
+            return None
+
+        async def fake_persist():
+            return None
+
+        original_sessions = main.user_sessions
+        original_market = main.market_data
+        original_load = main.load_coinbase_keys_for_user
+        original_preflight = main.get_coinbase_preflight_result
+        original_request = main.coinbase_request
+        original_wait = main.wait_coinbase_order_fill
+        original_notify = main.notify
+        original_persist = main.persist_sessions
+        original_rate_limit = main.check_rate_limit
+        main.user_sessions = {123: state}
+        main.market_data = {"BTC": {"price": 50000.0, "icon": "B"}}
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.get_coinbase_preflight_result = fake_preflight
+        main.coinbase_request = fake_coinbase_request
+        main.wait_coinbase_order_fill = fake_wait
+        main.notify = fake_notify
+        main.persist_sessions = fake_persist
+        main.check_rate_limit = lambda *args, **kwargs: None
+        try:
+            req = types.SimpleNamespace(symbol="BTCUSDT", amount_usdt=10.0, sl_pct=2.0, tp_pct=4.0, exchange="coinbase")
+            result = asyncio.run(main.manual_trade(req, request=object(), user_id=123))
+        finally:
+            main.user_sessions = original_sessions
+            main.market_data = original_market
+            main.load_coinbase_keys_for_user = original_load
+            main.get_coinbase_preflight_result = original_preflight
+            main.coinbase_request = original_request
+            main.wait_coinbase_order_fill = original_wait
+            main.notify = original_notify
+            main.persist_sessions = original_persist
+            main.check_rate_limit = original_rate_limit
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["exchange"], "coinbase")
+        self.assertEqual(len(state["positions"]), 1)
+        pos = state["positions"][0]
+        self.assertTrue(pos["realMode"])
+        self.assertEqual(pos["exchange"], "coinbase")
+        self.assertEqual(pos["symbol_pair"], "BTC-USDC")
+        self.assertEqual(pos["qty_purchased"], 0.0002)
+        post_body = next(body for method, path, body in calls if method == "POST" and path == "/api/v3/brokerage/orders")
+        self.assertEqual(post_body["side"], "BUY")
+        self.assertEqual(post_body["product_id"], "BTC-USDC")
+        self.assertEqual(post_body["order_configuration"]["market_market_ioc"]["quote_size"], "10.00")
+
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances
 

@@ -515,6 +515,30 @@ def summarize_coinbase_order(order_result: object) -> dict:
         "total_fees": order.get("total_fees", ""),
     }
 
+async def wait_coinbase_order_fill(order_id: str, api_key: str, api_secret: str,
+                                   attempts: int = 6, delay: float = 1.0) -> dict:
+    """Attende un fill Coinbase prima di creare o chiudere posizioni reali."""
+    last: dict = {}
+    for _ in range(attempts):
+        details = await coinbase_request(
+            "GET", f"/api/v3/brokerage/orders/historical/{order_id}",
+            api_key=api_key, api_secret=api_secret
+        )
+        last = summarize_coinbase_order(details)
+        try:
+            filled_size = float(last.get("filled_size") or 0)
+            avg_price = float(last.get("average_filled_price") or 0)
+        except Exception:
+            filled_size = 0.0
+            avg_price = 0.0
+        status = str(last.get("status") or "").upper()
+        if filled_size > 0 and avg_price > 0 and status in ("FILLED", "DONE", "SETTLED"):
+            return last
+        if status in ("CANCELLED", "REJECTED", "EXPIRED", "FAILED"):
+            return last
+        await asyncio.sleep(delay)
+    return last
+
 
 async def get_revx_order_details(order_id: str, key_id: str, private_key: str) -> dict:
     """GET /api/1.0/orders/{id} — ritorna prezzi e fee reali del fill."""
@@ -1725,13 +1749,98 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                 add_log(state, "info", "ERRORE", f"RevX exit error: {e}")
                 _exiting.discard(sym); return
 
+        # ── COINBASE EXIT ────────────────────────────────────────────────────
+        if pos.get("exchange") == "coinbase" and not pos.get("_already_sold"):
+            qty_purchased = pos.get("qty_purchased", 0.0)
+            if qty_purchased <= 0:
+                add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} Coinbase — vendita annullata")
+                _exiting.discard(sym); return
+            if not user_id:
+                add_log(state, "info", "ERRORE", f"user_id mancante per vendita Coinbase {sym}")
+                _exiting.discard(sym); return
+            try:
+                import uuid as _uuid
+                api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+                qty_to_sell = round(qty_purchased * 0.5, 8) if partial else round(qty_purchased, 8)
+                symbol_pair = pos.get("symbol_pair", f"{sym}-USDC").replace("/", "-")
+                sold_externally = False
+                try:
+                    accounts = await fetch_coinbase_accounts(api_key, api_secret)
+                    real_qty = sum(float(a.get("available") or 0) for a in accounts if a.get("currency") == sym)
+                    if real_qty > 0:
+                        qty_to_sell_real = round(real_qty * (0.5 if partial else 1.0), 8)
+                        qty_to_sell = min(qty_to_sell, qty_to_sell_real)
+                        pos["qty_purchased"] = real_qty
+                    else:
+                        add_log(state, "info", "WARN", f"{sym}: saldo Coinbase = 0 — venduto esternamente, registro trade")
+                        sold_externally = True
+                except Exception as be:
+                    print(f"[COINBASE SELL] errore lettura saldo: {be}")
+                if not sold_externally:
+                    order_body = {
+                        "client_order_id": str(_uuid.uuid4()),
+                        "product_id": symbol_pair,
+                        "side": "SELL",
+                        "order_configuration": {
+                            "market_market_ioc": {
+                                "base_size": f"{qty_to_sell:.8f}",
+                                "rfq_disabled": True,
+                            }
+                        },
+                    }
+                    result = await coinbase_request(
+                        "POST", "/api/v3/brokerage/orders",
+                        body=order_body, api_key=api_key, api_secret=api_secret
+                    )
+                    if result.get("success") is False:
+                        err = result.get("error_response") or result.get("failure_reason") or result
+                        pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
+                        add_log(state, "info", "ERRORE", f"Vendita Coinbase {sym} fallita ({pos['_sell_failures']}x): {str(err)[:120]}")
+                        await notify(state, f"ERRORE VENDITA Coinbase {sym}: {str(err)[:100]}")
+                        if pos.get("_sell_failures", 0) >= 3:
+                            pos["_manual_action_required"] = True
+                        _exiting.discard(sym); return
+                    order_id = extract_coinbase_order_id(result)
+                    if not order_id:
+                        pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
+                        add_log(state, "info", "ERRORE", f"Vendita Coinbase {sym} senza order_id")
+                        _exiting.discard(sym); return
+                    od = await wait_coinbase_order_fill(order_id, api_key, api_secret)
+                    try:
+                        filled_price = float(od.get("average_filled_price") or 0)
+                        filled_qty = float(od.get("filled_size") or 0)
+                        sell_fee_usd = float(od.get("total_fees") or 0)
+                    except Exception:
+                        filled_price = 0.0
+                        filled_qty = 0.0
+                        sell_fee_usd = 0.0
+                    if filled_price <= 0 or filled_qty <= 0:
+                        state_txt = od.get("status") or "sconosciuto"
+                        pos["_sell_failures"] = pos.get("_sell_failures", 0) + 1
+                        add_log(state, "info", "WARN", f"{sym}: vendita Coinbase non confermata (state={state_txt}) — posizione mantenuta")
+                        await notify(state, f"WARN {sym}: vendita Coinbase non confermata (state={state_txt}). Posizione mantenuta.")
+                        _exiting.discard(sym); return
+                    cur = filled_price
+                    pos["sell_fee_usd"] = pos.get("sell_fee_usd", 0.0) + sell_fee_usd
+                    pos["_sell_type"] = "Coinbase Market"
+                    add_log(state, "info", "VENDUTO Coinbase", f"{sym} qty: {filled_qty:.8f} @ ${cur:.4f} fee=${sell_fee_usd:.4f}")
+                    if partial:
+                        pos["qty_purchased"] = max(qty_purchased - filled_qty, 0.0)
+                if sold_externally:
+                    add_log(state, "info", "VENDUTO Coinbase (ext)", f"{sym} venduto esternamente @ ${cur:.4f} (prezzo stimato)")
+                    await notify(state, f"WARN: {sym} venduto esternamente su Coinbase. Trade registrato al prezzo corrente.")
+            except Exception as e:
+                err = public_error(e)
+                add_log(state, "info", "ERRORE", f"Coinbase exit error: {err}")
+                _exiting.discard(sym); return
+
     pnl = (cur - pos["entryPrice"]) / pos["entryPrice"] * close_size
     pct = (cur - pos["entryPrice"]) / pos["entryPrice"] * 100
 
     fee_pct = pos.get("fee_pct", 0.0009)
     exit_fee = close_size * fee_pct
-    # Per real mode usa fee reali da RevX, altrimenti stima
-    if pos.get("realMode") and pos.get("exchange") == "revx":
+    # Per real mode usa fee reali dagli exchange supportati, altrimenti stima
+    if pos.get("realMode") and pos.get("exchange") in ("revx", "coinbase"):
         sell_fee_real = pos.get("sell_fee_usd", exit_fee)
         pnl = pnl - sell_fee_real - pos.get("buy_fee_usd", 0.0)
         exit_fee = sell_fee_real
@@ -3930,6 +4039,9 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
     sym = req.symbol.upper().replace("USDT", "")
     if not sym.isalnum() or len(sym) > 20:
         raise HTTPException(status_code=400, detail="Simbolo non valido")
+    exchange = (req.exchange or "revx").lower()
+    if exchange not in ("revx", "coinbase"):
+        raise HTTPException(status_code=400, detail="Exchange non supportato per trade manuale")
     amount = round(req.amount_usdt, 2)
     if amount <= 0 or amount > 100_000:
         raise HTTPException(status_code=400, detail="Amount non valido")
@@ -3964,7 +4076,77 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
     stop_price = price * (1 - R_pct)
     tp_price   = price * (1 + tp_pct / 100)
     icon       = market_data.get(sym, {}).get("icon", "")
-    if is_real and req.exchange == "revx":
+    if exchange == "coinbase":
+        try:
+            import uuid as _uuid
+            api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+            preflight = await get_coinbase_preflight_result(api_key, api_secret, sym, amount)
+            if not preflight.get("ok"):
+                blockers = ", ".join(preflight.get("blockers", [])) or "preflight non pronto"
+                raise HTTPException(status_code=400, detail=f"Coinbase non pronto per {sym}: {blockers}")
+            product_id = preflight["product_id"]
+            order_body = {
+                "client_order_id": str(_uuid.uuid4()),
+                "product_id": product_id,
+                "side": "BUY",
+                "order_configuration": {
+                    "market_market_ioc": {
+                        "quote_size": f"{amount:.2f}",
+                        "rfq_disabled": True,
+                    }
+                },
+            }
+            result = await coinbase_request(
+                "POST", "/api/v3/brokerage/orders",
+                body=order_body, api_key=api_key, api_secret=api_secret
+            )
+            if result.get("success") is False:
+                err = result.get("error_response") or result.get("failure_reason") or result
+                raise HTTPException(status_code=400, detail=f"Ordine Coinbase fallito: {public_error(Exception(str(err)), api_key, api_secret, max_len=160)}")
+            order_id = extract_coinbase_order_id(result)
+            if not order_id:
+                raise HTTPException(status_code=400, detail="Ordine Coinbase creato senza order_id")
+            od = await wait_coinbase_order_fill(order_id, api_key, api_secret)
+            try:
+                actual_price = float(od.get("average_filled_price") or 0)
+                qty = float(od.get("filled_size") or 0)
+                buy_fee_usd = float(od.get("total_fees") or 0)
+            except Exception:
+                actual_price = 0.0
+                qty = 0.0
+                buy_fee_usd = 0.0
+            if actual_price <= 0 or qty <= 0:
+                state_txt = od.get("status") or "sconosciuto"
+                raise HTTPException(status_code=400, detail=f"Ordine Coinbase non fillato (state={state_txt}). Verifica su Coinbase.")
+            stop_price = actual_price * (1 - R_pct)
+            tp_price = actual_price * (1 + tp_pct / 100)
+            add_log(state, "buy", "ACQUISTO MANUALE (Coinbase)",
+                    f"{sym} @ ${actual_price:.4f} | Size: ${amount:.0f} | SL: ${stop_price:.4f}")
+            await notify(state, f"ACQUISTO MANUALE Coinbase\n{sym} @ ${actual_price:.4f}\nSize: ${amount:.2f}")
+            state["currentCapital"] -= amount
+            pos = {
+                "symbol": sym, "icon": icon,
+                "entryPrice": actual_price, "currentPrice": actual_price,
+                "highPrice": actual_price, "peak_price": actual_price,
+                "size": amount, "size_remaining": amount, "tp1_hit": False,
+                "entryTime": datetime.utcnow().isoformat() + "Z",
+                "stopPrice": stop_price, "tp1Price": tp_price, "tp2Price": tp_price,
+                "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
+                "realMode": True, "fee_pct": 0.0012,
+                "qty_purchased": qty, "exchange": "coinbase", "symbol_pair": product_id,
+                "entry_usd": amount, "buy_fee_usd": round(buy_fee_usd, 4), "manual": True,
+            }
+            state["positions"].append(pos)
+            await persist_sessions()
+            return {"ok": True, "price": actual_price, "qty": qty, "exchange": "coinbase"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            err = public_error(e)
+            add_log(state, "info", "ERRORE", f"Manual Coinbase trade error: {err}")
+            raise HTTPException(status_code=500, detail=err)
+
+    if is_real and exchange == "revx":
         if not revx_key_id or not revx_priv:
             raise HTTPException(status_code=400, detail="Chiavi RevX non configurate")
         try:

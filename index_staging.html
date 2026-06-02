@@ -1840,6 +1840,7 @@ body.auth-active .tabbar { display:none !important; }
       <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.5px">Exchange</label>
       <select id="tmExchange" style="width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:500;outline:none">
         <option value="revx">Revolut X</option>
+        <option value="coinbase">Coinbase</option>
       </select>
     </div>
     <div style="margin-bottom:16px">
@@ -4950,13 +4951,14 @@ function closeTVChart() {
 }
 
 // ── TRADE CONFIRM MODAL ───────────────────────────────────────────────────────
-function openTradeConfirmModal(sym, price, qty, slPct, tpPct, amountUsdt) {
+function openTradeConfirmModal(sym, price, qty, slPct, tpPct, amountUsdt, exchange = 'revx') {
   const base = sym.replace('USDT', '');
   const logo = document.getElementById('tcmLogo');
   logo.style.display = '';
   logo.src = getLogo(sym);
   document.getElementById('tcmTitle').textContent = base + ' acquistato';
-  document.getElementById('tcmSub').textContent = 'Ordine eseguito su Revolut X';
+  const exchangeLabel = exchange === 'coinbase' ? 'Coinbase' : 'Revolut X';
+  document.getElementById('tcmSub').textContent = 'Ordine eseguito su ' + exchangeLabel;
   const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
   document.getElementById('tcmQty').textContent     = qtyFmt + ' ' + base;
   document.getElementById('tcmSymbol').textContent  = sym;
@@ -4985,6 +4987,7 @@ let _tmPrice  = 0;
 function openTradeModal(sym, price) {
   _tmSymbol = sym;
   _tmPrice  = price;
+  renderTradeExchangeOptions();
   const base = sym.replace('USDT', '');
   const logoEl = document.getElementById('tmLogo');
   logoEl.style.display = '';
@@ -4997,6 +5000,18 @@ function openTradeModal(sym, price) {
   btn.textContent = 'Acquista';
   tmUpdatePrices();
   document.getElementById('tradeModal').style.display = 'flex';
+}
+
+function renderTradeExchangeOptions() {
+  const sel = document.getElementById('tmExchange');
+  if (!sel) return;
+  const previous = sel.value || 'revx';
+  const options = [];
+  if (_hasRevxKeys) options.push(['revx', 'Revolut X']);
+  if (_exchangeKeys.coinbase) options.push(['coinbase', 'Coinbase']);
+  if (!options.length) options.push(['revx', 'Revolut X']);
+  sel.innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+  sel.value = options.some(([value]) => value === previous) ? previous : options[0][0];
 }
 
 function closeTradeModal() {
@@ -5053,7 +5068,7 @@ async function executeManualTrade() {
       await poll();
       _newTradeCount++;
       updateStoricoBadge();
-      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, _sl, _tp, _amt);
+      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, _sl, _tp, _amt, data.exchange || exchange);
     } else {
       errEl.textContent   = data.detail || data.error || 'Errore esecuzione ordine';
       errEl.style.display = 'block';
