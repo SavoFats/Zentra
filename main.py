@@ -2209,8 +2209,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
     TRADING_FEE = 0.0009  # RevX taker fee 0.09%
 
     # Calcola il capitale tradabile dinamicamente
-    if cfg.get("realMode", False):
-        use_revx = state.get("use_revx", False)
+    if cfg.get("realMode", False) and state.get("use_revx", False):
         revx_key_id = state.get("revx_key_id", "")
         revx_priv   = state.get("revx_private_key", "")
         try:
@@ -2221,7 +2220,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             _update_pnl(state)
             return
     else:
-        # Sim: usa currentCapital (già aggiornato dopo ogni trade)
+        # Coinbase real mode e SIM: usa currentCapital (aggiornato dopo ogni trade)
         tradable_capital = state["currentCapital"] * capital_pct
 
     # Ferma solo se il saldo reale non è sufficiente ad aprire nemmeno un trade minimo
@@ -2941,6 +2940,7 @@ async def persist_sessions():
         "revx_key_id", "revx_private_key",
         "binance_api_key", "binance_api_secret",
         "coinbase_api_key", "coinbase_api_secret",
+        "coinbase_api_key_agent", "coinbase_api_secret_agent",
     }
     sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
