@@ -2524,7 +2524,11 @@ async def persist_sessions():
     """Salva lo stato delle sessioni attive nel DB per sopravvivere ai riavvii."""
     if not db_pool:
         return
-    _SENSITIVE_KEYS = {"revx_key_id", "revx_private_key"}
+    _SENSITIVE_KEYS = {
+        "revx_key_id", "revx_private_key",
+        "binance_api_key", "binance_api_secret",
+        "coinbase_api_key", "coinbase_api_secret",
+    }
     sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
         try:
@@ -2603,6 +2607,10 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_key_id TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_private_key TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS binance_api_key TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS binance_api_secret TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS coinbase_api_key TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS coinbase_api_secret TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'free';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT DEFAULT '';
@@ -2987,10 +2995,13 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT username, display_name, avatar_b64, sim_mode, revx_key_id, telegram_chat_id, "
+            "SELECT username, display_name, avatar_b64, sim_mode, revx_key_id, "
+            "binance_api_key, coinbase_api_key, telegram_chat_id, "
             "plan, subscription_expires_at, last_session_date, sessions_today FROM users WHERE id = $1", user_id
         )
     has_keys = bool(row.get("revx_key_id"))
+    has_binance_keys = bool(row.get("binance_api_key"))
+    has_coinbase_keys = bool(row.get("coinbase_api_key"))
     sim = row["sim_mode"] if row["sim_mode"] is not None else True
     if not has_keys:
         sim = True
@@ -3007,6 +3018,8 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
     return {
         "username": dname,
         "has_revx_keys": has_keys,
+        "has_binance_keys": has_binance_keys,
+        "has_coinbase_keys": has_coinbase_keys,
         "avatar_b64": row["avatar_b64"] or "",
         "sim_mode": sim,
         "telegram_linked": bool(row["telegram_chat_id"] or ""),
@@ -3776,6 +3789,35 @@ class RevxKeysRequest(BaseModel):
     key_id: str
     private_key: str
 
+class ExchangeKeysRequest(BaseModel):
+    api_key: str
+    api_secret: str
+
+SUPPORTED_EXTERNAL_EXCHANGES = {
+    "binance": {
+        "name": "Binance",
+        "key_column": "binance_api_key",
+        "secret_column": "binance_api_secret",
+    },
+    "coinbase": {
+        "name": "Coinbase",
+        "key_column": "coinbase_api_key",
+        "secret_column": "coinbase_api_secret",
+    },
+}
+
+def validate_external_exchange_keys(exchange: str, api_key: str, api_secret: str) -> tuple[str, str, dict]:
+    cfg = SUPPORTED_EXTERNAL_EXCHANGES.get((exchange or "").lower())
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Exchange non supportato")
+    api_key = (api_key or "").strip()
+    api_secret = (api_secret or "").strip()
+    if len(api_key) < 8 or len(api_key) > 512:
+        raise HTTPException(status_code=400, detail="API key non valida")
+    if len(api_secret) < 8 or len(api_secret) > 4096:
+        raise HTTPException(status_code=400, detail="API secret non valida")
+    return api_key, api_secret, cfg
+
 @app.post("/auth/save_revx_keys")
 async def save_revx_keys(req: RevxKeysRequest, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=10, window=300, key_suffix="save_revx")
@@ -3810,6 +3852,34 @@ async def delete_revx_keys(request: Request, user_id: int = Depends(get_current_
         state["revx_key_id"] = ""
         state["revx_private_key"] = ""
     return {"ok": True}
+
+@app.post("/auth/exchange_keys/{exchange}")
+async def save_external_exchange_keys(exchange: str, req: ExchangeKeysRequest, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=10, window=300, key_suffix=f"save_{exchange}_keys")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    api_key, api_secret, cfg = validate_external_exchange_keys(exchange, req.api_key, req.api_secret)
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            f"UPDATE users SET {cfg['key_column']} = $1, {cfg['secret_column']} = $2 WHERE id = $3",
+            encrypt_key(api_key), encrypt_key(api_secret), user_id
+        )
+    return {"ok": True, "exchange": exchange.lower()}
+
+@app.delete("/auth/exchange_keys/{exchange}")
+async def delete_external_exchange_keys(exchange: str, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix=f"delete_{exchange}_keys")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    cfg = SUPPORTED_EXTERNAL_EXCHANGES.get((exchange or "").lower())
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Exchange non supportato")
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            f"UPDATE users SET {cfg['key_column']} = '', {cfg['secret_column']} = '' WHERE id = $1",
+            user_id
+        )
+    return {"ok": True, "exchange": exchange.lower()}
 
 @app.get("/test_revx")
 async def test_revx(request: Request, user_id: int = Depends(get_current_user)):

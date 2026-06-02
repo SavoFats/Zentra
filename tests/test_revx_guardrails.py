@@ -93,6 +93,22 @@ class RevxGuardrailTests(unittest.TestCase):
     def setUpClass(cls):
         cls.main = import_main()
 
+    def test_external_exchange_key_validation_allows_supported_exchanges(self):
+        key, secret, cfg = self.main.validate_external_exchange_keys("binance", " api-key-123 ", " secret-123 ")
+        self.assertEqual(key, "api-key-123")
+        self.assertEqual(secret, "secret-123")
+        self.assertEqual(cfg["key_column"], "binance_api_key")
+
+    def test_external_exchange_key_validation_rejects_unknown_exchange(self):
+        with self.assertRaises(self.main.HTTPException) as ctx:
+            self.main.validate_external_exchange_keys("kraken", "api-key-123", "secret-123")
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_external_exchange_key_validation_rejects_short_secret(self):
+        with self.assertRaises(self.main.HTTPException) as ctx:
+            self.main.validate_external_exchange_keys("coinbase", "api-key-123", "short")
+        self.assertEqual(ctx.exception.status_code, 400)
+
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances
 

@@ -898,6 +898,43 @@ body.auth-active .tabbar { display:none !important; }
   </div>
 </div>
 
+<!-- Modal external exchange API keys -->
+<div class="modal-overlay" id="externalExchangeModal" onclick="if(event.target===this)closeExternalExchangeModal()">
+  <div class="modal-card" style="max-width:420px;width:100%">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="modal-title" style="margin-bottom:0" id="externalExchangeTitle">Collega exchange</div>
+      <button onclick="closeExternalExchangeModal()" style="background:none;border:none;cursor:pointer;color:var(--text3);padding:4px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div id="externalExchangeConnectedView" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px;background:rgba(0,200,100,0.1);border:1px solid rgba(0,200,100,0.3);border-radius:10px;margin-bottom:16px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00c864" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <span style="font-size:14px;font-weight:600;color:var(--text)" id="externalExchangeConnectedLabel">Exchange collegato</span>
+      </div>
+      <p style="font-size:13px;color:var(--text2);margin:0 0 20px;line-height:1.6">Le credenziali API sono salvate e crittografate. Il trading reale su questo exchange verra abilitato quando il modulo ordini dedicato sara pronto.</p>
+      <div class="modal-actions">
+        <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Chiudi</button>
+        <button class="modal-btn cancel" style="color:var(--red);border-color:var(--red)" onclick="disconnectExternalExchange()">Scollega</button>
+      </div>
+    </div>
+
+    <div id="externalExchangeFormView">
+      <div style="font-size:13px;color:var(--text2);line-height:1.55;margin-bottom:16px">Incolla le credenziali API create sull'exchange. Sono salvate cifrate e non vengono mostrate di nuovo dopo il salvataggio.</div>
+      <label style="font-size:12px;font-weight:700;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.04em">API key</label>
+      <input type="text" id="externalExchangeKey" placeholder="API key" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;color:var(--text);font-size:13px;font-family:monospace;outline:none;box-sizing:border-box;margin-bottom:12px" oninput="validateExternalExchangeForm()">
+      <label style="font-size:12px;font-weight:700;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.04em">API secret / private key</label>
+      <textarea id="externalExchangeSecret" rows="4" placeholder="API secret o private key" style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:11px 14px;color:var(--text);font-size:12px;font-family:monospace;outline:none;box-sizing:border-box;resize:none" oninput="validateExternalExchangeForm()"></textarea>
+      <div style="font-size:11px;color:var(--red);min-height:16px;margin-top:6px;margin-bottom:14px" id="externalExchangeErr"></div>
+      <div class="modal-actions" style="grid-template-columns:1fr 1fr">
+        <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Annulla</button>
+        <button class="modal-btn confirm-real" style="background:var(--blue)" id="externalExchangeSaveBtn" onclick="saveExternalExchangeKeys()" disabled>Salva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
 .revx-step-dot { width:10px;height:10px;border-radius:50%;background:var(--border2);transition:background 0.2s,transform 0.2s;flex-shrink:0; }
 .revx-step-dot.active { background:var(--blue);transform:scale(1.2); }
@@ -1627,10 +1664,41 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
-      <div class="card-label" style="padding:16px 18px 10px">Prossimamente</div>
-      <div class="acc-feat-row"><span>Binance</span><span class="acc-feat-val">In arrivo</span></div>
-      <div class="acc-feat-row"><span>Coinbase</span><span class="acc-feat-val">In arrivo</span></div>
-      <div class="acc-feat-row"><span>Kraken</span><span class="acc-feat-val">In arrivo</span></div>
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:42px;height:42px;border-radius:12px;background:rgba(245,158,11,0.13);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 14 9 5 9-5"/><path d="m3 8v6"/><path d="m21 8v6"/></svg>
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:800;color:var(--text)">Binance</div>
+            <span id="exchangeBinanceStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
+          </div>
+          <div id="exchangeBinanceSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+        </div>
+        <button id="exchangeBinanceBtn" onclick="showExternalExchangeConfig('binance')" style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
+      </div>
+      <div style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
+        Collegamento credenziali disponibile. L'esecuzione ordini Binance verra abilitata in uno step dedicato.
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:42px;height:42px;border-radius:12px;background:rgba(37,99,235,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 9.5a4 4 0 1 0 0 5"/></svg>
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:800;color:var(--text)">Coinbase</div>
+            <span id="exchangeCoinbaseStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
+          </div>
+          <div id="exchangeCoinbaseSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+        </div>
+        <button id="exchangeCoinbaseBtn" onclick="showExternalExchangeConfig('coinbase')" style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
+      </div>
+      <div style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
+        Collegamento credenziali disponibile. L'esecuzione ordini Coinbase verra abilitata in uno step dedicato.
+      </div>
     </div>
   </div>
 
@@ -1825,6 +1893,8 @@ let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
 let _simMode = true;
 let _hasRevxKeys = false;
+let _exchangeKeys = { binance: false, coinbase: false };
+let _activeExternalExchange = '';
 let _plan = 'free';
 let _sessionsToday = 0;
 let _sessionsPerDay = 1;
@@ -2129,6 +2199,8 @@ async function loadUserProfile() {
     }
 
     _hasRevxKeys = me.has_revx_keys || false;
+    _exchangeKeys.binance = me.has_binance_keys || false;
+    _exchangeKeys.coinbase = me.has_coinbase_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
     window._realMode = _hasRevxKeys && !_simMode;
     window._tgLinked = me.telegram_linked || false;
@@ -2186,6 +2258,92 @@ async function disconnectRevx() {
     }
   } catch(e) {
     showToast('Errore durante la disconnessione', true);
+  }
+}
+
+const EXTERNAL_EXCHANGE_LABELS = { binance: 'Binance', coinbase: 'Coinbase' };
+
+function showExternalExchangeConfig(exchange) {
+  if (S.running) {
+    document.getElementById('profileMenu').classList.remove('open');
+    document.getElementById('sessionActiveModal').classList.add('open');
+    return;
+  }
+  if (!EXTERNAL_EXCHANGE_LABELS[exchange]) return;
+  _activeExternalExchange = exchange;
+  const label = EXTERNAL_EXCHANGE_LABELS[exchange];
+  const connected = !!_exchangeKeys[exchange];
+  document.getElementById('externalExchangeTitle').textContent = connected ? label : 'Collega ' + label;
+  document.getElementById('externalExchangeConnectedLabel').textContent = label + ' collegato';
+  document.getElementById('externalExchangeConnectedView').style.display = connected ? '' : 'none';
+  document.getElementById('externalExchangeFormView').style.display = connected ? 'none' : '';
+  document.getElementById('externalExchangeKey').value = '';
+  document.getElementById('externalExchangeSecret').value = '';
+  document.getElementById('externalExchangeErr').textContent = '';
+  validateExternalExchangeForm();
+  document.getElementById('externalExchangeModal').classList.add('open');
+}
+
+function closeExternalExchangeModal() {
+  document.getElementById('externalExchangeModal').classList.remove('open');
+  _activeExternalExchange = '';
+}
+
+function validateExternalExchangeForm() {
+  const key = document.getElementById('externalExchangeKey')?.value.trim() || '';
+  const secret = document.getElementById('externalExchangeSecret')?.value.trim() || '';
+  const btn = document.getElementById('externalExchangeSaveBtn');
+  const ok = key.length >= 8 && secret.length >= 8;
+  if (btn) btn.disabled = !ok;
+}
+
+async function saveExternalExchangeKeys() {
+  const exchange = _activeExternalExchange;
+  if (!EXTERNAL_EXCHANGE_LABELS[exchange]) return;
+  const key = document.getElementById('externalExchangeKey').value.trim();
+  const secret = document.getElementById('externalExchangeSecret').value.trim();
+  const err = document.getElementById('externalExchangeErr');
+  const btn = document.getElementById('externalExchangeSaveBtn');
+  if (key.length < 8 || secret.length < 8) {
+    err.textContent = 'Inserisci API key e secret validi';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Salvo...';
+  err.textContent = '';
+  try {
+    const r = await fetch(API + '/auth/exchange_keys/' + exchange, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ api_key: key, api_secret: secret })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Errore salvataggio');
+    _exchangeKeys[exchange] = true;
+    closeExternalExchangeModal();
+    renderExchangePage();
+    showToast(EXTERNAL_EXCHANGE_LABELS[exchange] + ' collegato');
+  } catch(e) {
+    err.textContent = e.message || 'Errore salvataggio';
+  } finally {
+    btn.textContent = 'Salva';
+    validateExternalExchangeForm();
+  }
+}
+
+async function disconnectExternalExchange() {
+  const exchange = _activeExternalExchange;
+  if (!EXTERNAL_EXCHANGE_LABELS[exchange]) return;
+  try {
+    const r = await fetch(API + '/auth/exchange_keys/' + exchange, { method: 'DELETE', headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || 'Errore disconnessione');
+    _exchangeKeys[exchange] = false;
+    closeExternalExchangeModal();
+    renderExchangePage();
+    showToast(EXTERNAL_EXCHANGE_LABELS[exchange] + ' scollegato');
+  } catch(e) {
+    showToast(e.message || 'Errore durante la disconnessione', true);
   }
 }
 
@@ -4350,6 +4508,27 @@ function renderExchangePage() {
     ? 'API key configurate. Disponibile per il trading reale.'
     : 'Collega le API key Revolut X per abilitare gli ordini reali.';
   const btn = document.getElementById('exchangeRevxBtn');
+  if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
+  renderExternalExchangeStatus('binance');
+  renderExternalExchangeStatus('coinbase');
+}
+
+function renderExternalExchangeStatus(exchange) {
+  const label = EXTERNAL_EXCHANGE_LABELS[exchange];
+  if (!label) return;
+  const connected = !!_exchangeKeys[exchange];
+  const cap = exchange.charAt(0).toUpperCase() + exchange.slice(1);
+  const status = document.getElementById('exchange' + cap + 'Status');
+  if (status) {
+    status.textContent = connected ? 'Collegato' : 'Non collegato';
+    status.style.background = connected ? 'rgba(34,197,94,0.14)' : 'var(--surface2)';
+    status.style.color = connected ? 'var(--green)' : 'var(--text3)';
+  }
+  const sub = document.getElementById('exchange' + cap + 'Sub');
+  if (sub) sub.textContent = connected
+    ? 'Credenziali API salvate. Trading reale in arrivo.'
+    : 'Salva API key e secret';
+  const btn = document.getElementById('exchange' + cap + 'Btn');
   if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
 }
 
