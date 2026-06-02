@@ -1646,8 +1646,8 @@ body.auth-active .tabbar { display:none !important; }
 
     <div class="card" style="padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
-        <div style="width:42px;height:42px;border-radius:12px;background:rgba(80,90,200,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
+          <img src="https://www.revolut.com/favicon.ico" alt="Revolut X" style="width:24px;height:24px;object-fit:contain" onerror="this.outerHTML='<span style=&quot;font-size:12px;font-weight:900;color:var(--blue)&quot;>RX</span>'">
         </div>
         <div style="min-width:0;flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -1665,8 +1665,8 @@ body.auth-active .tabbar { display:none !important; }
 
     <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
-        <div style="width:42px;height:42px;border-radius:12px;background:rgba(245,158,11,0.13);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 14 9 5 9-5"/><path d="m3 8v6"/><path d="m21 8v6"/></svg>
+        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
+          <img src="https://www.binance.com/favicon.ico" alt="Binance" style="width:26px;height:26px;object-fit:contain" onerror="this.outerHTML='<span style=&quot;font-size:12px;font-weight:900;color:#f0b90b&quot;>BN</span>'">
         </div>
         <div style="min-width:0;flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -1684,8 +1684,8 @@ body.auth-active .tabbar { display:none !important; }
 
     <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
-        <div style="width:42px;height:42px;border-radius:12px;background:rgba(37,99,235,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 9.5a4 4 0 1 0 0 5"/></svg>
+        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
+          <img src="https://www.coinbase.com/favicon.ico" alt="Coinbase" style="width:26px;height:26px;object-fit:contain" onerror="this.outerHTML='<span style=&quot;font-size:12px;font-weight:900;color:#0052ff&quot;>CB</span>'">
         </div>
         <div style="min-width:0;flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -4529,7 +4529,11 @@ function renderExternalExchangeStatus(exchange) {
     ? 'Credenziali API salvate. Trading reale in arrivo.'
     : 'Salva API key e secret';
   const btn = document.getElementById('exchange' + cap + 'Btn');
-  if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
+  if (btn) {
+    btn.textContent = connected ? 'Gestisci' : 'Collega';
+    btn.style.background = connected ? 'var(--blue)' : 'var(--surface2)';
+    btn.style.color = connected ? '#fff' : 'var(--text)';
+  }
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
