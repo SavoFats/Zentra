@@ -591,7 +591,9 @@ body.auth-active .tabbar { display:none !important; }
 .home-mode-badge.real { background:rgba(246,70,93,0.12); color:var(--red); border:1px solid rgba(246,70,93,0.3); }
 [data-theme="dark"] .home-mode-badge.sim { color:#f0c040; }
 .home-hero { background:linear-gradient(135deg,#0052ff 0%,#1a70ff 55%,#003dd6 100%); border-radius:var(--radius); padding:22px 20px 22px; margin-bottom:10px; position:relative; overflow:hidden; }
-.home-hero-circles { position:absolute; right:-20px; top:50%; transform:translateY(-50%); pointer-events:none; border-radius:24px; }
+.home-hero-circles { position:absolute; right:-20px; top:50%; transform:translateY(-50%); pointer-events:none; }
+@keyframes hero-pulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
+.home-hero-circles { animation: hero-pulse 3s ease-in-out infinite; }
 .home-hero-label { font-size:10px; font-weight:700; color:rgba(255,255,255,0.6); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:10px; }
 .home-hero-title { font-size:26px; font-weight:800; color:#fff; letter-spacing:-0.03em; line-height:1.15; margin-bottom:14px; }
 .home-hero-pills { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
@@ -1178,11 +1180,9 @@ body.auth-active .tabbar { display:none !important; }
     <!-- Hero card — nascosta quando sessione attiva -->
     <div class="home-hero" id="homeHeroCard">
       <svg class="home-hero-circles" width="170" height="170" viewBox="0 0 192 192" fill="none" aria-hidden="true">
-        <rect width="192" height="192" rx="40" fill="white" fill-opacity="0.07"/>
-        <polyline points="24,140 64,96 92,118 130,62 168,80" fill="none" stroke="white" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" opacity="0.35"/>
-        <polyline points="24,140 64,96 92,118 130,62 168,80" fill="none" stroke="white" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" opacity="0.15" filter="blur(6px)"/>
-        <circle cx="168" cy="80" r="9" fill="white" opacity="0.5"/>
-        <circle cx="168" cy="80" r="5" fill="white" opacity="0.9"/>
+        <polyline points="24,140 64,96 92,118 130,62 168,80" fill="none" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.18"/>
+        <circle cx="168" cy="80" r="7" fill="white" opacity="0.25"/>
+        <circle cx="168" cy="80" r="4" fill="white" opacity="0.4"/>
       </svg>
       <div class="home-hero-label">PRONTO A PARTIRE</div>
       <div class="home-hero-title">Avvia<br>Zentra Core</div>
