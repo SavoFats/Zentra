@@ -2821,9 +2821,12 @@ function updateSimToggle() {
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
   const badge = document.getElementById('cfgModeBadge');
-  const isReal = _hasRevxKeys && !_simMode;
+  const selectedExchange = document.getElementById('agentExchange')?.value || 'revx';
+  const exchangeName = selectedExchange === 'coinbase' ? 'Coinbase' : 'Revolut X';
+  const hasExchangeKeys = selectedExchange === 'coinbase' ? (_exchangeKeys && _exchangeKeys.coinbase) : _hasRevxKeys;
+  const isReal = !!hasExchangeKeys && !_simMode;
   let modeLabel = 'Conto Demo';
-  if (isReal) modeLabel = 'Reale — Revolut X';
+  if (isReal) modeLabel = 'Reale — ' + exchangeName;
   if (lbl) lbl.textContent = modeLabel;
   if (lbl) lbl.style.color = isReal ? 'var(--red)' : 'var(--text2)';
   if (badge) badge.style.display = 'inline-flex';
@@ -3323,6 +3326,7 @@ async function onAgentExchangeChange() {
     display.style.color = 'var(--red)';
   }
   updateAlloc();
+  updateSimToggle();
 }
 function setCircuitBreaker(on) {
   document.getElementById('cbOnBtn').classList.toggle('active', on);
