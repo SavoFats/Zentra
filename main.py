@@ -687,15 +687,16 @@ async def fetch_dynamic_universe():
             candidates.append((sym, vol))
         candidates.sort(key=lambda x: x[1], reverse=True)
         candidate_syms = {sym for sym, _ in candidates}
-        if _revx_pairs:
-            # RevX attivo: universo = tutti i coin RevX con dati Binance
-            new_universe = candidate_syms & _revx_pairs
-        else:
-            new_universe = {sym for sym, _ in candidates[:CANDLE_UNIVERSE_SIZE]}
+        # Base: top N per volume — valido per tutti gli exchange (Coinbase, RevX, sim).
+        # Il filtro RevX-specifico viene applicato per-sessione nel loop agente.
+        base_universe = {sym for sym, _ in candidates[:CANDLE_UNIVERSE_SIZE]}
+        # Aggiungi anche le coin RevX non in top-N per garantire copertura sessioni RevX
+        revx_extra = (_revx_pairs & candidate_syms) if _revx_pairs else set()
+        new_universe = base_universe | revx_extra
         if new_universe:
             _dynamic_universe = new_universe
             _universe_last_update = time.time()
-            print(f"Universo dinamico: {len(_dynamic_universe)} coin{' (RevX)' if _revx_pairs else ''}")
+            print(f"Universo dinamico: {len(_dynamic_universe)} coin (base={len(base_universe)}, revx_extra={len(revx_extra)})")
     except Exception as e:
         print(f"Errore fetch universo dinamico: {e}")
 
@@ -3848,21 +3849,29 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     mt           = int(cfg.get("maxTrades", 0))
     mcl          = int(cfg.get("maxConsecutiveLosses", 3))
     mxh          = float(cfg.get("maxHoldHours", 4.0))
-    mom_thr_pct  = float(cfg.get("momentumPct", 0.01)) * 100
-    vol_mult_s   = float(cfg.get("volMultiplier", 1.2))
     max_stop_pct_s = float(cfg.get("maxStopPct", 0.02)) * 100
     btc_filt_s   = "ON" if cfg.get("btcEmaFilter", True) else "OFF"
     curr_sym     = "$"
+    strategy_s   = cfg.get("strategy", "momentum")
     if use_coinbase:
         exchange_name = "Coinbase"
     elif use_revx:
         exchange_name = "Revolut X"
     else:
         exchange_name = "SIM"
+    if strategy_s == "breakout":
+        chop_s   = float(cfg.get("chopMin", 61.8))
+        atr_s    = float(cfg.get("atrRatioMax", 0.85)) * 100
+        bvol_s   = float(cfg.get("breakoutVolMultiplier", 1.5))
+        strategy_params = f"CHOP≥{chop_s:.0f} | ATR<{atr_s:.0f}% | Vol≥{bvol_s:.1f}x"
+    else:
+        mom_thr_pct = float(cfg.get("momentumPct", 0.01)) * 100
+        vol_mult_s  = float(cfg.get("volMultiplier", 1.2))
+        strategy_params = f"Momentum: +{mom_thr_pct:.1f}% | Vol: {vol_mult_s}x"
     add_log(state, "info", "AVVIO",
-        f"{curr_sym}{capital:.0f} | {mode} [{exchange_name}] | Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | "
-        f"Momentum: +{mom_thr_pct:.1f}% | Vol: {vol_mult_s}x | Stop: -{max_stop_pct_s:.1f}% | "
-        f"BTC: {btc_filt_s} | MaxHold: {mxh}h | MaxLoss: {mcl}"
+        f"{curr_sym}{capital:.0f} | {mode} [{exchange_name}] | {strategy_s.upper()} | "
+        f"Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | {strategy_params} | "
+        f"Stop: -{max_stop_pct_s:.1f}% | BTC: {btc_filt_s} | MaxHold: {mxh}h | MaxLoss: {mcl}"
     )
     if free_session_counter_update and db_pool:
         try:
