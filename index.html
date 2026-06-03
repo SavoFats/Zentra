@@ -1741,8 +1741,8 @@ body.auth-active .tabbar { display:none !important; }
         </div>
         <button id="exchangeBinanceBtn" onclick="showExternalExchangeConfig('binance')" style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
       </div>
-      <div style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
-        Collegamento credenziali disponibile. L'esecuzione ordini Binance verra abilitata in uno step dedicato.
+      <div id="exchangeBinanceNote" style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
+        Collegamento credenziali disponibile. L'esecuzione ordini Binance verrà abilitata in uno step dedicato.
       </div>
     </div>
 
@@ -1760,8 +1760,8 @@ body.auth-active .tabbar { display:none !important; }
         </div>
         <button id="exchangeCoinbaseBtn" onclick="showExternalExchangeConfig('coinbase')" style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
       </div>
-      <div style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
-        Collegamento credenziali disponibile. L'esecuzione ordini Coinbase verra abilitata in uno step dedicato.
+      <div id="exchangeCoinbaseNote" style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
+        Collegamento credenziali disponibile. L'esecuzione ordini Coinbase verrà abilitata in uno step dedicato.
       </div>
     </div>
   </div>
@@ -4936,8 +4936,10 @@ function renderExternalExchangeStatus(exchange) {
   }
   const sub = document.getElementById('exchange' + cap + 'Sub');
   if (sub) sub.textContent = connected
-    ? 'Credenziali API salvate. Trading reale in arrivo.'
+    ? 'API key configurate. Disponibile per il trading reale.'
     : 'Salva API key e secret';
+  const note = document.getElementById('exchange' + cap + 'Note');
+  if (note) note.style.display = connected ? 'none' : '';
   const btn = document.getElementById('exchange' + cap + 'Btn');
   if (btn) {
     btn.textContent = connected ? 'Gestisci' : 'Collega';
