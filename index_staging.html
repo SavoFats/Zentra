@@ -4942,6 +4942,9 @@ function renderHome() {
 }
 
 function renderHomeHeroPills() {
+  const pills = document.querySelector('.home-hero-pills');
+  if (pills) pills.style.display = _plan === 'founder' ? 'flex' : 'none';
+  if (_plan !== 'founder') return;
   const durEl = document.getElementById('heroPillDuration');
   const slEl  = document.getElementById('heroPillStrategy');
   const capEl = document.getElementById('heroPillCapital');
@@ -6016,15 +6019,7 @@ function updatePlanUI() {
     badge.style.display = '';
   }
   const sesEl = document.getElementById('sessionsIndicator');
-  if (sesEl) {
-    if (_plan !== 'founder') {
-      sesEl.textContent = 'Disponibile solo con il piano Founder';
-      sesEl.style.color = 'rgba(255,255,255,0.72)';
-      sesEl.style.display = '';
-    } else {
-      sesEl.style.display = 'none';
-    }
-  }
+  if (sesEl) sesEl.style.display = 'none';
   const homeStartBtn = document.getElementById('homeStartBtn');
   if (homeStartBtn) {
     homeStartBtn.innerHTML = _plan === 'founder'
