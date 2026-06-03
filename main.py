@@ -120,6 +120,14 @@ def stripe_price_for_plan(plan: str) -> str:
         return STRIPE_PRO_PRICE_ID
     return ""
 
+def ai_daily_limit_for_plan(plan: str):
+    plan = normalize_plan(plan)
+    if plan == "founder":
+        return None
+    if plan == "pro":
+        return PRO_AI_ANALYSES_PER_DAY
+    return FREE_AI_ANALYSES_PER_DAY
+
 def plan_from_stripe_subscription(sub: dict, fallback: str = "pro") -> str:
     plan = normalize_plan((sub.get("metadata") or {}).get("plan") or fallback)
     if plan in PAID_PLANS:
@@ -139,6 +147,8 @@ def restore_debug_log(msg: str):
 # ── FREE PLAN LIMITS ──────────────────────────────────────────────────────────
 FREE_SESSIONS_PER_DAY  = 1
 FREE_SCANS_PER_DAY     = 10
+FREE_AI_ANALYSES_PER_DAY = 10
+PRO_AI_ANALYSES_PER_DAY  = 50
 FREE_MAX_SESSION_HOURS = 2
 FREE_MAX_POSITIONS     = 1
 FREE_ALLOC_PCT         = 1.0    # allocazione fissa 100% — 1 posizione = tutto il capitale sessione
@@ -3306,6 +3316,8 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_today INT DEFAULT 0;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_scan_date DATE;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS scans_today INT DEFAULT 0;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ai_chat_date DATE;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_chats_today INT DEFAULT 0;
                     CREATE TABLE IF NOT EXISTS trades_history (
                         id SERIAL PRIMARY KEY,
                         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -3821,7 +3833,8 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
             "SELECT username, display_name, avatar_b64, sim_mode, revx_key_id, "
             "binance_api_key, coinbase_api_key, telegram_chat_id, "
             "plan, subscription_expires_at, last_session_date, sessions_today, "
-            "last_scan_date, scans_today FROM users WHERE id = $1", user_id
+            "last_scan_date, scans_today, last_ai_chat_date, ai_chats_today "
+            "FROM users WHERE id = $1", user_id
         )
     has_keys = bool(row.get("revx_key_id"))
     has_binance_keys = bool(row.get("binance_api_key"))
@@ -3841,6 +3854,9 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
     sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
     last_scan_date = row["last_scan_date"]
     scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
+    last_ai_date = row["last_ai_chat_date"]
+    ai_today = (row["ai_chats_today"] or 0) if (last_ai_date and last_ai_date == today) else 0
+    ai_limit = ai_daily_limit_for_plan(raw_plan)
     return {
         "username": dname,
         "has_revx_keys": has_keys,
@@ -3855,6 +3871,9 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         "scans_today": scans_today,
         "scans_per_day": FREE_SCANS_PER_DAY,
         "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today) if raw_plan == "free" else 999,
+        "ai_analyses_today": ai_today,
+        "ai_analyses_per_day": ai_limit,
+        "ai_analyses_remaining": None if ai_limit is None else max(0, ai_limit - ai_today),
         "subscription_expires_at": exp.isoformat() if exp else None,
     }
 
@@ -4954,26 +4973,49 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     if not db_pool:
         raise HTTPException(status_code=503, detail="Database non disponibile")
 
-    async with db_pool.acquire() as conn:
-        plan_row = await conn.fetchrow(
-            "SELECT plan, subscription_expires_at FROM users WHERE id = $1",
-            user_id
-        )
-    raw_plan = normalize_plan(plan_row["plan"] if plan_row else "free")
-    exp = plan_row["subscription_expires_at"] if plan_row else None
-    if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
-        raw_plan = "free"
-    if raw_plan != "founder":
-        raise HTTPException(
-            status_code=403,
-            detail="Zentra AI è disponibile solo con il piano Founder."
-        )
-
     user_msg = body.message.strip()
     if not user_msg:
         raise HTTPException(status_code=400, detail="Messaggio vuoto")
     if len(user_msg) > 2000:
         raise HTTPException(status_code=400, detail="Messaggio troppo lungo (max 2000 caratteri)")
+
+    today = datetime.utcnow().date()
+    async with db_pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            "SELECT plan, subscription_expires_at, last_ai_chat_date, ai_chats_today "
+            "FROM users WHERE id = $1",
+            user_id
+        )
+        raw_plan = normalize_plan(plan_row["plan"] if plan_row else "free")
+        exp = plan_row["subscription_expires_at"] if plan_row else None
+        if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
+            raw_plan = "free"
+        ai_limit = ai_daily_limit_for_plan(raw_plan)
+        ai_today = 0
+        if plan_row:
+            last_ai_date = plan_row["last_ai_chat_date"]
+            ai_today = (plan_row["ai_chats_today"] or 0) if (last_ai_date and last_ai_date == today) else 0
+        if ai_limit is not None:
+            updated = await conn.fetchrow(
+                """
+                UPDATE users
+                   SET last_ai_chat_date = $1,
+                       ai_chats_today = CASE
+                           WHEN last_ai_chat_date = $1 THEN COALESCE(ai_chats_today, 0) + 1
+                           ELSE 1
+                       END
+                 WHERE id = $2
+                   AND (last_ai_chat_date IS DISTINCT FROM $1 OR COALESCE(ai_chats_today, 0) < $3)
+             RETURNING ai_chats_today
+                """,
+                today, user_id, ai_limit
+            )
+            if not updated:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Hai raggiunto il limite di {ai_limit} analisi Zentra AI di oggi. Passa a un piano superiore per continuare."
+                )
+            ai_today = updated["ai_chats_today"] or ai_today
 
     if body.reset:
         _ai_conversations[user_id] = []
@@ -5149,24 +5191,17 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
     reply = data["content"][0]["text"]
     history.append({"role": "assistant", "content": reply})
-    return {"reply": reply}
+    return {
+        "reply": reply,
+        "plan": raw_plan,
+        "ai_analyses_today": ai_today,
+        "ai_analyses_per_day": ai_limit,
+        "ai_analyses_remaining": None if ai_limit is None else max(0, ai_limit - ai_today),
+    }
 
 @app.delete("/chat/history")
 async def clear_chat_history(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=20, window=60)
-    if not db_pool:
-        raise HTTPException(status_code=503, detail="Database non disponibile")
-    async with db_pool.acquire() as conn:
-        plan_row = await conn.fetchrow(
-            "SELECT plan, subscription_expires_at FROM users WHERE id = $1",
-            user_id
-        )
-    raw_plan = normalize_plan(plan_row["plan"] if plan_row else "free")
-    exp = plan_row["subscription_expires_at"] if plan_row else None
-    if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
-        raw_plan = "free"
-    if raw_plan != "founder":
-        raise HTTPException(status_code=403, detail="Zentra AI è disponibile solo con il piano Founder.")
     _ai_conversations.pop(user_id, None)
     return {"ok": True}
 
@@ -5556,7 +5591,9 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT plan, subscription_expires_at, last_session_date, sessions_today, last_scan_date, scans_today FROM users WHERE id = $1", user_id)
+            "SELECT plan, subscription_expires_at, last_session_date, sessions_today, "
+            "last_scan_date, scans_today, last_ai_chat_date, ai_chats_today "
+            "FROM users WHERE id = $1", user_id)
     raw_plan = normalize_plan(row["plan"] or "free")
     exp = row["subscription_expires_at"]
     if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
@@ -5566,6 +5603,9 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
     sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
     last_scan_date = row["last_scan_date"]
     scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
+    last_ai_date = row["last_ai_chat_date"]
+    ai_today = (row["ai_chats_today"] or 0) if (last_ai_date and last_ai_date == today) else 0
+    ai_limit = ai_daily_limit_for_plan(raw_plan)
     return {
         "plan": raw_plan,
         "sessions_today": sessions_today,
@@ -5574,6 +5614,9 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
         "scans_today": scans_today,
         "scans_per_day": FREE_SCANS_PER_DAY,
         "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today) if raw_plan == "free" else 999,
+        "ai_analyses_today": ai_today,
+        "ai_analyses_per_day": ai_limit,
+        "ai_analyses_remaining": None if ai_limit is None else max(0, ai_limit - ai_today),
         "subscription_expires_at": exp.isoformat() if exp else None,
         "stripe_enabled": bool(STRIPE_SECRET_KEY and (STRIPE_PRO_PRICE_ID or STRIPE_FOUNDER_PRICE_ID)),
     }

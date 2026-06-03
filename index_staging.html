@@ -1172,6 +1172,14 @@ body.auth-active .tabbar { display:none !important; }
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Piani
     </button>
   </div>
+  <div class="sb-scan-usage" id="sbAIUsage" style="display:none">
+    <div class="sb-scan-usage-top">
+      <span>Analisi Zentra AI</span>
+      <span id="sbAIUsageText">0/10</span>
+    </div>
+    <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbAIUsageFill"></div></div>
+    <div class="sb-scan-usage-sub" id="sbAIUsageSub">10 analisi disponibili oggi</div>
+  </div>
   <div class="sb-scan-usage" id="sbScanUsage" style="display:none">
     <div class="sb-scan-usage-top">
       <span>Scansioni Free</span>
@@ -1904,6 +1912,7 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-sub">Per provare Zentra senza usare capitale reale.</div>
         <ul class="app-plan-feats">
           <li>10 scansioni di mercato al giorno</li>
+          <li>10 analisi Zentra AI al giorno</li>
           <li>Trading manuale illimitato in demo</li>
           <li>Watchlist e dashboard segnali</li>
           <li class="muted">Collegamento exchange reale</li>
@@ -1920,6 +1929,7 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-sub">Per trading manuale con capitale reale e notifiche operative.</div>
         <ul class="app-plan-feats">
           <li>Scansioni di mercato illimitate</li>
+          <li>50 analisi Zentra AI al giorno</li>
           <li>Trading manuale illimitato</li>
           <li>Collega Coinbase e Revolut X</li>
           <li>Gestione posizioni reali</li>
@@ -1936,6 +1946,7 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-sub">Accesso anticipato all'AI Trading Agent sperimentale.</div>
         <ul class="app-plan-feats">
           <li>Tutto incluso in Pro</li>
+          <li>Analisi Zentra AI illimitate</li>
           <li>AI Trading Agent sperimentale</li>
           <li>Ingressi automatici dai segnali Zentra</li>
           <li>Regole automatiche di rischio e uscita</li>
@@ -2169,6 +2180,8 @@ let _sessionsToday = 0;
 let _sessionsPerDay = 1;
 let _scansToday = 0;
 let _scansPerDay = 10;
+let _aiAnalysesToday = 0;
+let _aiAnalysesPerDay = 10;
 let STRIPE_ENABLED = false;
 let _pendingStartCfg = null;
 let _newTradeCount = 0;
@@ -2408,6 +2421,8 @@ async function checkAuth() {
     _sessionsPerDay = d.sessions_per_day || 1;
     _scansToday = d.scans_today ?? _scansToday;
     _scansPerDay = d.scans_per_day ?? _scansPerDay;
+    _aiAnalysesToday = d.ai_analyses_today ?? _aiAnalysesToday;
+    if (d.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = d.ai_analyses_per_day;
     localStorage.setItem('ca_username', _username);
     if (!localStorage.getItem('ca_active_tab')) localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
@@ -2491,6 +2506,8 @@ async function loadUserProfile() {
       _sessionsPerDay   = billing.sessions_per_day ?? _sessionsPerDay;
       _scansToday       = billing.scans_today ?? _scansToday;
       _scansPerDay      = billing.scans_per_day ?? _scansPerDay;
+      _aiAnalysesToday  = billing.ai_analyses_today ?? _aiAnalysesToday;
+      if (billing.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = billing.ai_analyses_per_day;
     }
 
     _hasRevxKeys = me.has_revx_keys || false;
@@ -5149,6 +5166,7 @@ function syncSidebar() {
   const cached = localStorage.getItem('ca_avatar');
   if (sbAv && cached) sbAv.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
   else if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
+  updateAIUsageUI();
   updateScanUsageUI();
 }
 
@@ -5979,6 +5997,7 @@ function updatePlanUI() {
   }
   // Lock/unlock config pro features
   applyPlanConfig();
+  updateAIUsageUI();
   updateScanUsageUI();
   if (typeof _aiInit === 'function') _aiInit();
   if (document.getElementById('page-plans')?.classList.contains('active')) renderPlansPage();
@@ -6167,6 +6186,46 @@ let _aiLoading = false;
 let _aiUnread = 0;
 const _aiHistory = [];
 
+function updateAIUsageFromPayload(d) {
+  if (!d) return;
+  if (d.ai_analyses_today !== undefined) _aiAnalysesToday = d.ai_analyses_today ?? _aiAnalysesToday;
+  if (d.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = d.ai_analyses_per_day;
+  updateAIUsageUI();
+}
+
+function updateAIUsageUI() {
+  const sub = document.getElementById('aiPanelSub');
+  const box = document.getElementById('sbAIUsage');
+  if (_aiAnalysesPerDay == null || _plan === 'founder') {
+    if (sub) sub.textContent = 'Copilot finanziario · Analisi illimitate';
+    if (box) {
+      box.style.display = 'none';
+      box.classList.remove('limit');
+    }
+    return;
+  }
+  const total = Math.max(1, Number(_aiAnalysesPerDay) || 10);
+  const used = Math.min(total, Math.max(0, Number(_aiAnalysesToday) || 0));
+  const remaining = Math.max(0, total - used);
+  if (sub) sub.textContent = remaining > 0
+    ? `Copilot finanziario · ${remaining}/${total} analisi oggi`
+    : 'Copilot finanziario · limite giornaliero raggiunto';
+  if (!box) return;
+  const pct = Math.round((used / total) * 100);
+  box.style.display = '';
+  box.classList.toggle('limit', remaining <= 0);
+  const text = document.getElementById('sbAIUsageText');
+  const fill = document.getElementById('sbAIUsageFill');
+  const boxSub = document.getElementById('sbAIUsageSub');
+  if (text) text.textContent = `${used}/${total}`;
+  if (fill) fill.style.width = pct + '%';
+  if (boxSub) {
+    boxSub.textContent = remaining > 0
+      ? `${remaining} analisi disponibili oggi`
+      : 'Limite AI raggiunto. Passa a un piano superiore.';
+  }
+}
+
 function toggleAIChat() {
   _aiOpen = !_aiOpen;
   document.getElementById('aiPanel').classList.toggle('open', _aiOpen);
@@ -6250,6 +6309,7 @@ async function sendAIMessage() {
       body: JSON.stringify({ message: msg })
     });
     const d = await r.json();
+    updateAIUsageFromPayload(d);
     typing.classList.remove('visible');
 
     if (d.reply) {
@@ -6275,13 +6335,8 @@ async function sendAIMessage() {
 
 function _aiInit() {
   const fab = document.getElementById('aiFab');
-  const panel = document.getElementById('aiPanel');
-  if (fab) fab.style.display = _plan === 'founder' ? 'flex' : 'none';
-  if (_plan !== 'founder' && panel) {
-    _aiOpen = false;
-    panel.classList.remove('open');
-  }
-  if (_plan !== 'founder') return;
+  if (fab) fab.style.display = 'flex';
+  updateAIUsageUI();
 
   // Update context bar based on live state
   const pos = (S && S.positions) ? S.positions.length : 0;

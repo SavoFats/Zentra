@@ -956,7 +956,7 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(restored["log"], [])
         self.assertTrue(sent_messages)
 
-    def test_chat_requires_founder_plan(self):
+    def test_chat_enforces_daily_ai_limit_for_free_plan(self):
         main = self.main
 
         class Row(dict):
@@ -965,7 +965,14 @@ class RevxGuardrailTests(unittest.TestCase):
 
         class Conn:
             async def fetchrow(self, sql, *args):
-                return Row({"plan": "pro", "subscription_expires_at": None})
+                if sql.lstrip().upper().startswith("SELECT"):
+                    return Row({
+                        "plan": "free",
+                        "subscription_expires_at": None,
+                        "last_ai_chat_date": main.datetime.utcnow().date(),
+                        "ai_chats_today": main.FREE_AI_ANALYSES_PER_DAY,
+                    })
+                return None
 
         original_pool = main.db_pool
         original_rate_limit = main.check_rate_limit
@@ -985,8 +992,73 @@ class RevxGuardrailTests(unittest.TestCase):
             else:
                 os.environ["ANTHROPIC_API_KEY"] = original_env
 
-        self.assertEqual(ctx.exception.status_code, 403)
-        self.assertIn("Founder", ctx.exception.detail)
+        self.assertEqual(ctx.exception.status_code, 429)
+        self.assertIn("limite", ctx.exception.detail)
+
+    def test_chat_allows_pro_and_returns_ai_usage(self):
+        main = self.main
+
+        class Row(dict):
+            def __getitem__(self, key):
+                return self.get(key)
+
+        class Conn:
+            async def fetchrow(self, sql, *args):
+                if sql.lstrip().upper().startswith("SELECT"):
+                    return Row({
+                        "plan": "pro",
+                        "subscription_expires_at": None,
+                        "last_ai_chat_date": None,
+                        "ai_chats_today": 0,
+                    })
+                return Row({"ai_chats_today": 1})
+
+        class Response:
+            status_code = 200
+
+            def json(self):
+                return {"content": [{"text": "Analisi pronta."}]}
+
+        class Client:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, *args, **kwargs):
+                return Response()
+
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_client = main.httpx.AsyncClient
+        original_history = dict(main._ai_conversations)
+        original_env = os.environ.get("ANTHROPIC_API_KEY")
+        main.db_pool = FakePool(Conn())
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.httpx.AsyncClient = Client
+        main._ai_conversations = {}
+        os.environ["ANTHROPIC_API_KEY"] = "anthropic-secret"
+        body = types.SimpleNamespace(message="Analizza ETH", reset=False)
+        try:
+            result = asyncio.run(main.chat(body, request=object(), user_id=123))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+            main.httpx.AsyncClient = original_client
+            main._ai_conversations = original_history
+            if original_env is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = original_env
+
+        self.assertEqual(result["reply"], "Analisi pronta.")
+        self.assertEqual(result["ai_analyses_today"], 1)
+        self.assertEqual(result["ai_analyses_per_day"], main.PRO_AI_ANALYSES_PER_DAY)
+        self.assertEqual(result["ai_analyses_remaining"], main.PRO_AI_ANALYSES_PER_DAY - 1)
 
     def test_chat_allows_founder_and_uses_anthropic_reply(self):
         main = self.main
@@ -997,7 +1069,12 @@ class RevxGuardrailTests(unittest.TestCase):
 
         class Conn:
             async def fetchrow(self, sql, *args):
-                return Row({"plan": "founder", "subscription_expires_at": None})
+                return Row({
+                    "plan": "founder",
+                    "subscription_expires_at": None,
+                    "last_ai_chat_date": None,
+                    "ai_chats_today": 0,
+                })
 
         class Response:
             status_code = 200
@@ -1057,6 +1134,7 @@ class RevxGuardrailTests(unittest.TestCase):
                 os.environ["ANTHROPIC_API_KEY"] = original_env
 
         self.assertEqual(result["reply"], "Setup non chiaro: meglio aspettare.")
+        self.assertIsNone(result["ai_analyses_per_day"])
 
 
 if __name__ == "__main__":
