@@ -652,7 +652,6 @@ footer {
 }
 .auth-google:disabled { cursor: not-allowed; opacity: 0.58; box-shadow: none; }
 .google-g { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: #4285f4; font-size: 19px; font-weight: 900; }
-.auth-note { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text3); font-size: 13px; font-weight: 700; margin: 14px 0 18px; }
 .auth-email-toggle {
   width: 100%; height: 54px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.035);
   color: var(--text); border-radius: 16px; font-family: var(--sans); font-size: 15px; font-weight: 800; cursor: pointer;
@@ -724,8 +723,6 @@ footer {
       <span class="google-g">G</span>
       <span id="googleAuthText">Continue with Google</span>
     </button>
-    <div class="auth-note" id="authNote">No card required · Free to start</div>
-
     <button class="auth-email-toggle" id="emailToggleBtn" type="button" onclick="showEmailAuth()">Continue with Email</button>
 
     <form class="auth-form" id="emailAuthForm" onsubmit="submitLandingAuth(event)">
@@ -1162,7 +1159,6 @@ const AUTH_COPY = {
     sub: 'Create your workspace to track signals, connect your exchange, and keep every live position under control.',
     google: 'Continue with Google',
     googleSoon: 'Google login coming soon',
-    note: 'No card required · Free to start',
     email: 'Continue with Email',
     register: 'Create account',
     login: 'Log in',
@@ -1183,7 +1179,6 @@ const AUTH_COPY = {
     sub: 'Crea il tuo workspace per seguire i segnali, collegare il tuo exchange e tenere sotto controllo ogni posizione aperta.',
     google: 'Continua con Google',
     googleSoon: 'Login Google in arrivo',
-    note: 'Nessuna carta richiesta · Gratis per iniziare',
     email: 'Continua con Email',
     register: 'Crea account',
     login: 'Accedi',
@@ -1209,7 +1204,6 @@ function updateAuthCopy() {
   setText('authTitle', c.title);
   setText('authSub', c.sub);
   setText('googleAuthText', googleEnabled ? c.google : c.googleSoon);
-  setText('authNote', c.note);
   setText('emailToggleBtn', c.email);
   setText('authTabRegister', c.register);
   setText('authTabLogin', c.login);
