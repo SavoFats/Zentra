@@ -682,6 +682,7 @@ CANDLE_UPDATE_INTERVAL = 60    # secondi (1 minuto)
 scanner_candle_data: dict = {}   # {tf: {sym: signal_indicators}}
 _scanner_candles_ts:  dict = {}   # {tf: last_update_timestamp}
 _scanner_refreshing: set = set()  # timeframe refresh già in corso
+_ai_conversations:   dict = {}   # {user_id: [{"role": ..., "content": ...}]}
 SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
 VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
@@ -4942,45 +4943,178 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
 
 @app.post("/chat")
 async def chat(body: dict, request: Request, user_id: int = Depends(get_current_user)):
-    check_rate_limit(request, max_attempts=20, window=60)
+    check_rate_limit(request, max_attempts=30, window=60)
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        return {"error": "API key non configurata"}
-    messages = body.get("messages", [])
-    if not isinstance(messages, list):
-        raise HTTPException(status_code=400, detail="Formato messaggi non valido")
-    if len(messages) > 20:
-        raise HTTPException(status_code=400, detail="Troppi messaggi nella richiesta")
-    # Valida ogni messaggio: solo role e content stringa, max 2000 char ciascuno
-    for m in messages:
-        if not isinstance(m, dict):
-            raise HTTPException(status_code=400, detail="Messaggio non valido")
-        if m.get("role") not in ("user", "assistant"):
-            raise HTTPException(status_code=400, detail="Role non valido")
-        if not isinstance(m.get("content"), str) or len(m["content"]) > 2000:
-            raise HTTPException(status_code=400, detail="Contenuto messaggio non valido o troppo lungo")
+        raise HTTPException(status_code=503, detail="AI non configurata")
+
+    user_msg = str(body.get("message", "")).strip()
+    if not user_msg:
+        raise HTTPException(status_code=400, detail="Messaggio vuoto")
+    if len(user_msg) > 2000:
+        raise HTTPException(status_code=400, detail="Messaggio troppo lungo (max 2000 caratteri)")
+
+    reset = body.get("reset", False)
+    if reset:
+        _ai_conversations[user_id] = []
+
+    # ── Live context ────────────────────────────────────────────────────────
     state = get_session(user_id)
-    positions = state["positions"]
-    pnl = state["currentCapital"] - state["capital"]
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Market overview
+    btc = market_data.get("BTC", {})
+    btc_price = btc.get("price", 0)
+    btc_change = btc.get("change24h", 0)
+    md_list = [(s, d) for s, d in market_data.items() if d.get("price", 0) > 0]
+    gainers = sorted(md_list, key=lambda x: x[1].get("change24h", 0), reverse=True)[:5]
+    losers  = sorted(md_list, key=lambda x: x[1].get("change24h", 0))[:5]
+    market_ctx  = f"BTC: ${btc_price:,.2f} ({btc_change:+.1f}% 24h)\n"
+    market_ctx += "Top gainers: " + ", ".join(f"{s} {d.get('change24h',0):+.1f}%" for s, d in gainers) + "\n"
+    market_ctx += "Top losers:  " + ", ".join(f"{s} {d.get('change24h',0):+.1f}%" for s, d in losers)  + "\n"
+
+    # Scanner signals across all timeframes
+    _SIGNALS = ["golden_cross","ema_stack","rsi_oversold","rsi_overbought",
+                "macd_bullish","macd_bearish","tsi_bullish","breakout","volume_spike"]
+    scanner_ctx = ""
+    for tf in ["5m","15m","1h","4h","1d"]:
+        tf_data = scanner_candle_data.get(tf, {})
+        if not tf_data:
+            continue
+        tf_lines = []
+        for sig in _SIGNALS:
+            coins = [sym for sym, d in tf_data.items() if d.get(sig)][:8]
+            if coins:
+                tf_lines.append(f"  {sig}: {', '.join(coins)}")
+        if tf_lines:
+            scanner_ctx += f"\n[Scanner {tf}]\n" + "\n".join(tf_lines) + "\n"
+
+    # Open positions
+    positions = state.get("positions", [])
     if positions:
-        pos_desc = ", ".join([f"{p['symbol']} @ ${p['entryPrice']:.4f}" for p in positions])
+        pos_lines = []
+        for pos in positions:
+            sym  = pos["symbol"]
+            cur  = market_data.get(sym.replace("USDT",""), {}).get("price") or \
+                   market_data.get(sym, {}).get("price") or pos.get("currentPrice", pos["entryPrice"])
+            entry = pos["entryPrice"]
+            sl    = pos.get("stopPrice", 0)
+            tp1   = pos.get("tp1_price", 0)
+            pct   = (cur - entry) / entry * 100 if entry else 0
+            usd   = pos.get("size", 0) * pct / 100
+            sl_d  = (cur - sl) / cur * 100 if sl and cur else 0
+            tp1_d = (tp1 - cur) / cur * 100 if tp1 and cur else 0
+            pos_sigs = []
+            for tf in ["1h","4h"]:
+                td = scanner_candle_data.get(tf, {}).get(sym.replace("USDT",""), {})
+                pos_sigs += [f"{s}@{tf}" for s in _SIGNALS if td.get(s)]
+            line = (f"  {sym}: entry ${entry:.4f} | now ${cur:.4f} | P&L {pct:+.2f}% (${usd:+.2f})"
+                    f" | SL ${sl:.4f} ({sl_d:+.1f}%) | TP1 ${tp1:.4f} (+{tp1_d:.1f}%)"
+                    f" | {'REAL' if pos.get('realMode') else 'SIM'}/{pos.get('exchange','sim')}")
+            if pos_sigs:
+                line += f" | {', '.join(pos_sigs[:4])}"
+            pos_lines.append(line)
+        positions_ctx = "\n[Posizioni aperte]\n" + "\n".join(pos_lines) + "\n"
     else:
-        pos_desc = "nessuna posizione aperta"
-    system = (
-        f"Sei un agente di trading crypto. "
-        f"Stato: {pos_desc}. P&L sessione: ${pnl:.2f}. "
-        f"Rispondi in italiano, conciso e professionale."
+        positions_ctx = "\n[Posizioni aperte]: nessuna\n"
+
+    # Session info
+    capital = state.get("capital", 0)
+    cur_cap = state.get("currentCapital", capital)
+    pnl_usd = cur_cap - capital
+    pnl_pct = pnl_usd / capital * 100 if capital else 0
+    cfg     = state.get("config", {})
+    tc      = state.get("tradeCount", 0)
+    wins    = state.get("wins", 0)
+    session_ctx  = "\n[Sessione trading]\n"
+    session_ctx += f"  Stato: {'RUNNING' if state.get('running') else 'FERMA'}\n"
+    session_ctx += f"  Capitale: ${capital:.2f} | Corrente: ${cur_cap:.2f} | P&L: ${pnl_usd:+.2f} ({pnl_pct:+.2f}%)\n"
+    session_ctx += f"  Strategia: {cfg.get('strategy','momentum')} | Alloc: {cfg.get('allocPct',20)}% | MaxSL: {cfg.get('maxStopPct',5)}%\n"
+    session_ctx += f"  Modalità: {'REALE' if cfg.get('realMode') else 'SIM'} | Exchange: {cfg.get('agentExchange','sim')}\n"
+    session_ctx += f"  Trade: {tc} | Win rate: {int(wins/max(tc,1)*100)}%\n"
+
+    # Last 5 trades from DB
+    trades_ctx = ""
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT symbol,entry_price,exit_price,pnl,pct,reason,entry_time "
+                    "FROM trades_history WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5",
+                    user_id
+                )
+            if rows:
+                trades_ctx = "\n[Ultimi 5 trade]\n"
+                for r in rows:
+                    trades_ctx += (f"  {r['symbol']}: {r['entry_price']:.4f}→{r['exit_price']:.4f}"
+                                   f" | {r['pct']:+.2f}% (${r['pnl']:+.2f}) | {r['reason']} | {str(r['entry_time'])[:10]}\n")
+        except Exception:
+            pass
+
+    context_block = (
+        f"\n=== CONTESTO LIVE ZENTRA [{now_str}] ===\n"
+        f"{market_ctx}{positions_ctx}{session_ctx}{trades_ctx}{scanner_ctx}"
+        f"=== FINE CONTESTO ===\n"
     )
-    async with httpx.AsyncClient(timeout=30) as client:
+
+    # ── System prompt ────────────────────────────────────────────────────────
+    system_prompt = (
+        "Sei Zentra AI, il copilot finanziario integrato nella piattaforma Zentra Trading.\n\n"
+        "RUOLO\n"
+        "Sei un analista tecnico esperto di crypto. Analizzi dati di mercato live, "
+        "segnali dello scanner, posizioni aperte e dai consigli concreti e azionabili. "
+        "Non sei un chatbot generico — sei focalizzato esclusivamente sul trading crypto con approccio tecnico.\n\n"
+        "STILE\n"
+        "- Risposte concise e dirette, mai verbose\n"
+        "- Usa numeri reali dal contesto (prezzi, % P&L, distanza SL/TP)\n"
+        "- Se suggerisci un'azione, specifica: direzione, motivazione, stop loss consigliato\n"
+        "- Se il setup non è chiaro, dillo — non inventare segnali\n"
+        "- Usa il simbolo della coin senza USDT (es. BTC, ETH)\n\n"
+        "INDICATORI ZENTRA\n"
+        "- EMA 20/50/200: trend e golden cross\n"
+        "- RSI 14: ipercomprato >70, ipervenduto <30\n"
+        "- MACD (5,13,3): momentum e crossover\n"
+        "- TSI (25,13): conferma trend\n"
+        "- Volume spike: conferma breakout\n"
+        "- Breakout: rottura livelli chiave con volume\n"
+        "- golden_cross: EMA50 incrocia EMA200 verso l'alto\n"
+        "- ema_stack: close > EMA20 > EMA50 > EMA200\n\n"
+        "GESTIONE DEL RISCHIO\n"
+        "- Non suggerire mai di rischiare più del 5% del capitale su una singola operazione\n"
+        "- Segnala sempre se un setup ha bassa confluenza di segnali\n"
+        "- In mercato laterale o incerto, suggerisci di aspettare\n\n"
+        "LINGUA\n"
+        "Rispondi sempre nella stessa lingua dell'utente.\n\n"
+        + context_block
+    )
+
+    # ── Conversation history ─────────────────────────────────────────────────
+    history = _ai_conversations.setdefault(user_id, [])
+    history.append({"role": "user", "content": user_msg})
+    if len(history) > 20:
+        history[:] = history[-20:]
+
+    async with httpx.AsyncClient(timeout=45) as client:
         res = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-            json={"model": "claude-haiku-4-5-20251001", "max_tokens": 500, "system": system, "messages": messages}
+            json={"model": "claude-sonnet-4-6", "max_tokens": 1024, "system": system_prompt, "messages": history}
         )
         data = res.json()
-        if "content" in data:
-            return {"reply": data["content"][0]["text"]}
+
+    if "content" not in data:
+        history.pop()
         return {"error": public_error(Exception(str(data.get("error", data))), api_key)}
+
+    reply = data["content"][0]["text"]
+    history.append({"role": "assistant", "content": reply})
+    return {"reply": reply}
+
+@app.delete("/chat/history")
+async def clear_chat_history(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=20, window=60)
+    _ai_conversations.pop(user_id, None)
+    return {"ok": True}
 
 # ── DEBUG / UTILITY ENDPOINTS ──────────────────────────────────────────────────
 

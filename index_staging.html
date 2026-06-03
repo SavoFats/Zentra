@@ -1699,6 +1699,49 @@ body.auth-active .tabbar { display:none !important; }
       .scan-tf-btn.active { background:var(--blue); border-color:var(--blue); color:#fff; }
       @keyframes scan-spin { to { transform:rotate(360deg); } }
       .scan-loading-spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--blue); border-radius:50%; animation:scan-spin .75s linear infinite; margin:0 auto; }
+
+      /* ── Zentra AI Chat ── */
+      .ai-fab { position:fixed; bottom:calc(var(--tab-h) + var(--safe-b) + 16px); right:16px; width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#0052ff,#7c3aed); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(0,82,255,0.4); z-index:150; transition:transform .2s,box-shadow .2s; }
+      .ai-fab:hover { transform:scale(1.08); box-shadow:0 6px 28px rgba(0,82,255,0.5); }
+      .ai-fab svg { width:24px; height:24px; color:#fff; }
+      .ai-fab .ai-fab-badge { position:absolute; top:-2px; right:-2px; width:18px; height:18px; border-radius:50%; background:var(--red); border:2px solid var(--bg); font-size:10px; font-weight:800; color:#fff; display:none; align-items:center; justify-content:center; }
+      .ai-panel { position:fixed; bottom:0; right:0; width:min(420px,100vw); height:calc(100vh - 56px); background:var(--surface); border-left:1px solid var(--border); border-top:1px solid var(--border); border-radius:16px 0 0 0; z-index:300; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); box-shadow:-8px 0 40px rgba(0,0,0,0.25); }
+      .ai-panel.open { transform:translateX(0); }
+      .ai-panel-hdr { display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+      .ai-panel-hdr-icon { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,#0052ff,#7c3aed); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+      .ai-panel-hdr-icon svg { width:18px; height:18px; color:#fff; }
+      .ai-panel-title { font-size:15px; font-weight:800; color:var(--text); flex:1; }
+      .ai-panel-sub { font-size:11px; color:var(--text3); font-weight:500; }
+      .ai-panel-close { width:32px; height:32px; border-radius:8px; border:none; background:var(--surface2); color:var(--text2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; }
+      .ai-panel-close:hover { background:var(--border); color:var(--text); }
+      .ai-messages { flex:1; overflow-y:auto; padding:16px 14px; display:flex; flex-direction:column; gap:12px; }
+      .ai-msg { max-width:88%; display:flex; flex-direction:column; gap:4px; }
+      .ai-msg.user { align-self:flex-end; }
+      .ai-msg.ai { align-self:flex-start; }
+      .ai-bubble { padding:10px 13px; border-radius:14px; font-size:13.5px; line-height:1.55; font-weight:500; white-space:pre-wrap; word-break:break-word; }
+      .ai-msg.user .ai-bubble { background:var(--blue); color:#fff; border-bottom-right-radius:4px; }
+      .ai-msg.ai .ai-bubble { background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; border:1px solid var(--border); }
+      .ai-msg-time { font-size:10px; color:var(--text3); font-weight:500; padding:0 4px; }
+      .ai-msg.user .ai-msg-time { text-align:right; }
+      .ai-typing { align-self:flex-start; display:none; gap:4px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:14px; border-bottom-left-radius:4px; }
+      .ai-typing.visible { display:flex; }
+      .ai-dot { width:7px; height:7px; border-radius:50%; background:var(--text3); animation:ai-bounce .9s infinite; }
+      .ai-dot:nth-child(2) { animation-delay:.15s; }
+      .ai-dot:nth-child(3) { animation-delay:.3s; }
+      @keyframes ai-bounce { 0%,80%,100% { transform:translateY(0); opacity:.4; } 40% { transform:translateY(-5px); opacity:1; } }
+      .ai-welcome { text-align:center; padding:32px 16px; color:var(--text3); font-size:13px; line-height:1.6; }
+      .ai-welcome strong { color:var(--text2); display:block; margin-bottom:6px; font-size:14px; }
+      .ai-suggestions { display:flex; flex-wrap:wrap; gap:8px; padding:0 14px 12px; }
+      .ai-sug { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:6px 13px; font-size:12px; font-weight:600; color:var(--text2); cursor:pointer; transition:all .15s; white-space:nowrap; }
+      .ai-sug:hover { border-color:var(--blue); color:var(--blue); }
+      .ai-input-row { display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--border); flex-shrink:0; }
+      .ai-input { flex:1; border:1px solid var(--border); background:var(--surface2); color:var(--text); border-radius:12px; padding:10px 13px; font:500 13.5px var(--sans); resize:none; outline:none; max-height:120px; min-height:40px; line-height:1.45; }
+      .ai-input:focus { border-color:rgba(0,82,255,0.5); box-shadow:0 0 0 3px rgba(0,82,255,0.08); }
+      .ai-send { width:40px; height:40px; border-radius:10px; border:none; background:var(--blue); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:opacity .15s; align-self:flex-end; }
+      .ai-send:disabled { opacity:0.4; cursor:not-allowed; }
+      .ai-send svg { width:18px; height:18px; }
+      .ai-ctx-bar { padding:8px 14px; background:rgba(0,82,255,0.06); border-bottom:1px solid rgba(0,82,255,0.12); font-size:11px; color:var(--blue); font-weight:600; display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }
+      .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
     </style>
     <div class="scan-tf-bar">
       <span class="scan-tf-label">Timeframe</span>
@@ -2427,6 +2470,7 @@ function initApp() {
   loadUserProfile();
   startupSession();
   applyIOSSafeAreaFix();
+  document.dispatchEvent(new Event('zentra:authed'));
 }
 
 async function loadUserProfile() {
@@ -3912,6 +3956,8 @@ async function poll() {
       unlockConfig();
     }
     render();
+    // Keep AI context bar in sync
+    if (typeof _aiInit === 'function') _aiInit();
   } catch(e) { console.error(e); }
 }
 
@@ -6052,6 +6098,52 @@ function closeProWelcome() {
 </div>
 
 <!-- Banner informativa storage -->
+<!-- ── Zentra AI Chat Widget ── -->
+<button class="ai-fab" id="aiFab" onclick="toggleAIChat()" aria-label="Zentra AI" style="display:none">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12"/><path d="M12 8v4l3 3"/><circle cx="4.5" cy="4.5" r="1.5"/></svg>
+  <span class="ai-fab-badge" id="aiFabBadge"></span>
+</button>
+
+<div class="ai-panel" id="aiPanel">
+  <div class="ai-panel-hdr">
+    <div class="ai-panel-hdr-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="ai-panel-title">Zentra AI</div>
+      <div class="ai-panel-sub" id="aiPanelSub">Copilot finanziario · Live</div>
+    </div>
+    <button class="ai-panel-close" onclick="toggleAIChat()">×</button>
+  </div>
+  <div class="ai-ctx-bar" id="aiCtxBar">
+    <span class="ai-ctx-pill">📊 Mercato live</span>
+    <span class="ai-ctx-pill">📡 Scanner</span>
+    <span class="ai-ctx-pill" id="aiCtxPositions">📂 Posizioni</span>
+    <span class="ai-ctx-pill" id="aiCtxSession">⚙️ Sessione</span>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="ai-welcome" id="aiWelcome">
+      <strong>Ciao, sono Zentra AI</strong>
+      Analizzo il mercato live, i tuoi segnali scanner e le posizioni aperte.<br>Chiedimi qualsiasi cosa sul trading.
+    </div>
+  </div>
+  <div class="ai-typing" id="aiTyping">
+    <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
+  </div>
+  <div class="ai-suggestions" id="aiSuggestions">
+    <button class="ai-sug" onclick="aiSuggest(this)">Analizza il mercato ora</button>
+    <button class="ai-sug" onclick="aiSuggest(this)">Ci sono setup interessanti?</button>
+    <button class="ai-sug" onclick="aiSuggest(this)">Come stanno le mie posizioni?</button>
+    <button class="ai-sug" onclick="aiSuggest(this)">Consigli sulla sessione attiva</button>
+  </div>
+  <div class="ai-input-row">
+    <textarea class="ai-input" id="aiInput" rows="1" placeholder="Chiedi a Zentra AI…" onkeydown="aiInputKeydown(event)" oninput="aiInputResize(this)"></textarea>
+    <button class="ai-send" id="aiSend" onclick="sendAIMessage()" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
 <div id="cookieBanner" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);left:12px;right:12px;z-index:450;background:var(--surface);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--glass-border);border-radius:14px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.28);flex-direction:column;gap:10px">
   <div style="font-size:12px;color:var(--text2);line-height:1.5">
     Zentra utilizza token di autenticazione in memoria locale per mantenere la sessione attiva. Non usiamo cookie di profilazione o di terze parti.
@@ -6064,6 +6156,136 @@ function closeProWelcome() {
     const b = document.getElementById('cookieBanner');
     if (b) b.style.display = 'flex';
   }
+</script>
+
+<script>
+/* ── Zentra AI ── */
+let _aiOpen = false;
+let _aiLoading = false;
+let _aiUnread = 0;
+const _aiHistory = [];
+
+function toggleAIChat() {
+  _aiOpen = !_aiOpen;
+  document.getElementById('aiPanel').classList.toggle('open', _aiOpen);
+  if (_aiOpen) {
+    _aiUnread = 0;
+    document.getElementById('aiFabBadge').style.display = 'none';
+    setTimeout(() => document.getElementById('aiInput').focus(), 300);
+  }
+}
+
+function aiInputResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  document.getElementById('aiSend').disabled = !el.value.trim();
+}
+
+function aiInputKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (!document.getElementById('aiSend').disabled) sendAIMessage();
+  }
+}
+
+function aiSuggest(btn) {
+  const msg = btn.textContent.trim();
+  document.getElementById('aiInput').value = msg;
+  document.getElementById('aiSend').disabled = false;
+  sendAIMessage();
+}
+
+function _aiTime() {
+  return new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+}
+
+function _aiAppendMsg(role, content) {
+  const msgs = document.getElementById('aiMessages');
+  const welcome = document.getElementById('aiWelcome');
+  if (welcome) welcome.remove();
+
+  const sug = document.getElementById('aiSuggestions');
+  if (sug) sug.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'ai-msg ' + role;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'ai-bubble';
+  bubble.textContent = content;
+
+  const time = document.createElement('div');
+  time.className = 'ai-msg-time';
+  time.textContent = _aiTime();
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(time);
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+  return wrap;
+}
+
+async function sendAIMessage() {
+  const input = document.getElementById('aiInput');
+  const msg = input.value.trim();
+  if (!msg || _aiLoading) return;
+
+  _aiLoading = true;
+  document.getElementById('aiSend').disabled = true;
+  input.value = '';
+  input.style.height = 'auto';
+
+  _aiAppendMsg('user', msg);
+
+  const typing = document.getElementById('aiTyping');
+  typing.classList.add('visible');
+  document.getElementById('aiMessages').scrollTop = 999999;
+
+  try {
+    const r = await fetch(API + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ message: msg })
+    });
+    const d = await r.json();
+    typing.classList.remove('visible');
+
+    if (d.reply) {
+      _aiAppendMsg('ai', d.reply);
+      if (!_aiOpen) {
+        _aiUnread++;
+        const badge = document.getElementById('aiFabBadge');
+        badge.textContent = _aiUnread;
+        badge.style.display = 'flex';
+      }
+    } else {
+      _aiAppendMsg('ai', '⚠️ ' + (d.error || 'Errore nella risposta. Riprova.'));
+    }
+  } catch (e) {
+    typing.classList.remove('visible');
+    _aiAppendMsg('ai', '⚠️ Connessione persa. Controlla la rete e riprova.');
+  }
+
+  _aiLoading = false;
+  document.getElementById('aiSend').disabled = false;
+  document.getElementById('aiMessages').scrollTop = 999999;
+}
+
+function _aiInit() {
+  const fab = document.getElementById('aiFab');
+  if (fab) fab.style.display = 'flex';
+
+  // Update context bar based on live state
+  const pos = (S && S.positions) ? S.positions.length : 0;
+  const running = S && S.running;
+  const posEl = document.getElementById('aiCtxPositions');
+  const sesEl = document.getElementById('aiCtxSession');
+  if (posEl) posEl.textContent = pos > 0 ? `📂 ${pos} posizione${pos > 1 ? 'i' : ''}` : '📂 Nessuna posizione';
+  if (sesEl) sesEl.textContent = running ? '⚙️ Sessione attiva' : '⚙️ Sessione ferma';
+}
+
+// Show AI fab after auth
+document.addEventListener('zentra:authed', _aiInit);
 </script>
 
 </body>
