@@ -12,7 +12,7 @@ import json
 import secrets
 import stripe
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Depends, Request, Response
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 import httpx
@@ -334,6 +334,8 @@ async def revx_request(method: str, path: str, body: dict = None,
 
 COINBASE_BASE = "https://api.coinbase.com"
 COINBASE_HOST = "api.coinbase.com"
+COINBASE_POSITION_PRICE_TTL = 10
+COINBASE_PRICE_WARN_TTL = 60
 
 def normalize_coinbase_api_secret(api_secret: str) -> str:
     """Normalizza private key Coinbase copiate con newline escapati."""
@@ -451,6 +453,45 @@ async def get_coinbase_product_price(product_id: str, api_key: str, api_secret: 
         if price > 0:
             return price
     raise ValueError(f"Prezzo Coinbase non disponibile per {product_id}")
+
+async def get_coinbase_quote_balance(api_key: str, api_secret: str) -> float:
+    accounts = await fetch_coinbase_accounts(api_key, api_secret)
+    return sum(
+        float(a.get("available") or 0)
+        for a in accounts
+        if a.get("currency") in ("USD", "USDC")
+    )
+
+async def resolve_coinbase_product(sym: str, api_key: str, api_secret: str) -> tuple[str, float]:
+    """Trova il prodotto Coinbase tradabile e il prezzo corrente per un asset base."""
+    last_exc = None
+    for product_id in (f"{sym}-USDC", f"{sym}-USD"):
+        try:
+            price = await get_coinbase_product_price(product_id, api_key, api_secret)
+            if price > 0:
+                return product_id, price
+        except Exception as e:
+            last_exc = e
+    raise ValueError(public_error(last_exc or Exception(f"Prezzo Coinbase non disponibile per {sym}"), max_len=120))
+
+async def refresh_coinbase_position_price(pos: dict, api_key: str, api_secret: str) -> tuple[float, bool]:
+    """Aggiorna il prezzo Coinbase con cache breve. In errore usa l'ultimo prezzo noto."""
+    now = time.time()
+    current = float(pos.get("currentPrice") or 0.0)
+    last_fetch = float(pos.get("_coinbase_price_last_fetch") or 0.0)
+    if current > 0 and now - last_fetch < COINBASE_POSITION_PRICE_TTL:
+        return current, False
+    try:
+        price = await get_coinbase_product_price(pos.get("symbol_pair", f"{pos['symbol']}-USDC"), api_key, api_secret)
+        pos["currentPrice"] = price
+        pos["_coinbase_price_last_fetch"] = now
+        pos.pop("_coinbase_price_error", None)
+        return price, True
+    except Exception as e:
+        pos["_coinbase_price_error"] = public_error(e, max_len=100)
+        if current > 0:
+            return current, False
+        raise
 
 def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -> dict:
     if not isinstance(product, dict):
@@ -604,6 +645,12 @@ _revoked_tokens: set = set()     # token revocati al logout
 candle_data: dict = {}
 _candles_last_update: float = 0
 CANDLE_UPDATE_INTERVAL = 60    # secondi (1 minuto)
+
+scanner_candle_data: dict = {}   # {tf: {sym: signal_indicators}}
+_scanner_candles_ts:  dict = {}   # {tf: last_update_timestamp}
+_scanner_refreshing: set = set()  # timeframe refresh già in corso
+SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
+VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
 
@@ -708,7 +755,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             r5, r15, r1h = await asyncio.gather(
                 client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "5m",  "limit": 150}),
                 client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "15m", "limit": 150}),
-                client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "1h",  "limit": 60}),
+                client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "1h",  "limit": 250}),
             )
             if r5.status_code == 451:
                 continue  # prova Binance US
@@ -724,7 +771,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
 
         if not isinstance(klines5, list) or not isinstance(klines15, list) or not isinstance(klines1h, list):
             return None
-        if len(klines5) < 100 or len(klines15) < 100 or len(klines1h) < 50:
+        if len(klines5) < 100 or len(klines15) < 100 or len(klines1h) < 200:
             return None
 
         closes5  = [float(k[4]) for k in klines5]
@@ -831,11 +878,13 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         macd_hist      = hist_list[-1] if hist_list else 0.0
         macd_hist_prev = hist_list[-2] if len(hist_list) >= 2 else 0.0
 
-        # Golden Cross / Death Cross: EMA20 vs EMA50 su 1h, crossover avvenuto nelle ultime 3 ore
-        ema50_1h_cur   = calc_ema(closes1h[:-1], 50)
-        ema50_1h_prev3 = calc_ema(closes1h[:-4], 50)
-        golden_cross   = (ema20_1h_cur > ema50_1h_cur) and (ema20_1h_prev3 < ema50_1h_prev3)
-        death_cross    = (ema20_1h_cur < ema50_1h_cur) and (ema20_1h_prev3 > ema50_1h_prev3)
+        # Golden Cross / Death Cross: EMA50 vs EMA200 su 1h (definizione classica), crossover nelle ultime 24 ore
+        ema50_1h_cur     = calc_ema(closes1h[:-1], 50)
+        ema200_1h_cur    = calc_ema(closes1h[:-1], 200)
+        ema50_1h_prev24  = calc_ema(closes1h[:-25], 50)
+        ema200_1h_prev24 = calc_ema(closes1h[:-25], 200)
+        golden_cross     = (ema50_1h_cur > ema200_1h_cur) and (ema50_1h_prev24 <= ema200_1h_prev24)
+        death_cross      = (ema50_1h_cur < ema200_1h_cur) and (ema50_1h_prev24 >= ema200_1h_prev24)
         # RSI: entrambi su 1h per coerenza (5m è troppo rumoroso per overbought)
         rsi_oversold   = rsi_1h < 30.0
         rsi_overbought = rsi_1h > 70.0
@@ -933,6 +982,147 @@ async def fetch_all_candles():
 
     _candles_last_update = time.time()
     print(f"Candele aggiornate: {updated}/{len(syms)}")
+
+# ──────────────────────────────────────────────────────────────
+#  SCANNER MULTI-TIMEFRAME
+# ──────────────────────────────────────────────────────────────
+
+async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: str = "1h") -> dict | None:
+    """Scarica candele per UN timeframe e calcola tutti i segnali scanner su quel TF."""
+    pair   = f"{sym}USDT"
+    limits = {"5m": 300, "15m": 300, "1h": 250, "4h": 250, "1d": 300}
+    limit  = limits.get(timeframe, 250)
+    try:
+        for base in (BINANCE_BASE, BINANCE_US_BASE):
+            r = await client.get(f"{base}/api/v3/klines",
+                                 params={"symbol": pair, "interval": timeframe, "limit": limit})
+            if r.status_code == 451:
+                continue
+            if r.status_code != 200:
+                return None
+            break
+        else:
+            return None
+
+        klines = r.json()
+        if not isinstance(klines, list) or len(klines) < 220:
+            return None
+
+        closes  = [float(k[4]) for k in klines]
+        volumes = [float(k[5]) for k in klines]
+        highs   = [float(k[2]) for k in klines]
+        lows    = [float(k[3]) for k in klines]
+        closed  = closes[:-1]   # escludi candela corrente ancora aperta
+
+        # EMA 20 / 50 / 200
+        ema20      = calc_ema(closed, 20)
+        ema50      = calc_ema(closed, 50)
+        ema200     = calc_ema(closed, 200)
+        ema50_p24  = calc_ema(closed[:-24], 50)
+        ema200_p24 = calc_ema(closed[:-24], 200)
+
+        # RSI(14)
+        rsi = calc_rsi(closed, 14)
+
+        # MACD(5,13,3)
+        e5   = calc_ema_list(closed, 5)
+        e13  = calc_ema_list(closed, 13)
+        off  = len(e5) - len(e13)
+        macd_line   = [e5[off + i] - e13[i] for i in range(len(e13))]
+        sig_list    = calc_ema_list(macd_line, 3)
+        off2        = len(macd_line) - len(sig_list)
+        hist        = [macd_line[off2 + i] - sig_list[i] for i in range(len(sig_list))]
+        macd_hist      = hist[-1]  if hist           else 0.0
+        macd_hist_prev = hist[-2]  if len(hist) >= 2 else 0.0
+
+        # TSI(25,13)
+        pc     = [closed[i] - closed[i-1] for i in range(1, len(closed))]
+        abs_pc = [abs(x) for x in pc]
+        e1 = calc_ema_list(pc,     25);  e2 = calc_ema_list(e1, 13)
+        a1 = calc_ema_list(abs_pc, 25);  a2 = calc_ema_list(a1, 13)
+        tsi_cur  = round(100 * e2[-1] / a2[-1], 2) if a2 and a2[-1]  != 0 else 0.0
+        tsi_prev = round(100 * e2[-2] / a2[-2], 2) if a2 and len(a2) >= 2 and a2[-2] != 0 else 0.0
+
+        # Volume
+        vol_last  = volumes[-2] if len(volumes) >= 2 else 0.0
+        vol_avg20 = sum(volumes[-21:-1]) / 20 if len(volumes) >= 21 else 0.0
+
+        # Breakout: ultima chiusura supera il massimo delle 10 candele chiuse precedenti
+        last_close = closed[-1]
+        high10     = max(highs[-12:-2]) if len(highs) >= 12 else max(highs[:-2])
+
+        vol_spike    = (vol_last > 2.0 * vol_avg20) if vol_avg20 > 0 else False
+        golden_cross = (ema50 > ema200) and (ema50_p24 <= ema200_p24)
+        death_cross  = (ema50 < ema200) and (ema50_p24 >= ema200_p24)
+
+        return {
+            "golden_cross":   golden_cross,
+            "death_cross":    death_cross,
+            "rsi_14":         round(rsi, 1),
+            "rsi_oversold":   rsi < 30.0,
+            "rsi_overbought": rsi > 70.0,
+            "ema_stack":      (last_close > ema20 > ema50) if ema50 > 0 else False,
+            "macd_hist":      round(macd_hist, 6),
+            "macd_hist_prev": round(macd_hist_prev, 6),
+            "macd_bullish":   macd_hist > 0 and macd_hist > macd_hist_prev,
+            "macd_bearish":   macd_hist < 0 and macd_hist < macd_hist_prev,
+            "tsi_bullish":    tsi_cur > 0 and tsi_cur >= tsi_prev,
+            "breakout":       last_close > high10 and vol_spike,
+            "volume_spike":   vol_spike,
+            "vol_ratio":      round(vol_last / vol_avg20, 2) if vol_avg20 > 0 else 0.0,
+            "sparkline":      closes[-25:-1],
+        }
+    except Exception as e:
+        print(f"Scanner candle error {sym} {timeframe}: {e}")
+        return None
+
+
+async def fetch_all_scanner_candles(timeframe: str = "1h"):
+    """Aggiorna scanner_candle_data[timeframe] per tutte le coin dell'universo."""
+    global _scanner_candles_ts
+    if timeframe not in VALID_TF:
+        return
+    if timeframe in _scanner_refreshing:
+        return
+    _scanner_refreshing.add(timeframe)
+    universe = sorted(
+        [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in _dynamic_universe],
+        key=lambda x: x[1].get("volume24h", 0), reverse=True
+    )
+    try:
+        if not _revx_pairs:
+            universe = universe[:CANDLE_UNIVERSE_SIZE]
+        if not universe:
+            return
+        syms = [s for s, _ in universe]
+        print(f"Scanner [{timeframe}] per {len(syms)} coin...")
+        async with httpx.AsyncClient(timeout=15) as client:
+            sem = asyncio.Semaphore(8)
+            async def _fetch(s):
+                async with sem:
+                    return await fetch_scanner_candles(s, client, timeframe)
+            results = await asyncio.gather(*[_fetch(s) for s in syms], return_exceptions=True)
+        if timeframe not in scanner_candle_data:
+            scanner_candle_data[timeframe] = {}
+        updated = 0
+        for sym, res in zip(syms, results):
+            if res and not isinstance(res, Exception):
+                scanner_candle_data[timeframe][sym] = res
+                updated += 1
+        _scanner_candles_ts[timeframe] = time.time()
+        print(f"Scanner [{timeframe}] aggiornate: {updated}/{len(syms)}")
+    finally:
+        _scanner_refreshing.discard(timeframe)
+
+
+def schedule_scanner_refresh(timeframe: str):
+    if timeframe not in VALID_TF or timeframe in _scanner_refreshing:
+        return
+    try:
+        asyncio.create_task(fetch_all_scanner_candles(timeframe))
+    except RuntimeError:
+        pass
+
 
 def get_momentum_signal(sym: str, current_price: float,
                         max_stop_pct: float = 0.02,
@@ -1191,9 +1381,7 @@ async def fetch_prices_coingecko():
                     for state in list(user_sessions.values()):
                         for pos in list(state["positions"]):
                             if pos["symbol"] == sym:
-                                pos["currentPrice"] = float(price)
-                                if float(price) > pos["highPrice"]:
-                                    pos["highPrice"] = float(price)
+                                update_position_from_external_price(pos, float(price))
                     fetched += 1
                 await asyncio.sleep(1.5)
         print(f"[CG] fetch_prices fallback: {fetched} coin aggiornate")
@@ -1251,9 +1439,7 @@ async def fetch_prices():
             for state in list(user_sessions.values()):
                 for pos in list(state["positions"]):
                     if pos["symbol"] == sym:
-                        pos["currentPrice"] = price
-                        if price > pos["highPrice"]:
-                            pos["highPrice"] = price
+                        update_position_from_external_price(pos, price)
 
     except Exception as e:
         print(f"Fetch error: {e}")
@@ -1284,6 +1470,14 @@ def add_log(state: dict, type_: str, label: str, desc: str):
     })
     if len(log) > 200:
         log.pop()
+
+def update_position_from_external_price(pos: dict, price: float):
+    """Aggiorna prezzi posizione da feed generici, ma non per Coinbase real."""
+    if pos.get("realMode") and pos.get("exchange") == "coinbase":
+        return
+    pos["currentPrice"] = price
+    if price > pos.get("highPrice", pos.get("entryPrice", price)):
+        pos["highPrice"] = price
 
 def unrealized_pnl(state: dict) -> float:
     total = 0.0
@@ -2149,8 +2343,26 @@ async def scan_and_trade(state: dict, user_id: int = None):
         # Posizione in attesa di GTC limit fill: salta SL/TP
         if pos.get("_sell_mode") == "retry_limit":
             continue
+        if pos.get("realMode") and pos.get("exchange") == "coinbase":
+            try:
+                cb_key = state.get("coinbase_api_key_agent", "")
+                cb_sec = state.get("coinbase_api_secret_agent", "")
+                if not cb_key:
+                    cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
+                _, fresh = await refresh_coinbase_position_price(pos, cb_key, cb_sec)
+                if not fresh and pos.get("_coinbase_price_error"):
+                    now_warn = time.time()
+                    if now_warn - float(pos.get("_coinbase_price_warn_ts") or 0.0) > COINBASE_PRICE_WARN_TTL:
+                        pos["_coinbase_price_warn_ts"] = now_warn
+                        add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo Coinbase non aggiornato — uso ultimo prezzo noto")
+            except Exception as e:
+                add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo Coinbase non disponibile — SL/TP saltato: {public_error(e, max_len=100)}")
+                continue
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
+
+        if pos.get("_manual_action_required") or pos.get("imported"):
+            continue
 
         max_hold_hours = cfg.get("maxHoldHours", 4)
 
@@ -2207,7 +2419,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
     alloc_pct   = min(cfg.get("allocPct", 0.20), 1.0)
     fixed_amt   = cfg.get("tradeAmountUsd", 0)
     capital_pct = cfg.get("capitalPct", 1.0)
-    TRADING_FEE = 0.0009  # RevX taker fee 0.09%
+    TRADING_FEE = 0.012 if state.get("use_coinbase") else 0.0009
 
     # Calcola il capitale tradabile dinamicamente
     if cfg.get("realMode", False) and state.get("use_revx", False):
@@ -2220,8 +2432,20 @@ async def scan_and_trade(state: dict, user_id: int = None):
             add_log(state, "info", "ERRORE", f"Fetch saldo RevX fallito: {e}")
             _update_pnl(state)
             return
+    elif cfg.get("realMode", False) and state.get("use_coinbase", False):
+        cb_key = state.get("coinbase_api_key_agent", "")
+        cb_sec = state.get("coinbase_api_secret_agent", "")
+        try:
+            if not cb_key:
+                cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
+            quote_balance = await get_coinbase_quote_balance(cb_key, cb_sec)
+            tradable_capital = quote_balance * capital_pct
+        except Exception as e:
+            add_log(state, "info", "ERRORE", f"Fetch saldo Coinbase fallito: {public_error(e, max_len=120)}")
+            _update_pnl(state)
+            return
     else:
-        # Coinbase real mode e SIM: usa currentCapital (aggiornato dopo ogni trade)
+        # SIM: usa currentCapital (aggiornato dopo ogni trade)
         tradable_capital = state["currentCapital"] * capital_pct
 
     # Ferma solo se il saldo reale non è sufficiente ad aprire nemmeno un trade minimo
@@ -2240,10 +2464,10 @@ async def scan_and_trade(state: dict, user_id: int = None):
             _update_pnl(state)
             return
         # Evita falso stop per settlement delay: se currentCapital è molto > saldo letto,
-        # il saldo è probabilmente in transito (RevX non ha ancora accreditato la vendita)
+        # il saldo è probabilmente in transito (RevX/Coinbase non ha ancora accreditato la vendita)
         elif state.get("currentCapital", 0) > tradable_capital * 5:
             add_log(state, "info", "INFO",
-                f"Saldo RevX in attesa settlement (${tradable_capital:.2f}) — attesa")
+                f"Saldo exchange in attesa settlement (${tradable_capital:.2f}) — attesa")
             _update_pnl(state)
             return
         else:
@@ -2796,7 +3020,12 @@ async def monitor_manual_positions(state: dict, user_id: int):
         if pos.get("exchange") == "coinbase" and pos.get("realMode"):
             try:
                 api_key, api_secret = await load_coinbase_keys_for_user(user_id)
-                cur = await get_coinbase_product_price(pos.get("symbol_pair", f"{sym}-USDC"), api_key, api_secret)
+                cur, fresh = await refresh_coinbase_position_price(pos, api_key, api_secret)
+                if not fresh and pos.get("_coinbase_price_error"):
+                    now_warn = time.time()
+                    if now_warn - float(pos.get("_coinbase_price_warn_ts") or 0.0) > COINBASE_PRICE_WARN_TTL:
+                        pos["_coinbase_price_warn_ts"] = now_warn
+                        add_log(state, "info", "WARN", f"{sym}: prezzo Coinbase non aggiornato — uso ultimo prezzo noto")
             except Exception as e:
                 add_log(state, "info", "WARN", f"{sym}: prezzo Coinbase non disponibile — monitor SL/TP saltato: {public_error(e, max_len=100)}")
                 continue
@@ -2807,6 +3036,9 @@ async def monitor_manual_positions(state: dict, user_id: int):
         pos["currentPrice"] = cur
         if cur > pos.get("peak_price", pos["entryPrice"]):
             pos["peak_price"] = cur
+
+        if pos.get("_manual_action_required") or pos.get("imported"):
+            continue
 
         if cur <= pos["stopPrice"]:
             await exit_position(state, pos, "STOP LOSS", user_id=user_id)
@@ -2872,9 +3104,7 @@ async def binance_ws_loop():
                             for state in list(user_sessions.values()):
                                 for pos in list(state["positions"]):
                                     if pos["symbol"] == sym:
-                                        pos["currentPrice"] = price
-                                        if price > pos["highPrice"]:
-                                            pos["highPrice"] = price
+                                        update_position_from_external_price(pos, price)
                     except Exception as parse_err:
                         print(f"[WS] Errore parsing: {parse_err}")
         except Exception as e:
@@ -2904,6 +3134,9 @@ async def background_loop():
 
             if time.time() - _candles_last_update >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_candles()
+
+            if time.time() - _scanner_candles_ts.get("1h", 0) >= CANDLE_UPDATE_INTERVAL:
+                await fetch_all_scanner_candles("1h")
 
             sessions_snapshot = list(user_sessions.items())
             for uid, state in sessions_snapshot:
@@ -3519,16 +3752,30 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
     }
 
 @app.get("/market")
-async def get_market(request: Request, user_id: int = Depends(get_current_user)):
+async def get_market(
+    request: Request,
+    user_id: int = Depends(get_current_user),
+    timeframe: str = Query("1h"),
+):
     check_rate_limit(request, max_attempts=60, window=60, key_suffix="market")
+
+    if timeframe not in VALID_TF:
+        timeframe = "1h"
+
+    # Refresh scanner cache per il TF richiesto se assente o scaduta
+    tf_age = time.time() - _scanner_candles_ts.get(timeframe, 0)
+    if tf_age > SCANNER_CACHE_TTL or timeframe not in scanner_candle_data:
+        schedule_scanner_refresh(timeframe)
+
     items = []
-    # Usa la configurazione della sessione dell'utente richiedente, altrimenti default
     user_state = user_sessions.get(user_id, {})
     active_cfg = user_state.get("config", {})
 
     max_stop_pct  = active_cfg.get("maxStopPct", 0.02)
     vol_mult      = active_cfg.get("volMultiplier", 1.2)
     momentum_thr  = active_cfg.get("momentumPct", 0.01)
+
+    tf_cache = scanner_candle_data.get(timeframe, {})
 
     for s, d in market_data.items():
         if d["price"] <= 0:
@@ -3551,28 +3798,25 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "signal":       sig["signal"],
             "reason":       sig["reason"],
         }
-        item["sparkline"] = candle_data.get(s, {}).get("sparkline", [])
-        cd = candle_data.get(s, {})
+        sc = tf_cache.get(s, {})
+        item["sparkline"] = sc.get("sparkline", candle_data.get(s, {}).get("sparkline", []))
         item["scanner"] = {
-            "rsi_14":        round(cd.get("rsi_14", 0.0), 1),
-            "macd_hist":     round(cd.get("macd_hist", 0.0), 6),
-            "golden_cross":  cd.get("golden_cross", False),
-            "death_cross":   cd.get("death_cross", False),
-            "rsi_oversold":  cd.get("rsi_oversold", False),
-            "rsi_overbought":cd.get("rsi_overbought", False),
-            "breakout":      sig.get("breakout_ok", False) and sig.get("vol_ok", False),
-            "macd_bullish":  sig.get("macd_ok", False),
-            "macd_bearish":  cd.get("macd_hist", 0.0) < 0 and cd.get("macd_hist", 0.0) < cd.get("macd_hist_prev", 0.0),
-            "tsi_bullish":   (cd.get("tsi_1h", -1) > 0 and cd.get("tsi_15m", -1) > 0
-                              and cd.get("tsi_15m", -1) >= cd.get("tsi_15m_prev", -1)),
-            # NUOVI:
-            "ema_stack":     (cd.get("last_close_5m", 0) > cd.get("ema20_1h", 0) > cd.get("ema50_1h", 0)) if cd.get("ema50_1h", 0) > 0 else False,
-            "volume_spike":  (cd.get("vol_last", 0) > 2.0 * cd.get("vol_avg_20", 0)) if cd.get("vol_avg_20", 0) > 0 else False,
-            "vol_ratio":     round(cd.get("vol_last", 0) / cd.get("vol_avg_20", 1), 2) if cd.get("vol_avg_20", 0) > 0 else 0.0,
+            "rsi_14":         sc.get("rsi_14",         0.0),
+            "macd_hist":      sc.get("macd_hist",       0.0),
+            "golden_cross":   sc.get("golden_cross",    False),
+            "death_cross":    sc.get("death_cross",     False),
+            "rsi_oversold":   sc.get("rsi_oversold",    False),
+            "rsi_overbought": sc.get("rsi_overbought",  False),
+            "breakout":       sc.get("breakout",        False),
+            "macd_bullish":   sc.get("macd_bullish",    False),
+            "macd_bearish":   sc.get("macd_bearish",    False),
+            "tsi_bullish":    sc.get("tsi_bullish",     False),
+            "ema_stack":      sc.get("ema_stack",       False),
+            "volume_spike":   sc.get("volume_spike",    False),
+            "vol_ratio":      sc.get("vol_ratio",       0.0),
         }
         items.append(item)
 
-    # Filtra sempre alle coin RevX se disponibili — sim e reale mostrano le stesse coin
     if _revx_pairs:
         items = [i for i in items if i["symbol"] in _revx_pairs]
 
@@ -4027,6 +4271,81 @@ async def load_coinbase_keys_for_user(user_id: int) -> tuple[str, str]:
     if not row or not row["coinbase_api_key"]:
         raise HTTPException(status_code=400, detail="Chiavi Coinbase non configurate")
     return decrypt_key(row["coinbase_api_key"]), decrypt_key(row["coinbase_api_secret"])
+
+async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 0.50) -> dict:
+    api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+    accounts = await fetch_coinbase_accounts(api_key, api_secret)
+    state = get_session(user_id)
+    existing = {
+        p.get("symbol")
+        for p in state.get("positions", [])
+        if p.get("realMode") and p.get("exchange") == "coinbase"
+    }
+    imported = []
+    skipped = []
+    for acc in accounts:
+        sym = str(acc.get("currency") or "").upper()
+        qty = float(acc.get("available") or 0)
+        if not sym or qty <= 0:
+            continue
+        if sym in STABLES:
+            skipped.append({"symbol": sym, "reason": "quote_or_stable"})
+            continue
+        if sym in existing:
+            skipped.append({"symbol": sym, "reason": "already_open"})
+            continue
+        try:
+            product_id, price = await resolve_coinbase_product(sym, api_key, api_secret)
+        except Exception as e:
+            print(f"[coinbase_sync] {sym}: {public_error(e, api_key, api_secret, max_len=120)}")
+            skipped.append({"symbol": sym, "reason": "product_or_price_unavailable"})
+            continue
+        value_usd = qty * price
+        if value_usd < min_value_usd:
+            skipped.append({"symbol": sym, "reason": "below_min_value", "value_usd": round(value_usd, 4)})
+            continue
+        pos = {
+            "symbol": sym,
+            "icon": market_data.get(sym, {}).get("icon", sym[:1]),
+            "entryPrice": price,
+            "currentPrice": price,
+            "highPrice": price,
+            "peak_price": price,
+            "size": round(value_usd, 2),
+            "size_remaining": round(value_usd, 2),
+            "tp1_hit": False,
+            "entryTime": datetime.utcnow().isoformat() + "Z",
+            "stopPrice": 0.0,
+            "tp1Price": price * 10,
+            "tp2Price": price * 10,
+            "R_pct": 0.0,
+            "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
+            "realMode": True,
+            "fee_pct": 0.012,
+            "qty_purchased": qty,
+            "exchange": "coinbase",
+            "symbol_pair": product_id,
+            "entry_usd": round(value_usd, 2),
+            "buy_fee_usd": 0.0,
+            "manual": True,
+            "imported": True,
+            "_manual_action_required": True,
+        }
+        state.setdefault("positions", []).append(pos)
+        state["currentCapital"] = max(0.0, float(state.get("currentCapital") or 0.0) - pos["size"])
+        existing.add(sym)
+        imported.append({
+            "symbol": sym,
+            "product_id": product_id,
+            "qty": qty,
+            "price": price,
+            "value_usd": round(value_usd, 2),
+        })
+    if imported:
+        labels = ", ".join(f"{p['symbol']} ${p['value_usd']:.2f}" for p in imported[:8])
+        add_log(state, "info", "SYNC COINBASE", f"Importate posizioni Coinbase: {labels}")
+        await persist_sessions()
+    return {"ok": True, "imported": imported, "skipped": skipped}
 
 async def get_coinbase_preflight_result(api_key: str, api_secret: str, sym: str, amount: float) -> dict:
     accounts = await fetch_coinbase_accounts(api_key, api_secret)
@@ -4651,6 +4970,18 @@ async def preflight_coinbase(request: Request, symbol: str = "BTC", amount_usd: 
     except Exception as e:
         return {"ok": False, "error": public_error(e, api_key, api_secret)}
 
+@app.post("/positions/sync_coinbase")
+async def sync_coinbase_positions(request: Request, min_value_usd: float = 0.50,
+                                  user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=300, key_suffix="sync_coinbase_positions")
+    min_value = max(0.10, min(float(min_value_usd or 0.50), 1000.0))
+    try:
+        return await sync_coinbase_positions_for_user(user_id, min_value_usd=min_value)
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"ok": False, "error": public_error(e)}
+
 @app.get("/exchange_price/{exchange}/{symbol}")
 async def exchange_price(exchange: str, symbol: str, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=30, window=60, key_suffix="exchange_price")
@@ -4690,15 +5021,11 @@ async def exchange_price(exchange: str, symbol: str, request: Request, user_id: 
         return {"price": price, "exchange": "revx", "symbol": sym, "source": "binance_fallback"}
     elif exchange == "coinbase":
         api_key, api_secret = await load_coinbase_keys_for_user(user_id)
-        last_exc = None
-        for product_id in (f"{sym}-USDC", f"{sym}-USD"):
-            try:
-                price = await get_coinbase_product_price(product_id, api_key, api_secret)
-                if price > 0:
-                    return {"price": price, "exchange": "coinbase", "symbol": sym, "product_id": product_id}
-            except Exception as e:
-                last_exc = e
-        raise HTTPException(status_code=404, detail=public_error(last_exc or Exception("Prezzo non disponibile"), api_key, api_secret))
+        try:
+            product_id, price = await resolve_coinbase_product(sym, api_key, api_secret)
+            return {"price": price, "exchange": "coinbase", "symbol": sym, "product_id": product_id}
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=public_error(e, api_key, api_secret))
     raise HTTPException(status_code=400, detail="Exchange non supportato")
 
 @app.get("/debug/revx_orders")

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production-87b2.up.railway.app https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production-87b2.up.railway.app https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -927,6 +927,7 @@ body.auth-active .tabbar { display:none !important; }
         <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Chiudi</button>
         <button class="modal-btn cancel" id="externalExchangeTestBtn" onclick="testExternalExchangeConnection()">Test connessione</button>
         <button class="modal-btn cancel" id="externalExchangePreflightBtn" onclick="preflightExternalExchange()">Preflight BTC $1</button>
+        <button class="modal-btn cancel" id="externalExchangeSyncBtn" onclick="syncCoinbasePositions()">Sync posizioni</button>
         <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroBuyBtn" onclick="microBuyCoinbase()">Compra BTC $1</button>
         <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroSellBtn" onclick="microSellCoinbase()">Vendi BTC test</button>
         <button class="modal-btn cancel" style="color:var(--red);border-color:var(--red)" onclick="disconnectExternalExchange()">Scollega</button>
@@ -1648,6 +1649,23 @@ body.auth-active .tabbar { display:none !important; }
       </button>
     </div>
 
+    <!-- Timeframe bar -->
+    <style>
+      .scan-tf-bar { display:flex; align-items:center; gap:6px; padding:14px 0 6px; flex-wrap:wrap; }
+      .scan-tf-label { font-size:10px; font-weight:700; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; margin-right:4px; }
+      .scan-tf-btn { background:none; border:1px solid var(--border); border-radius:6px; color:var(--text2); font-size:12px; font-weight:600; padding:5px 12px; cursor:pointer; transition:all .15s; font-family:inherit; line-height:1; }
+      .scan-tf-btn:hover { border-color:var(--blue); color:var(--blue); }
+      .scan-tf-btn.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+    </style>
+    <div class="scan-tf-bar">
+      <span class="scan-tf-label">Timeframe</span>
+      <button class="scan-tf-btn" onclick="selectTimeframe('5m',this)">5m</button>
+      <button class="scan-tf-btn" onclick="selectTimeframe('15m',this)">15m</button>
+      <button class="scan-tf-btn active" onclick="selectTimeframe('1h',this)">1h</button>
+      <button class="scan-tf-btn" onclick="selectTimeframe('4h',this)">4h</button>
+      <button class="scan-tf-btn" onclick="selectTimeframe('1d',this)">1d</button>
+    </div>
+
     <!-- Empty state -->
     <div id="scan-empty" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:56px 32px;text-align:center;">
       <div style="margin-bottom:24px;position:relative;display:inline-block">
@@ -2341,6 +2359,7 @@ function showExternalExchangeConfig(exchange) {
   document.getElementById('externalExchangeFormView').style.display = connected ? 'none' : '';
   const testBtn = document.getElementById('externalExchangeTestBtn');
   const preflightBtn = document.getElementById('externalExchangePreflightBtn');
+  const syncBtn = document.getElementById('externalExchangeSyncBtn');
   const microBuyBtn = document.getElementById('externalExchangeMicroBuyBtn');
   const microSellBtn = document.getElementById('externalExchangeMicroSellBtn');
   if (testBtn) {
@@ -2352,6 +2371,11 @@ function showExternalExchangeConfig(exchange) {
     preflightBtn.style.display = exchange === 'coinbase' ? '' : 'none';
     preflightBtn.disabled = false;
     preflightBtn.textContent = 'Preflight BTC $1';
+  }
+  if (syncBtn) {
+    syncBtn.style.display = exchange === 'coinbase' ? '' : 'none';
+    syncBtn.disabled = false;
+    syncBtn.textContent = 'Sync posizioni';
   }
   if (microBuyBtn) {
     microBuyBtn.style.display = exchange === 'coinbase' ? '' : 'none';
@@ -2569,6 +2593,50 @@ async function microBuyCoinbase() {
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Compra BTC $1';
+    }
+  }
+}
+
+async function syncCoinbasePositions() {
+  const box = document.getElementById('externalExchangeTestResult');
+  const btn = document.getElementById('externalExchangeSyncBtn');
+  if (_activeExternalExchange !== 'coinbase') return;
+  if (!confirm('Importare in Zentra le posizioni Coinbase aperte non ancora tracciate?')) return;
+  if (box) {
+    box.style.display = '';
+    box.style.color = 'var(--text2)';
+    box.textContent = 'Sincronizzazione posizioni Coinbase...';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sync...';
+  }
+  try {
+    const r = await fetch(API + '/positions/sync_coinbase', {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Sync Coinbase fallita');
+    const imported = d.imported || [];
+    const skipped = d.skipped || [];
+    if (box) {
+      box.style.color = imported.length ? 'var(--green)' : 'var(--text2)';
+      const importedText = imported.length
+        ? imported.map(p => `${p.symbol} $${Number(p.value_usd || 0).toFixed(2)}`).join(' · ')
+        : 'nessuna nuova posizione';
+      box.textContent = `Sync completata: ${importedText}. Saltate: ${skipped.length}.`;
+    }
+    await poll();
+  } catch(e) {
+    if (box) {
+      box.style.color = 'var(--red)';
+      box.textContent = e.message || 'Sync Coinbase fallita';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Sync posizioni';
     }
   }
 }
@@ -2853,11 +2921,12 @@ function updateSimToggle() {
   const toggle = document.getElementById('simModeToggle');
   const row = document.getElementById('simModeRow');
   // Mostra toggle simulazione solo se ha almeno un exchange reale configurato
-  if (row) row.style.display = _hasRevxKeys ? 'flex' : 'none';
+  const hasAnyRealExchange = _hasRevxKeys || (_exchangeKeys && _exchangeKeys.coinbase);
+  if (row) row.style.display = hasAnyRealExchange ? 'flex' : 'none';
   if (toggle) toggle.classList.toggle('on', _simMode);
   const sbSimToggle = document.getElementById('sbSimToggle');
   const sbSimRow = document.getElementById('sbSimRow');
-  if (sbSimRow) sbSimRow.style.display = _hasRevxKeys ? 'flex' : 'none';
+  if (sbSimRow) sbSimRow.style.display = hasAnyRealExchange ? 'flex' : 'none';
   if (sbSimToggle) sbSimToggle.classList.toggle('on', _simMode);
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
@@ -3331,6 +3400,8 @@ function renderAgentExchangeOptions() {
   if (!options.length) options.push(['revx', 'Revolut X']);
   sel.innerHTML = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   if (options.some(([v]) => v === prev)) sel.value = prev;
+  else sel.value = options[0][0];
+  updateSimToggle();
 }
 
 async function onAgentExchangeChange() {
@@ -3615,7 +3686,7 @@ async function poll() {
     const [sRes, tRes, mRes] = await Promise.all([
       fetch(API + '/status', { headers:authHeaders(), ...noCache }),
       fetch(API + '/trades', { headers:authHeaders(), ...noCache }),
-      fetch(API + '/market', { headers:authHeaders(), ...noCache }),
+      fetch(API + '/market?timeframe=' + _scanTimeframe, { headers:authHeaders(), ...noCache }),
     ]);
     if (sRes.status === 401) {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
@@ -4807,10 +4878,9 @@ function closeDrawer() {
 
 async function refreshMarket() {
   try {
-    const r = await fetch(API + '/market', { headers: authHeaders() });
+    const r = await fetch(API + '/market?timeframe=' + _scanTimeframe, { headers: authHeaders() });
     const d = await r.json();
     mktData = d.market || [];
-    // universeCount rimosso dall'header
     renderMarket();
   } catch(e) {}
 }
@@ -4946,7 +5016,8 @@ function renderExternalExchangeStatus(exchange) {
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
-let _scanSignal = '';
+let _scanSignal    = '';
+let _scanTimeframe = '1h';
 
 const _scanSignalFn = {
   breakout:      c => c.scanner?.breakout,
@@ -4978,7 +5049,7 @@ const _scanInfoData = {
   },
   golden_cross: {
     title: 'Golden Cross',
-    body: 'La EMA20 supera la EMA50 verso l\'alto. È un segnale di inversione bullish a medio termine: il momentum di breve ha preso il sopravvento su quello di lungo.'
+    body: 'La EMA50 supera la EMA200 verso l\'alto su timeframe orario. È la definizione classica di Golden Cross: il trend di medio periodo ha invertito al rialzo rispetto al lungo periodo.'
   },
   ema_stack: {
     title: 'EMA Stack',
@@ -5047,7 +5118,8 @@ function showScanInfo(e, key) {
 }
 
 function resetScannerState() {
-  _scanSignal = '';
+  _scanSignal    = '';
+  _scanTimeframe = '1h';
   // Riporta al tab Trend preselezionato, nessun segnale attivo
   document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active'));
   const trendTab = document.querySelector('.scan-tab[onclick*="trend"]');
@@ -5056,6 +5128,10 @@ function resetScannerState() {
   const trendPanel = document.getElementById('signals-trend');
   if (trendPanel) trendPanel.classList.add('active');
   document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
+  // Reset timeframe bar a 1h
+  document.querySelectorAll('.scan-tf-btn').forEach(b => b.classList.remove('active'));
+  const tfBtn = document.querySelector('.scan-tf-btn[onclick*="\'1h\'"]');
+  if (tfBtn) tfBtn.classList.add('active');
   // Mostra empty state, nascondi risultati
   const empty = document.getElementById('scan-empty');
   const card  = document.getElementById('scan-results-card');
@@ -5093,6 +5169,17 @@ async function selectScanSignal(key, el) {
   if (list) list.innerHTML = '<div class="empty"><div class="empty-text">Caricamento...</div></div>';
   await refreshMarket();
   renderScanner();
+}
+
+async function selectTimeframe(tf, el) {
+  _scanTimeframe = tf;
+  document.querySelectorAll('.scan-tf-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  // Se c'è un segnale attivo, ri-esegui lo scan sul nuovo TF
+  if (_scanSignal) {
+    const activeCard = document.querySelector('.scan-card.active');
+    if (activeCard) await selectScanSignal(_scanSignal, activeCard);
+  }
 }
 
 function updateScannerPricesInPlace() {
@@ -5171,20 +5258,70 @@ function renderScanner() {
   }).join('');
 }
 
+const SIGNAL_STUDIES = {
+  golden_cross:   [{id:'MAExp@tv-basicstudies',inputs:{length:50}},{id:'MAExp@tv-basicstudies',inputs:{length:200}}],
+  death_cross:    [{id:'MAExp@tv-basicstudies',inputs:{length:50}},{id:'MAExp@tv-basicstudies',inputs:{length:200}}],
+  ema_stack:      [{id:'MAExp@tv-basicstudies',inputs:{length:20}},{id:'MAExp@tv-basicstudies',inputs:{length:50}}],
+  rsi_oversold:   ['RSI@tv-basicstudies'],
+  rsi_overbought: ['RSI@tv-basicstudies'],
+  macd_bullish:   ['MACD@tv-basicstudies'],
+  macd_bearish:   ['MACD@tv-basicstudies'],
+  tsi_bullish:    ['TSI@tv-basicstudies'],
+  breakout:       [],
+  volume_spike:   []
+};
+const SIGNAL_INTERVAL = {
+  golden_cross: '60', death_cross: '60', ema_stack: '60',
+  rsi_oversold: '60', rsi_overbought: '60',
+  macd_bullish: '5',  macd_bearish: '5',
+  tsi_bullish:  '60', breakout: '5',  volume_spike: '5'
+};
+let _tvWidget = null;
+
 function openTVChart(symbol) {
-  const base = symbol.replace('USDT','');
+  const base = symbol.replace('USDT', '');
   document.getElementById('tvSymbolLabel').textContent = base + ' / USDT';
   document.getElementById('tvModal').style.display = 'flex';
   const container = document.getElementById('tvWidgetContainer');
   const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-  // Senza prefisso exchange: TradingView trova l'exchange più liquido automaticamente.
-  // Se la coin non è su Binance TV, trova BYBIT/MEXC/OKX invece di mostrare errore.
-  const sym = encodeURIComponent(`${base}USDT`);
-  container.innerHTML = `<iframe src="https://s.tradingview.com/widgetembed/?symbol=${sym}&interval=5&theme=${theme}&style=1&locale=it&hidesidetoolbar=0&hidetoptoolbar=0&saveimage=0&allow_symbol_change=1" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;
+  const studies  = SIGNAL_STUDIES[_scanSignal] || [];
+  const TF_MAP   = {'5m':'5','15m':'15','1h':'60','4h':'240','1d':'1D'};
+  const interval = TF_MAP[_scanTimeframe] || SIGNAL_INTERVAL[_scanSignal] || '60';
+
+  if (_tvWidget) { try { _tvWidget.remove(); } catch(e) {} _tvWidget = null; }
+  container.innerHTML = '';
+
+  function _createWidget() {
+    _tvWidget = new TradingView.widget({
+      autosize: true,
+      symbol: `${base}USDT`,
+      interval: interval,
+      timezone: 'Etc/UTC',
+      theme: theme,
+      style: '1',
+      locale: 'it',
+      enable_publishing: false,
+      allow_symbol_change: true,
+      container_id: 'tvWidgetContainer',
+      studies: studies,
+      hide_side_toolbar: false,
+      hide_top_toolbar: false
+    });
+  }
+
+  if (typeof TradingView !== 'undefined') {
+    _createWidget();
+  } else {
+    const s = document.createElement('script');
+    s.src = 'https://s3.tradingview.com/tv.js';
+    s.onload = _createWidget;
+    document.head.appendChild(s);
+  }
 }
 
 function closeTVChart() {
   document.getElementById('tvModal').style.display = 'none';
+  if (_tvWidget) { try { _tvWidget.remove(); } catch(e) {} _tvWidget = null; }
   const c = document.getElementById('tvWidgetContainer');
   if (c) c.innerHTML = '';
 }

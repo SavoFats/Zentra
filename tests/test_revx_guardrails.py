@@ -39,6 +39,7 @@ def _install_import_stubs():
     fastapi.FastAPI = _FastAPI
     fastapi.HTTPException = _HTTPException
     fastapi.Depends = lambda dep=None: dep
+    fastapi.Query = lambda default=None, *args, **kwargs: default
     fastapi.Request = type("Request", (), {})
     fastapi.Response = type("Response", (), {"__init__": lambda self, *a, **k: None})
     sys.modules.setdefault("fastapi", fastapi)
@@ -215,6 +216,25 @@ class RevxGuardrailTests(unittest.TestCase):
         best = sorted([usd, usdc], key=lambda c: (len(c.get("blockers", [])), -float(c.get("available_quote") or 0)))[0]
         self.assertEqual(best["product_id"], "BTC-USDC")
         self.assertTrue(best["ok"])
+
+    def test_coinbase_quote_balance_sums_usd_and_usdc(self):
+        main = self.main
+
+        async def fake_fetch_accounts(api_key, api_secret):
+            return [
+                {"currency": "USD", "available": 2.0},
+                {"currency": "USDC", "available": 3.5},
+                {"currency": "EUR", "available": 9.0},
+            ]
+
+        original = main.fetch_coinbase_accounts
+        main.fetch_coinbase_accounts = fake_fetch_accounts
+        try:
+            balance = asyncio.run(main.get_coinbase_quote_balance("key", "secret"))
+        finally:
+            main.fetch_coinbase_accounts = original
+
+        self.assertEqual(balance, 5.5)
 
     def test_extract_coinbase_order_id_accepts_success_response(self):
         order_id = self.main.extract_coinbase_order_id({
@@ -423,6 +443,163 @@ class RevxGuardrailTests(unittest.TestCase):
 
         self.assertIn(pos, state["positions"])
         self.assertEqual(pos["currentPrice"], 0.1324)
+
+    def test_external_market_price_does_not_overwrite_real_coinbase_position(self):
+        pos = {
+            "symbol": "OCEAN",
+            "entryPrice": 0.1315,
+            "currentPrice": 0.1324,
+            "highPrice": 0.1324,
+            "realMode": True,
+            "exchange": "coinbase",
+        }
+
+        self.main.update_position_from_external_price(pos, 0.6123)
+
+        self.assertEqual(pos["currentPrice"], 0.1324)
+        self.assertEqual(pos["highPrice"], 0.1324)
+
+    def test_sync_coinbase_positions_imports_missing_base_balance(self):
+        main = self.main
+        state = main.make_session()
+        state["capital"] = 10.0
+        state["currentCapital"] = 8.0
+        existing = {
+            "symbol": "BTC",
+            "realMode": True,
+            "exchange": "coinbase",
+        }
+        state["positions"].append(existing)
+
+        async def fake_load_keys(user_id):
+            self.assertEqual(user_id, 123)
+            return "api-key", "api-secret"
+
+        async def fake_fetch_accounts(api_key, api_secret):
+            return [
+                {"currency": "USDC", "available": 5.0},
+                {"currency": "BTC", "available": 0.001},
+                {"currency": "OCEAN", "available": 7.5},
+                {"currency": "DUST", "available": 0.01},
+            ]
+
+        async def fake_resolve_product(sym, api_key, api_secret):
+            prices = {"OCEAN": ("OCEAN-USDC", 0.1324), "DUST": ("DUST-USDC", 0.01)}
+            return prices[sym]
+
+        async def fake_persist():
+            return None
+
+        original_sessions = main.user_sessions
+        original_load = main.load_coinbase_keys_for_user
+        original_fetch = main.fetch_coinbase_accounts
+        original_resolve = main.resolve_coinbase_product
+        original_persist = main.persist_sessions
+        original_market = main.market_data
+        main.user_sessions = {123: state}
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.fetch_coinbase_accounts = fake_fetch_accounts
+        main.resolve_coinbase_product = fake_resolve_product
+        main.persist_sessions = fake_persist
+        main.market_data = {"OCEAN": {"icon": "O"}}
+        try:
+            result = asyncio.run(main.sync_coinbase_positions_for_user(123, min_value_usd=0.50))
+        finally:
+            main.user_sessions = original_sessions
+            main.load_coinbase_keys_for_user = original_load
+            main.fetch_coinbase_accounts = original_fetch
+            main.resolve_coinbase_product = original_resolve
+            main.persist_sessions = original_persist
+            main.market_data = original_market
+
+        self.assertTrue(result["ok"])
+        self.assertEqual([p["symbol"] for p in result["imported"]], ["OCEAN"])
+        self.assertEqual(len(state["positions"]), 2)
+        imported = state["positions"][1]
+        self.assertTrue(imported["realMode"])
+        self.assertEqual(imported["exchange"], "coinbase")
+        self.assertEqual(imported["symbol_pair"], "OCEAN-USDC")
+        self.assertEqual(imported["qty_purchased"], 7.5)
+        self.assertTrue(imported["manual"])
+        self.assertTrue(imported["imported"])
+        self.assertTrue(imported["_manual_action_required"])
+        self.assertAlmostEqual(state["currentCapital"], 7.01, places=2)
+        skipped = {item["symbol"]: item["reason"] for item in result["skipped"]}
+        self.assertEqual(skipped["USDC"], "quote_or_stable")
+        self.assertEqual(skipped["BTC"], "already_open")
+        self.assertEqual(skipped["DUST"], "below_min_value")
+
+    def test_refresh_coinbase_position_price_uses_stale_price_on_api_error(self):
+        main = self.main
+        pos = {
+            "symbol": "OCEAN",
+            "symbol_pair": "OCEAN-USDC",
+            "currentPrice": 0.1324,
+            "_coinbase_price_last_fetch": 0,
+        }
+
+        async def fake_price(*args, **kwargs):
+            raise Exception("Coinbase timeout")
+
+        original_price = main.get_coinbase_product_price
+        main.get_coinbase_product_price = fake_price
+        try:
+            price, fresh = asyncio.run(main.refresh_coinbase_position_price(pos, "api-key", "api-secret"))
+        finally:
+            main.get_coinbase_product_price = original_price
+
+        self.assertEqual(price, 0.1324)
+        self.assertFalse(fresh)
+        self.assertIn("Coinbase timeout", pos["_coinbase_price_error"])
+
+    def test_imported_coinbase_position_is_not_auto_closed_by_manual_monitor(self):
+        main = self.main
+        state = main.make_session()
+        pos = {
+            "symbol": "OCEAN",
+            "entryPrice": 0.1324,
+            "currentPrice": 0.1324,
+            "highPrice": 0.1324,
+            "peak_price": 0.1324,
+            "size": 1.0,
+            "size_remaining": 1.0,
+            "entryTime": "2026-06-02T17:35:00Z",
+            "stopPrice": 0.0,
+            "tp1Price": 0.20,
+            "realMode": True,
+            "exchange": "coinbase",
+            "symbol_pair": "OCEAN-USDC",
+            "qty_purchased": 7.5,
+            "manual": True,
+            "imported": True,
+            "_manual_action_required": True,
+        }
+        state["positions"].append(pos)
+
+        async def fake_load_keys(user_id):
+            return "api-key", "api-secret"
+
+        async def fake_coinbase_price(product_id, api_key, api_secret):
+            return 0.25
+
+        async def fail_exit(*args, **kwargs):
+            raise AssertionError("Imported Coinbase position should not auto-close")
+
+        original_load = main.load_coinbase_keys_for_user
+        original_price = main.get_coinbase_product_price
+        original_exit = main.exit_position
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.get_coinbase_product_price = fake_coinbase_price
+        main.exit_position = fail_exit
+        try:
+            asyncio.run(main.monitor_manual_positions(state, user_id=123))
+        finally:
+            main.load_coinbase_keys_for_user = original_load
+            main.get_coinbase_product_price = original_price
+            main.exit_position = original_exit
+
+        self.assertIn(pos, state["positions"])
+        self.assertEqual(pos["currentPrice"], 0.25)
 
     def test_coinbase_exit_keeps_position_when_available_balance_is_zero(self):
         main = self.main
