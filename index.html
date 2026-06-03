@@ -1603,7 +1603,7 @@ body.auth-active .tabbar { display:none !important; }
 
     <!-- Trend signals -->
     <div class="scan-signals active" id="signals-trend">
-      <button class="scan-card active" id="scard-breakout" onclick="selectScanSignal('breakout',this)">
+      <button class="scan-card" id="scard-breakout" onclick="selectScanSignal('breakout',this)">
         <span class="scan-info-btn" onclick="showScanInfo(event,'breakout')">i</span>
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><line x1="4" y1="24" x2="46" y2="24" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.4"/><rect x="6" y="27" width="5" height="7" rx="1" fill="currentColor" opacity="0.25"/><rect x="16" y="25" width="5" height="9" rx="1" fill="currentColor" opacity="0.35"/><rect x="26" y="19" width="5" height="13" rx="1" fill="currentColor" opacity="0.55"/><line x1="39" y1="22" x2="39" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="35,11 39,7 43,11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div>
         <div class="scan-card-label">Breakout</div>
@@ -1648,8 +1648,42 @@ body.auth-active .tabbar { display:none !important; }
       </button>
     </div>
 
+    <!-- Empty state -->
+    <div id="scan-empty" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:56px 32px;text-align:center;">
+      <div style="margin-bottom:24px;position:relative;display:inline-block">
+        <style>
+          @keyframes radar-ring { 0%{r:12;opacity:.7} 100%{r:44;opacity:0} }
+          @keyframes radar-ring2{ 0%{r:12;opacity:.5} 100%{r:44;opacity:0} }
+          @keyframes scan-pulse { 0%,100%{opacity:.9} 50%{opacity:.4} }
+          .rr1 { animation: radar-ring  2.2s ease-out infinite; }
+          .rr2 { animation: radar-ring2 2.2s ease-out .9s infinite; }
+          .scan-dot { animation: scan-pulse 1.8s ease-in-out infinite; }
+        </style>
+        <svg width="96" height="96" viewBox="0 0 96 96" fill="none">
+          <!-- radar rings -->
+          <circle class="rr1" cx="48" cy="48" r="12" stroke="var(--blue)" stroke-width="1.5" fill="none"/>
+          <circle class="rr2" cx="48" cy="48" r="12" stroke="var(--blue)" stroke-width="1" fill="none"/>
+          <!-- static rings -->
+          <circle cx="48" cy="48" r="28" stroke="var(--blue)" stroke-width="1" stroke-dasharray="4 3" fill="none" opacity="0.2"/>
+          <circle cx="48" cy="48" r="40" stroke="var(--blue)" stroke-width="1" stroke-dasharray="4 3" fill="none" opacity="0.12"/>
+          <!-- crosshair -->
+          <line x1="48" y1="8"  x2="48" y2="88" stroke="var(--blue)" stroke-width="1" opacity="0.12"/>
+          <line x1="8"  y1="48" x2="88" y2="48" stroke="var(--blue)" stroke-width="1" opacity="0.12"/>
+          <!-- center dot -->
+          <circle cx="48" cy="48" r="4" fill="var(--blue)" opacity="0.8"/>
+          <circle cx="48" cy="48" r="7" stroke="var(--blue)" stroke-width="1.5" fill="none" opacity="0.5"/>
+          <!-- signal dots -->
+          <circle class="scan-dot" cx="62" cy="34" r="3" fill="var(--blue)" opacity="0.7"/>
+          <circle class="scan-dot" cx="30" cy="58" r="2.5" fill="var(--blue)" opacity="0.5" style="animation-delay:.4s"/>
+          <circle class="scan-dot" cx="68" cy="55" r="2" fill="var(--blue)" opacity="0.45" style="animation-delay:.9s"/>
+        </svg>
+      </div>
+      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:10px">Seleziona un segnale</div>
+      <div style="font-size:13px;color:var(--text2);max-width:260px;margin:0 auto;line-height:1.6">Scegli un indicatore dal menu sopra per avviare la scansione in tempo reale.</div>
+    </div>
+
     <!-- Risultati -->
-    <div class="card">
+    <div class="card" id="scan-results-card" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-size:15px;font-weight:700" id="scanResultsTitle">Breakout</div>
         <div id="scanCount" style="font-size:11px;font-weight:700;color:#fff;background:var(--blue);padding:4px 12px;border-radius:20px">0 found</div>
@@ -4900,7 +4934,7 @@ function renderExternalExchangeStatus(exchange) {
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
-let _scanSignal = 'breakout';
+let _scanSignal = '';
 
 const _scanSignalFn = {
   breakout:      c => c.scanner?.breakout,
@@ -5006,6 +5040,13 @@ function selectScanCluster(cat, el) {
   document.querySelectorAll('.scan-signals').forEach(s => s.classList.remove('active'));
   const panel = document.getElementById('signals-' + cat);
   if (panel) panel.classList.add('active');
+  // Reset signal selection when switching cluster
+  document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
+  _scanSignal = '';
+  const empty = document.getElementById('scan-empty');
+  const card  = document.getElementById('scan-results-card');
+  if (empty) empty.style.display = '';
+  if (card)  card.style.display  = 'none';
 }
 
 async function selectScanSignal(key, el) {
@@ -5014,6 +5055,11 @@ async function selectScanSignal(key, el) {
   el.classList.add('active');
   const titleEl = document.getElementById('scanResultsTitle');
   if (titleEl) titleEl.textContent = _scanLabelMap[key] || key;
+  // Show results card, hide empty state
+  const empty = document.getElementById('scan-empty');
+  const card  = document.getElementById('scan-results-card');
+  if (empty) empty.style.display = 'none';
+  if (card)  card.style.display  = '';
   const list = document.getElementById('scannerList');
   if (list) list.innerHTML = '<div class="empty"><div class="empty-text">Caricamento...</div></div>';
   await refreshMarket();
