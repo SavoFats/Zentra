@@ -39,6 +39,7 @@ def _install_import_stubs():
     fastapi.FastAPI = _FastAPI
     fastapi.HTTPException = _HTTPException
     fastapi.Depends = lambda dep=None: dep
+    fastapi.Query = lambda default=None, *args, **kwargs: default
     fastapi.Request = type("Request", (), {})
     fastapi.Response = type("Response", (), {"__init__": lambda self, *a, **k: None})
     sys.modules.setdefault("fastapi", fastapi)
@@ -215,6 +216,25 @@ class RevxGuardrailTests(unittest.TestCase):
         best = sorted([usd, usdc], key=lambda c: (len(c.get("blockers", [])), -float(c.get("available_quote") or 0)))[0]
         self.assertEqual(best["product_id"], "BTC-USDC")
         self.assertTrue(best["ok"])
+
+    def test_coinbase_quote_balance_sums_usd_and_usdc(self):
+        main = self.main
+
+        async def fake_fetch_accounts(api_key, api_secret):
+            return [
+                {"currency": "USD", "available": 2.0},
+                {"currency": "USDC", "available": 3.5},
+                {"currency": "EUR", "available": 9.0},
+            ]
+
+        original = main.fetch_coinbase_accounts
+        main.fetch_coinbase_accounts = fake_fetch_accounts
+        try:
+            balance = asyncio.run(main.get_coinbase_quote_balance("key", "secret"))
+        finally:
+            main.fetch_coinbase_accounts = original
+
+        self.assertEqual(balance, 5.5)
 
     def test_extract_coinbase_order_id_accepts_success_response(self):
         order_id = self.main.extract_coinbase_order_id({
@@ -423,6 +443,21 @@ class RevxGuardrailTests(unittest.TestCase):
 
         self.assertIn(pos, state["positions"])
         self.assertEqual(pos["currentPrice"], 0.1324)
+
+    def test_external_market_price_does_not_overwrite_real_coinbase_position(self):
+        pos = {
+            "symbol": "OCEAN",
+            "entryPrice": 0.1315,
+            "currentPrice": 0.1324,
+            "highPrice": 0.1324,
+            "realMode": True,
+            "exchange": "coinbase",
+        }
+
+        self.main.update_position_from_external_price(pos, 0.6123)
+
+        self.assertEqual(pos["currentPrice"], 0.1324)
+        self.assertEqual(pos["highPrice"], 0.1324)
 
     def test_coinbase_exit_keeps_position_when_available_balance_is_zero(self):
         main = self.main

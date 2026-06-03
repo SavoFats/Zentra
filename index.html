@@ -2870,11 +2870,12 @@ function updateSimToggle() {
   const toggle = document.getElementById('simModeToggle');
   const row = document.getElementById('simModeRow');
   // Mostra toggle simulazione solo se ha almeno un exchange reale configurato
-  if (row) row.style.display = _hasRevxKeys ? 'flex' : 'none';
+  const hasAnyRealExchange = _hasRevxKeys || (_exchangeKeys && _exchangeKeys.coinbase);
+  if (row) row.style.display = hasAnyRealExchange ? 'flex' : 'none';
   if (toggle) toggle.classList.toggle('on', _simMode);
   const sbSimToggle = document.getElementById('sbSimToggle');
   const sbSimRow = document.getElementById('sbSimRow');
-  if (sbSimRow) sbSimRow.style.display = _hasRevxKeys ? 'flex' : 'none';
+  if (sbSimRow) sbSimRow.style.display = hasAnyRealExchange ? 'flex' : 'none';
   if (sbSimToggle) sbSimToggle.classList.toggle('on', _simMode);
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
@@ -3348,6 +3349,8 @@ function renderAgentExchangeOptions() {
   if (!options.length) options.push(['revx', 'Revolut X']);
   sel.innerHTML = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   if (options.some(([v]) => v === prev)) sel.value = prev;
+  else sel.value = options[0][0];
+  updateSimToggle();
 }
 
 async function onAgentExchangeChange() {

@@ -452,6 +452,14 @@ async def get_coinbase_product_price(product_id: str, api_key: str, api_secret: 
             return price
     raise ValueError(f"Prezzo Coinbase non disponibile per {product_id}")
 
+async def get_coinbase_quote_balance(api_key: str, api_secret: str) -> float:
+    accounts = await fetch_coinbase_accounts(api_key, api_secret)
+    return sum(
+        float(a.get("available") or 0)
+        for a in accounts
+        if a.get("currency") in ("USD", "USDC")
+    )
+
 def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -> dict:
     if not isinstance(product, dict):
         raise ValueError("Formato prodotto Coinbase non riconosciuto")
@@ -607,6 +615,7 @@ CANDLE_UPDATE_INTERVAL = 60    # secondi (1 minuto)
 
 scanner_candle_data: dict = {}   # {tf: {sym: signal_indicators}}
 _scanner_candles_ts:  dict = {}   # {tf: last_update_timestamp}
+_scanner_refreshing: set = set()  # timeframe refresh già in corso
 SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
 VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
@@ -1038,31 +1047,48 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
 async def fetch_all_scanner_candles(timeframe: str = "1h"):
     """Aggiorna scanner_candle_data[timeframe] per tutte le coin dell'universo."""
     global _scanner_candles_ts
+    if timeframe not in VALID_TF:
+        return
+    if timeframe in _scanner_refreshing:
+        return
+    _scanner_refreshing.add(timeframe)
     universe = sorted(
         [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in _dynamic_universe],
         key=lambda x: x[1].get("volume24h", 0), reverse=True
     )
-    if not _revx_pairs:
-        universe = universe[:CANDLE_UNIVERSE_SIZE]
-    if not universe:
+    try:
+        if not _revx_pairs:
+            universe = universe[:CANDLE_UNIVERSE_SIZE]
+        if not universe:
+            return
+        syms = [s for s, _ in universe]
+        print(f"Scanner [{timeframe}] per {len(syms)} coin...")
+        async with httpx.AsyncClient(timeout=15) as client:
+            sem = asyncio.Semaphore(8)
+            async def _fetch(s):
+                async with sem:
+                    return await fetch_scanner_candles(s, client, timeframe)
+            results = await asyncio.gather(*[_fetch(s) for s in syms], return_exceptions=True)
+        if timeframe not in scanner_candle_data:
+            scanner_candle_data[timeframe] = {}
+        updated = 0
+        for sym, res in zip(syms, results):
+            if res and not isinstance(res, Exception):
+                scanner_candle_data[timeframe][sym] = res
+                updated += 1
+        _scanner_candles_ts[timeframe] = time.time()
+        print(f"Scanner [{timeframe}] aggiornate: {updated}/{len(syms)}")
+    finally:
+        _scanner_refreshing.discard(timeframe)
+
+
+def schedule_scanner_refresh(timeframe: str):
+    if timeframe not in VALID_TF or timeframe in _scanner_refreshing:
         return
-    syms = [s for s, _ in universe]
-    print(f"Scanner [{timeframe}] per {len(syms)} coin...")
-    async with httpx.AsyncClient(timeout=15) as client:
-        sem = asyncio.Semaphore(8)
-        async def _fetch(s):
-            async with sem:
-                return await fetch_scanner_candles(s, client, timeframe)
-        results = await asyncio.gather(*[_fetch(s) for s in syms], return_exceptions=True)
-    if timeframe not in scanner_candle_data:
-        scanner_candle_data[timeframe] = {}
-    updated = 0
-    for sym, res in zip(syms, results):
-        if res and not isinstance(res, Exception):
-            scanner_candle_data[timeframe][sym] = res
-            updated += 1
-    _scanner_candles_ts[timeframe] = time.time()
-    print(f"Scanner [{timeframe}] aggiornate: {updated}/{len(syms)}")
+    try:
+        asyncio.create_task(fetch_all_scanner_candles(timeframe))
+    except RuntimeError:
+        pass
 
 
 def get_momentum_signal(sym: str, current_price: float,
@@ -1322,9 +1348,7 @@ async def fetch_prices_coingecko():
                     for state in list(user_sessions.values()):
                         for pos in list(state["positions"]):
                             if pos["symbol"] == sym:
-                                pos["currentPrice"] = float(price)
-                                if float(price) > pos["highPrice"]:
-                                    pos["highPrice"] = float(price)
+                                update_position_from_external_price(pos, float(price))
                     fetched += 1
                 await asyncio.sleep(1.5)
         print(f"[CG] fetch_prices fallback: {fetched} coin aggiornate")
@@ -1382,9 +1406,7 @@ async def fetch_prices():
             for state in list(user_sessions.values()):
                 for pos in list(state["positions"]):
                     if pos["symbol"] == sym:
-                        pos["currentPrice"] = price
-                        if price > pos["highPrice"]:
-                            pos["highPrice"] = price
+                        update_position_from_external_price(pos, price)
 
     except Exception as e:
         print(f"Fetch error: {e}")
@@ -1415,6 +1437,14 @@ def add_log(state: dict, type_: str, label: str, desc: str):
     })
     if len(log) > 200:
         log.pop()
+
+def update_position_from_external_price(pos: dict, price: float):
+    """Aggiorna prezzi posizione da feed generici, ma non per Coinbase real."""
+    if pos.get("realMode") and pos.get("exchange") == "coinbase":
+        return
+    pos["currentPrice"] = price
+    if price > pos.get("highPrice", pos.get("entryPrice", price)):
+        pos["highPrice"] = price
 
 def unrealized_pnl(state: dict) -> float:
     total = 0.0
@@ -2280,6 +2310,17 @@ async def scan_and_trade(state: dict, user_id: int = None):
         # Posizione in attesa di GTC limit fill: salta SL/TP
         if pos.get("_sell_mode") == "retry_limit":
             continue
+        if pos.get("realMode") and pos.get("exchange") == "coinbase":
+            try:
+                cb_key = state.get("coinbase_api_key_agent", "")
+                cb_sec = state.get("coinbase_api_secret_agent", "")
+                if not cb_key:
+                    cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
+                cb_price = await get_coinbase_product_price(pos.get("symbol_pair", f"{pos['symbol']}-USDC"), cb_key, cb_sec)
+                pos["currentPrice"] = cb_price
+            except Exception as e:
+                add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo Coinbase non disponibile — SL/TP saltato: {public_error(e, max_len=100)}")
+                continue
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
 
@@ -2338,7 +2379,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
     alloc_pct   = min(cfg.get("allocPct", 0.20), 1.0)
     fixed_amt   = cfg.get("tradeAmountUsd", 0)
     capital_pct = cfg.get("capitalPct", 1.0)
-    TRADING_FEE = 0.0009  # RevX taker fee 0.09%
+    TRADING_FEE = 0.012 if state.get("use_coinbase") else 0.0009
 
     # Calcola il capitale tradabile dinamicamente
     if cfg.get("realMode", False) and state.get("use_revx", False):
@@ -2351,8 +2392,20 @@ async def scan_and_trade(state: dict, user_id: int = None):
             add_log(state, "info", "ERRORE", f"Fetch saldo RevX fallito: {e}")
             _update_pnl(state)
             return
+    elif cfg.get("realMode", False) and state.get("use_coinbase", False):
+        cb_key = state.get("coinbase_api_key_agent", "")
+        cb_sec = state.get("coinbase_api_secret_agent", "")
+        try:
+            if not cb_key:
+                cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
+            quote_balance = await get_coinbase_quote_balance(cb_key, cb_sec)
+            tradable_capital = quote_balance * capital_pct
+        except Exception as e:
+            add_log(state, "info", "ERRORE", f"Fetch saldo Coinbase fallito: {public_error(e, max_len=120)}")
+            _update_pnl(state)
+            return
     else:
-        # Coinbase real mode e SIM: usa currentCapital (aggiornato dopo ogni trade)
+        # SIM: usa currentCapital (aggiornato dopo ogni trade)
         tradable_capital = state["currentCapital"] * capital_pct
 
     # Ferma solo se il saldo reale non è sufficiente ad aprire nemmeno un trade minimo
@@ -2371,10 +2424,10 @@ async def scan_and_trade(state: dict, user_id: int = None):
             _update_pnl(state)
             return
         # Evita falso stop per settlement delay: se currentCapital è molto > saldo letto,
-        # il saldo è probabilmente in transito (RevX non ha ancora accreditato la vendita)
+        # il saldo è probabilmente in transito (RevX/Coinbase non ha ancora accreditato la vendita)
         elif state.get("currentCapital", 0) > tradable_capital * 5:
             add_log(state, "info", "INFO",
-                f"Saldo RevX in attesa settlement (${tradable_capital:.2f}) — attesa")
+                f"Saldo exchange in attesa settlement (${tradable_capital:.2f}) — attesa")
             _update_pnl(state)
             return
         else:
@@ -3003,9 +3056,7 @@ async def binance_ws_loop():
                             for state in list(user_sessions.values()):
                                 for pos in list(state["positions"]):
                                     if pos["symbol"] == sym:
-                                        pos["currentPrice"] = price
-                                        if price > pos["highPrice"]:
-                                            pos["highPrice"] = price
+                                        update_position_from_external_price(pos, price)
                     except Exception as parse_err:
                         print(f"[WS] Errore parsing: {parse_err}")
         except Exception as e:
@@ -3666,7 +3717,7 @@ async def get_market(
     # Refresh scanner cache per il TF richiesto se assente o scaduta
     tf_age = time.time() - _scanner_candles_ts.get(timeframe, 0)
     if tf_age > SCANNER_CACHE_TTL or timeframe not in scanner_candle_data:
-        await fetch_all_scanner_candles(timeframe)
+        schedule_scanner_refresh(timeframe)
 
     items = []
     user_state = user_sessions.get(user_id, {})
