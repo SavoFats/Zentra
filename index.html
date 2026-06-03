@@ -591,7 +591,9 @@ body.auth-active .tabbar { display:none !important; }
 .home-mode-badge.real { background:rgba(246,70,93,0.12); color:var(--red); border:1px solid rgba(246,70,93,0.3); }
 [data-theme="dark"] .home-mode-badge.sim { color:#f0c040; }
 .home-hero { background:linear-gradient(135deg,#0052ff 0%,#1a70ff 55%,#003dd6 100%); border-radius:var(--radius); padding:22px 20px 22px; margin-bottom:10px; position:relative; overflow:hidden; }
-.home-hero-circles { position:absolute; right:-28px; top:50%; transform:translateY(-50%); pointer-events:none; }
+.home-hero-circles { position:absolute; right:16px; top:50%; transform:translateY(-50%); pointer-events:none; }
+@keyframes hero-pulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
+.home-hero-circles { animation: hero-pulse 3s ease-in-out infinite; }
 .home-hero-label { font-size:10px; font-weight:700; color:rgba(255,255,255,0.6); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:10px; }
 .home-hero-title { font-size:26px; font-weight:800; color:#fff; letter-spacing:-0.03em; line-height:1.15; margin-bottom:14px; }
 .home-hero-pills { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
@@ -1177,13 +1179,13 @@ body.auth-active .tabbar { display:none !important; }
 
     <!-- Hero card — nascosta quando sessione attiva -->
     <div class="home-hero" id="homeHeroCard">
-      <svg class="home-hero-circles" width="160" height="160" viewBox="0 0 160 160" fill="none" aria-hidden="true">
-        <circle cx="80" cy="80" r="72" stroke="white" stroke-width="1" opacity="0.2"/>
-        <circle cx="80" cy="80" r="52" stroke="white" stroke-width="1" opacity="0.15"/>
-        <circle cx="80" cy="80" r="32" stroke="white" stroke-width="1" opacity="0.1"/>
+      <svg class="home-hero-circles" width="170" height="170" viewBox="0 0 192 192" fill="none" aria-hidden="true">
+        <polyline points="24,140 64,96 92,118 130,62 168,80" fill="none" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.18"/>
+        <circle cx="168" cy="80" r="7" fill="white" opacity="0.25"/>
+        <circle cx="168" cy="80" r="4" fill="white" opacity="0.4"/>
       </svg>
-      <div class="home-hero-label">PRONTO A PARTIRE</div>
-      <div class="home-hero-title">Avvia il tuo<br>agente</div>
+
+      <div class="home-hero-title">Avvia<br>Zentra Core</div>
       <div class="home-hero-pills">
         <span class="home-hero-pill" id="heroPillDuration">Durata --</span>
         <span class="home-hero-pill" id="heroPillStrategy">Stop Loss --</span>
@@ -1289,9 +1291,13 @@ body.auth-active .tabbar { display:none !important; }
 
     <div class="section-label">Capitale</div>
     <div class="field">
-      <div class="field-label">Saldo totale disponibile</div>
-      <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 14px;font-size:16px;font-weight:700;color:var(--text3)" id="totalBalanceDisplay">--</div>
-      <div class="field-hint" id="balanceSourceHint">Aggiornato in tempo reale da Revolut X</div>
+      <div class="field-label">Exchange agente</div>
+      <select id="agentExchange" onchange="onAgentExchangeChange()" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:15px;font-weight:600;outline:none;font-family:var(--sans);margin-top:6px">
+        <option value="revx">Revolut X</option>
+        <option value="coinbase">Coinbase</option>
+      </select>
+      <div style="margin-top:10px;padding:13px 14px;font-size:16px;font-weight:700;color:var(--text3);background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm)" id="totalBalanceDisplay">--</div>
+      <div class="field-hint" id="balanceSourceHint">Seleziona l'exchange per vedere il saldo</div>
     </div>
     <!-- elemento nascosto per compatibilità JS (dataset.total) -->
     <input type="hidden" id="capital">
@@ -1321,18 +1327,30 @@ body.auth-active .tabbar { display:none !important; }
       <input type="range" id="sessionDuration" min="0" max="24" value="0" step="1" oninput="document.getElementById('sessionVal').textContent=this.value+'h'">
     </div>
 
-    <div class="section-label">Filtri</div>
-
-    <div class="field" style="display:none">
-      <div class="field-label">Filtro Trend 1h <span id="trend1hLabel" style="color:var(--green);font-weight:700">ON</span></div>
-      <div class="ema-toggle-row">
-        <button class="ema-btn active" id="trend1hOnBtn" onclick="setTrend1h(true)">Attivo</button>
-        <button class="ema-btn" id="trend1hOffBtn" onclick="setTrend1h(false)">Disattivo</button>
+    <div class="section-label">Strategia</div>
+    <div class="field">
+      <div class="field-label">Strategia di ingresso</div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="ema-btn active" id="stratMomentumBtn" onclick="setStrategy('momentum')">Momentum</button>
+        <button class="ema-btn" id="stratBreakoutBtn" onclick="setStrategy('breakout')">Breakout</button>
       </div>
+      <div class="field-hint" id="stratHint">Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata</div>
+    </div>
+
+    <!-- Filtri nascosti per compatibilità JS -->
+    <div style="display:none">
+      <input type="range" id="minR" value="1.0"><input type="range" id="tp1R" value="2.0"><input type="range" id="tp2R" value="4.0">
+      <button id="trailingOnBtn"></button><button id="trailingOffBtn"></button><span id="trailingLabel"></span>
+      <button id="rsiOnBtn"></button><button id="rsiOffBtn"></button><span id="rsiFilterLabel"></span>
+      <input type="range" id="rsiMin" min="20" max="50" value="35" step="5">
+      <input type="range" id="rsiMax" min="50" max="80" value="65" step="5">
+      <input type="range" id="pullbackTolerance" min="0.1" max="3" value="2.0" step="0.1">
+      <span id="pullbackVal">2.0%</span>
+      <button id="trend1hOnBtn"></button><button id="trend1hOffBtn"></button><span id="trend1hLabel"></span>
     </div>
 
     <div class="field">
-      <div class="field-label">Filtro BTC EMA1h <span id="btcEmaLabel" style="color:var(--green);font-weight:700">ON</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
+      <div class="field-label">Filtro BTC EMA1h <span id="btcEmaLabel" style="color:var(--green);font-weight:700">ON</span></div>
       <div class="ema-toggle-row">
         <button class="ema-btn active" id="btcEmaOnBtn" onclick="setBtcEma(true)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1343,145 +1361,145 @@ body.auth-active .tabbar { display:none !important; }
           Disattivo
         </button>
       </div>
-      <div class="field-hint">Pausa se BTC è sotto la propria EMA50 su 1h — filtro medio-termine più stabile, meno falsi blocchi</div>
+      <div class="field-hint">Pausa se BTC è sotto la propria EMA50 su 1h — riduce i falsi segnali nei mercati deboli</div>
     </div>
-
-
-    <div class="field" style="display:none">
-      <div class="field-label">Filtro RSI <span id="rsiFilterLabel">ON</span></div>
-      <div class="ema-toggle-row">
-        <button class="ema-btn active" id="rsiOnBtn" onclick="setRsiFilter(true)">Attivo</button>
-        <button class="ema-btn" id="rsiOffBtn" onclick="setRsiFilter(false)">Disattivo</button>
-      </div>
-      <input type="range" id="rsiMin" min="20" max="50" value="35" step="5" style="display:none">
-      <input type="range" id="rsiMax" min="50" max="80" value="65" step="5" style="display:none">
-    </div>
-
-    <div class="field" style="display:none">
-      <div class="field-label">Pullback Tolerance <span id="pullbackVal">2.0%</span></div>
-      <input type="range" id="pullbackTolerance" min="0.1" max="3" value="2.0" step="0.1"
-        oninput="document.getElementById('pullbackVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Distanza massima del prezzo da EMA20 per considerare un pullback valido</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
-      <input type="range" id="momentumPct" min="0.5" max="3" value="1" step="0.5"
-        oninput="document.getElementById('momentumPctVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
-    </div>
-
-    <div class="section-label">Stop &amp; Take Profit</div>
 
     <div class="field">
       <div class="field-label">Stop Loss massimo <span id="slVal">2.5%</span></div>
-      <input type="range" id="stopLoss" min="0.5" max="5" value="2.0" step="0.1"
+      <input type="range" id="stopLoss" min="0.5" max="5" value="2.5" step="0.1"
         oninput="document.getElementById('slVal').textContent=parseFloat(this.value).toFixed(1)+'%';updateTpSchema()">
       <div class="field-hint">Stop fisso sotto il prezzo di entrata — protezione catastrofica, non si muove mai</div>
     </div>
 
-    <div class="field" style="display:none">
-      <input type="range" id="minR" value="1.0" style="display:none">
-      <input type="range" id="tp1R" value="2.0" style="display:none">
-      <input type="range" id="tp2R" value="4.0" style="display:none">
-      <button id="trailingOnBtn" style="display:none"></button>
-      <button id="trailingOffBtn" style="display:none"></button>
-      <span id="trailingLabel" style="display:none"></span>
-    </div>
+    <!-- Toggle avanzati -->
+    <button id="advancedToggleBtn" onclick="toggleAdvanced()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;margin-bottom:4px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:var(--sans);color:var(--text2);font-size:13px;font-weight:600;transition:all 0.2s">
+      <span style="display:flex;align-items:center;gap:8px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
+        Impostazioni avanzate
+      </span>
+      <svg id="advancedChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="transition:transform 0.25s"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
 
-    <div class="field">
-      <div class="field-label">Trail ATR <span id="trailAtrVal" style="color:var(--blue);font-weight:700">2.0×</span></div>
-      <input type="range" id="trailAtrMultiplier" min="1" max="4" value="2" step="0.5"
-        oninput="document.getElementById('trailAtrVal').textContent=parseFloat(this.value).toFixed(1)+'×';updateTpSchema()">
-      <div class="field-hint">Distanza del trailing stop in multipli di ATR — più alto = più respiro alla coin, più basso = protegge prima i profitti</div>
-    </div>
+    <div id="advancedSection" style="display:none">
 
-    <div class="field">
-      <div class="field-label">Profit Activation <span id="profitActVal" style="color:var(--blue);font-weight:700">0.3%</span></div>
-      <input type="range" id="profitActivation" min="0" max="2" value="0.3" step="0.1"
-        oninput="document.getElementById('profitActVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Il trailing scatta solo dopo questo profitto netto — più alto = lascia respirare la posizione, meno uscite precoci</div>
-    </div>
+      <div class="section-label" style="margin-top:16px">Filtri strategia</div>
 
-    <div class="field">
-      <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">4h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="maxHoldHours" min="1" max="24" value="4" step="1"
-        oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
-      <div class="field-hint">Chiude la posizione automaticamente se aperta da troppo tempo</div>
-    </div>
-
-    <div class="field">
-      <div class="field-label">Strategia di ingresso</div>
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <button class="ema-btn active" id="stratMomentumBtn" onclick="setStrategy('momentum')">Momentum</button>
-        <button class="ema-btn" id="stratBreakoutBtn" onclick="setStrategy('breakout')">Breakout</button>
+      <div class="field" id="momentumFilterField">
+        <div class="field-label">Soglia Momentum <span id="momentumPctVal" style="color:var(--blue);font-weight:700">1.0%</span></div>
+        <input type="range" id="momentumPct" min="0.5" max="3" value="1" step="0.5"
+          oninput="document.getElementById('momentumPctVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+        <div class="field-hint">Guadagno minimo in 50 minuti per considerare un coin in momentum — abbassa in mercati laterali, alza in volatili</div>
       </div>
-      <div class="field-hint" id="stratHint">Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata</div>
-    </div>
 
-    <div class="field">
-      <div class="field-label">Circuit Breaker <span id="circuitBreakerLabel" style="color:var(--text3);font-weight:700">OFF</span></div>
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <button class="ema-btn" id="cbOnBtn" onclick="setCircuitBreaker(true)">Attivo</button>
-        <button class="ema-btn active" id="cbOffBtn" onclick="setCircuitBreaker(false)">Disattivo</button>
-      </div>
-      <div class="field-hint">Ferma il bot automaticamente se la perdita giornaliera supera la soglia — protegge il capitale nei giorni negativi</div>
-    </div>
-
-    <div class="field" id="cbLimitField" style="display:none">
-      <div class="field-label">Max Perdita Giornaliera <span id="dailyLossVal" style="color:var(--red);font-weight:700">3%</span></div>
-      <input type="range" id="dailyLossLimit" min="1" max="10" value="3" step="0.5"
-        oninput="document.getElementById('dailyLossVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
-      <div class="field-hint">Se il bot perde questa percentuale del capitale in un giorno, si ferma automaticamente fino a mezzanotte UTC</div>
-    </div>
-
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Come funziona l'uscita</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Hard Stop</div>
-          <div style="font-size:13px;font-weight:700;color:var(--red)">−<span id="tp1Label">2</span>%</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Protezione catastrofica</div>
+      <div id="breakoutFilters" style="display:none">
+        <div class="field">
+          <div class="field-label">Soglia CHOP <span id="chopMinVal" style="color:var(--blue);font-weight:700">61.8</span></div>
+          <input type="range" id="chopMin" min="55" max="75" value="61.8" step="0.5"
+            oninput="document.getElementById('chopMinVal').textContent=parseFloat(this.value).toFixed(1)">
+          <div class="field-hint">Consolidamento confermato sopra questa soglia — 61.8 (golden ratio) è il valore classico, abbassa per trovare più setup</div>
         </div>
-        <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Trailing Profit</div>
-          <div style="font-size:13px;font-weight:700;color:var(--green)"><span id="tp2Label">2.0</span>× ATR dal picco</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">Solo quando in profitto netto</div>
+        <div class="field">
+          <div class="field-label">Compressione ATR <span id="atrRatioVal" style="color:var(--blue);font-weight:700">85%</span></div>
+          <input type="range" id="atrRatioMax" min="60" max="95" value="85" step="5"
+            oninput="document.getElementById('atrRatioVal').textContent=this.value+'%'">
+          <div class="field-hint">L'ATR corrente deve essere sotto questa % della sua media — volatilità compressa significa breakout potenzialmente più esplosivo</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Volume Breakout <span id="breakoutVolVal" style="color:var(--blue);font-weight:700">1.5×</span></div>
+          <input type="range" id="breakoutVolMultiplier" min="1.2" max="3" value="1.5" step="0.1"
+            oninput="document.getElementById('breakoutVolVal').textContent=parseFloat(this.value).toFixed(1)+'×'">
+          <div class="field-hint">Spike di volume minimo sul breakout — conferma partecipazione reale, non un falso segnale su volumi bassi</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:10px;font-weight:500">Il trailing profit si attiva solo dopo aver coperto le commissioni (~0.18% round-trip)</div>
-    </div>
 
-    <div class="section-label">Gestione Rischio</div>
+      <div class="section-label" style="margin-top:16px">Uscita posizioni</div>
 
-    <div class="field">
-      <div class="field-label">Volume minimo universe <span id="volVal">$0M</span></div>
-      <input type="range" id="minVolume" min="0" max="500" value="0" step="1"
-        oninput="document.getElementById('volVal').textContent=getCurrSym()+this.value+'M'">
-      <div class="field-hint">Coin con volume inferiore vengono escluse dall'universo</div>
-    </div>
+      <div class="field">
+        <div class="field-label">Trail ATR <span id="trailAtrVal" style="color:var(--blue);font-weight:700">2.0×</span></div>
+        <input type="range" id="trailAtrMultiplier" min="1" max="4" value="2" step="0.5"
+          oninput="document.getElementById('trailAtrVal').textContent=parseFloat(this.value).toFixed(1)+'×';updateTpSchema()">
+        <div class="field-hint">Distanza del trailing stop in multipli di ATR dal picco — 2× è il compromesso standard tra respiro e protezione profitti</div>
+      </div>
 
-    <div class="field">
-      <div class="field-label">Max trade per sessione <span id="maxTradesVal">Illimitato</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="maxTrades" min="0" max="20" value="0" step="1"
-        oninput="updateMaxTrades()">
-      <div class="field-hint" id="maxTradesHint">Nessun limite — l'agente opera per tutta la durata</div>
-    </div>
+      <div class="field">
+        <div class="field-label">Profit Activation <span id="profitActVal" style="color:var(--blue);font-weight:700">0.5%</span></div>
+        <input type="range" id="profitActivation" min="0" max="2" value="0.5" step="0.1"
+          oninput="document.getElementById('profitActVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+        <div class="field-hint">Il trailing si attiva solo dopo questo profitto netto — sotto 0.3% si rischia di uscire sul rumore, sopra 1% si lascia troppo profitto sul tavolo</div>
+      </div>
 
-    <div class="field">
-      <div class="field-label">Stop dopo N perdite consecutive <span id="maxLossVal">3</span></div>
-      <input type="range" id="maxConsecutiveLosses" min="1" max="10" value="3" step="1"
-        oninput="updateMaxLoss()">
-      <div class="field-hint" id="maxLossHint">Sessione fermata automaticamente dopo 3 loss di fila</div>
-    </div>
+      <div class="field">
+        <div class="field-label">Max Hold Time <span id="maxHoldVal" style="color:var(--blue);font-weight:700">6h</span></div>
+        <input type="range" id="maxHoldHours" min="1" max="24" value="6" step="1"
+          oninput="document.getElementById('maxHoldVal').textContent=this.value+'h'">
+        <div class="field-hint">Chiude forzatamente se la posizione è aperta da troppo — evita di tenere zombie che non si muovono</div>
+      </div>
 
-    <div class="field">
-      <div class="field-label">Cooldown post-uscita <span id="cdVal">0h</span> <span class="pro-lock-label" style="display:none">PRO</span></div>
-      <input type="range" id="cooldown" min="0" max="6" value="0" step="0.5"
-        oninput="document.getElementById('cdVal').textContent=this.value+'h'">
-    </div>
+      <div class="field">
+        <div class="field-label">Circuit Breaker <span id="circuitBreakerLabel" style="color:var(--text3);font-weight:700">OFF</span></div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="ema-btn" id="cbOnBtn" onclick="setCircuitBreaker(true)">Attivo</button>
+          <button class="ema-btn active" id="cbOffBtn" onclick="setCircuitBreaker(false)">Disattivo</button>
+        </div>
+        <div class="field-hint">Ferma il bot se la perdita giornaliera supera la soglia — utile nei giorni con mercato erratico</div>
+      </div>
 
-    <button class="start-btn" id="startBtn" onclick="startAgent()">Avvia sessione</button>
+      <div class="field" id="cbLimitField" style="display:none">
+        <div class="field-label">Max Perdita Giornaliera <span id="dailyLossVal" style="color:var(--red);font-weight:700">5%</span></div>
+        <input type="range" id="dailyLossLimit" min="1" max="10" value="5" step="0.5"
+          oninput="document.getElementById('dailyLossVal').textContent=parseFloat(this.value).toFixed(1)+'%'">
+        <div class="field-hint">Soglia consigliata 3-5% — sotto il 3% troppi falsi scatti su volatilità normale crypto</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px" id="tpSchemaBox">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Schema uscita</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Hard Stop</div>
+            <div style="font-size:13px;font-weight:700;color:var(--red)">−<span id="tp1Label">2.5</span>%</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">Protezione catastrofica</div>
+          </div>
+          <div style="background:var(--surface3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:4px">Trailing Profit</div>
+            <div style="font-size:13px;font-weight:700;color:var(--green)"><span id="tp2Label">2.0</span>× ATR dal picco</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">Solo quando in profitto netto</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label">Rischio operativo</div>
+
+      <div class="field">
+        <div class="field-label">Volume minimo universe <span id="volVal">$0M</span></div>
+        <input type="range" id="minVolume" min="0" max="500" value="0" step="1"
+          oninput="document.getElementById('volVal').textContent=getCurrSym()+this.value+'M'">
+        <div class="field-hint">Filtra coin per volume 24h minimo. Lascia a 0 per usare tutto l'universo (già curato per liquidità).</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Max trade per sessione <span id="maxTradesVal">Illimitato</span></div>
+        <input type="range" id="maxTrades" min="0" max="20" value="0" step="1"
+          oninput="updateMaxTrades()">
+        <div class="field-hint" id="maxTradesHint">Nessun limite — l'agente opera per tutta la durata della sessione</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Stop dopo N perdite consecutive <span id="maxLossVal">3</span></div>
+        <input type="range" id="maxConsecutiveLosses" min="1" max="10" value="3" step="1"
+          oninput="updateMaxLoss()">
+        <div class="field-hint" id="maxLossHint">Sessione fermata dopo 3 loss di fila — segnale che il mercato non è favorevole alla strategia</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Cooldown post-uscita <span id="cdVal">0.5h</span></div>
+        <input type="range" id="cooldown" min="0" max="6" value="0.5" step="0.5"
+          oninput="document.getElementById('cdVal').textContent=this.value+'h'">
+        <div class="field-hint">Attesa minima prima del prossimo ingresso dopo ogni uscita — evita di rientrare subito in un mercato ancora instabile</div>
+      </div>
+
+    </div><!-- /advancedSection -->
+
+    <button class="start-btn" id="startBtn" onclick="startAgent()" style="margin-top:20px">Avvia sessione</button>
     <button class="start-btn" id="saveConfigBtn" onclick="saveConfigLive()" style="display:none">Salva modifiche</button>
     <button class="reset-btn" id="resetBtn" onclick="resetAgent()">Reset</button>
     <div style="height:8px"></div>
@@ -2803,9 +2821,12 @@ function updateSimToggle() {
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
   const badge = document.getElementById('cfgModeBadge');
-  const isReal = _hasRevxKeys && !_simMode;
+  const selectedExchange = document.getElementById('agentExchange')?.value || 'revx';
+  const exchangeName = selectedExchange === 'coinbase' ? 'Coinbase' : 'Revolut X';
+  const hasExchangeKeys = selectedExchange === 'coinbase' ? (_exchangeKeys && _exchangeKeys.coinbase) : _hasRevxKeys;
+  const isReal = !!hasExchangeKeys && !_simMode;
   let modeLabel = 'Conto Demo';
-  if (isReal) modeLabel = 'Reale — Revolut X';
+  if (isReal) modeLabel = 'Reale — ' + exchangeName;
   if (lbl) lbl.textContent = modeLabel;
   if (lbl) lbl.style.color = isReal ? 'var(--red)' : 'var(--text2)';
   if (badge) badge.style.display = 'inline-flex';
@@ -3113,6 +3134,9 @@ function restoreConfigFromStorage() {
   if (saved.btcEmaFilter !== undefined) setBtcEma(saved.btcEmaFilter);
   if (saved.maxHoldHours) { document.getElementById('maxHoldHours').value=saved.maxHoldHours; document.getElementById('maxHoldVal').textContent=saved.maxHoldHours+'h'; }
   if (saved.strategy) setStrategy(saved.strategy);
+  if (saved.chopMin !== undefined) { document.getElementById('chopMin').value=saved.chopMin; document.getElementById('chopMinVal').textContent=parseFloat(saved.chopMin).toFixed(1); }
+  if (saved.atrRatioMax !== undefined) { const v=Math.round(saved.atrRatioMax*100); document.getElementById('atrRatioMax').value=v; document.getElementById('atrRatioVal').textContent=v+'%'; }
+  if (saved.breakoutVolMultiplier !== undefined) { document.getElementById('breakoutVolMultiplier').value=saved.breakoutVolMultiplier; document.getElementById('breakoutVolVal').textContent=parseFloat(saved.breakoutVolMultiplier).toFixed(1)+'×'; }
   if (saved.realMode) {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
@@ -3133,27 +3157,6 @@ function getFeePct() {
 function getExchangeLabel() {
   const exchange = document.getElementById('agentExchange')?.value;
   return exchange === 'coinbase' ? 'Coinbase (1.2%)' : 'Revolut X (0.09%)';
-}
-
-function showFieldError(fieldId, message) {
-  const el = document.getElementById(fieldId);
-  if (el) {
-    el.style.borderColor = 'var(--red)';
-    el.style.boxShadow = '0 0 0 3px rgba(255,59,48,0.15)';
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-  const hintMap = { capitalUsd: 'capitalHint', allocUsd: 'allocHint' };
-  const hintId = hintMap[fieldId];
-  if (hintId) {
-    const hint = document.getElementById(hintId);
-    if (hint) hint.innerHTML = '<span style="color:var(--red);font-weight:600">⚠ ' + message + '</span>';
-  }
-  showToast(message, true);
-}
-
-function clearFieldError(fieldId) {
-  const el = document.getElementById(fieldId);
-  if (el) { el.style.borderColor = ''; el.style.boxShadow = ''; }
 }
 
 function updateCapitalUsd() {
@@ -3245,6 +3248,86 @@ function setStrategy(s) {
   document.getElementById('stratHint').textContent = s === 'breakout'
     ? 'Entra su coin in consolidamento che rompono il range con volume — ingresso anticipato, prima del grande move'
     : 'Entra su coin con forte slancio in corso — segnale rapido ma si entra a mossa già avviata';
+  const mf = document.getElementById('momentumFilterField');
+  if (mf) mf.style.display = s === 'momentum' ? '' : 'none';
+  const bf = document.getElementById('breakoutFilters');
+  if (bf) bf.style.display = s === 'breakout' ? '' : 'none';
+}
+
+function toggleAdvanced() {
+  const sec = document.getElementById('advancedSection');
+  const chevron = document.getElementById('advancedChevron');
+  const open = sec.style.display === 'none' || sec.style.display === '';
+  if (open) {
+    sec.style.display = 'block';
+    chevron.style.transform = 'rotate(180deg)';
+  } else {
+    sec.style.display = 'none';
+    chevron.style.transform = 'rotate(0deg)';
+  }
+}
+
+function renderAgentExchangeOptions() {
+  const sel = document.getElementById('agentExchange');
+  if (!sel) return;
+  const prev = sel.value;
+  const options = [];
+  if (_hasRevxKeys) options.push(['revx', 'Revolut X']);
+  if (_exchangeKeys && _exchangeKeys.coinbase) options.push(['coinbase', 'Coinbase']);
+  if (!options.length) options.push(['revx', 'Revolut X']);
+  sel.innerHTML = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  if (options.some(([v]) => v === prev)) sel.value = prev;
+}
+
+async function onAgentExchangeChange() {
+  const exchange = document.getElementById('agentExchange')?.value;
+  const display = document.getElementById('totalBalanceDisplay');
+  const hint    = document.getElementById('balanceSourceHint');
+  if (!display) return;
+  display.textContent = 'Caricamento...';
+  display.style.color = '';
+  try {
+    if (exchange === 'coinbase') {
+      const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
+      const d = await r.json();
+      if (d.ok) {
+        const qb = d.quote_balances || {};
+        const bal = parseFloat(qb.USD || qb.USDC || qb.EUR || 0);
+        display.textContent = '$' + bal.toFixed(2) + ' disponibili';
+        display.style.color = 'var(--green)';
+        hint.textContent = 'Aggiornato da Coinbase';
+        document.getElementById('capitalUsd').value = parseFloat((bal * 0.98).toFixed(2));
+        document.getElementById('capital').dataset.total = bal;
+        updateCapitalUsd();
+      } else {
+        display.textContent = 'Errore connessione Coinbase';
+        display.style.color = 'var(--red)';
+      }
+    } else {
+      const r = await fetch(API + '/test_revx', { headers: authHeaders() });
+      const d = await r.json();
+      if (d.ok) {
+        const usd = d.balances.find(b => b.currency === 'USD' || b.currency === 'USDC');
+        const eur = d.balances.find(b => b.currency === 'EUR');
+        const best = usd || eur;
+        const bal = best ? parseFloat(best.available) : 0;
+        display.textContent = '$' + bal.toFixed(2) + ' disponibili';
+        display.style.color = 'var(--green)';
+        hint.textContent = 'Aggiornato in tempo reale da Revolut X';
+        document.getElementById('capitalUsd').value = parseFloat((bal * 0.98).toFixed(2));
+        document.getElementById('capital').dataset.total = bal;
+        updateCapitalUsd();
+      } else {
+        display.textContent = 'Errore connessione RevX';
+        display.style.color = 'var(--red)';
+      }
+    }
+  } catch(e) {
+    display.textContent = 'Errore di rete';
+    display.style.color = 'var(--red)';
+  }
+  updateAlloc();
+  updateSimToggle();
 }
 function setCircuitBreaker(on) {
   document.getElementById('cbOnBtn').classList.toggle('active', on);
@@ -3302,6 +3385,28 @@ async function setMode(real) {
   updateProfileMenu();
 }
 
+// ── FIELD VALIDATION HELPERS ─────────────────────────────────────────────────
+function showFieldError(fieldId, message) {
+  const el = document.getElementById(fieldId);
+  if (el) {
+    el.style.borderColor = 'var(--red)';
+    el.style.boxShadow = '0 0 0 3px rgba(255,59,48,0.15)';
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  const hintMap = { capitalUsd: 'capitalHint', allocUsd: 'allocHint' };
+  const hintId = hintMap[fieldId];
+  if (hintId) {
+    const hint = document.getElementById(hintId);
+    if (hint) hint.innerHTML = '<span style="color:var(--red);font-weight:600">⚠ ' + message + '</span>';
+  }
+  showToast(message, true);
+}
+
+function clearFieldError(fieldId) {
+  const el = document.getElementById(fieldId);
+  if (el) { el.style.borderColor = ''; el.style.boxShadow = ''; }
+}
+
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
   clearFieldError('capitalUsd');
@@ -3342,10 +3447,10 @@ async function startAgent() {
     timeFilter:            false,
     maxHoldHours:          parseFloat(document.getElementById('maxHoldHours').value),
     strategy:              document.getElementById('stratBreakoutBtn').classList.contains('active') ? 'breakout' : 'momentum',
-    chopMin:               parseFloat(document.getElementById('chopMin')?.value || 61.8),
-    atrRatioMax:           parseFloat(document.getElementById('atrRatioMax')?.value || 85) / 100,
-    breakoutVolMultiplier: parseFloat(document.getElementById('breakoutVolMultiplier')?.value || 1.5),
-    agentExchange:         selectedExch,
+    chopMin:               parseFloat(document.getElementById('chopMin').value),
+    atrRatioMax:           parseFloat(document.getElementById('atrRatioMax').value) / 100,
+    breakoutVolMultiplier: parseFloat(document.getElementById('breakoutVolMultiplier').value),
+    agentExchange:         document.getElementById('agentExchange')?.value || 'revx',
   };
   if (isReal) { showConfirmModal(cfg); return; }
   await doStartAgent(cfg);
@@ -3364,7 +3469,7 @@ async function doStartAgent(cfg) {
     closeDrawer();
     showTab('posizioni', document.querySelectorAll('.tab')[2]);
     startPolling();
-  } catch(e) { showToast('Errore connessione: ' + e.message, true); }
+  } catch(e) { showToast('Errore di connessione: ' + e.message, true); }
 }
 
 async function pauseAgent() {
@@ -4579,6 +4684,8 @@ function openDrawer() {
   document.getElementById('drawerOverlay').classList.add('open');
   document.getElementById('configDrawer').classList.add('open');
   loadHomeBalance();
+  renderAgentExchangeOptions();
+  onAgentExchangeChange();
 }
 
 function closeDrawer() {
