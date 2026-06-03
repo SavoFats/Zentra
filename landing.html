@@ -363,14 +363,15 @@ section { padding: 120px 40px; }
 .plans { background: var(--bg2); }
 .plans-header { text-align: center; margin-bottom: 60px; }
 .plans-grid {
-  display: flex; gap: 20px; max-width: 760px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 1120px; margin: 0 auto;
   align-items: stretch;
 }
 .plan-card {
-  flex: 1; background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 36px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 34px;
   position: relative; overflow: hidden;
   transition: transform 0.3s, box-shadow 0.3s;
+  display: flex; flex-direction: column;
 }
 .plan-card:hover { transform: translateY(-4px); }
 .plan-card.featured {
@@ -379,6 +380,12 @@ section { padding: 120px 40px; }
   box-shadow: 0 0 60px rgba(0,82,255,0.12), inset 0 1px 0 rgba(0,82,255,0.3);
 }
 .plan-card.featured:hover { box-shadow: 0 16px 60px rgba(0,82,255,0.2), inset 0 1px 0 rgba(0,82,255,0.3); }
+.plan-card.founder {
+  border-color: rgba(255,176,32,0.45);
+  background: linear-gradient(160deg, rgba(255,176,32,0.11), rgba(0,82,255,0.04));
+  box-shadow: 0 0 70px rgba(255,176,32,0.1), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.plan-card.founder:hover { box-shadow: 0 16px 70px rgba(255,176,32,0.18), inset 0 1px 0 rgba(255,255,255,0.1); }
 .plan-badge {
   display: inline-block;
   background: var(--blue); color: #fff;
@@ -386,9 +393,13 @@ section { padding: 120px 40px; }
   text-transform: uppercase; padding: 4px 12px; border-radius: 20px;
   margin-bottom: 20px;
 }
+.plan-card.founder .plan-badge {
+  background: linear-gradient(135deg, #ffb020, #ff6b2b);
+  color: #10131f;
+}
 .plan-name { font-size: 14px; font-weight: 700; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
 .plan-price {
-  font-size: 48px; font-weight: 900; letter-spacing: -0.04em;
+  font-size: 46px; font-weight: 900; letter-spacing: -0.04em;
   margin-bottom: 4px; color: var(--text);
 }
 .plan-price span { font-size: 18px; font-weight: 600; color: var(--text3); }
@@ -410,8 +421,13 @@ section { padding: 120px 40px; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cline x1='3' y1='3' x2='9' y2='9' stroke='rgba(255,255,255,0.2)' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='9' y1='3' x2='3' y2='9' stroke='rgba(255,255,255,0.2)' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: center;
 }
+.plan-risk {
+  margin: auto 0 20px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(255,176,32,0.08); border: 1px solid rgba(255,176,32,0.22);
+  color: var(--text2); font-size: 12px; line-height: 1.5; font-weight: 600;
+}
 .btn-plan {
-  width: 100%; padding: 14px; border-radius: 12px;
+  width: 100%; padding: 14px; border-radius: 12px; margin-top: auto;
   font-size: 15px; font-weight: 700; font-family: var(--sans);
   cursor: pointer; transition: all 0.2s; border: none;
   text-decoration: none; display: block; text-align: center;
@@ -423,6 +439,12 @@ section { padding: 120px 40px; }
   box-shadow: 0 4px 24px rgba(0,82,255,0.35);
 }
 .btn-plan.primary:hover { box-shadow: 0 8px 32px rgba(0,82,255,0.5); transform: translateY(-1px); }
+.btn-plan.founder {
+  background: linear-gradient(135deg, #ffb020, #ff6b2b);
+  color: #10131f;
+  box-shadow: 0 4px 24px rgba(255,176,32,0.25);
+}
+.btn-plan.founder:hover { box-shadow: 0 8px 34px rgba(255,176,32,0.4); transform: translateY(-1px); }
 
 /* ─── EXCHANGE CAROUSEL ─────────────────────── */
 .exch-track-wrap { overflow: hidden; margin-top: auto; padding-top: 20px; position: relative; }
@@ -563,6 +585,10 @@ footer {
 .footer-copy { font-size: 12px; color: var(--text3); font-weight: 500; }
 
 /* ─── RESPONSIVE ────────────────────────────── */
+@media (max-width: 1120px) {
+  .plans-grid { grid-template-columns: 1fr; max-width: 520px; }
+}
+
 @media (max-width: 768px) {
   nav { padding: 0 20px; }
   .nav-links { display: none; }
@@ -570,7 +596,7 @@ footer {
   .hero { padding: 100px 20px 60px; }
   .features-grid { grid-template-columns: 1fr; }
   .feature-card-wide { grid-column: span 1; }
-  .plans-grid { flex-direction: column; }
+  .plans-grid { grid-template-columns: 1fr; max-width: 460px; }
   .steps { flex-direction: column; gap: 32px; }
   .steps::before { display: none; }
   .hero-stats { flex-direction: column; border-radius: 16px; }
@@ -1069,38 +1095,54 @@ footer {
 <section class="plans" id="plans">
   <div class="plans-header reveal">
     <div class="section-tag" data-i18n="plans_tag">Plans</div>
-    <h2 class="section-title" data-i18n="plans_title">Simple, transparent pricing</h2>
-    <p class="section-sub" data-i18n="plans_sub">Start for free, upgrade when you're ready.</p>
+    <h2 class="section-title" data-i18n="plans_title">Choose your level of control</h2>
+    <p class="section-sub" data-i18n="plans_sub">Start in demo, connect your exchange when you're ready, or join the Founder beta to unlock the AI Trading Agent.</p>
   </div>
   <div class="plans-grid">
     <div class="plan-card reveal delay-1">
       <div class="plan-name">Free</div>
       <div class="plan-price">€0<span></span></div>
-      <div class="plan-period" data-i18n="plan_free_period">Forever free</div>
+      <div class="plan-period" data-i18n="plan_free_period">For exploring Zentra without real capital</div>
       <ul class="plan-features">
-        <li data-i18n="pf1">Manual trading</li>
-        <li data-i18n="pf2">Market scanner</li>
-        <li data-i18n="pf3">1 open position at a time</li>
-        <li class="unavail" data-i18n="pf4">Automated agent</li>
+        <li data-i18n="pf1">10 market scans per day</li>
+        <li data-i18n="pf2">Unlimited manual trading in demo</li>
+        <li data-i18n="pf3">Watchlist and signal dashboard</li>
+        <li class="unavail" data-i18n="pf4">Real exchange connection</li>
         <li class="unavail" data-i18n="pf5">Telegram notifications</li>
-        <li class="unavail" data-i18n="pf6">Real exchange trading</li>
+        <li class="unavail" data-i18n="pf6">AI Trading Agent</li>
       </ul>
-      <a href="/app" class="btn-plan secondary js-auth-trigger" data-i18n="plan_free_btn">Get started free</a>
+      <a href="/app" class="btn-plan secondary js-auth-trigger" data-i18n="plan_free_btn">Start Free</a>
     </div>
     <div class="plan-card featured reveal delay-2">
-      <div class="plan-badge" data-i18n="plan_pro_badge">Most Popular</div>
+      <div class="plan-badge" data-i18n="plan_pro_badge">Best for active traders</div>
       <div class="plan-name">Pro</div>
-      <div class="plan-price">€29<span>/mo</span></div>
-      <div class="plan-period" data-i18n="plan_pro_period">Billed monthly</div>
+      <div class="plan-price">€14.99<span>/mo</span></div>
+      <div class="plan-period" data-i18n="plan_pro_period">For manual real-money trading</div>
       <ul class="plan-features">
-        <li data-i18n="pp1">Everything in Free</li>
-        <li data-i18n="pp2">Automated AI agent</li>
-        <li data-i18n="pp3">Unlimited positions</li>
-        <li data-i18n="pp4">Telegram notifications</li>
-        <li data-i18n="pp5">Real-money trading</li>
-        <li data-i18n="pp6">Both strategies (Momentum + Breakout)</li>
+        <li data-i18n="pp1">Unlimited market scans</li>
+        <li data-i18n="pp2">Unlimited manual trading</li>
+        <li data-i18n="pp3">Connect Coinbase and Revolut X</li>
+        <li data-i18n="pp4">Real-money position management</li>
+        <li data-i18n="pp5">Telegram notifications</li>
+        <li class="unavail" data-i18n="pp6">AI Trading Agent beta</li>
       </ul>
-      <a href="/app" class="btn-plan primary js-auth-trigger" data-i18n="plan_pro_btn">Start with Pro</a>
+      <a href="/app" class="btn-plan primary js-auth-trigger" data-i18n="plan_pro_btn">Go Pro</a>
+    </div>
+    <div class="plan-card founder reveal delay-3">
+      <div class="plan-badge" data-i18n="plan_founder_badge">Limited beta access</div>
+      <div class="plan-name">Founder</div>
+      <div class="plan-price">€49<span>/mo</span></div>
+      <div class="plan-period" data-i18n="plan_founder_period">Early access to the AI Trading Agent</div>
+      <ul class="plan-features">
+        <li data-i18n="fp1">Everything in Pro</li>
+        <li data-i18n="fp2">Experimental AI Trading Agent</li>
+        <li data-i18n="fp3">Automatic entries from Zentra signals</li>
+        <li data-i18n="fp4">Automated risk rules and exits</li>
+        <li data-i18n="fp5">Momentum + Breakout strategies</li>
+        <li data-i18n="fp6">Founder price locked while subscribed</li>
+      </ul>
+      <div class="plan-risk" data-i18n="plan_founder_risk">Beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.</div>
+      <a href="/app" class="btn-plan founder js-auth-trigger" data-i18n="plan_founder_btn">Become a Founder</a>
     </div>
   </div>
 </section>
@@ -1358,11 +1400,13 @@ const T = {
     t5_quote:'"Telegram alerts mean I never miss an entry or exit, even with a full-time job. It\'s like having a professional trading assistant available 24/7 on my phone."',
     t6_quote:'"Scanning 50+ pairs manually is humanly impossible. My entry quality improved the moment I stopped guessing and let Zentra\'s scanner decide. Fewer trades, better results."',
     t7_quote:'"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."',
-    plans_tag:'Plans', plans_title:'Simple, transparent pricing', plans_sub:'Start for free, upgrade when you\'re ready.',
-    plan_free_period:'Forever free', pf1:'Manual trading', pf2:'Market scanner', pf3:'1 open position at a time', pf4:'Automated agent', pf5:'Telegram notifications', pf6:'Real exchange trading',
-    plan_free_btn:'Get started free', plan_pro_badge:'Most Popular',
-    plan_pro_period:'Billed monthly', pp1:'Everything in Free', pp2:'Automated AI agent', pp3:'Unlimited positions', pp4:'Telegram notifications', pp5:'Real-money trading', pp6:'Both strategies (Momentum + Breakout)',
-    plan_pro_btn:'Start with Pro',
+    plans_tag:'Plans', plans_title:'Choose your level of control', plans_sub:'Start in demo, connect your exchange when you\'re ready, or join the Founder beta to unlock the AI Trading Agent.',
+    plan_free_period:'For exploring Zentra without real capital', pf1:'10 market scans per day', pf2:'Unlimited manual trading in demo', pf3:'Watchlist and signal dashboard', pf4:'Real exchange connection', pf5:'Telegram notifications', pf6:'AI Trading Agent',
+    plan_free_btn:'Start Free', plan_pro_badge:'Best for active traders',
+    plan_pro_period:'For manual real-money trading', pp1:'Unlimited market scans', pp2:'Unlimited manual trading', pp3:'Connect Coinbase and Revolut X', pp4:'Real-money position management', pp5:'Telegram notifications', pp6:'AI Trading Agent beta',
+    plan_pro_btn:'Go Pro', plan_founder_badge:'Limited beta access',
+    plan_founder_period:'Early access to the AI Trading Agent', fp1:'Everything in Pro', fp2:'Experimental AI Trading Agent', fp3:'Automatic entries from Zentra signals', fp4:'Automated risk rules and exits', fp5:'Momentum + Breakout strategies', fp6:'Founder price locked while subscribed',
+    plan_founder_risk:'Beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.', plan_founder_btn:'Become a Founder',
     cta_tag:'Ready?', cta_title:'Start trading smarter today.', cta_sub:'Join traders using Zentra to automate their crypto strategy.',
     cta_btn:'Open Zentra', cta_note:'Free to start. No credit card required.',
   },
@@ -1393,11 +1437,13 @@ const T = {
     t5_quote:'"Gli alert Telegram fanno sì che non mi perda mai un ingresso o un\'uscita, anche con un lavoro a tempo pieno. È come avere un assistente di trading professionale disponibile 24/7."',
     t6_quote:'"Monitorare manualmente 50+ coppie è umanamente impossibile. La qualità dei miei ingressi è migliorata nel momento in cui ho lasciato decidere allo scanner di Zentra. Meno trade, risultati migliori."',
     t7_quote:'"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."',
-    plans_tag:'Piani', plans_title:'Prezzi semplici e trasparenti', plans_sub:'Inizia gratis, aggiorna quando sei pronto.',
-    plan_free_period:'Gratis per sempre', pf1:'Trading manuale', pf2:'Scanner di mercato', pf3:'1 posizione aperta alla volta', pf4:'Agente automatico', pf5:'Notifiche Telegram', pf6:'Trading reale su exchange',
-    plan_free_btn:'Inizia gratis', plan_pro_badge:'Più Popolare',
-    plan_pro_period:'Fatturazione mensile', pp1:'Tutto del piano Free', pp2:'Agente AI automatico', pp3:'Posizioni illimitate', pp4:'Notifiche Telegram', pp5:'Trading reale', pp6:'Entrambe le strategie (Momentum + Breakout)',
-    plan_pro_btn:'Inizia con Pro',
+    plans_tag:'Piani', plans_title:'Scegli il tuo livello di controllo', plans_sub:'Parti in demo, collega il tuo exchange quando sei pronto, oppure entra nella beta Founder per sbloccare l\'AI Trading Agent.',
+    plan_free_period:'Per esplorare Zentra senza capitale reale', pf1:'10 scansioni di mercato al giorno', pf2:'Trading manuale illimitato in demo', pf3:'Watchlist e dashboard segnali', pf4:'Collegamento exchange reale', pf5:'Notifiche Telegram', pf6:'AI Trading Agent',
+    plan_free_btn:'Inizia gratis', plan_pro_badge:'Per trader attivi',
+    plan_pro_period:'Per trading manuale con capitale reale', pp1:'Scansioni di mercato illimitate', pp2:'Trading manuale illimitato', pp3:'Collega Coinbase e Revolut X', pp4:'Gestione posizioni reali', pp5:'Notifiche Telegram', pp6:'AI Trading Agent beta',
+    plan_pro_btn:'Passa a Pro', plan_founder_badge:'Accesso beta limitato',
+    plan_founder_period:'Accesso anticipato all\'AI Trading Agent', fp1:'Tutto incluso in Pro', fp2:'AI Trading Agent sperimentale', fp3:'Ingressi automatici dai segnali Zentra', fp4:'Regole automatiche di rischio e uscita', fp5:'Strategie Momentum + Breakout', fp6:'Prezzo Founder bloccato finché sei abbonato',
+    plan_founder_risk:'Funzione in beta. Il trading comporta rischi e può causare perdite. L\'algoritmo è in continuo miglioramento e non garantisce profitti.', plan_founder_btn:'Diventa Founder',
     cta_tag:'Pronti?', cta_title:'Inizia a tradare in modo più intelligente.', cta_sub:'Unisciti ai trader che usano Zentra per automatizzare la loro strategia.',
     cta_btn:'Apri Zentra', cta_note:'Gratuito per iniziare. Nessuna carta di credito.',
   }
