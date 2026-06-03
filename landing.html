@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zentra — AI Crypto Trading</title>
-<meta name="description" content="The AI-powered crypto trading agent. Automated strategies, real-time scanner, and smart risk management — all in one platform.">
-<meta property="og:title" content="Zentra — AI Crypto Trading">
-<meta property="og:description" content="Trade smarter with AI. Automated strategies, real-time scanner, and smart risk management.">
+<title>Zentra — Agente AI per Crypto Trading</title>
+<meta name="description" content="L'agente AI per crypto trading. Scanner in tempo reale, strategie automatiche e gestione del rischio smart in un'unica piattaforma.">
+<meta property="og:title" content="Zentra — Agente AI per Crypto Trading">
+<meta property="og:description" content="Trada in modo più intelligente con Zentra: scanner live, segnali automatici e gestione del rischio.">
 <style>
 :root {
   --blue: #0052ff;
@@ -363,14 +363,15 @@ section { padding: 120px 40px; }
 .plans { background: var(--bg2); }
 .plans-header { text-align: center; margin-bottom: 60px; }
 .plans-grid {
-  display: flex; gap: 20px; max-width: 760px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 1120px; margin: 0 auto;
   align-items: stretch;
 }
 .plan-card {
-  flex: 1; background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 36px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 34px;
   position: relative; overflow: hidden;
   transition: transform 0.3s, box-shadow 0.3s;
+  display: flex; flex-direction: column;
 }
 .plan-card:hover { transform: translateY(-4px); }
 .plan-card.featured {
@@ -379,6 +380,12 @@ section { padding: 120px 40px; }
   box-shadow: 0 0 60px rgba(0,82,255,0.12), inset 0 1px 0 rgba(0,82,255,0.3);
 }
 .plan-card.featured:hover { box-shadow: 0 16px 60px rgba(0,82,255,0.2), inset 0 1px 0 rgba(0,82,255,0.3); }
+.plan-card.founder {
+  border-color: rgba(255,176,32,0.45);
+  background: linear-gradient(160deg, rgba(255,176,32,0.11), rgba(0,82,255,0.04));
+  box-shadow: 0 0 70px rgba(255,176,32,0.1), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.plan-card.founder:hover { box-shadow: 0 16px 70px rgba(255,176,32,0.18), inset 0 1px 0 rgba(255,255,255,0.1); }
 .plan-badge {
   display: inline-block;
   background: var(--blue); color: #fff;
@@ -386,9 +393,13 @@ section { padding: 120px 40px; }
   text-transform: uppercase; padding: 4px 12px; border-radius: 20px;
   margin-bottom: 20px;
 }
+.plan-card.founder .plan-badge {
+  background: linear-gradient(135deg, #ffb020, #ff6b2b);
+  color: #10131f;
+}
 .plan-name { font-size: 14px; font-weight: 700; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
 .plan-price {
-  font-size: 48px; font-weight: 900; letter-spacing: -0.04em;
+  font-size: 46px; font-weight: 900; letter-spacing: -0.04em;
   margin-bottom: 4px; color: var(--text);
 }
 .plan-price span { font-size: 18px; font-weight: 600; color: var(--text3); }
@@ -410,8 +421,13 @@ section { padding: 120px 40px; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cline x1='3' y1='3' x2='9' y2='9' stroke='rgba(255,255,255,0.2)' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='9' y1='3' x2='3' y2='9' stroke='rgba(255,255,255,0.2)' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: center;
 }
+.plan-risk {
+  margin: auto 0 20px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(255,176,32,0.08); border: 1px solid rgba(255,176,32,0.22);
+  color: var(--text2); font-size: 12px; line-height: 1.5; font-weight: 600;
+}
 .btn-plan {
-  width: 100%; padding: 14px; border-radius: 12px;
+  width: 100%; padding: 14px; border-radius: 12px; margin-top: auto;
   font-size: 15px; font-weight: 700; font-family: var(--sans);
   cursor: pointer; transition: all 0.2s; border: none;
   text-decoration: none; display: block; text-align: center;
@@ -423,6 +439,12 @@ section { padding: 120px 40px; }
   box-shadow: 0 4px 24px rgba(0,82,255,0.35);
 }
 .btn-plan.primary:hover { box-shadow: 0 8px 32px rgba(0,82,255,0.5); transform: translateY(-1px); }
+.btn-plan.founder {
+  background: linear-gradient(135deg, #ffb020, #ff6b2b);
+  color: #10131f;
+  box-shadow: 0 4px 24px rgba(255,176,32,0.25);
+}
+.btn-plan.founder:hover { box-shadow: 0 8px 34px rgba(255,176,32,0.4); transform: translateY(-1px); }
 
 /* ─── EXCHANGE CAROUSEL ─────────────────────── */
 .exch-track-wrap { overflow: hidden; margin-top: auto; padding-top: 20px; position: relative; }
@@ -563,6 +585,10 @@ footer {
 .footer-copy { font-size: 12px; color: var(--text3); font-weight: 500; }
 
 /* ─── RESPONSIVE ────────────────────────────── */
+@media (max-width: 1120px) {
+  .plans-grid { grid-template-columns: 1fr; max-width: 520px; }
+}
+
 @media (max-width: 768px) {
   nav { padding: 0 20px; }
   .nav-links { display: none; }
@@ -570,7 +596,7 @@ footer {
   .hero { padding: 100px 20px 60px; }
   .features-grid { grid-template-columns: 1fr; }
   .feature-card-wide { grid-column: span 1; }
-  .plans-grid { flex-direction: column; }
+  .plans-grid { grid-template-columns: 1fr; max-width: 460px; }
   .steps { flex-direction: column; gap: 32px; }
   .steps::before { display: none; }
   .hero-stats { flex-direction: column; border-radius: 16px; }
@@ -649,9 +675,10 @@ footer {
   border: none; border-radius: 18px; background: linear-gradient(135deg, #0052ff, #7c3aed 55%, #f6465d);
   color: white; font-size: 17px; font-weight: 800; font-family: var(--sans); cursor: pointer;
   box-shadow: 0 16px 46px rgba(0,82,255,0.3);
+  margin-bottom: 16px;
 }
 .auth-google:disabled { cursor: not-allowed; opacity: 0.58; box-shadow: none; }
-.google-g { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: #4285f4; font-size: 19px; font-weight: 900; }
+.google-g { width: 28px; height: 28px; flex-shrink: 0; display: block; }
 .auth-email-toggle {
   width: 100%; height: 54px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.035);
   color: var(--text); border-radius: 16px; font-family: var(--sans); font-size: 15px; font-weight: 800; cursor: pointer;
@@ -694,13 +721,13 @@ footer {
     Zentra
   </a>
   <div class="nav-links">
-    <a href="#features" data-i18n="nav_features">Features</a>
-    <a href="#how" data-i18n="nav_how">How it works</a>
-    <a href="#plans" data-i18n="nav_plans">Plans</a>
+    <a href="#features" data-i18n="nav_features">Funzionalità</a>
+    <a href="#how" data-i18n="nav_how">Come funziona</a>
+    <a href="#plans" data-i18n="nav_plans">Piani</a>
   </div>
   <div class="nav-actions">
-    <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇮🇹</button>
-    <a class="btn-primary js-auth-trigger" href="/app" data-i18n="nav_open_app">Open App ↗</a>
+    <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧</button>
+    <a class="btn-primary js-auth-trigger" href="/app" data-i18n="nav_open_app">Apri App ↗</a>
   </div>
 </nav>
 
@@ -708,7 +735,7 @@ footer {
 <div class="auth-modal" id="authModal" aria-hidden="true">
   <div class="auth-backdrop" onclick="closeAuthModal()"></div>
   <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <button class="auth-close" type="button" onclick="closeAuthModal()" aria-label="Close">×</button>
+    <button class="auth-close" type="button" onclick="closeAuthModal()" aria-label="Chiudi">×</button>
     <div class="auth-mark">
       <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="28" height="28" rx="7" fill="#0052ff"/>
@@ -716,19 +743,24 @@ footer {
         <circle cx="24" cy="12" r="2" fill="white"/>
       </svg>
     </div>
-    <h2 class="auth-title" id="authTitle">Almost there, open your Zentra account</h2>
-    <p class="auth-sub" id="authSub">Sign up to save your scanner, connect exchanges, and start managing trades from one dashboard.</p>
+    <h2 class="auth-title" id="authTitle">Ci siamo quasi, apri il tuo account Zentra</h2>
+    <p class="auth-sub" id="authSub">Crea il tuo workspace per seguire i segnali, collegare il tuo exchange e tenere sotto controllo ogni posizione aperta.</p>
 
     <button class="auth-google" id="googleAuthBtn" type="button" onclick="continueWithGoogle()">
-      <span class="google-g">G</span>
-      <span id="googleAuthText">Continue with Google</span>
+      <svg class="google-g" viewBox="0 0 48 48" aria-hidden="true">
+        <path fill="#EA4335" d="M24 9.5c3.2 0 6.1 1.1 8.4 3.2l6.3-6.3C34.8 2.8 29.7.7 24 .7 14.6.7 6.5 6.1 2.6 14l7.6 5.9C12 13.8 17.5 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.4c-.5 2.8-2.1 5.2-4.5 6.8l7 5.4c4.1-3.8 7.2-9.4 7.2-16.2z"/>
+        <path fill="#FBBC05" d="M10.2 28.1c-.5-1.4-.8-2.9-.8-4.6s.3-3.2.8-4.6L2.6 13C1 16.2.1 19.8.1 23.5s.9 7.3 2.5 10.5l7.6-5.9z"/>
+        <path fill="#34A853" d="M24 46.3c5.7 0 10.5-1.9 14-5.2l-7-5.4c-1.9 1.3-4.4 2.1-7 2.1-6.5 0-12-4.3-13.8-10.2L2.6 33.5c3.9 7.8 12 12.8 21.4 12.8z"/>
+      </svg>
+      <span id="googleAuthText">Continua con Google</span>
     </button>
-    <button class="auth-email-toggle" id="emailToggleBtn" type="button" onclick="showEmailAuth()">Continue with Email</button>
+    <button class="auth-email-toggle" id="emailToggleBtn" type="button" onclick="showEmailAuth()">Continua con Email</button>
 
     <form class="auth-form" id="emailAuthForm" onsubmit="submitLandingAuth(event)">
       <div class="auth-tabs">
-        <button class="auth-tab active" id="authTabRegister" type="button" onclick="setAuthMode('register')">Create account</button>
-        <button class="auth-tab" id="authTabLogin" type="button" onclick="setAuthMode('login')">Log in</button>
+        <button class="auth-tab active" id="authTabRegister" type="button" onclick="setAuthMode('register')">Crea account</button>
+        <button class="auth-tab" id="authTabLogin" type="button" onclick="setAuthMode('login')">Accedi</button>
       </div>
       <div class="auth-field">
         <label for="authEmail" id="authEmailLabel">Email</label>
@@ -736,16 +768,16 @@ footer {
       </div>
       <div class="auth-field">
         <label for="authPassword" id="authPasswordLabel">Password</label>
-        <input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimum 8 characters">
+        <input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimo 8 caratteri">
       </div>
-      <button class="auth-submit" id="authSubmitBtn" type="submit">Create free account</button>
+      <button class="auth-submit" id="authSubmitBtn" type="submit">Crea account gratis</button>
       <div class="auth-error" id="authError"></div>
     </form>
 
     <ul class="auth-benefits" id="authBenefits">
-      <li>Save your scans and analysis</li>
-      <li>Connect Coinbase or Revolut X when ready</li>
-      <li>Access the Free Discovery Plan</li>
+      <li>Tieni sincronizzati segnali scanner e watchlist</li>
+      <li>Fai trading dalle tue API exchange, senza custodia fondi</li>
+      <li>Monitora le posizioni aperte con i controlli rischio Zentra</li>
     </ul>
   </div>
 </div>
@@ -1063,38 +1095,54 @@ footer {
 <section class="plans" id="plans">
   <div class="plans-header reveal">
     <div class="section-tag" data-i18n="plans_tag">Plans</div>
-    <h2 class="section-title" data-i18n="plans_title">Simple, transparent pricing</h2>
-    <p class="section-sub" data-i18n="plans_sub">Start for free, upgrade when you're ready.</p>
+    <h2 class="section-title" data-i18n="plans_title">Choose your level of control</h2>
+    <p class="section-sub" data-i18n="plans_sub">Start in demo, connect your exchange when you're ready, or join the Founder beta to unlock the AI Trading Agent.</p>
   </div>
   <div class="plans-grid">
     <div class="plan-card reveal delay-1">
       <div class="plan-name">Free</div>
       <div class="plan-price">€0<span></span></div>
-      <div class="plan-period" data-i18n="plan_free_period">Forever free</div>
+      <div class="plan-period" data-i18n="plan_free_period">For exploring Zentra without real capital</div>
       <ul class="plan-features">
-        <li data-i18n="pf1">Manual trading</li>
-        <li data-i18n="pf2">Market scanner</li>
-        <li data-i18n="pf3">1 open position at a time</li>
-        <li class="unavail" data-i18n="pf4">Automated agent</li>
+        <li data-i18n="pf1">10 market scans per day</li>
+        <li data-i18n="pf2">Unlimited manual trading in demo</li>
+        <li data-i18n="pf3">Watchlist and signal dashboard</li>
+        <li class="unavail" data-i18n="pf4">Real exchange connection</li>
         <li class="unavail" data-i18n="pf5">Telegram notifications</li>
-        <li class="unavail" data-i18n="pf6">Real exchange trading</li>
+        <li class="unavail" data-i18n="pf6">AI Trading Agent</li>
       </ul>
-      <a href="/app" class="btn-plan secondary js-auth-trigger" data-i18n="plan_free_btn">Get started free</a>
+      <a href="/app" class="btn-plan secondary js-auth-trigger" data-plan="free" data-i18n="plan_free_btn">Start Free</a>
     </div>
     <div class="plan-card featured reveal delay-2">
-      <div class="plan-badge" data-i18n="plan_pro_badge">Most Popular</div>
+      <div class="plan-badge" data-i18n="plan_pro_badge">Best for active traders</div>
       <div class="plan-name">Pro</div>
-      <div class="plan-price">€29<span>/mo</span></div>
-      <div class="plan-period" data-i18n="plan_pro_period">Billed monthly</div>
+      <div class="plan-price">€14.99<span>/mo</span></div>
+      <div class="plan-period" data-i18n="plan_pro_period">For manual real-money trading</div>
       <ul class="plan-features">
-        <li data-i18n="pp1">Everything in Free</li>
-        <li data-i18n="pp2">Automated AI agent</li>
-        <li data-i18n="pp3">Unlimited positions</li>
-        <li data-i18n="pp4">Telegram notifications</li>
-        <li data-i18n="pp5">Real-money trading</li>
-        <li data-i18n="pp6">Both strategies (Momentum + Breakout)</li>
+        <li data-i18n="pp1">Unlimited market scans</li>
+        <li data-i18n="pp2">Unlimited manual trading</li>
+        <li data-i18n="pp3">Connect Coinbase and Revolut X</li>
+        <li data-i18n="pp4">Real-money position management</li>
+        <li data-i18n="pp5">Telegram notifications</li>
+        <li class="unavail" data-i18n="pp6">AI Trading Agent beta</li>
       </ul>
-      <a href="/app" class="btn-plan primary js-auth-trigger" data-i18n="plan_pro_btn">Start with Pro</a>
+      <a href="/app" class="btn-plan primary js-auth-trigger" data-plan="pro" data-i18n="plan_pro_btn">Go Pro</a>
+    </div>
+    <div class="plan-card founder reveal delay-3">
+      <div class="plan-badge" data-i18n="plan_founder_badge">Limited beta access</div>
+      <div class="plan-name">Founder</div>
+      <div class="plan-price">€49.99<span>/mo</span></div>
+      <div class="plan-period" data-i18n="plan_founder_period">Early access to the AI Trading Agent</div>
+      <ul class="plan-features">
+        <li data-i18n="fp1">Everything in Pro</li>
+        <li data-i18n="fp2">Experimental AI Trading Agent</li>
+        <li data-i18n="fp3">Automatic entries from Zentra signals</li>
+        <li data-i18n="fp4">Automated risk rules and exits</li>
+        <li data-i18n="fp5">Momentum + Breakout strategies</li>
+        <li data-i18n="fp6">Founder price locked while subscribed</li>
+      </ul>
+      <div class="plan-risk" data-i18n="plan_founder_risk">Beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.</div>
+      <a href="/app" class="btn-plan founder js-auth-trigger" data-plan="founder" data-i18n="plan_founder_btn">Become a Founder</a>
     </div>
   </div>
 </section>
@@ -1149,9 +1197,29 @@ footer {
 </footer>
 
 <script>
-const API = 'https://crypto-agent-back-production.up.railway.app';
+const API = 'https://api.zentra.trading';
 let authMode = 'register';
 let googleEnabled = false;
+let pendingCheckoutPlan = '';
+
+function authHeaders() {
+  const token = localStorage.getItem('ca_token') || '';
+  return token
+    ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+    : { 'Content-Type': 'application/json' };
+}
+
+function validPaidPlan(plan) {
+  return plan === 'pro' || plan === 'founder';
+}
+
+function showAuthDialog() {
+  const modal = document.getElementById('authModal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  updateAuthCopy();
+}
 
 const AUTH_COPY = {
   en: {
@@ -1216,17 +1284,60 @@ function updateAuthCopy() {
   setAuthMode(authMode);
 }
 
-function openAuthModal(event) {
-  if (event) event.preventDefault();
-  if (localStorage.getItem('ca_token')) {
+async function startCheckout(plan) {
+  const c = authCopy();
+  if (!validPaidPlan(plan)) {
     window.location.href = '/app';
     return;
   }
-  const modal = document.getElementById('authModal');
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  updateAuthCopy();
+  if (!localStorage.getItem('ca_token')) {
+    pendingCheckoutPlan = plan;
+    localStorage.setItem('ca_pending_checkout_plan', plan);
+    showAuthDialog();
+    return;
+  }
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('token');
+    url.searchParams.delete('username');
+    url.searchParams.delete('checkout');
+    url.searchParams.delete('auth_error');
+    const returnUrl = url.toString();
+    const r = await fetch(API + '/billing/checkout', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ plan, success_url: returnUrl, cancel_url: returnUrl })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.url) throw new Error(d.detail || d.error || c.connectionError);
+    localStorage.removeItem('ca_pending_checkout_plan');
+    pendingCheckoutPlan = '';
+    window.location.href = d.url;
+  } catch (e) {
+    showAuthDialog();
+    showAuthModalError(e.message || c.connectionError);
+  }
+}
+
+function openAuthModal(event) {
+  if (event) event.preventDefault();
+  const plan = event?.currentTarget?.dataset?.plan || '';
+  if (localStorage.getItem('ca_token')) {
+    if (validPaidPlan(plan)) {
+      startCheckout(plan);
+      return;
+    }
+    window.location.href = '/app';
+    return;
+  }
+  if (validPaidPlan(plan)) {
+    pendingCheckoutPlan = plan;
+    localStorage.setItem('ca_pending_checkout_plan', plan);
+  } else {
+    pendingCheckoutPlan = '';
+    localStorage.removeItem('ca_pending_checkout_plan');
+  }
+  showAuthDialog();
 }
 
 function closeAuthModal() {
@@ -1234,6 +1345,8 @@ function closeAuthModal() {
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+  pendingCheckoutPlan = '';
+  localStorage.removeItem('ca_pending_checkout_plan');
 }
 
 function showEmailAuth() {
@@ -1283,6 +1396,11 @@ async function submitLandingAuth(event) {
     if (!r.ok) throw new Error(d.detail || d.error || c.connectionError);
     localStorage.setItem('ca_token', d.token);
     localStorage.setItem('ca_username', d.username || email);
+    const plan = pendingCheckoutPlan || localStorage.getItem('ca_pending_checkout_plan') || '';
+    if (validPaidPlan(plan)) {
+      await startCheckout(plan);
+      return;
+    }
     window.location.href = '/app';
   } catch (e) {
     showAuthModalError(e.message || c.connectionError);
@@ -1298,8 +1416,27 @@ function continueWithGoogle() {
     showEmailAuth();
     return;
   }
-  const redirect = window.location.origin + '/app';
+  const plan = pendingCheckoutPlan || localStorage.getItem('ca_pending_checkout_plan') || '';
+  const redirectUrl = new URL(validPaidPlan(plan) ? window.location.href : window.location.origin + '/app');
+  if (validPaidPlan(plan)) redirectUrl.searchParams.set('checkout', plan);
+  const redirect = redirectUrl.toString();
   window.location.href = API + '/auth/google/start?redirect=' + encodeURIComponent(redirect);
+}
+
+function handleLandingAuthReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const username = params.get('username');
+  const checkout = params.get('checkout') || localStorage.getItem('ca_pending_checkout_plan') || '';
+  if (token) {
+    localStorage.setItem('ca_token', token);
+    if (username) localStorage.setItem('ca_username', username);
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete('token');
+    clean.searchParams.delete('username');
+    window.history.replaceState({}, '', clean.toString());
+    if (validPaidPlan(checkout)) startCheckout(checkout);
+  }
 }
 
 async function loadGoogleAuthStatus() {
@@ -1322,6 +1459,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeAuthModal();
 });
 loadGoogleAuthStatus();
+handleLandingAuthReturn();
 
 /* ─── TRANSLATIONS ─────────────────────────── */
 const T = {
@@ -1352,11 +1490,13 @@ const T = {
     t5_quote:'"Telegram alerts mean I never miss an entry or exit, even with a full-time job. It\'s like having a professional trading assistant available 24/7 on my phone."',
     t6_quote:'"Scanning 50+ pairs manually is humanly impossible. My entry quality improved the moment I stopped guessing and let Zentra\'s scanner decide. Fewer trades, better results."',
     t7_quote:'"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."',
-    plans_tag:'Plans', plans_title:'Simple, transparent pricing', plans_sub:'Start for free, upgrade when you\'re ready.',
-    plan_free_period:'Forever free', pf1:'Manual trading', pf2:'Market scanner', pf3:'1 open position at a time', pf4:'Automated agent', pf5:'Telegram notifications', pf6:'Real exchange trading',
-    plan_free_btn:'Get started free', plan_pro_badge:'Most Popular',
-    plan_pro_period:'Billed monthly', pp1:'Everything in Free', pp2:'Automated AI agent', pp3:'Unlimited positions', pp4:'Telegram notifications', pp5:'Real-money trading', pp6:'Both strategies (Momentum + Breakout)',
-    plan_pro_btn:'Start with Pro',
+    plans_tag:'Plans', plans_title:'Choose your level of control', plans_sub:'Start in demo, connect your exchange when you\'re ready, or join the Founder beta to unlock the AI Trading Agent.',
+    plan_free_period:'For exploring Zentra without real capital', pf1:'10 market scans per day', pf2:'Unlimited manual trading in demo', pf3:'Watchlist and signal dashboard', pf4:'Real exchange connection', pf5:'Telegram notifications', pf6:'AI Trading Agent',
+    plan_free_btn:'Start Free', plan_pro_badge:'Best for active traders',
+    plan_pro_period:'For manual real-money trading', pp1:'Unlimited market scans', pp2:'Unlimited manual trading', pp3:'Connect Coinbase and Revolut X', pp4:'Real-money position management', pp5:'Telegram notifications', pp6:'AI Trading Agent beta',
+    plan_pro_btn:'Go Pro', plan_founder_badge:'Limited beta access',
+    plan_founder_period:'Early access to the AI Trading Agent', fp1:'Everything in Pro', fp2:'Experimental AI Trading Agent', fp3:'Automatic entries from Zentra signals', fp4:'Automated risk rules and exits', fp5:'Momentum + Breakout strategies', fp6:'Founder price locked while subscribed',
+    plan_founder_risk:'Beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.', plan_founder_btn:'Become a Founder',
     cta_tag:'Ready?', cta_title:'Start trading smarter today.', cta_sub:'Join traders using Zentra to automate their crypto strategy.',
     cta_btn:'Open Zentra', cta_note:'Free to start. No credit card required.',
   },
@@ -1378,7 +1518,7 @@ const T = {
     how_tag:'Come funziona', how_title:'Operativo in pochi minuti', how_sub:'Collega il tuo account, configura la strategia e lascia fare a Zentra.',
     step1_title:'Connetti', step1_desc:'Collega le tue chiavi API del tuo exchange. Zentra non le salva mai in chiaro — cifratura end-to-end.',
     step2_title:'Configura', step2_desc:'Scegli la strategia, imposta i parametri di rischio (SL%, TP%, max posizioni) e la durata della sessione.',
-    step3_title:'Tradata', step3_desc:'Avvia l\'agente e ricevi notifiche Telegram per ogni ingresso, uscita e avviso — in tempo reale.',
+    step3_title:'Trada', step3_desc:'Avvia l\'agente e ricevi notifiche Telegram per ogni ingresso, uscita e avviso — in tempo reale.',
     testi_tag:'Testimonianze', testi_title:'Amato dai trader di tutto il mondo', testi_sub:'Risultati reali da trader che hanno fatto di Zentra parte del loro workflow quotidiano.',
     t1_quote:'"Finalmente uno strumento algoritmico che non richiede un dottorato per configurarlo. Ho impostato i parametri in 10 minuti e l\'ho lasciato girare. +14% nel primo mese di trading automatico."',
     t2_quote:'"L\'agente ha preso un breakout su SOL alle 3 di notte mentre dormivo. Quel singolo trade ha coperto l\'abbonamento Pro per tutto l\'anno. Un vero game changer."',
@@ -1387,19 +1527,21 @@ const T = {
     t5_quote:'"Gli alert Telegram fanno sì che non mi perda mai un ingresso o un\'uscita, anche con un lavoro a tempo pieno. È come avere un assistente di trading professionale disponibile 24/7."',
     t6_quote:'"Monitorare manualmente 50+ coppie è umanamente impossibile. La qualità dei miei ingressi è migliorata nel momento in cui ho lasciato decidere allo scanner di Zentra. Meno trade, risultati migliori."',
     t7_quote:'"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."',
-    plans_tag:'Piani', plans_title:'Prezzi semplici e trasparenti', plans_sub:'Inizia gratis, aggiorna quando sei pronto.',
-    plan_free_period:'Gratis per sempre', pf1:'Trading manuale', pf2:'Scanner di mercato', pf3:'1 posizione aperta alla volta', pf4:'Agente automatico', pf5:'Notifiche Telegram', pf6:'Trading reale su exchange',
-    plan_free_btn:'Inizia gratis', plan_pro_badge:'Più Popolare',
-    plan_pro_period:'Fatturazione mensile', pp1:'Tutto del piano Free', pp2:'Agente AI automatico', pp3:'Posizioni illimitate', pp4:'Notifiche Telegram', pp5:'Trading reale', pp6:'Entrambe le strategie (Momentum + Breakout)',
-    plan_pro_btn:'Inizia con Pro',
+    plans_tag:'Piani', plans_title:'Scegli il tuo livello di controllo', plans_sub:'Parti in demo, collega il tuo exchange quando sei pronto, oppure entra nella beta Founder per sbloccare l\'AI Trading Agent.',
+    plan_free_period:'Per esplorare Zentra senza capitale reale', pf1:'10 scansioni di mercato al giorno', pf2:'Trading manuale illimitato in demo', pf3:'Watchlist e dashboard segnali', pf4:'Collegamento exchange reale', pf5:'Notifiche Telegram', pf6:'AI Trading Agent',
+    plan_free_btn:'Inizia gratis', plan_pro_badge:'Per trader attivi',
+    plan_pro_period:'Per trading manuale con capitale reale', pp1:'Scansioni di mercato illimitate', pp2:'Trading manuale illimitato', pp3:'Collega Coinbase e Revolut X', pp4:'Gestione posizioni reali', pp5:'Notifiche Telegram', pp6:'AI Trading Agent beta',
+    plan_pro_btn:'Passa a Pro', plan_founder_badge:'Accesso beta limitato',
+    plan_founder_period:'Accesso anticipato all\'AI Trading Agent', fp1:'Tutto incluso in Pro', fp2:'AI Trading Agent sperimentale', fp3:'Ingressi automatici dai segnali Zentra', fp4:'Regole automatiche di rischio e uscita', fp5:'Strategie Momentum + Breakout', fp6:'Prezzo Founder bloccato finché sei abbonato',
+    plan_founder_risk:'Funzione in beta. Il trading comporta rischi e può causare perdite. L\'algoritmo è in continuo miglioramento e non garantisce profitti.', plan_founder_btn:'Diventa Founder',
     cta_tag:'Pronti?', cta_title:'Inizia a tradare in modo più intelligente.', cta_sub:'Unisciti ai trader che usano Zentra per automatizzare la loro strategia.',
     cta_btn:'Apri Zentra', cta_note:'Gratuito per iniziare. Nessuna carta di credito.',
   }
 };
 
-let lang = 'en';
-function toggleLang() {
-  lang = lang === 'en' ? 'it' : 'en';
+let lang = 'it';
+function applyLanguage() {
+  document.documentElement.lang = lang;
   document.getElementById('langBtn').textContent = lang === 'en' ? '🇮🇹' : '🇬🇧';
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
@@ -1407,6 +1549,13 @@ function toggleLang() {
   });
   updateAuthCopy();
 }
+
+function toggleLang() {
+  lang = lang === 'en' ? 'it' : 'en';
+  applyLanguage();
+}
+
+applyLanguage();
 
 /* ─── HERO CANVAS CHART ─────────────────────── */
 const canvas = document.getElementById('heroCanvas');

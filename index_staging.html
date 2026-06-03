@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://crypto-agent-back-production-87b2.up.railway.app https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api-staging.zentra.trading https://api.zentra.trading https://api.anthropic.com https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -233,6 +233,29 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .btn-primary:active { opacity:0.85; }
 .plan-badge.free { background:var(--surface3); color:var(--text3); }
 .plan-badge.pro  { background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
+.plan-badge.founder { background:linear-gradient(90deg,#ffb020,#ff6b2b); color:#15110a; }
+.plans-page-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+.app-plan-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:18px; display:flex; flex-direction:column; min-height:430px; box-shadow:0 16px 40px rgba(0,0,0,0.04); }
+.app-plan-card.pro { border-color:rgba(0,82,255,0.35); box-shadow:0 18px 48px rgba(0,82,255,0.12); }
+.app-plan-card.founder { border-color:rgba(255,176,32,0.45); background:linear-gradient(160deg,rgba(255,176,32,0.10),rgba(0,82,255,0.035)); box-shadow:0 18px 52px rgba(255,176,32,0.12); }
+.app-plan-kicker { font-size:10px; font-weight:900; letter-spacing:0.09em; text-transform:uppercase; color:var(--text3); margin-bottom:10px; min-height:18px; }
+.app-plan-card.pro .app-plan-kicker { color:var(--blue); }
+.app-plan-card.founder .app-plan-kicker { color:#d97706; }
+.app-plan-name { font-size:18px; font-weight:900; color:var(--text); letter-spacing:-0.03em; }
+.app-plan-price { font-size:36px; font-weight:900; color:var(--text); letter-spacing:-0.05em; margin-top:10px; }
+.app-plan-price span { font-size:15px; color:var(--text3); letter-spacing:0; font-weight:700; }
+.app-plan-sub { font-size:12px; color:var(--text3); line-height:1.45; margin:6px 0 18px; min-height:34px; }
+.app-plan-feats { list-style:none; display:flex; flex-direction:column; gap:9px; margin:0 0 18px; padding:0; }
+.app-plan-feats li { display:flex; gap:9px; font-size:12.5px; color:var(--text2); line-height:1.35; font-weight:600; }
+.app-plan-feats li::before { content:'✓'; color:var(--green); font-weight:900; flex-shrink:0; }
+.app-plan-feats li.muted { color:var(--text3); }
+.app-plan-feats li.muted::before { content:'×'; color:var(--text3); }
+.app-plan-risk { margin:auto 0 14px; border:1px solid rgba(255,176,32,0.22); background:rgba(255,176,32,0.08); border-radius:12px; padding:10px 11px; font-size:11px; line-height:1.45; color:var(--text2); font-weight:650; }
+.app-plan-btn { margin-top:auto; border:none; border-radius:12px; padding:12px 14px; font-family:var(--sans); font-weight:900; font-size:13px; cursor:pointer; background:var(--surface2); color:var(--text); }
+.app-plan-btn.primary { background:var(--blue); color:#fff; box-shadow:0 6px 24px rgba(0,82,255,0.25); }
+.app-plan-btn.founder { background:linear-gradient(135deg,#ffb020,#ff6b2b); color:#15110a; box-shadow:0 6px 24px rgba(255,176,32,0.22); }
+.app-plan-btn:disabled { opacity:0.6; cursor:default; box-shadow:none; }
+@media (max-width:980px) { .plans-page-grid { grid-template-columns:1fr; } .app-plan-card { min-height:auto; } }
 .pro-locked { opacity:0.45; pointer-events:none; }
 .pro-lock-label { font-size:10px; font-weight:800; color:#1a1200; background:#f59e0b; border-radius:4px; padding:2px 6px; margin-left:6px; letter-spacing:0.04em; }
 #sessionsIndicator { font-size:12px; margin-top:4px; }
@@ -411,6 +434,13 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-item svg { flex-shrink:0; opacity:0.65; }
 .sb-item.active svg, .sb-item:hover svg { opacity:1; }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
+.sb-scan-usage { margin:8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
+.sb-scan-usage-top { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; font-weight:800; color:var(--text2); letter-spacing:.02em; }
+.sb-scan-usage-bar { height:6px; border-radius:999px; background:var(--border); overflow:hidden; margin-top:8px; }
+.sb-scan-usage-fill { height:100%; width:0%; border-radius:999px; background:var(--blue); transition:width .2s ease, background .2s ease; }
+.sb-scan-usage-sub { font-size:10px; color:var(--text3); margin-top:6px; line-height:1.35; }
+.sb-scan-usage.limit .sb-scan-usage-fill { background:var(--red); }
+.sb-scan-usage.limit .sb-scan-usage-sub { color:var(--red); }
 .sb-foot { padding:8px; border-top:1px solid var(--border); flex-shrink:0; }
 .sb-user { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; text-align:left; transition:background 0.15s; font-family:var(--sans); }
 .sb-user:hover { background:var(--surface2); }
@@ -723,7 +753,7 @@ body.auth-active .tabbar { display:none !important; }
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     <span id="pmTelegram">Collega Telegram</span>
   </div>
-  <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? (_plan==='pro' ? manageSubscriptionClick() : (document.getElementById('profileMenu').classList.remove('open'), showPaywall())) : null" style="display:none">
+  <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? (isPaidPlan() ? manageSubscriptionClick() : (document.getElementById('profileMenu').classList.remove('open'), showPaywall())) : null" style="display:none">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
     <span id="pmBillingLabel">Abbonamento</span>
   </div>
@@ -733,7 +763,7 @@ body.auth-active .tabbar { display:none !important; }
         <div style="font-size:12px;font-weight:800;color:#fbbf24;letter-spacing:0.04em;margin-bottom:2px">ZENTRA PRO</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.75);font-weight:500">Sessioni illimitate · più posizioni</div>
       </div>
-      <div style="background:#f59e0b;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:800;color:#1a1200;white-space:nowrap;margin-left:10px">€9.99/mese →</div>
+      <div style="background:#f59e0b;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:800;color:#1a1200;white-space:nowrap;margin-left:10px">€14.99/mese →</div>
     </div>
   </div>
   <div class="profile-menu-item danger" onclick="logout()">
@@ -1138,6 +1168,17 @@ body.auth-active .tabbar { display:none !important; }
     <button class="sb-item" data-tab="exchange" onclick="showTab('exchange',this)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M2 10h20"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Exchange
     </button>
+    <button class="sb-item" data-tab="plans" onclick="showTab('plans',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Piani
+    </button>
+  </div>
+  <div class="sb-scan-usage" id="sbScanUsage" style="display:none">
+    <div class="sb-scan-usage-top">
+      <span>Scansioni Free</span>
+      <span id="sbScanUsageText">0/10</span>
+    </div>
+    <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbScanUsageFill"></div></div>
+    <div class="sb-scan-usage-sub" id="sbScanUsageSub">10 scansioni disponibili oggi</div>
   </div>
   <div style="padding:0 8px;border-top:1px solid var(--border)">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
@@ -1658,6 +1699,50 @@ body.auth-active .tabbar { display:none !important; }
       .scan-tf-btn.active { background:var(--blue); border-color:var(--blue); color:#fff; }
       @keyframes scan-spin { to { transform:rotate(360deg); } }
       .scan-loading-spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--blue); border-radius:50%; animation:scan-spin .75s linear infinite; margin:0 auto; }
+
+      /* ── Zentra AI Chat ── */
+      .ai-fab { position:fixed; bottom:calc(var(--tab-h) + var(--safe-b) + 16px); right:16px; width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#0052ff,#7c3aed); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(0,82,255,0.4); z-index:150; transition:transform .2s,box-shadow .2s; }
+      .ai-fab:hover { transform:scale(1.08); box-shadow:0 6px 28px rgba(0,82,255,0.5); }
+      .ai-fab svg { width:24px; height:24px; color:#fff; }
+      .ai-fab .ai-fab-badge { position:absolute; top:-2px; right:-2px; width:18px; height:18px; border-radius:50%; background:var(--red); border:2px solid var(--bg); font-size:10px; font-weight:800; color:#fff; display:none; align-items:center; justify-content:center; }
+      .ai-panel { position:fixed; bottom:0; right:0; width:min(420px,100vw); height:calc(100vh - 56px); background:#f5f7ff; border-left:1px solid var(--border); border-top:1px solid var(--border); border-radius:16px 0 0 0; z-index:300; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); box-shadow:-8px 0 40px rgba(0,0,0,0.25); }
+      [data-theme="dark"] .ai-panel { background:#0d1128; }
+      .ai-panel.open { transform:translateX(0); }
+      .ai-panel-hdr { display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+      .ai-panel-hdr-icon { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,#0052ff,#7c3aed); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+      .ai-panel-hdr-icon svg { width:18px; height:18px; color:#fff; }
+      .ai-panel-title { font-size:15px; font-weight:800; color:var(--text); flex:1; }
+      .ai-panel-sub { font-size:11px; color:var(--text3); font-weight:500; }
+      .ai-panel-close { width:32px; height:32px; border-radius:8px; border:none; background:var(--surface2); color:var(--text2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; }
+      .ai-panel-close:hover { background:var(--border); color:var(--text); }
+      .ai-messages { flex:1; overflow-y:auto; padding:16px 14px; display:flex; flex-direction:column; gap:12px; }
+      .ai-msg { max-width:88%; display:flex; flex-direction:column; gap:4px; }
+      .ai-msg.user { align-self:flex-end; }
+      .ai-msg.ai { align-self:flex-start; }
+      .ai-bubble { padding:10px 13px; border-radius:14px; font-size:13.5px; line-height:1.55; font-weight:500; white-space:pre-wrap; word-break:break-word; }
+      .ai-msg.user .ai-bubble { background:var(--blue); color:#fff; border-bottom-right-radius:4px; }
+      .ai-msg.ai .ai-bubble { background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; border:1px solid var(--border); }
+      .ai-msg-time { font-size:10px; color:var(--text3); font-weight:500; padding:0 4px; }
+      .ai-msg.user .ai-msg-time { text-align:right; }
+      .ai-typing { align-self:flex-start; display:none; gap:4px; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:14px; border-bottom-left-radius:4px; }
+      .ai-typing.visible { display:flex; }
+      .ai-dot { width:7px; height:7px; border-radius:50%; background:var(--text3); animation:ai-bounce .9s infinite; }
+      .ai-dot:nth-child(2) { animation-delay:.15s; }
+      .ai-dot:nth-child(3) { animation-delay:.3s; }
+      @keyframes ai-bounce { 0%,80%,100% { transform:translateY(0); opacity:.4; } 40% { transform:translateY(-5px); opacity:1; } }
+      .ai-welcome { text-align:center; padding:32px 16px; color:var(--text3); font-size:13px; line-height:1.6; }
+      .ai-welcome strong { color:var(--text2); display:block; margin-bottom:6px; font-size:14px; }
+      .ai-suggestions { display:flex; flex-wrap:wrap; gap:8px; padding:0 14px 12px; }
+      .ai-sug { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:6px 13px; font-size:12px; font-weight:600; color:var(--text2); cursor:pointer; transition:all .15s; white-space:nowrap; }
+      .ai-sug:hover { border-color:var(--blue); color:var(--blue); }
+      .ai-input-row { display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--border); flex-shrink:0; }
+      .ai-input { flex:1; border:1px solid var(--border); background:var(--surface2); color:var(--text); border-radius:12px; padding:10px 13px; font:500 13.5px var(--sans); resize:none; outline:none; max-height:120px; min-height:40px; line-height:1.45; }
+      .ai-input:focus { border-color:rgba(0,82,255,0.5); box-shadow:0 0 0 3px rgba(0,82,255,0.08); }
+      .ai-send { width:40px; height:40px; border-radius:10px; border:none; background:var(--blue); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:opacity .15s; align-self:flex-end; }
+      .ai-send:disabled { opacity:0.4; cursor:not-allowed; }
+      .ai-send svg { width:18px; height:18px; }
+      .ai-ctx-bar { padding:8px 14px; background:rgba(0,82,255,0.06); border-bottom:1px solid rgba(0,82,255,0.12); font-size:11px; color:var(--blue); font-weight:600; display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }
+      .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
     </style>
     <div class="scan-tf-bar">
       <span class="scan-tf-label">Timeframe</span>
@@ -1798,6 +1883,67 @@ body.auth-active .tabbar { display:none !important; }
       </div>
       <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
         <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">Coming Soon</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIANI -->
+  <div class="page" id="page-plans">
+    <div class="ptr-indicator" id="ptr-page-plans"><div class="ptr-spinner"></div></div>
+
+    <div style="padding:20px 0 16px">
+      <div class="home-welcome-sub">Abbonamento</div>
+      <div class="home-username">Piani</div>
+    </div>
+
+    <div class="plans-page-grid">
+      <div class="app-plan-card">
+        <div class="app-plan-kicker">Demo</div>
+        <div class="app-plan-name">Free</div>
+        <div class="app-plan-price">€0<span>/mo</span></div>
+        <div class="app-plan-sub">Per provare Zentra senza usare capitale reale.</div>
+        <ul class="app-plan-feats">
+          <li>10 scansioni di mercato al giorno</li>
+          <li>Trading manuale illimitato in demo</li>
+          <li>Watchlist e dashboard segnali</li>
+          <li class="muted">Collegamento exchange reale</li>
+          <li class="muted">Notifiche Telegram</li>
+          <li class="muted">AI Trading Agent</li>
+        </ul>
+        <button class="app-plan-btn" id="planFreeBtn" onclick="showTab('home',document.querySelector('.sb-item[data-tab=home]'))">Piano attuale</button>
+      </div>
+
+      <div class="app-plan-card pro">
+        <div class="app-plan-kicker">Per trader attivi</div>
+        <div class="app-plan-name">Pro</div>
+        <div class="app-plan-price">€14.99<span>/mo</span></div>
+        <div class="app-plan-sub">Per trading manuale con capitale reale e notifiche operative.</div>
+        <ul class="app-plan-feats">
+          <li>Scansioni di mercato illimitate</li>
+          <li>Trading manuale illimitato</li>
+          <li>Collega Coinbase e Revolut X</li>
+          <li>Gestione posizioni reali</li>
+          <li>Notifiche Telegram</li>
+          <li class="muted">AI Trading Agent beta</li>
+        </ul>
+        <button class="app-plan-btn primary" id="planProBtn" onclick="checkoutPlan('pro')">Passa a Pro</button>
+      </div>
+
+      <div class="app-plan-card founder">
+        <div class="app-plan-kicker">Accesso beta limitato</div>
+        <div class="app-plan-name">Founder</div>
+        <div class="app-plan-price">€49.99<span>/mo</span></div>
+        <div class="app-plan-sub">Accesso anticipato all'AI Trading Agent sperimentale.</div>
+        <ul class="app-plan-feats">
+          <li>Tutto incluso in Pro</li>
+          <li>AI Trading Agent sperimentale</li>
+          <li>Ingressi automatici dai segnali Zentra</li>
+          <li>Regole automatiche di rischio e uscita</li>
+          <li>Strategie Momentum + Breakout</li>
+          <li>Prezzo Founder bloccato finché sei abbonato</li>
+        </ul>
+        <div class="app-plan-risk">Funzione in beta. Il trading comporta rischi e può causare perdite. L'algoritmo è in continuo miglioramento e non garantisce profitti.</div>
+        <button class="app-plan-btn founder" id="planFounderBtn" onclick="checkoutPlan('founder')">Diventa Founder</button>
       </div>
     </div>
   </div>
@@ -1988,7 +2134,7 @@ body.auth-active .tabbar { display:none !important; }
 </div>
 
 <script>
-const API = 'https://crypto-agent-back-production-87b2.up.railway.app';
+const API = 'https://api-staging.zentra.trading';
 
 let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
@@ -2021,6 +2167,8 @@ let _activeExternalExchange = '';
 let _plan = 'free';
 let _sessionsToday = 0;
 let _sessionsPerDay = 1;
+let _scansToday = 0;
+let _scansPerDay = 10;
 let STRIPE_ENABLED = false;
 let _pendingStartCfg = null;
 let _newTradeCount = 0;
@@ -2032,6 +2180,22 @@ function authHeaders() {
   return _authToken
     ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _authToken }
     : { 'Content-Type': 'application/json' };
+}
+
+function isPaidPlan() {
+  return _plan === 'pro' || _plan === 'founder';
+}
+
+function planDisplayName() {
+  if (_plan === 'founder') return 'Zentra Founder';
+  if (_plan === 'pro') return 'Zentra Pro';
+  return 'Piano Free';
+}
+
+function planBadgeText() {
+  if (_plan === 'founder') return 'FOUNDER';
+  if (_plan === 'pro') return 'PRO';
+  return 'FREE';
 }
 
 // ── AVATAR / PROFILO ─────────────────────────────────────────────────────────
@@ -2183,7 +2347,7 @@ async function doLogin() {
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
-    if (!d.has_revx_keys) { showApiKeys(); return; }
+    localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('loginPass','loginPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Accedi'; }
 }
@@ -2205,7 +2369,8 @@ async function doRegister() {
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
-    showApiKeys();
+    localStorage.setItem('ca_active_tab', 'home');
+    hideAuthScreen(); initApp();
   } catch(e) { showFieldError('regPass','regPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Registrati'; }
 }
 
@@ -2241,11 +2406,10 @@ async function checkAuth() {
     _plan = d.plan || 'free';
     _sessionsToday = d.sessions_today || 0;
     _sessionsPerDay = d.sessions_per_day || 1;
+    _scansToday = d.scans_today ?? _scansToday;
+    _scansPerDay = d.scans_per_day ?? _scansPerDay;
     localStorage.setItem('ca_username', _username);
-    if (!d.has_revx_keys) {
-      showAuthScreen();
-      showApiKeys(); return;
-    }
+    if (!localStorage.getItem('ca_active_tab')) localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
   } catch(e) {
     showAuthScreen();
@@ -2307,6 +2471,7 @@ function initApp() {
   loadUserProfile();
   startupSession();
   applyIOSSafeAreaFix();
+  document.dispatchEvent(new Event('zentra:authed'));
 }
 
 async function loadUserProfile() {
@@ -2324,6 +2489,8 @@ async function loadUserProfile() {
       _plan             = billing.plan || _plan;
       _sessionsToday    = billing.sessions_today ?? _sessionsToday;
       _sessionsPerDay   = billing.sessions_per_day ?? _sessionsPerDay;
+      _scansToday       = billing.scans_today ?? _scansToday;
+      _scansPerDay      = billing.scans_per_day ?? _scansPerDay;
     }
 
     _hasRevxKeys = me.has_revx_keys || false;
@@ -3182,6 +3349,7 @@ function showTab(name, el) {
   if (name === 'home') renderHome();
   if (name === 'scanner') resetScannerState();
   if (name === 'exchange') renderExchangePage();
+  if (name === 'plans') renderPlansPage();
   if (name === 'account') renderAccountPage();
   if (name === 'posizioni') {
     const chiuseActive = document.getElementById('posPanelChiuse')?.style.display !== 'none';
@@ -3789,6 +3957,8 @@ async function poll() {
       unlockConfig();
     }
     render();
+    // Keep AI context bar in sync
+    if (typeof _aiInit === 'function') _aiInit();
   } catch(e) { console.error(e); }
 }
 
@@ -4924,14 +5094,22 @@ function closeDrawer() {
 
 
 
-async function refreshMarket() {
+async function refreshMarket(countScan = false) {
   try {
-    const r = await fetch(API + '/market?timeframe=' + _scanTimeframe, { headers: authHeaders() });
+    const url = API + '/market?timeframe=' + encodeURIComponent(_scanTimeframe) + (countScan ? '&count_scan=1' : '');
+    const r = await fetch(url, { headers: authHeaders() });
     const d = await r.json();
+    updateScanUsageFromPayload(d);
+    if (d.error === 'scan_limit') {
+      showScanLimitModal(d.message);
+      return false;
+    }
     mktData = d.market || [];
     _scannerRefreshing = d.scanner_refreshing || false;
     renderMarket();
+    return true;
   } catch(e) {}
+  return false;
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
@@ -4965,12 +5143,46 @@ function syncSidebar() {
   const uinit = document.getElementById('sbAvatarInitial');
   const sbAv  = document.getElementById('sbAvatar');
   if (uname) uname.textContent = _username || '--';
-  if (uplan) uplan.textContent = (_plan === 'pro') ? 'Zentra Pro' : 'Piano Free';
+  if (uplan) uplan.textContent = planDisplayName();
   if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
   // sync avatar image
   const cached = localStorage.getItem('ca_avatar');
   if (sbAv && cached) sbAv.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
   else if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
+  updateScanUsageUI();
+}
+
+function updateScanUsageFromPayload(d) {
+  if (!d) return;
+  if (d.plan) _plan = d.plan;
+  if (d.scans_today !== undefined) _scansToday = d.scans_today ?? _scansToday;
+  if (d.scans_per_day !== undefined) _scansPerDay = d.scans_per_day ?? _scansPerDay;
+  updateScanUsageUI();
+}
+
+function updateScanUsageUI() {
+  const box = document.getElementById('sbScanUsage');
+  if (!box) return;
+  if (_plan !== 'free') {
+    box.style.display = 'none';
+    return;
+  }
+  const total = Math.max(1, Number(_scansPerDay) || 10);
+  const used = Math.min(total, Math.max(0, Number(_scansToday) || 0));
+  const remaining = Math.max(0, total - used);
+  const pct = Math.round((used / total) * 100);
+  box.style.display = '';
+  box.classList.toggle('limit', remaining <= 0);
+  const text = document.getElementById('sbScanUsageText');
+  const fill = document.getElementById('sbScanUsageFill');
+  const sub = document.getElementById('sbScanUsageSub');
+  if (text) text.textContent = `${used}/${total}`;
+  if (fill) fill.style.width = pct + '%';
+  if (sub) {
+    sub.textContent = remaining > 0
+      ? `${remaining} scansioni disponibili oggi`
+      : 'Limite raggiunto. Passa a Pro o Founder.';
+  }
 }
 
 function navigateToAccount() {
@@ -4992,14 +5204,17 @@ function renderAccountPage() {
   // Plan block
   const planBlock = document.getElementById('accPlanBlock');
   if (planBlock) {
-    const isPro = _plan === 'pro';
+    const isPro = isPaidPlan();
+    const isFounder = _plan === 'founder';
+    const planName = planDisplayName();
+    const badgeText = planBadgeText();
     planBlock.innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
         <div style="width:34px;height:34px;border-radius:9px;background:${isPro?'rgba(124,58,237,0.15)':'rgba(80,90,200,0.10)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${isPro?'#7c3aed':'var(--blue)'}" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${isFounder?'#ffb020':(isPro?'#7c3aed':'var(--blue)')}" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         </div>
         <div>
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${isPro?'Zentra Pro':'Piano Free'} <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:${isPro?'rgba(124,58,237,0.2)':'rgba(80,90,200,0.12)'};color:${isPro?'#a78bfa':'var(--blue)'};vertical-align:middle">${isPro?'PRO':'FREE'}</span></div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${planName} <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:${isFounder?'rgba(255,176,32,0.18)':(isPro?'rgba(124,58,237,0.2)':'rgba(80,90,200,0.12)')};color:${isFounder?'#ffb020':(isPro?'#a78bfa':'var(--blue)')};vertical-align:middle">${badgeText}</span></div>
           <div style="font-size:12px;color:var(--text3);margin-top:2px">${isPro?'Accesso completo':'Funzionalità base'}</div>
         </div>
       </div>
@@ -5019,6 +5234,36 @@ function renderAccountPage() {
   // Telegram
   const tgSub = document.getElementById('accTgSub');
   if (tgSub) tgSub.textContent = window._tgLinked ? 'Collegato' : 'Non collegato';
+}
+
+function renderPlansPage() {
+  const freeBtn = document.getElementById('planFreeBtn');
+  const proBtn = document.getElementById('planProBtn');
+  const founderBtn = document.getElementById('planFounderBtn');
+  if (freeBtn) {
+    freeBtn.textContent = _plan === 'free' ? 'Piano attuale' : 'Incluso nel tuo piano';
+    freeBtn.disabled = true;
+  }
+  if (proBtn) {
+    if (_plan === 'pro') {
+      proBtn.textContent = 'Gestisci Pro';
+      proBtn.disabled = false;
+    } else if (_plan === 'founder') {
+      proBtn.textContent = 'Incluso in Founder';
+      proBtn.disabled = true;
+    } else {
+      proBtn.textContent = 'Passa a Pro';
+      proBtn.disabled = false;
+    }
+  }
+  if (founderBtn) {
+    if (_plan === 'founder') {
+      founderBtn.textContent = 'Gestisci Founder';
+    } else {
+      founderBtn.textContent = _plan === 'pro' ? 'Passa a Founder' : 'Diventa Founder';
+    }
+    founderBtn.disabled = false;
+  }
 }
 
 function renderExchangePage() {
@@ -5219,7 +5464,8 @@ async function selectScanSignal(key, el) {
   if (card)  card.style.display  = '';
   const list = document.getElementById('scannerList');
   if (list) list.innerHTML = _scanSpinnerHTML;
-  await refreshMarket();
+  const ok = await refreshMarket(true);
+  if (ok === false) return;
   renderScanner();
 }
 
@@ -5642,7 +5888,14 @@ document.addEventListener('touchstart', e => {
 
 // ── BILLING / PAYWALL ─────────────────────────────────────────────────────────
 
-function showPaywall(msg) {
+let _paywallAction = 'checkout';
+
+function showPaywall(msg, action = 'checkout') {
+  _paywallAction = action;
+  const title = document.getElementById('paywallTitle');
+  const btn = document.getElementById('paywallPrimaryBtn');
+  if (title) title.textContent = action === 'plans' ? 'Scansioni gratuite esaurite' : 'Piano Free';
+  if (btn) btn.textContent = action === 'plans' ? 'Vedi piani' : 'Passa a Pro';
   document.getElementById('paywallMsg').textContent = msg || 'Passa a Pro per sbloccare sessioni illimitate.';
   document.getElementById('paywallModal').classList.add('open');
 }
@@ -5652,11 +5905,31 @@ function closePaywall() {
 }
 
 async function upgradeToProClick() {
+  await checkoutPlan('pro');
+}
+
+function handlePaywallPrimary() {
+  closePaywall();
+  if (_paywallAction === 'plans') {
+    showTab('plans', document.querySelector('.sb-item[data-tab="plans"]'));
+    return;
+  }
+  upgradeToProClick();
+}
+
+function showScanLimitModal(msg) {
+  showPaywall(msg || 'Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.', 'plans');
+}
+
+async function checkoutPlan(plan) {
   if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
+  if (plan === 'pro' && _plan === 'pro') { await manageSubscriptionClick(); return; }
+  if (plan === 'founder' && _plan === 'founder') { await manageSubscriptionClick(); return; }
+  if (plan !== 'pro' && plan !== 'founder') { return; }
   try {
     const r = await fetch(API + '/billing/checkout', {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ success_url: location.href, cancel_url: location.href })
+      body: JSON.stringify({ plan, success_url: location.href, cancel_url: location.href })
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
@@ -5680,8 +5953,8 @@ async function manageSubscriptionClick() {
 function updatePlanUI() {
   const badge = document.getElementById('planBadge');
   if (badge) {
-    badge.textContent = _plan === 'pro' ? 'PRO' : 'FREE';
-    badge.className = 'plan-badge ' + (_plan === 'pro' ? 'pro' : 'free');
+    badge.textContent = planBadgeText();
+    badge.className = 'plan-badge ' + (_plan === 'founder' ? 'founder' : (_plan === 'pro' ? 'pro' : 'free'));
     badge.style.display = '';
   }
   const sesEl = document.getElementById('sessionsIndicator');
@@ -5702,10 +5975,12 @@ function updatePlanUI() {
   // Voce "Gestisci abbonamento" nel menu — solo Pro con Stripe configurato
   const pmBilling = document.getElementById('pmBillingItem');
   if (pmBilling) {
-    pmBilling.style.display = (STRIPE_ENABLED && _plan === 'pro') ? '' : 'none';
+    pmBilling.style.display = (STRIPE_ENABLED && isPaidPlan()) ? '' : 'none';
   }
   // Lock/unlock config pro features
   applyPlanConfig();
+  updateScanUsageUI();
+  if (document.getElementById('page-plans')?.classList.contains('active')) renderPlansPage();
 }
 
 function applyPlanConfig() {
@@ -5751,9 +6026,11 @@ function applyPlanConfig() {
           if (r.ok) {
             const d = await r.json();
             STRIPE_ENABLED = d.stripe_enabled || STRIPE_ENABLED;
-            if (d.plan === 'pro') {
-              _plan = 'pro';
+            if (d.plan === 'pro' || d.plan === 'founder') {
+              _plan = d.plan;
               _sessionsToday = d.sessions_today ?? _sessionsToday;
+              _scansToday = d.scans_today ?? _scansToday;
+              _scansPerDay = d.scans_per_day ?? _scansPerDay;
               updatePlanUI();
               break;
             }
@@ -5804,10 +6081,10 @@ function closeProWelcome() {
 <div class="modal-overlay" id="paywallModal" onclick="if(event.target===this)closePaywall()">
   <div class="modal-card" style="max-width:360px;text-align:center;padding:32px 24px">
     <div style="font-size:40px;margin-bottom:12px">🔒</div>
-    <div style="font-size:20px;font-weight:700;margin-bottom:8px">Piano Free</div>
+    <div id="paywallTitle" style="font-size:20px;font-weight:700;margin-bottom:8px">Piano Free</div>
     <p id="paywallMsg" style="color:var(--text2);font-size:14px;margin-bottom:24px;line-height:1.5"></p>
     <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:20px;text-align:left">
-      <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">✦ Zentra Pro — €9.99/mese</div>
+      <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">Zentra Pro — €14.99/mese</div>
       <div style="font-size:13px;color:var(--text2);line-height:1.8">
         ✓ Sessioni illimitate al giorno<br>
         ✓ Posizioni multiple contemporaneamente<br>
@@ -5815,13 +6092,59 @@ function closeProWelcome() {
         ✓ Allocazione per trade personalizzabile
       </div>
     </div>
-    <button class="btn-primary" style="width:100%;padding:14px;font-size:16px;margin-bottom:10px;cursor:pointer" onclick="upgradeToProClick()">Passa a Pro</button>
+    <button class="btn-primary" id="paywallPrimaryBtn" style="width:100%;padding:14px;font-size:16px;margin-bottom:10px;cursor:pointer" onclick="handlePaywallPrimary()">Passa a Pro</button>
     <button onclick="closePaywall()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">Forse dopo</button>
     <div style="font-size:11px;color:var(--text3);margin-top:14px;line-height:1.6">Procedendo accetti i <a href="terms.html" style="color:var(--blue)">Termini di Servizio</a> e la <a href="privacy.html" style="color:var(--blue)">Privacy Policy</a></div>
   </div>
 </div>
 
 <!-- Banner informativa storage -->
+<!-- ── Zentra AI Chat Widget ── -->
+<button class="ai-fab" id="aiFab" onclick="toggleAIChat()" aria-label="Zentra AI" style="display:none">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12"/><path d="M12 8v4l3 3"/><circle cx="4.5" cy="4.5" r="1.5"/></svg>
+  <span class="ai-fab-badge" id="aiFabBadge"></span>
+</button>
+
+<div class="ai-panel" id="aiPanel">
+  <div class="ai-panel-hdr">
+    <div class="ai-panel-hdr-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="ai-panel-title">Zentra AI</div>
+      <div class="ai-panel-sub" id="aiPanelSub">Copilot finanziario · Live</div>
+    </div>
+    <button class="ai-panel-close" onclick="toggleAIChat()">×</button>
+  </div>
+  <div class="ai-ctx-bar" id="aiCtxBar">
+    <span class="ai-ctx-pill">📊 Mercato live</span>
+    <span class="ai-ctx-pill">📡 Scanner</span>
+    <span class="ai-ctx-pill" id="aiCtxPositions">📂 Posizioni</span>
+    <span class="ai-ctx-pill" id="aiCtxSession">⚙️ Sessione</span>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="ai-welcome" id="aiWelcome">
+      <strong>Ciao, sono Zentra AI</strong>
+      Analizzo il mercato live, i tuoi segnali scanner e le posizioni aperte.<br>Chiedimi qualsiasi cosa sul trading.
+    </div>
+  </div>
+  <div class="ai-typing" id="aiTyping">
+    <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
+  </div>
+  <div class="ai-suggestions" id="aiSuggestions">
+    <button class="ai-sug" onclick="aiSuggest(this)">Analizza il mercato ora</button>
+    <button class="ai-sug" onclick="aiSuggest(this)">Ci sono setup interessanti?</button>
+    <button class="ai-sug" onclick="aiSuggest(this)">Come stanno le mie posizioni?</button>
+    <button class="ai-sug" onclick="aiSuggest(this)">Consigli sulla sessione attiva</button>
+  </div>
+  <div class="ai-input-row">
+    <textarea class="ai-input" id="aiInput" rows="1" placeholder="Chiedi a Zentra AI…" onkeydown="aiInputKeydown(event)" oninput="aiInputResize(this)"></textarea>
+    <button class="ai-send" id="aiSend" onclick="sendAIMessage()" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
 <div id="cookieBanner" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);left:12px;right:12px;z-index:450;background:var(--surface);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--glass-border);border-radius:14px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.28);flex-direction:column;gap:10px">
   <div style="font-size:12px;color:var(--text2);line-height:1.5">
     Zentra utilizza token di autenticazione in memoria locale per mantenere la sessione attiva. Non usiamo cookie di profilazione o di terze parti.
@@ -5834,6 +6157,136 @@ function closeProWelcome() {
     const b = document.getElementById('cookieBanner');
     if (b) b.style.display = 'flex';
   }
+</script>
+
+<script>
+/* ── Zentra AI ── */
+let _aiOpen = false;
+let _aiLoading = false;
+let _aiUnread = 0;
+const _aiHistory = [];
+
+function toggleAIChat() {
+  _aiOpen = !_aiOpen;
+  document.getElementById('aiPanel').classList.toggle('open', _aiOpen);
+  if (_aiOpen) {
+    _aiUnread = 0;
+    document.getElementById('aiFabBadge').style.display = 'none';
+    setTimeout(() => document.getElementById('aiInput').focus(), 300);
+  }
+}
+
+function aiInputResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  document.getElementById('aiSend').disabled = !el.value.trim();
+}
+
+function aiInputKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (!document.getElementById('aiSend').disabled) sendAIMessage();
+  }
+}
+
+function aiSuggest(btn) {
+  const msg = btn.textContent.trim();
+  document.getElementById('aiInput').value = msg;
+  document.getElementById('aiSend').disabled = false;
+  sendAIMessage();
+}
+
+function _aiTime() {
+  return new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+}
+
+function _aiAppendMsg(role, content) {
+  const msgs = document.getElementById('aiMessages');
+  const welcome = document.getElementById('aiWelcome');
+  if (welcome) welcome.remove();
+
+  const sug = document.getElementById('aiSuggestions');
+  if (sug) sug.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'ai-msg ' + role;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'ai-bubble';
+  bubble.textContent = content;
+
+  const time = document.createElement('div');
+  time.className = 'ai-msg-time';
+  time.textContent = _aiTime();
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(time);
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+  return wrap;
+}
+
+async function sendAIMessage() {
+  const input = document.getElementById('aiInput');
+  const msg = input.value.trim();
+  if (!msg || _aiLoading) return;
+
+  _aiLoading = true;
+  document.getElementById('aiSend').disabled = true;
+  input.value = '';
+  input.style.height = 'auto';
+
+  _aiAppendMsg('user', msg);
+
+  const typing = document.getElementById('aiTyping');
+  typing.classList.add('visible');
+  document.getElementById('aiMessages').scrollTop = 999999;
+
+  try {
+    const r = await fetch(API + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ message: msg })
+    });
+    const d = await r.json();
+    typing.classList.remove('visible');
+
+    if (d.reply) {
+      _aiAppendMsg('ai', d.reply);
+      if (!_aiOpen) {
+        _aiUnread++;
+        const badge = document.getElementById('aiFabBadge');
+        badge.textContent = _aiUnread;
+        badge.style.display = 'flex';
+      }
+    } else {
+      _aiAppendMsg('ai', '⚠️ ' + (d.error || 'Errore nella risposta. Riprova.'));
+    }
+  } catch (e) {
+    typing.classList.remove('visible');
+    _aiAppendMsg('ai', '⚠️ Connessione persa. Controlla la rete e riprova.');
+  }
+
+  _aiLoading = false;
+  document.getElementById('aiSend').disabled = false;
+  document.getElementById('aiMessages').scrollTop = 999999;
+}
+
+function _aiInit() {
+  const fab = document.getElementById('aiFab');
+  if (fab) fab.style.display = 'flex';
+
+  // Update context bar based on live state
+  const pos = (S && S.positions) ? S.positions.length : 0;
+  const running = S && S.running;
+  const posEl = document.getElementById('aiCtxPositions');
+  const sesEl = document.getElementById('aiCtxSession');
+  if (posEl) posEl.textContent = pos > 0 ? `📂 ${pos} posizione${pos > 1 ? 'i' : ''}` : '📂 Nessuna posizione';
+  if (sesEl) sesEl.textContent = running ? '⚙️ Sessione attiva' : '⚙️ Sessione ferma';
+}
+
+// Show AI fab after auth
+document.addEventListener('zentra:authed', _aiInit);
 </script>
 
 </body>
