@@ -434,6 +434,13 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-item svg { flex-shrink:0; opacity:0.65; }
 .sb-item.active svg, .sb-item:hover svg { opacity:1; }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
+.sb-scan-usage { margin:8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
+.sb-scan-usage-top { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; font-weight:800; color:var(--text2); letter-spacing:.02em; }
+.sb-scan-usage-bar { height:6px; border-radius:999px; background:var(--border); overflow:hidden; margin-top:8px; }
+.sb-scan-usage-fill { height:100%; width:0%; border-radius:999px; background:var(--blue); transition:width .2s ease, background .2s ease; }
+.sb-scan-usage-sub { font-size:10px; color:var(--text3); margin-top:6px; line-height:1.35; }
+.sb-scan-usage.limit .sb-scan-usage-fill { background:var(--red); }
+.sb-scan-usage.limit .sb-scan-usage-sub { color:var(--red); }
 .sb-foot { padding:8px; border-top:1px solid var(--border); flex-shrink:0; }
 .sb-user { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; text-align:left; transition:background 0.15s; font-family:var(--sans); }
 .sb-user:hover { background:var(--surface2); }
@@ -1164,6 +1171,14 @@ body.auth-active .tabbar { display:none !important; }
     <button class="sb-item" data-tab="plans" onclick="showTab('plans',this)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Piani
     </button>
+  </div>
+  <div class="sb-scan-usage" id="sbScanUsage" style="display:none">
+    <div class="sb-scan-usage-top">
+      <span>Scansioni Free</span>
+      <span id="sbScanUsageText">0/10</span>
+    </div>
+    <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbScanUsageFill"></div></div>
+    <div class="sb-scan-usage-sub" id="sbScanUsageSub">10 scansioni disponibili oggi</div>
   </div>
   <div style="padding:0 8px;border-top:1px solid var(--border)">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
@@ -2108,6 +2123,8 @@ let _activeExternalExchange = '';
 let _plan = 'free';
 let _sessionsToday = 0;
 let _sessionsPerDay = 1;
+let _scansToday = 0;
+let _scansPerDay = 10;
 let STRIPE_ENABLED = false;
 let _pendingStartCfg = null;
 let _newTradeCount = 0;
@@ -2345,6 +2362,8 @@ async function checkAuth() {
     _plan = d.plan || 'free';
     _sessionsToday = d.sessions_today || 0;
     _sessionsPerDay = d.sessions_per_day || 1;
+    _scansToday = d.scans_today ?? _scansToday;
+    _scansPerDay = d.scans_per_day ?? _scansPerDay;
     localStorage.setItem('ca_username', _username);
     if (!localStorage.getItem('ca_active_tab')) localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
@@ -2425,6 +2444,8 @@ async function loadUserProfile() {
       _plan             = billing.plan || _plan;
       _sessionsToday    = billing.sessions_today ?? _sessionsToday;
       _sessionsPerDay   = billing.sessions_per_day ?? _sessionsPerDay;
+      _scansToday       = billing.scans_today ?? _scansToday;
+      _scansPerDay      = billing.scans_per_day ?? _scansPerDay;
     }
 
     _hasRevxKeys = me.has_revx_keys || false;
@@ -5026,14 +5047,22 @@ function closeDrawer() {
 
 
 
-async function refreshMarket() {
+async function refreshMarket(countScan = false) {
   try {
-    const r = await fetch(API + '/market?timeframe=' + _scanTimeframe, { headers: authHeaders() });
+    const url = API + '/market?timeframe=' + encodeURIComponent(_scanTimeframe) + (countScan ? '&count_scan=1' : '');
+    const r = await fetch(url, { headers: authHeaders() });
     const d = await r.json();
+    updateScanUsageFromPayload(d);
+    if (d.error === 'scan_limit') {
+      showScanLimitModal(d.message);
+      return false;
+    }
     mktData = d.market || [];
     _scannerRefreshing = d.scanner_refreshing || false;
     renderMarket();
+    return true;
   } catch(e) {}
+  return false;
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
@@ -5073,6 +5102,40 @@ function syncSidebar() {
   const cached = localStorage.getItem('ca_avatar');
   if (sbAv && cached) sbAv.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
   else if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
+  updateScanUsageUI();
+}
+
+function updateScanUsageFromPayload(d) {
+  if (!d) return;
+  if (d.plan) _plan = d.plan;
+  if (d.scans_today !== undefined) _scansToday = d.scans_today ?? _scansToday;
+  if (d.scans_per_day !== undefined) _scansPerDay = d.scans_per_day ?? _scansPerDay;
+  updateScanUsageUI();
+}
+
+function updateScanUsageUI() {
+  const box = document.getElementById('sbScanUsage');
+  if (!box) return;
+  if (_plan !== 'free') {
+    box.style.display = 'none';
+    return;
+  }
+  const total = Math.max(1, Number(_scansPerDay) || 10);
+  const used = Math.min(total, Math.max(0, Number(_scansToday) || 0));
+  const remaining = Math.max(0, total - used);
+  const pct = Math.round((used / total) * 100);
+  box.style.display = '';
+  box.classList.toggle('limit', remaining <= 0);
+  const text = document.getElementById('sbScanUsageText');
+  const fill = document.getElementById('sbScanUsageFill');
+  const sub = document.getElementById('sbScanUsageSub');
+  if (text) text.textContent = `${used}/${total}`;
+  if (fill) fill.style.width = pct + '%';
+  if (sub) {
+    sub.textContent = remaining > 0
+      ? `${remaining} scansioni disponibili oggi`
+      : 'Limite raggiunto. Passa a Pro o Founder.';
+  }
 }
 
 function navigateToAccount() {
@@ -5354,7 +5417,8 @@ async function selectScanSignal(key, el) {
   if (card)  card.style.display  = '';
   const list = document.getElementById('scannerList');
   if (list) list.innerHTML = _scanSpinnerHTML;
-  await refreshMarket();
+  const ok = await refreshMarket(true);
+  if (ok === false) return;
   renderScanner();
 }
 
@@ -5777,7 +5841,14 @@ document.addEventListener('touchstart', e => {
 
 // ── BILLING / PAYWALL ─────────────────────────────────────────────────────────
 
-function showPaywall(msg) {
+let _paywallAction = 'checkout';
+
+function showPaywall(msg, action = 'checkout') {
+  _paywallAction = action;
+  const title = document.getElementById('paywallTitle');
+  const btn = document.getElementById('paywallPrimaryBtn');
+  if (title) title.textContent = action === 'plans' ? 'Scansioni gratuite esaurite' : 'Piano Free';
+  if (btn) btn.textContent = action === 'plans' ? 'Vedi piani' : 'Passa a Pro';
   document.getElementById('paywallMsg').textContent = msg || 'Passa a Pro per sbloccare sessioni illimitate.';
   document.getElementById('paywallModal').classList.add('open');
 }
@@ -5788,6 +5859,19 @@ function closePaywall() {
 
 async function upgradeToProClick() {
   await checkoutPlan('pro');
+}
+
+function handlePaywallPrimary() {
+  closePaywall();
+  if (_paywallAction === 'plans') {
+    showTab('plans', document.querySelector('.sb-item[data-tab="plans"]'));
+    return;
+  }
+  upgradeToProClick();
+}
+
+function showScanLimitModal(msg) {
+  showPaywall(msg || 'Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.', 'plans');
 }
 
 async function checkoutPlan(plan) {
@@ -5848,6 +5932,7 @@ function updatePlanUI() {
   }
   // Lock/unlock config pro features
   applyPlanConfig();
+  updateScanUsageUI();
   if (document.getElementById('page-plans')?.classList.contains('active')) renderPlansPage();
 }
 
@@ -5897,6 +5982,8 @@ function applyPlanConfig() {
             if (d.plan === 'pro' || d.plan === 'founder') {
               _plan = d.plan;
               _sessionsToday = d.sessions_today ?? _sessionsToday;
+              _scansToday = d.scans_today ?? _scansToday;
+              _scansPerDay = d.scans_per_day ?? _scansPerDay;
               updatePlanUI();
               break;
             }
@@ -5947,7 +6034,7 @@ function closeProWelcome() {
 <div class="modal-overlay" id="paywallModal" onclick="if(event.target===this)closePaywall()">
   <div class="modal-card" style="max-width:360px;text-align:center;padding:32px 24px">
     <div style="font-size:40px;margin-bottom:12px">🔒</div>
-    <div style="font-size:20px;font-weight:700;margin-bottom:8px">Piano Free</div>
+    <div id="paywallTitle" style="font-size:20px;font-weight:700;margin-bottom:8px">Piano Free</div>
     <p id="paywallMsg" style="color:var(--text2);font-size:14px;margin-bottom:24px;line-height:1.5"></p>
     <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:20px;text-align:left">
       <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">Zentra Pro — €14.99/mese</div>
@@ -5958,7 +6045,7 @@ function closeProWelcome() {
         ✓ Allocazione per trade personalizzabile
       </div>
     </div>
-    <button class="btn-primary" style="width:100%;padding:14px;font-size:16px;margin-bottom:10px;cursor:pointer" onclick="upgradeToProClick()">Passa a Pro</button>
+    <button class="btn-primary" id="paywallPrimaryBtn" style="width:100%;padding:14px;font-size:16px;margin-bottom:10px;cursor:pointer" onclick="handlePaywallPrimary()">Passa a Pro</button>
     <button onclick="closePaywall()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">Forse dopo</button>
     <div style="font-size:11px;color:var(--text3);margin-top:14px;line-height:1.6">Procedendo accetti i <a href="terms.html" style="color:var(--blue)">Termini di Servizio</a> e la <a href="privacy.html" style="color:var(--blue)">Privacy Policy</a></div>
   </div>

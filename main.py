@@ -138,6 +138,7 @@ def restore_debug_log(msg: str):
 
 # ── FREE PLAN LIMITS ──────────────────────────────────────────────────────────
 FREE_SESSIONS_PER_DAY  = 1
+FREE_SCANS_PER_DAY     = 10
 FREE_MAX_SESSION_HOURS = 2
 FREE_MAX_POSITIONS     = 1
 FREE_ALLOC_PCT         = 1.0    # allocazione fissa 100% — 1 posizione = tutto il capitale sessione
@@ -3298,6 +3299,8 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_session_date DATE;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_today INT DEFAULT 0;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_scan_date DATE;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS scans_today INT DEFAULT 0;
                     CREATE TABLE IF NOT EXISTS trades_history (
                         id SERIAL PRIMARY KEY,
                         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -3812,7 +3815,8 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         row = await conn.fetchrow(
             "SELECT username, display_name, avatar_b64, sim_mode, revx_key_id, "
             "binance_api_key, coinbase_api_key, telegram_chat_id, "
-            "plan, subscription_expires_at, last_session_date, sessions_today FROM users WHERE id = $1", user_id
+            "plan, subscription_expires_at, last_session_date, sessions_today, "
+            "last_scan_date, scans_today FROM users WHERE id = $1", user_id
         )
     has_keys = bool(row.get("revx_key_id"))
     has_binance_keys = bool(row.get("binance_api_key"))
@@ -3830,6 +3834,8 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
     today = datetime.utcnow().date()
     last_date = row["last_session_date"]
     sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
+    last_scan_date = row["last_scan_date"]
+    scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
     return {
         "username": dname,
         "has_revx_keys": has_keys,
@@ -3841,6 +3847,9 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         "plan": raw_plan,
         "sessions_today": sessions_today,
         "sessions_per_day": FREE_SESSIONS_PER_DAY,
+        "scans_today": scans_today,
+        "scans_per_day": FREE_SCANS_PER_DAY,
+        "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today) if raw_plan == "free" else 999,
         "subscription_expires_at": exp.isoformat() if exp else None,
     }
 
@@ -3924,11 +3933,56 @@ async def get_market(
     request: Request,
     user_id: int = Depends(get_current_user),
     timeframe: str = Query("1h"),
+    count_scan: bool = Query(False),
 ):
     check_rate_limit(request, max_attempts=60, window=60, key_suffix="market")
 
     if timeframe not in VALID_TF:
         timeframe = "1h"
+
+    raw_plan = "free"
+    scans_today = 0
+    today = datetime.utcnow().date()
+    if db_pool:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT plan, subscription_expires_at, last_scan_date, scans_today FROM users WHERE id = $1",
+                user_id
+            )
+            if row:
+                raw_plan = normalize_plan(row["plan"] or "free")
+                exp = row["subscription_expires_at"]
+                if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
+                    raw_plan = "free"
+                last_scan_date = row["last_scan_date"]
+                scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
+                if count_scan and raw_plan == "free":
+                    updated = await conn.fetchrow(
+                        """
+                        UPDATE users
+                           SET last_scan_date = $1,
+                               scans_today = CASE
+                                   WHEN last_scan_date = $1 THEN COALESCE(scans_today, 0) + 1
+                                   ELSE 1
+                               END
+                         WHERE id = $2
+                           AND (last_scan_date IS DISTINCT FROM $1 OR COALESCE(scans_today, 0) < $3)
+                     RETURNING scans_today
+                        """,
+                        today, user_id, FREE_SCANS_PER_DAY
+                    )
+                    if not updated:
+                        return {
+                            "error": "scan_limit",
+                            "message": "Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.",
+                            "plan": raw_plan,
+                            "scans_today": scans_today,
+                            "scans_per_day": FREE_SCANS_PER_DAY,
+                            "scans_remaining": 0,
+                            "market": [],
+                            "scanner_refreshing": False,
+                        }
+                    scans_today = updated["scans_today"] or scans_today
 
     # Refresh scanner cache per il TF richiesto se assente o scaduta
     tf_age = time.time() - _scanner_candles_ts.get(timeframe, 0)
@@ -3991,7 +4045,14 @@ async def get_market(
         items = [i for i in items if i["symbol"] in _revx_pairs]
 
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
-    return {"market": result, "scanner_refreshing": scanner_refreshing}
+    return {
+        "market": result,
+        "scanner_refreshing": scanner_refreshing,
+        "plan": raw_plan,
+        "scans_today": scans_today,
+        "scans_per_day": FREE_SCANS_PER_DAY,
+        "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today) if raw_plan == "free" else 999,
+    }
 
 @app.get("/trades")
 async def get_trades(request: Request, user_id: int = Depends(get_current_user)):
@@ -5307,7 +5368,7 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT plan, subscription_expires_at, last_session_date, sessions_today FROM users WHERE id = $1", user_id)
+            "SELECT plan, subscription_expires_at, last_session_date, sessions_today, last_scan_date, scans_today FROM users WHERE id = $1", user_id)
     raw_plan = normalize_plan(row["plan"] or "free")
     exp = row["subscription_expires_at"]
     if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
@@ -5315,11 +5376,16 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
     today = datetime.utcnow().date()
     last_date = row["last_session_date"]
     sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
+    last_scan_date = row["last_scan_date"]
+    scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
     return {
         "plan": raw_plan,
         "sessions_today": sessions_today,
         "sessions_per_day": FREE_SESSIONS_PER_DAY,
         "sessions_remaining": max(0, FREE_SESSIONS_PER_DAY - sessions_today) if raw_plan == "free" else 999,
+        "scans_today": scans_today,
+        "scans_per_day": FREE_SCANS_PER_DAY,
+        "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today) if raw_plan == "free" else 999,
         "subscription_expires_at": exp.isoformat() if exp else None,
         "stripe_enabled": bool(STRIPE_SECRET_KEY and (STRIPE_PRO_PRICE_ID or STRIPE_FOUNDER_PRICE_ID)),
     }

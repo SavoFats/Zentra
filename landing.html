@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zentra — AI Crypto Trading</title>
-<meta name="description" content="The AI-powered crypto trading agent. Automated strategies, real-time scanner, and smart risk management — all in one platform.">
-<meta property="og:title" content="Zentra — AI Crypto Trading">
-<meta property="og:description" content="Trade smarter with AI. Automated strategies, real-time scanner, and smart risk management.">
+<title>Zentra — Agente AI per Crypto Trading</title>
+<meta name="description" content="L'agente AI per crypto trading. Scanner in tempo reale, strategie automatiche e gestione del rischio smart in un'unica piattaforma.">
+<meta property="og:title" content="Zentra — Agente AI per Crypto Trading">
+<meta property="og:description" content="Trada in modo più intelligente con Zentra: scanner live, segnali automatici e gestione del rischio.">
 <style>
 :root {
   --blue: #0052ff;
@@ -721,13 +721,13 @@ footer {
     Zentra
   </a>
   <div class="nav-links">
-    <a href="#features" data-i18n="nav_features">Features</a>
-    <a href="#how" data-i18n="nav_how">How it works</a>
-    <a href="#plans" data-i18n="nav_plans">Plans</a>
+    <a href="#features" data-i18n="nav_features">Funzionalità</a>
+    <a href="#how" data-i18n="nav_how">Come funziona</a>
+    <a href="#plans" data-i18n="nav_plans">Piani</a>
   </div>
   <div class="nav-actions">
-    <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇮🇹</button>
-    <a class="btn-primary js-auth-trigger" href="/app" data-i18n="nav_open_app">Open App ↗</a>
+    <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧</button>
+    <a class="btn-primary js-auth-trigger" href="/app" data-i18n="nav_open_app">Apri App ↗</a>
   </div>
 </nav>
 
@@ -735,7 +735,7 @@ footer {
 <div class="auth-modal" id="authModal" aria-hidden="true">
   <div class="auth-backdrop" onclick="closeAuthModal()"></div>
   <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <button class="auth-close" type="button" onclick="closeAuthModal()" aria-label="Close">×</button>
+    <button class="auth-close" type="button" onclick="closeAuthModal()" aria-label="Chiudi">×</button>
     <div class="auth-mark">
       <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="28" height="28" rx="7" fill="#0052ff"/>
@@ -743,8 +743,8 @@ footer {
         <circle cx="24" cy="12" r="2" fill="white"/>
       </svg>
     </div>
-    <h2 class="auth-title" id="authTitle">Almost there, open your Zentra account</h2>
-    <p class="auth-sub" id="authSub">Create your workspace to track signals, connect your exchange, and keep every live position under control.</p>
+    <h2 class="auth-title" id="authTitle">Ci siamo quasi, apri il tuo account Zentra</h2>
+    <p class="auth-sub" id="authSub">Crea il tuo workspace per seguire i segnali, collegare il tuo exchange e tenere sotto controllo ogni posizione aperta.</p>
 
     <button class="auth-google" id="googleAuthBtn" type="button" onclick="continueWithGoogle()">
       <svg class="google-g" viewBox="0 0 48 48" aria-hidden="true">
@@ -753,14 +753,14 @@ footer {
         <path fill="#FBBC05" d="M10.2 28.1c-.5-1.4-.8-2.9-.8-4.6s.3-3.2.8-4.6L2.6 13C1 16.2.1 19.8.1 23.5s.9 7.3 2.5 10.5l7.6-5.9z"/>
         <path fill="#34A853" d="M24 46.3c5.7 0 10.5-1.9 14-5.2l-7-5.4c-1.9 1.3-4.4 2.1-7 2.1-6.5 0-12-4.3-13.8-10.2L2.6 33.5c3.9 7.8 12 12.8 21.4 12.8z"/>
       </svg>
-      <span id="googleAuthText">Continue with Google</span>
+      <span id="googleAuthText">Continua con Google</span>
     </button>
-    <button class="auth-email-toggle" id="emailToggleBtn" type="button" onclick="showEmailAuth()">Continue with Email</button>
+    <button class="auth-email-toggle" id="emailToggleBtn" type="button" onclick="showEmailAuth()">Continua con Email</button>
 
     <form class="auth-form" id="emailAuthForm" onsubmit="submitLandingAuth(event)">
       <div class="auth-tabs">
-        <button class="auth-tab active" id="authTabRegister" type="button" onclick="setAuthMode('register')">Create account</button>
-        <button class="auth-tab" id="authTabLogin" type="button" onclick="setAuthMode('login')">Log in</button>
+        <button class="auth-tab active" id="authTabRegister" type="button" onclick="setAuthMode('register')">Crea account</button>
+        <button class="auth-tab" id="authTabLogin" type="button" onclick="setAuthMode('login')">Accedi</button>
       </div>
       <div class="auth-field">
         <label for="authEmail" id="authEmailLabel">Email</label>
@@ -768,16 +768,16 @@ footer {
       </div>
       <div class="auth-field">
         <label for="authPassword" id="authPasswordLabel">Password</label>
-        <input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimum 8 characters">
+        <input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimo 8 caratteri">
       </div>
-      <button class="auth-submit" id="authSubmitBtn" type="submit">Create free account</button>
+      <button class="auth-submit" id="authSubmitBtn" type="submit">Crea account gratis</button>
       <div class="auth-error" id="authError"></div>
     </form>
 
     <ul class="auth-benefits" id="authBenefits">
-      <li>Save your scans and analysis</li>
-      <li>Connect Coinbase or Revolut X when ready</li>
-      <li>Access the Free Discovery Plan</li>
+      <li>Tieni sincronizzati segnali scanner e watchlist</li>
+      <li>Fai trading dalle tue API exchange, senza custodia fondi</li>
+      <li>Monitora le posizioni aperte con i controlli rischio Zentra</li>
     </ul>
   </div>
 </div>
@@ -1518,7 +1518,7 @@ const T = {
     how_tag:'Come funziona', how_title:'Operativo in pochi minuti', how_sub:'Collega il tuo account, configura la strategia e lascia fare a Zentra.',
     step1_title:'Connetti', step1_desc:'Collega le tue chiavi API del tuo exchange. Zentra non le salva mai in chiaro — cifratura end-to-end.',
     step2_title:'Configura', step2_desc:'Scegli la strategia, imposta i parametri di rischio (SL%, TP%, max posizioni) e la durata della sessione.',
-    step3_title:'Tradata', step3_desc:'Avvia l\'agente e ricevi notifiche Telegram per ogni ingresso, uscita e avviso — in tempo reale.',
+    step3_title:'Trada', step3_desc:'Avvia l\'agente e ricevi notifiche Telegram per ogni ingresso, uscita e avviso — in tempo reale.',
     testi_tag:'Testimonianze', testi_title:'Amato dai trader di tutto il mondo', testi_sub:'Risultati reali da trader che hanno fatto di Zentra parte del loro workflow quotidiano.',
     t1_quote:'"Finalmente uno strumento algoritmico che non richiede un dottorato per configurarlo. Ho impostato i parametri in 10 minuti e l\'ho lasciato girare. +14% nel primo mese di trading automatico."',
     t2_quote:'"L\'agente ha preso un breakout su SOL alle 3 di notte mentre dormivo. Quel singolo trade ha coperto l\'abbonamento Pro per tutto l\'anno. Un vero game changer."',
@@ -1539,9 +1539,9 @@ const T = {
   }
 };
 
-let lang = 'en';
-function toggleLang() {
-  lang = lang === 'en' ? 'it' : 'en';
+let lang = 'it';
+function applyLanguage() {
+  document.documentElement.lang = lang;
   document.getElementById('langBtn').textContent = lang === 'en' ? '🇮🇹' : '🇬🇧';
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
@@ -1549,6 +1549,13 @@ function toggleLang() {
   });
   updateAuthCopy();
 }
+
+function toggleLang() {
+  lang = lang === 'en' ? 'it' : 'en';
+  applyLanguage();
+}
+
+applyLanguage();
 
 /* ─── HERO CANVAS CHART ─────────────────────── */
 const canvas = document.getElementById('heroCanvas');
