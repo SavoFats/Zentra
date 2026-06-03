@@ -299,6 +299,7 @@ section { padding: 120px 40px; }
   transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
   cursor: default;
   position: relative; overflow: hidden;
+  display: flex; flex-direction: column;
 }
 .feature-card::before {
   content: '';
@@ -424,7 +425,7 @@ section { padding: 120px 40px; }
 .btn-plan.primary:hover { box-shadow: 0 8px 32px rgba(0,82,255,0.5); transform: translateY(-1px); }
 
 /* ─── EXCHANGE CAROUSEL ─────────────────────── */
-.exch-track-wrap { overflow: hidden; margin-top: 20px; position: relative; }
+.exch-track-wrap { overflow: hidden; margin-top: auto; padding-top: 20px; position: relative; }
 .exch-track-wrap::before,
 .exch-track-wrap::after {
   content:''; position:absolute; top:0; bottom:0; width:28px; z-index:2; pointer-events:none;
