@@ -632,8 +632,8 @@ body.auth-active .tabbar { display:none !important; }
     <div class="auth-title">Bentornato</div>
     <div class="auth-sub">Accedi al tuo account</div>
     <div class="auth-field">
-      <label>Username</label>
-      <div class="auth-field-wrap"><input type="text" id="loginUser" placeholder="il tuo username" autocomplete="username"></div>
+      <label>Email o username</label>
+      <div class="auth-field-wrap"><input type="text" id="loginUser" placeholder="email o username" autocomplete="username"></div>
       <div class="auth-field-error" id="loginUserErr"></div>
     </div>
     <div class="auth-field">
@@ -652,14 +652,14 @@ body.auth-active .tabbar { display:none !important; }
     <div class="auth-title">Crea account</div>
     <div class="auth-sub">Inizia a tradare con il tuo agente AI</div>
     <div class="auth-field">
-      <label>Username</label>
-      <div class="auth-field-wrap"><input type="text" id="regUser" placeholder="scegli un username"></div>
+      <label>Email o username</label>
+      <div class="auth-field-wrap"><input type="text" id="regUser" placeholder="email o username"></div>
       <div class="auth-field-error" id="regUserErr"></div>
     </div>
     <div class="auth-field">
       <label>Password</label>
       <div class="auth-field-wrap">
-        <input type="password" id="regPass" placeholder="minimo 6 caratteri">
+        <input type="password" id="regPass" placeholder="minimo 8 caratteri">
         <span class="auth-eye" onclick="togglePwd('regPass',this)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
       </div>
       <div class="auth-field-error" id="regPassErr"></div>
@@ -1992,9 +1992,11 @@ const API = 'https://crypto-agent-back-production-87b2.up.railway.app';
 
 let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
+let _pendingAuthError = '';
 {
   const authParams = new URLSearchParams(window.location.search);
   const tokenFromUrl = authParams.get('token');
+  const authError = authParams.get('auth_error');
   if (tokenFromUrl) {
     _authToken = tokenFromUrl;
     _username = authParams.get('username') || _username || 'Zentra user';
@@ -2002,6 +2004,11 @@ let _username  = localStorage.getItem('ca_username') || '';
     localStorage.setItem('ca_username', _username);
     authParams.delete('token');
     authParams.delete('username');
+    authParams.delete('auth_error');
+    const clean = window.location.pathname + (authParams.toString() ? '?' + authParams.toString() : '') + window.location.hash;
+    window.history.replaceState({}, '', clean);
+  } else if (authError) {
+    _pendingAuthError = authError;
     authParams.delete('auth_error');
     const clean = window.location.pathname + (authParams.toString() ? '?' + authParams.toString() : '') + window.location.hash;
     window.history.replaceState({}, '', clean);
@@ -2153,6 +2160,11 @@ function showAuthScreen() {
   const s = document.getElementById('authScreen');
   if (s) { s.style.display = 'flex'; s.style.opacity = '1'; }
   document.body.classList.add('auth-active');
+  if (_pendingAuthError) {
+    showLogin();
+    showFieldError('loginPass', 'loginPassErr', 'Accesso Google non completato. Riprova o usa email e password.');
+    _pendingAuthError = '';
+  }
 }
 function showAuthError(id, msg) { const el=document.getElementById(id); el.textContent=msg; el.style.display=''; }
 
@@ -2160,7 +2172,7 @@ async function doLogin() {
   clearFieldError('loginUser','loginUserErr'); clearFieldError('loginPass','loginPassErr');
   const username = document.getElementById('loginUser').value.trim();
   const password = document.getElementById('loginPass').value;
-  if (!username) return showFieldError('loginUser','loginUserErr','Inserisci il tuo username');
+  if (!username) return showFieldError('loginUser','loginUserErr','Inserisci email o username');
   if (!password) return showFieldError('loginPass','loginPassErr','Inserisci la tua password');
   const btn = document.getElementById('loginBtn');
   btn.disabled = true; btn.textContent = 'Accesso in corso...';
@@ -2180,10 +2192,10 @@ async function doRegister() {
   clearFieldError('regUser','regUserErr'); clearFieldError('regPass','regPassErr');
   const username = document.getElementById('regUser').value.trim();
   const password = document.getElementById('regPass').value;
-  if (!username) return showFieldError('regUser','regUserErr','Scegli un username');
+  if (!username) return showFieldError('regUser','regUserErr','Inserisci email o username');
   if (username.length < 3) return showFieldError('regUser','regUserErr','Username troppo corto (min 3 caratteri)');
   if (!password) return showFieldError('regPass','regPassErr','Scegli una password');
-  if (password.length < 6) return showFieldError('regPass','regPassErr','Password troppo corta (min 6 caratteri)');
+  if (password.length < 8) return showFieldError('regPass','regPassErr','Password troppo corta (min 8 caratteri)');
   const btn = document.getElementById('regBtn');
   btn.disabled = true; btn.textContent = 'Registrazione in corso...';
   try {
