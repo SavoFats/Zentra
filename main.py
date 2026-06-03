@@ -231,6 +231,10 @@ class LoginRequest(BaseModel):
     email: str = ""
     password: str
 
+class ChatRequest(BaseModel):
+    message: str
+    reset: bool = False
+
 BINANCE_BASE    = "https://api.binance.com"
 BINANCE_US_BASE = "https://api.binance.us"
 
@@ -4942,20 +4946,19 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
         return {"ok": True, "price": price, "qty": qty}
 
 @app.post("/chat")
-async def chat(body: dict, request: Request, user_id: int = Depends(get_current_user)):
+async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=30, window=60)
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         raise HTTPException(status_code=503, detail="AI non configurata")
 
-    user_msg = str(body.get("message", "")).strip()
+    user_msg = body.message.strip()
     if not user_msg:
         raise HTTPException(status_code=400, detail="Messaggio vuoto")
     if len(user_msg) > 2000:
         raise HTTPException(status_code=400, detail="Messaggio troppo lungo (max 2000 caratteri)")
 
-    reset = body.get("reset", False)
-    if reset:
+    if body.reset:
         _ai_conversations[user_id] = []
 
     # ── Live context ────────────────────────────────────────────────────────
@@ -5094,11 +5097,13 @@ async def chat(body: dict, request: Request, user_id: int = Depends(get_current_
     if len(history) > 20:
         history[:] = history[-20:]
 
+    messages_to_send = [{"role": m["role"], "content": m["content"]} for m in history]
+
     async with httpx.AsyncClient(timeout=45) as client:
         res = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-            json={"model": "claude-sonnet-4-6", "max_tokens": 1024, "system": system_prompt, "messages": history}
+            json={"model": "claude-sonnet-4-6", "max_tokens": 1024, "system": system_prompt, "messages": messages_to_send}
         )
         data = res.json()
 
