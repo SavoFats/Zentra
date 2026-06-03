@@ -1912,7 +1912,7 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-sub">Per provare Zentra senza usare capitale reale.</div>
         <ul class="app-plan-feats">
           <li>10 scansioni di mercato al giorno</li>
-          <li>10 analisi Zentra AI al giorno</li>
+          <li>10 analisi Zentra AI in demo al giorno</li>
           <li>Trading manuale illimitato in demo</li>
           <li>Watchlist e dashboard segnali</li>
           <li class="muted">Collegamento exchange reale</li>
@@ -2514,7 +2514,7 @@ async function loadUserProfile() {
     _exchangeKeys.binance = me.has_binance_keys || false;
     _exchangeKeys.coinbase = me.has_coinbase_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
-    window._realMode = _hasRevxKeys && !_simMode;
+    window._realMode = _plan !== 'free' && _hasRevxKeys && !_simMode;
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
     if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram ✓' : 'Collega Telegram';
@@ -3126,6 +3126,11 @@ function showToast(msg, isError = false) {
 }
 
 async function setSimMode(sim) {
+  if (_plan === 'free' && !sim) {
+    showPaywall('Il piano Free usa solo il conto demo. Passa a Pro per collegare exchange reali.', 'plans');
+    updateSimToggle();
+    return;
+  }
   // Blocca switch se sessione attiva
   if (S.running) {
     document.getElementById('profileMenu').classList.remove('open');
@@ -3154,11 +3159,13 @@ function updateSimToggle() {
   const row = document.getElementById('simModeRow');
   // Mostra toggle simulazione solo se ha almeno un exchange reale configurato
   const hasAnyRealExchange = _hasRevxKeys || (_exchangeKeys && _exchangeKeys.coinbase);
-  if (row) row.style.display = hasAnyRealExchange ? 'flex' : 'none';
+  const realAllowed = _plan !== 'free';
+  if (!realAllowed) _simMode = true;
+  if (row) row.style.display = (realAllowed && hasAnyRealExchange) ? 'flex' : 'none';
   if (toggle) toggle.classList.toggle('on', _simMode);
   const sbSimToggle = document.getElementById('sbSimToggle');
   const sbSimRow = document.getElementById('sbSimRow');
-  if (sbSimRow) sbSimRow.style.display = hasAnyRealExchange ? 'flex' : 'none';
+  if (sbSimRow) sbSimRow.style.display = (realAllowed && hasAnyRealExchange) ? 'flex' : 'none';
   if (sbSimToggle) sbSimToggle.classList.toggle('on', _simMode);
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
@@ -3166,7 +3173,7 @@ function updateSimToggle() {
   const selectedExchange = document.getElementById('agentExchange')?.value || 'revx';
   const exchangeName = selectedExchange === 'coinbase' ? 'Coinbase' : 'Revolut X';
   const hasExchangeKeys = selectedExchange === 'coinbase' ? (_exchangeKeys && _exchangeKeys.coinbase) : _hasRevxKeys;
-  const isReal = !!hasExchangeKeys && !_simMode;
+  const isReal = realAllowed && !!hasExchangeKeys && !_simMode;
   let modeLabel = 'Conto Demo';
   if (isReal) modeLabel = 'Reale — ' + exchangeName;
   if (lbl) lbl.textContent = modeLabel;
@@ -3493,7 +3500,7 @@ function restoreConfigFromStorage() {
   if (saved.chopMin !== undefined) { document.getElementById('chopMin').value=saved.chopMin; document.getElementById('chopMinVal').textContent=parseFloat(saved.chopMin).toFixed(1); }
   if (saved.atrRatioMax !== undefined) { const v=Math.round(saved.atrRatioMax*100); document.getElementById('atrRatioMax').value=v; document.getElementById('atrRatioVal').textContent=v+'%'; }
   if (saved.breakoutVolMultiplier !== undefined) { document.getElementById('breakoutVolMultiplier').value=saved.breakoutVolMultiplier; document.getElementById('breakoutVolVal').textContent=parseFloat(saved.breakoutVolMultiplier).toFixed(1)+'×'; }
-  if (saved.realMode) {
+  if (saved.realMode && _plan !== 'free') {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
     document.getElementById('modeSimBtn').classList.remove('active-sim');
@@ -3780,7 +3787,7 @@ async function startAgent() {
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const selectedExch = document.getElementById('agentExchange')?.value || 'revx';
   const hasCoinbaseKeys = _exchangeKeys && _exchangeKeys.coinbase;
-  const isReal = !_simMode && (selectedExch === 'coinbase' ? !!hasCoinbaseKeys : _hasRevxKeys);
+  const isReal = _plan !== 'free' && !_simMode && (selectedExch === 'coinbase' ? !!hasCoinbaseKeys : _hasRevxKeys);
   const capitalVal = parseFloat(capitalUsdVal.toFixed(2));
   if (isReal && capitalVal <= 0) { showFieldError('capitalUsd', 'Saldo non ancora caricato — attendi e riprova'); return; }
   if (isReal && total > 0 && capitalVal > total) { showFieldError('capitalUsd', 'Supera il saldo disponibile (' + getCurrSym() + total.toFixed(2) + ')'); return; }
@@ -5706,6 +5713,11 @@ function openTradeModal(sym, price) {
 function renderTradeExchangeOptions() {
   const sel = document.getElementById('tmExchange');
   if (!sel) return;
+  if (_plan === 'free') {
+    sel.innerHTML = '<option value="revx">Conto Demo</option>';
+    sel.value = 'revx';
+    return;
+  }
   const previous = sel.value || 'revx';
   const options = [];
   if (_hasRevxKeys) options.push(['revx', 'Revolut X']);

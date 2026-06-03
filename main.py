@@ -4273,6 +4273,9 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
 
     # Override configurazione per utenti free
     if user_plan == "free":
+        real_mode = False
+        use_revx = False
+        use_coinbase = False
         cfg["allocPct"]        = FREE_ALLOC_PCT
         free_duration = int(cfg.get("sessionDuration", FREE_MAX_SESSION_HOURS))
         cfg["sessionDuration"] = FREE_MAX_SESSION_HOURS if free_duration <= 0 else min(free_duration, FREE_MAX_SESSION_HOURS)
@@ -4779,6 +4782,22 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
     sl_pct = max(0.1, min(req.sl_pct, 50.0))
     tp_pct = max(0.1, min(req.tp_pct, 200.0))
     state = get_session(user_id)
+    user_plan = normalize_plan(state.get("plan", "free"))
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                plan_row = await conn.fetchrow(
+                    "SELECT plan, subscription_expires_at FROM users WHERE id = $1",
+                    user_id
+                )
+            if plan_row:
+                user_plan = normalize_plan(plan_row["plan"] or "free")
+                exp = plan_row["subscription_expires_at"]
+                if user_plan in PAID_PLANS and exp and exp < datetime.utcnow():
+                    user_plan = "free"
+                state["plan"] = user_plan
+        except Exception as _e:
+            print(f"[MANUAL TRADE] plan lookup: {_e}")
     # Leggi chiavi RevX: prima dalla sessione in memoria, poi dal DB
     revx_key_id = state.get("revx_key_id", "")
     revx_priv   = state.get("revx_private_key", "")
@@ -4800,6 +4819,13 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                     state["use_revx"]         = True
         except Exception as _e:
             print(f"[MANUAL TRADE] DB lookup: {_e}")
+    if user_plan == "free":
+        if exchange == "coinbase":
+            raise HTTPException(
+                status_code=403,
+                detail="Il piano Free supporta solo trade manuali in simulazione. Passa a Pro per usare exchange reali."
+            )
+        is_real = False
     price = market_data.get(sym, {}).get("price", 0.0)
     if not price:
         raise HTTPException(status_code=400, detail="Prezzo non disponibile per questa coin")
