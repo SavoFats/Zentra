@@ -927,6 +927,7 @@ body.auth-active .tabbar { display:none !important; }
         <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Chiudi</button>
         <button class="modal-btn cancel" id="externalExchangeTestBtn" onclick="testExternalExchangeConnection()">Test connessione</button>
         <button class="modal-btn cancel" id="externalExchangePreflightBtn" onclick="preflightExternalExchange()">Preflight BTC $1</button>
+        <button class="modal-btn cancel" id="externalExchangeSyncBtn" onclick="syncCoinbasePositions()">Sync posizioni</button>
         <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroBuyBtn" onclick="microBuyCoinbase()">Compra BTC $1</button>
         <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroSellBtn" onclick="microSellCoinbase()">Vendi BTC test</button>
         <button class="modal-btn cancel" style="color:var(--red);border-color:var(--red)" onclick="disconnectExternalExchange()">Scollega</button>
@@ -2358,6 +2359,7 @@ function showExternalExchangeConfig(exchange) {
   document.getElementById('externalExchangeFormView').style.display = connected ? 'none' : '';
   const testBtn = document.getElementById('externalExchangeTestBtn');
   const preflightBtn = document.getElementById('externalExchangePreflightBtn');
+  const syncBtn = document.getElementById('externalExchangeSyncBtn');
   const microBuyBtn = document.getElementById('externalExchangeMicroBuyBtn');
   const microSellBtn = document.getElementById('externalExchangeMicroSellBtn');
   if (testBtn) {
@@ -2369,6 +2371,11 @@ function showExternalExchangeConfig(exchange) {
     preflightBtn.style.display = exchange === 'coinbase' ? '' : 'none';
     preflightBtn.disabled = false;
     preflightBtn.textContent = 'Preflight BTC $1';
+  }
+  if (syncBtn) {
+    syncBtn.style.display = exchange === 'coinbase' ? '' : 'none';
+    syncBtn.disabled = false;
+    syncBtn.textContent = 'Sync posizioni';
   }
   if (microBuyBtn) {
     microBuyBtn.style.display = exchange === 'coinbase' ? '' : 'none';
@@ -2586,6 +2593,50 @@ async function microBuyCoinbase() {
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Compra BTC $1';
+    }
+  }
+}
+
+async function syncCoinbasePositions() {
+  const box = document.getElementById('externalExchangeTestResult');
+  const btn = document.getElementById('externalExchangeSyncBtn');
+  if (_activeExternalExchange !== 'coinbase') return;
+  if (!confirm('Importare in Zentra le posizioni Coinbase aperte non ancora tracciate?')) return;
+  if (box) {
+    box.style.display = '';
+    box.style.color = 'var(--text2)';
+    box.textContent = 'Sincronizzazione posizioni Coinbase...';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sync...';
+  }
+  try {
+    const r = await fetch(API + '/positions/sync_coinbase', {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Sync Coinbase fallita');
+    const imported = d.imported || [];
+    const skipped = d.skipped || [];
+    if (box) {
+      box.style.color = imported.length ? 'var(--green)' : 'var(--text2)';
+      const importedText = imported.length
+        ? imported.map(p => `${p.symbol} $${Number(p.value_usd || 0).toFixed(2)}`).join(' · ')
+        : 'nessuna nuova posizione';
+      box.textContent = `Sync completata: ${importedText}. Saltate: ${skipped.length}.`;
+    }
+    await poll();
+  } catch(e) {
+    if (box) {
+      box.style.color = 'var(--red)';
+      box.textContent = e.message || 'Sync Coinbase fallita';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Sync posizioni';
     }
   }
 }

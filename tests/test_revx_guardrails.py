@@ -459,6 +459,76 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(pos["currentPrice"], 0.1324)
         self.assertEqual(pos["highPrice"], 0.1324)
 
+    def test_sync_coinbase_positions_imports_missing_base_balance(self):
+        main = self.main
+        state = main.make_session()
+        state["capital"] = 10.0
+        state["currentCapital"] = 8.0
+        existing = {
+            "symbol": "BTC",
+            "realMode": True,
+            "exchange": "coinbase",
+        }
+        state["positions"].append(existing)
+
+        async def fake_load_keys(user_id):
+            self.assertEqual(user_id, 123)
+            return "api-key", "api-secret"
+
+        async def fake_fetch_accounts(api_key, api_secret):
+            return [
+                {"currency": "USDC", "available": 5.0},
+                {"currency": "BTC", "available": 0.001},
+                {"currency": "OCEAN", "available": 7.5},
+                {"currency": "DUST", "available": 0.01},
+            ]
+
+        async def fake_resolve_product(sym, api_key, api_secret):
+            prices = {"OCEAN": ("OCEAN-USDC", 0.1324), "DUST": ("DUST-USDC", 0.01)}
+            return prices[sym]
+
+        async def fake_persist():
+            return None
+
+        original_sessions = main.user_sessions
+        original_load = main.load_coinbase_keys_for_user
+        original_fetch = main.fetch_coinbase_accounts
+        original_resolve = main.resolve_coinbase_product
+        original_persist = main.persist_sessions
+        original_market = main.market_data
+        main.user_sessions = {123: state}
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.fetch_coinbase_accounts = fake_fetch_accounts
+        main.resolve_coinbase_product = fake_resolve_product
+        main.persist_sessions = fake_persist
+        main.market_data = {"OCEAN": {"icon": "O"}}
+        try:
+            result = asyncio.run(main.sync_coinbase_positions_for_user(123, min_value_usd=0.50))
+        finally:
+            main.user_sessions = original_sessions
+            main.load_coinbase_keys_for_user = original_load
+            main.fetch_coinbase_accounts = original_fetch
+            main.resolve_coinbase_product = original_resolve
+            main.persist_sessions = original_persist
+            main.market_data = original_market
+
+        self.assertTrue(result["ok"])
+        self.assertEqual([p["symbol"] for p in result["imported"]], ["OCEAN"])
+        self.assertEqual(len(state["positions"]), 2)
+        imported = state["positions"][1]
+        self.assertTrue(imported["realMode"])
+        self.assertEqual(imported["exchange"], "coinbase")
+        self.assertEqual(imported["symbol_pair"], "OCEAN-USDC")
+        self.assertEqual(imported["qty_purchased"], 7.5)
+        self.assertTrue(imported["manual"])
+        self.assertTrue(imported["imported"])
+        self.assertTrue(imported["_manual_action_required"])
+        self.assertAlmostEqual(state["currentCapital"], 7.01, places=2)
+        skipped = {item["symbol"]: item["reason"] for item in result["skipped"]}
+        self.assertEqual(skipped["USDC"], "quote_or_stable")
+        self.assertEqual(skipped["BTC"], "already_open")
+        self.assertEqual(skipped["DUST"], "below_min_value")
+
     def test_coinbase_exit_keeps_position_when_available_balance_is_zero(self):
         main = self.main
         state = main.make_session()

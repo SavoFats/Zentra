@@ -460,6 +460,18 @@ async def get_coinbase_quote_balance(api_key: str, api_secret: str) -> float:
         if a.get("currency") in ("USD", "USDC")
     )
 
+async def resolve_coinbase_product(sym: str, api_key: str, api_secret: str) -> tuple[str, float]:
+    """Trova il prodotto Coinbase tradabile e il prezzo corrente per un asset base."""
+    last_exc = None
+    for product_id in (f"{sym}-USDC", f"{sym}-USD"):
+        try:
+            price = await get_coinbase_product_price(product_id, api_key, api_secret)
+            if price > 0:
+                return product_id, price
+        except Exception as e:
+            last_exc = e
+    raise ValueError(public_error(last_exc or Exception(f"Prezzo Coinbase non disponibile per {sym}"), max_len=120))
+
 def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -> dict:
     if not isinstance(product, dict):
         raise ValueError("Formato prodotto Coinbase non riconosciuto")
@@ -4224,6 +4236,80 @@ async def load_coinbase_keys_for_user(user_id: int) -> tuple[str, str]:
         raise HTTPException(status_code=400, detail="Chiavi Coinbase non configurate")
     return decrypt_key(row["coinbase_api_key"]), decrypt_key(row["coinbase_api_secret"])
 
+async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 0.50) -> dict:
+    api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+    accounts = await fetch_coinbase_accounts(api_key, api_secret)
+    state = get_session(user_id)
+    existing = {
+        p.get("symbol")
+        for p in state.get("positions", [])
+        if p.get("realMode") and p.get("exchange") == "coinbase"
+    }
+    imported = []
+    skipped = []
+    for acc in accounts:
+        sym = str(acc.get("currency") or "").upper()
+        qty = float(acc.get("available") or 0)
+        if not sym or qty <= 0:
+            continue
+        if sym in STABLES:
+            skipped.append({"symbol": sym, "reason": "quote_or_stable"})
+            continue
+        if sym in existing:
+            skipped.append({"symbol": sym, "reason": "already_open"})
+            continue
+        try:
+            product_id, price = await resolve_coinbase_product(sym, api_key, api_secret)
+        except Exception as e:
+            skipped.append({"symbol": sym, "reason": public_error(e, api_key, api_secret, max_len=120)})
+            continue
+        value_usd = qty * price
+        if value_usd < min_value_usd:
+            skipped.append({"symbol": sym, "reason": "below_min_value", "value_usd": round(value_usd, 4)})
+            continue
+        pos = {
+            "symbol": sym,
+            "icon": market_data.get(sym, {}).get("icon", sym[:1]),
+            "entryPrice": price,
+            "currentPrice": price,
+            "highPrice": price,
+            "peak_price": price,
+            "size": round(value_usd, 2),
+            "size_remaining": round(value_usd, 2),
+            "tp1_hit": False,
+            "entryTime": datetime.utcnow().isoformat() + "Z",
+            "stopPrice": 0.0,
+            "tp1Price": price * 10,
+            "tp2Price": price * 10,
+            "R_pct": 0.0,
+            "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
+            "realMode": True,
+            "fee_pct": 0.012,
+            "qty_purchased": qty,
+            "exchange": "coinbase",
+            "symbol_pair": product_id,
+            "entry_usd": round(value_usd, 2),
+            "buy_fee_usd": 0.0,
+            "manual": True,
+            "imported": True,
+            "_manual_action_required": True,
+        }
+        state.setdefault("positions", []).append(pos)
+        state["currentCapital"] = max(0.0, float(state.get("currentCapital") or 0.0) - pos["size"])
+        existing.add(sym)
+        imported.append({
+            "symbol": sym,
+            "product_id": product_id,
+            "qty": qty,
+            "price": price,
+            "value_usd": round(value_usd, 2),
+        })
+    if imported:
+        labels = ", ".join(f"{p['symbol']} ${p['value_usd']:.2f}" for p in imported[:8])
+        add_log(state, "info", "SYNC COINBASE", f"Importate posizioni Coinbase: {labels}")
+        await persist_sessions()
+    return {"ok": True, "imported": imported, "skipped": skipped}
+
 async def get_coinbase_preflight_result(api_key: str, api_secret: str, sym: str, amount: float) -> dict:
     accounts = await fetch_coinbase_accounts(api_key, api_secret)
     product_errors = []
@@ -4847,6 +4933,18 @@ async def preflight_coinbase(request: Request, symbol: str = "BTC", amount_usd: 
     except Exception as e:
         return {"ok": False, "error": public_error(e, api_key, api_secret)}
 
+@app.post("/positions/sync_coinbase")
+async def sync_coinbase_positions(request: Request, min_value_usd: float = 0.50,
+                                  user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=300, key_suffix="sync_coinbase_positions")
+    min_value = max(0.10, min(float(min_value_usd or 0.50), 1000.0))
+    try:
+        return await sync_coinbase_positions_for_user(user_id, min_value_usd=min_value)
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"ok": False, "error": public_error(e)}
+
 @app.get("/exchange_price/{exchange}/{symbol}")
 async def exchange_price(exchange: str, symbol: str, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=30, window=60, key_suffix="exchange_price")
@@ -4886,15 +4984,11 @@ async def exchange_price(exchange: str, symbol: str, request: Request, user_id: 
         return {"price": price, "exchange": "revx", "symbol": sym, "source": "binance_fallback"}
     elif exchange == "coinbase":
         api_key, api_secret = await load_coinbase_keys_for_user(user_id)
-        last_exc = None
-        for product_id in (f"{sym}-USDC", f"{sym}-USD"):
-            try:
-                price = await get_coinbase_product_price(product_id, api_key, api_secret)
-                if price > 0:
-                    return {"price": price, "exchange": "coinbase", "symbol": sym, "product_id": product_id}
-            except Exception as e:
-                last_exc = e
-        raise HTTPException(status_code=404, detail=public_error(last_exc or Exception("Prezzo non disponibile"), api_key, api_secret))
+        try:
+            product_id, price = await resolve_coinbase_product(sym, api_key, api_secret)
+            return {"price": price, "exchange": "coinbase", "symbol": sym, "product_id": product_id}
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=public_error(e, api_key, api_secret))
     raise HTTPException(status_code=400, detail="Exchange non supportato")
 
 @app.get("/debug/revx_orders")
