@@ -3022,13 +3022,15 @@ async function loadServerLogos() {
   } catch(e) {}
 }
 function getLogo(sym) {
+  // 1. URL CoinGecko nota (hardcoded o server) — massima qualità
+  // 2. TradingView CDN — SVG per praticamente ogni coin
   return LOGO_URLS[sym] || _serverLogos[sym]
     || `https://s3-symbol-logo.tradingview.com/crypto/XTVC${sym}--big.svg`;
 }
 function _coinLetterFallback(el, letter, size) {
   const d = document.createElement('div');
   d.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0`;
-  d.textContent = letter.toUpperCase();
+  d.textContent = (letter || '?').toUpperCase();
   el.replaceWith(d);
 }
 
@@ -3039,14 +3041,14 @@ let pollInterval = null;
 let _expandedTrades = new Set();
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function coinImgErr(el, sym, size) {
-  // sym può essere il simbolo completo (es. "BTC") o la singola lettera fallback
-  if (sym.length > 1) {
-    // Prova Binance CDN come terzo tentativo
+  // Chain: getLogo (CoinGecko o TradingView) → Binance CDN → lettera
+  if (sym.length > 1 && !el.dataset.imgDone) {
+    el.dataset.imgDone = '1';
     el.onerror = () => _coinLetterFallback(el, sym[0], size);
     el.src = `https://bin.bnbstatic.com/image/crypto/square/${sym}.png`;
     return;
   }
-  _coinLetterFallback(el, sym, size);
+  _coinLetterFallback(el, sym[0] || sym, size);
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
