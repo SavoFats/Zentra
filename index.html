@@ -3063,7 +3063,7 @@ function showTab(name, el) {
   localStorage.setItem('ca_active_tab', name);
   updateSidebarActive(name);
   if (name === 'home') renderHome();
-  if (name === 'scanner') refreshMarket().then(() => renderScanner());
+  if (name === 'scanner') resetScannerState();
   if (name === 'exchange') renderExchangePage();
   if (name === 'account') renderAccountPage();
   if (name === 'posizioni') {
@@ -5044,6 +5044,23 @@ function showScanInfo(e, key) {
   if (top < margin) top = margin;
   tt.style.left = left + 'px';
   tt.style.top = top + 'px';
+}
+
+function resetScannerState() {
+  _scanSignal = '';
+  // Riporta al tab Trend preselezionato, nessun segnale attivo
+  document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active'));
+  const trendTab = document.querySelector('.scan-tab[onclick*="trend"]');
+  if (trendTab) trendTab.classList.add('active');
+  document.querySelectorAll('.scan-signals').forEach(s => s.classList.remove('active'));
+  const trendPanel = document.getElementById('signals-trend');
+  if (trendPanel) trendPanel.classList.add('active');
+  document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
+  // Mostra empty state, nascondi risultati
+  const empty = document.getElementById('scan-empty');
+  const card  = document.getElementById('scan-results-card');
+  if (empty) empty.style.display = '';
+  if (card)  card.style.display  = 'none';
 }
 
 function selectScanCluster(cat, el) {
