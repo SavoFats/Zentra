@@ -3022,7 +3022,14 @@ async function loadServerLogos() {
   } catch(e) {}
 }
 function getLogo(sym) {
-  return LOGO_URLS[sym] || _serverLogos[sym] || `https://bin.bnbstatic.com/image/crypto/square/${sym}.png`;
+  return LOGO_URLS[sym] || _serverLogos[sym]
+    || `https://s3-symbol-logo.tradingview.com/crypto/XTVC${sym}--big.svg`;
+}
+function _coinLetterFallback(el, letter, size) {
+  const d = document.createElement('div');
+  d.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0`;
+  d.textContent = letter.toUpperCase();
+  el.replaceWith(d);
 }
 
 // ── STATE ────────────────────────────────────────────────────────────────────
@@ -3031,11 +3038,15 @@ let trades = [];
 let pollInterval = null;
 let _expandedTrades = new Set();
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function coinImgErr(el, initial, size) {
-  const d = document.createElement('div');
-  d.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0`;
-  d.textContent = initial;
-  el.replaceWith(d);
+function coinImgErr(el, sym, size) {
+  // sym può essere il simbolo completo (es. "BTC") o la singola lettera fallback
+  if (sym.length > 1) {
+    // Prova Binance CDN come terzo tentativo
+    el.onerror = () => _coinLetterFallback(el, sym[0], size);
+    el.src = `https://bin.bnbstatic.com/image/crypto/square/${sym}.png`;
+    return;
+  }
+  _coinLetterFallback(el, sym, size);
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
@@ -3866,7 +3877,7 @@ function renderHomeSession() {
     const isNeg = pnl < -0.005;
     const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
-    const img = `<img src="${logo}" style="width:40px;height:40px;border-radius:50%;flex-shrink:0;object-fit:cover" onerror="coinImgErr(this,'${esc(p.symbol[0])}',40)">`;
+    const img = `<img src="${logo}" style="width:40px;height:40px;border-radius:50%;flex-shrink:0;object-fit:cover" onerror="coinImgErr(this,'${esc(p.symbol)}',40)">`;
     const d = mktData.find(c => c.symbol === p.symbol);
     const spark = renderSparkline(d ? d.sparkline : [], color);
     return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
@@ -4006,7 +4017,7 @@ function renderPositions() {
     const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
     const logo = getLogo(p.symbol);
     const img  = logo
-      ? `<img src="${logo}" class="pos-logo-new" onerror="coinImgErr(this,'${esc(p.symbol[0])}',44)">`
+      ? `<img src="${logo}" class="pos-logo-new" onerror="coinImgErr(this,'${esc(p.symbol)}',44)">`
       : `<div class="pos-icon-new">${p.symbol[0]}</div>`;
     const stopPrice  = p.stopPrice || 0;
     const posQty     = p.qty_purchased > 0 ? p.qty_purchased : (entryPrice > 0 ? size / entryPrice : 0);
@@ -4251,7 +4262,7 @@ function renderTransazioni() {
     const feeStr = totalFee > 0 ? `<span style="font-size:10px;color:var(--text3)">fee $${totalFee.toFixed(2)}</span>` : '';
     return `<div style="background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid ${color};margin-bottom:8px;cursor:pointer" onclick="toggleTradeRow('trs-${i}')">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px">
-        <img src="${getLogo(t.symbol)}" style="width:38px;height:38px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(t.symbol[0])}',38)">
+        <img src="${getLogo(t.symbol)}" style="width:38px;height:38px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(t.symbol)}',38)">
         <div style="flex:1;min-width:0">
           <div style="font-weight:700;font-size:14px;letter-spacing:0.01em">${esc(t.symbol)}</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">${timeStr} · ${t.durationMin} min</div>
@@ -4426,7 +4437,7 @@ function renderMarket() {
     }
     const starred = _watchlist.has(c.symbol);
     return `<div class="mkt-row${isOpen?' mkt-row-open':''}">
-      <img src="${getLogo(c.symbol)}" class="mkt-logo" data-logo-sym="${c.symbol}" id="logo-img-${c.symbol}" onerror="coinImgErr(this,'${esc(c.symbol[0])}',48)">
+      <img src="${getLogo(c.symbol)}" class="mkt-logo" data-logo-sym="${c.symbol}" id="logo-img-${c.symbol}" onerror="coinImgErr(this,'${esc(c.symbol)}',48)">
       <div class="mkt-row-info">
         <div class="mkt-name">
           <span>${esc(fullName)}${isOpen?'<span class="mkt-in-badge">IN</span>':''}</span>
@@ -4629,7 +4640,7 @@ function renderHomeWatchlist() {
     const chgText = d ? (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%' : '--';
     const spark = renderSparkline(d ? d.sparkline : [], chg >= 0 ? 'var(--green)' : 'var(--red)');
     const logoHtml = logo
-      ? `<img src="${logo}" data-logo-sym="${sym}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="coinImgErr(this,'${esc(sym[0])}',40)">`
+      ? `<img src="${logo}" data-logo-sym="${sym}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="coinImgErr(this,'${esc(sym)}',40)">`
       : `<div style="width:40px;height:40px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--text2);flex-shrink:0">${sym[0]}</div>`;
     return `<div class="watchlist-row">
       ${logoHtml}
@@ -5119,7 +5130,7 @@ function renderScanner() {
 
     const starred = _watchlist.has(sym);
     return `<div class="scan-row">
-      <img src="${getLogo(sym)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;margin-right:12px;flex-shrink:0" onerror="coinImgErr(this,'${esc(base[0])}',38)">
+      <img src="${getLogo(sym)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;margin-right:12px;flex-shrink:0" onerror="coinImgErr(this,'${esc(base)}',38)">
       <div style="min-width:60px;max-width:80px">
         <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(base)}</div>
       </div>
