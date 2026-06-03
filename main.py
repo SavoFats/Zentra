@@ -4951,6 +4951,23 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         raise HTTPException(status_code=503, detail="AI non configurata")
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="Database non disponibile")
+
+    async with db_pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            "SELECT plan, subscription_expires_at FROM users WHERE id = $1",
+            user_id
+        )
+    raw_plan = normalize_plan(plan_row["plan"] if plan_row else "free")
+    exp = plan_row["subscription_expires_at"] if plan_row else None
+    if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
+        raw_plan = "free"
+    if raw_plan != "founder":
+        raise HTTPException(
+            status_code=403,
+            detail="Zentra AI è disponibile solo con il piano Founder."
+        )
 
     user_msg = body.message.strip()
     if not user_msg:
@@ -4998,18 +5015,20 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         pos_lines = []
         for pos in positions:
             sym  = pos["symbol"]
-            cur  = market_data.get(sym.replace("USDT",""), {}).get("price") or \
-                   market_data.get(sym, {}).get("price") or pos.get("currentPrice", pos["entryPrice"])
+            sym_base = sym.replace("USDT","").replace("-USDC","").replace("-USD","")
+            pos_price = pos.get("currentPrice") or pos.get("entryPrice")
+            market_price = market_data.get(sym_base, {}).get("price") or market_data.get(sym, {}).get("price")
+            cur = pos_price if pos.get("realMode") else (market_price or pos_price)
             entry = pos["entryPrice"]
             sl    = pos.get("stopPrice", 0)
-            tp1   = pos.get("tp1_price", 0)
+            tp1   = pos.get("tp1Price", pos.get("tp1_price", 0))
             pct   = (cur - entry) / entry * 100 if entry else 0
             usd   = pos.get("size", 0) * pct / 100
             sl_d  = (cur - sl) / cur * 100 if sl and cur else 0
             tp1_d = (tp1 - cur) / cur * 100 if tp1 and cur else 0
             pos_sigs = []
             for tf in ["1h","4h"]:
-                td = scanner_candle_data.get(tf, {}).get(sym.replace("USDT",""), {})
+                td = scanner_candle_data.get(tf, {}).get(sym_base, {})
                 pos_sigs += [f"{s}@{tf}" for s in _SIGNALS if td.get(s)]
             line = (f"  {sym}: entry ${entry:.4f} | now ${cur:.4f} | P&L {pct:+.2f}% (${usd:+.2f})"
                     f" | SL ${sl:.4f} ({sl_d:+.1f}%) | TP1 ${tp1:.4f} (+{tp1_d:.1f}%)"
@@ -5065,12 +5084,18 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "Sei Zentra AI, il copilot finanziario integrato nella piattaforma Zentra Trading.\n\n"
         "RUOLO\n"
         "Sei un analista tecnico esperto di crypto. Analizzi dati di mercato live, "
-        "segnali dello scanner, posizioni aperte e dai consigli concreti e azionabili. "
+        "segnali dello scanner e posizioni aperte. Dai analisi pratiche e scenari operativi, "
         "Non sei un chatbot generico — sei focalizzato esclusivamente sul trading crypto con approccio tecnico.\n\n"
+        "LIMITI E RESPONSABILITA\n"
+        "- Non presentare mai una previsione come certa\n"
+        "- Non promettere rendimenti o profitti\n"
+        "- Ricorda che il trading comporta rischio di perdita del capitale quando proponi un'azione\n"
+        "- Formula le idee come analisi informativa, non come consulenza finanziaria personalizzata\n"
+        "- Se i dati sono incompleti, esplicitalo prima di trarre conclusioni\n\n"
         "STILE\n"
         "- Risposte concise e dirette, mai verbose\n"
         "- Usa numeri reali dal contesto (prezzi, % P&L, distanza SL/TP)\n"
-        "- Se suggerisci un'azione, specifica: direzione, motivazione, stop loss consigliato\n"
+        "- Se descrivi un possibile setup, specifica: direzione, motivazione, invalidazione e rischio\n"
         "- Se il setup non è chiaro, dillo — non inventare segnali\n"
         "- Usa il simbolo della coin senza USDT (es. BTC, ETH)\n\n"
         "INDICATORI ZENTRA\n"
@@ -5099,13 +5124,24 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
     messages_to_send = [{"role": m["role"], "content": m["content"]} for m in history]
 
-    async with httpx.AsyncClient(timeout=45) as client:
-        res = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-            json={"model": "claude-sonnet-4-6", "max_tokens": 1024, "system": system_prompt, "messages": messages_to_send}
-        )
-        data = res.json()
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            res = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                json={"model": "claude-sonnet-4-6", "max_tokens": 1024, "system": system_prompt, "messages": messages_to_send}
+            )
+        try:
+            data = res.json()
+        except Exception:
+            data = {}
+        if res.status_code >= 400:
+            history.pop()
+            detail = data.get("error", {}).get("message") if isinstance(data.get("error"), dict) else ""
+            return {"error": detail or "Zentra AI temporaneamente non disponibile. Riprova tra poco."}
+    except Exception as e:
+        history.pop()
+        return {"error": public_error(e, api_key, max_len=160)}
 
     if "content" not in data:
         history.pop()
@@ -5118,6 +5154,19 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 @app.delete("/chat/history")
 async def clear_chat_history(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=20, window=60)
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="Database non disponibile")
+    async with db_pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            "SELECT plan, subscription_expires_at FROM users WHERE id = $1",
+            user_id
+        )
+    raw_plan = normalize_plan(plan_row["plan"] if plan_row else "free")
+    exp = plan_row["subscription_expires_at"] if plan_row else None
+    if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
+        raw_plan = "free"
+    if raw_plan != "founder":
+        raise HTTPException(status_code=403, detail="Zentra AI è disponibile solo con il piano Founder.")
     _ai_conversations.pop(user_id, None)
     return {"ok": True}
 

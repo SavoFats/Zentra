@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.zentra.trading https://api.zentra.trading https://api.anthropic.com https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.zentra.trading https://api.anthropic.com https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -5980,6 +5980,7 @@ function updatePlanUI() {
   // Lock/unlock config pro features
   applyPlanConfig();
   updateScanUsageUI();
+  if (typeof _aiInit === 'function') _aiInit();
   if (document.getElementById('page-plans')?.classList.contains('active')) renderPlansPage();
 }
 
@@ -6260,7 +6261,7 @@ async function sendAIMessage() {
         badge.style.display = 'flex';
       }
     } else {
-      _aiAppendMsg('ai', '⚠️ ' + (d.error || 'Errore nella risposta. Riprova.'));
+      _aiAppendMsg('ai', '⚠️ ' + (d.error || d.detail || 'Errore nella risposta. Riprova.'));
     }
   } catch (e) {
     typing.classList.remove('visible');
@@ -6274,7 +6275,13 @@ async function sendAIMessage() {
 
 function _aiInit() {
   const fab = document.getElementById('aiFab');
-  if (fab) fab.style.display = 'flex';
+  const panel = document.getElementById('aiPanel');
+  if (fab) fab.style.display = _plan === 'founder' ? 'flex' : 'none';
+  if (_plan !== 'founder' && panel) {
+    _aiOpen = false;
+    panel.classList.remove('open');
+  }
+  if (_plan !== 'founder') return;
 
   // Update context bar based on live state
   const pos = (S && S.positions) ? S.positions.length : 0;

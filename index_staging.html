@@ -5980,6 +5980,7 @@ function updatePlanUI() {
   // Lock/unlock config pro features
   applyPlanConfig();
   updateScanUsageUI();
+  if (typeof _aiInit === 'function') _aiInit();
   if (document.getElementById('page-plans')?.classList.contains('active')) renderPlansPage();
 }
 
@@ -6260,7 +6261,7 @@ async function sendAIMessage() {
         badge.style.display = 'flex';
       }
     } else {
-      _aiAppendMsg('ai', '⚠️ ' + (d.error || 'Errore nella risposta. Riprova.'));
+      _aiAppendMsg('ai', '⚠️ ' + (d.error || d.detail || 'Errore nella risposta. Riprova.'));
     }
   } catch (e) {
     typing.classList.remove('visible');
@@ -6274,7 +6275,13 @@ async function sendAIMessage() {
 
 function _aiInit() {
   const fab = document.getElementById('aiFab');
-  if (fab) fab.style.display = 'flex';
+  const panel = document.getElementById('aiPanel');
+  if (fab) fab.style.display = _plan === 'founder' ? 'flex' : 'none';
+  if (_plan !== 'founder' && panel) {
+    _aiOpen = false;
+    panel.classList.remove('open');
+  }
+  if (_plan !== 'founder') return;
 
   // Update context bar based on live state
   const pos = (S && S.positions) ? S.positions.length : 0;
