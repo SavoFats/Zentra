@@ -5161,8 +5161,10 @@ function openTVChart(symbol) {
   document.getElementById('tvModal').style.display = 'flex';
   const container = document.getElementById('tvWidgetContainer');
   const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-  const sym = encodeURIComponent(`BINANCE:${base}USDT`);
-  container.innerHTML = `<iframe src="https://s.tradingview.com/widgetembed/?symbol=${sym}&interval=5&theme=${theme}&style=1&locale=it&hidesidetoolbar=0&hidetoptoolbar=0&saveimage=0&allow_symbol_change=0" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;
+  // Senza prefisso exchange: TradingView trova l'exchange più liquido automaticamente.
+  // Se la coin non è su Binance TV, trova BYBIT/MEXC/OKX invece di mostrare errore.
+  const sym = encodeURIComponent(`${base}USDT`);
+  container.innerHTML = `<iframe src="https://s.tradingview.com/widgetembed/?symbol=${sym}&interval=5&theme=${theme}&style=1&locale=it&hidesidetoolbar=0&hidetoptoolbar=0&saveimage=0&allow_symbol_change=1" style="width:100%;height:100%;border:none" allowfullscreen></iframe>`;
 }
 
 function closeTVChart() {
