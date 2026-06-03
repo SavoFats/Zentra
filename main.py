@@ -831,15 +831,14 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         macd_hist      = hist_list[-1] if hist_list else 0.0
         macd_hist_prev = hist_list[-2] if len(hist_list) >= 2 else 0.0
 
-        # Golden Cross / Death Cross: rileva crossover EMA9/EMA30 su 5m avvenuto nelle ultime 5 candele
-        ema9_5m        = calc_ema(closes5[:-1], 9)
-        ema30_5m       = calc_ema(closes5[:-1], 30)
-        ema9_5m_prev5  = calc_ema(closes5[:-6], 9)
-        ema30_5m_prev5 = calc_ema(closes5[:-6], 30)
-        golden_cross   = (ema9_5m > ema30_5m) and (ema9_5m_prev5 <= ema30_5m_prev5)
-        death_cross    = (ema9_5m < ema30_5m) and (ema9_5m_prev5 >= ema30_5m_prev5)
-        rsi_oversold  = rsi_1h < 30.0
-        rsi_overbought = rsi_14 > 70.0
+        # Golden Cross / Death Cross: EMA20 vs EMA50 su 1h, crossover avvenuto nelle ultime 3 ore
+        ema50_1h_cur   = calc_ema(closes1h[:-1], 50)
+        ema50_1h_prev3 = calc_ema(closes1h[:-4], 50)
+        golden_cross   = (ema20_1h_cur > ema50_1h_cur) and (ema20_1h_prev3 < ema50_1h_prev3)
+        death_cross    = (ema20_1h_cur < ema50_1h_cur) and (ema20_1h_prev3 > ema50_1h_prev3)
+        # RSI: entrambi su 1h per coerenza (5m è troppo rumoroso per overbought)
+        rsi_oversold   = rsi_1h < 30.0
+        rsi_overbought = rsi_1h > 70.0
 
         return {
             "ema20_5m":          ema20_5m_cur,
@@ -849,7 +848,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             "ema20_15m_prev3":   ema20_15m_prev3,
             "ema50_15m_prev3":   ema50_15m_prev3,
             "ema20_1h":          ema20_1h_cur,
-            "ema50_1h":          calc_ema(closes1h[:-1], 50),
+            "ema50_1h":          ema50_1h_cur,
             "ema20_1h_prev3":    ema20_1h_prev3,
             "last_close_5m":    closes5[-2],   # ultimo close CONFERMATO (candela chiusa)
             "close_1h_ago":     closes1h[-2] if len(closes1h) >= 2 else 0.0,
@@ -3561,10 +3560,11 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "death_cross":   cd.get("death_cross", False),
             "rsi_oversold":  cd.get("rsi_oversold", False),
             "rsi_overbought":cd.get("rsi_overbought", False),
-            "breakout":      sig.get("breakout_ok", False),
+            "breakout":      sig.get("breakout_ok", False) and sig.get("vol_ok", False),
             "macd_bullish":  sig.get("macd_ok", False),
             "macd_bearish":  cd.get("macd_hist", 0.0) < 0 and cd.get("macd_hist", 0.0) < cd.get("macd_hist_prev", 0.0),
-            "tsi_bullish":   sig.get("tsi_ok", False),
+            "tsi_bullish":   (cd.get("tsi_1h", -1) > 0 and cd.get("tsi_15m", -1) > 0
+                              and cd.get("tsi_15m", -1) >= cd.get("tsi_15m_prev", -1)),
             # NUOVI:
             "ema_stack":     (cd.get("last_close_5m", 0) > cd.get("ema20_1h", 0) > cd.get("ema50_1h", 0)) if cd.get("ema50_1h", 0) > 0 else False,
             "volume_spike":  (cd.get("vol_last", 0) > 2.0 * cd.get("vol_avg_20", 0)) if cd.get("vol_avg_20", 0) > 0 else False,
