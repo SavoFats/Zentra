@@ -831,11 +831,13 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         macd_hist      = hist_list[-1] if hist_list else 0.0
         macd_hist_prev = hist_list[-2] if len(hist_list) >= 2 else 0.0
 
-        # Golden Cross / Death Cross (EMA9 vs EMA30 su 5m)
-        ema9_5m       = calc_ema(closes5[:-1], 9)
-        ema30_5m      = calc_ema(closes5[:-1], 30)
-        golden_cross  = ema9_5m > ema30_5m
-        death_cross   = ema9_5m < ema30_5m
+        # Golden Cross / Death Cross: rileva crossover EMA9/EMA30 su 5m avvenuto nelle ultime 5 candele
+        ema9_5m        = calc_ema(closes5[:-1], 9)
+        ema30_5m       = calc_ema(closes5[:-1], 30)
+        ema9_5m_prev5  = calc_ema(closes5[:-6], 9)
+        ema30_5m_prev5 = calc_ema(closes5[:-6], 30)
+        golden_cross   = (ema9_5m > ema30_5m) and (ema9_5m_prev5 <= ema30_5m_prev5)
+        death_cross    = (ema9_5m < ema30_5m) and (ema9_5m_prev5 >= ema30_5m_prev5)
         rsi_oversold  = rsi_1h < 30.0
         rsi_overbought = rsi_14 > 70.0
 
@@ -3564,7 +3566,7 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "macd_bearish":  cd.get("macd_hist", 0.0) < 0 and cd.get("macd_hist", 0.0) < cd.get("macd_hist_prev", 0.0),
             "tsi_bullish":   sig.get("tsi_ok", False),
             # NUOVI:
-            "ema_stack":     (cd.get("last_close_5m", 0) > cd.get("ema20_5m", 0) > cd.get("ema50_5m", 0)) if cd.get("ema50_5m", 0) > 0 else False,
+            "ema_stack":     (cd.get("last_close_5m", 0) > cd.get("ema20_1h", 0) > cd.get("ema50_1h", 0)) if cd.get("ema50_1h", 0) > 0 else False,
             "volume_spike":  (cd.get("vol_last", 0) > 2.0 * cd.get("vol_avg_20", 0)) if cd.get("vol_avg_20", 0) > 0 else False,
             "vol_ratio":     round(cd.get("vol_last", 0) / cd.get("vol_avg_20", 1), 2) if cd.get("vol_avg_20", 0) > 0 else 0.0,
         }

@@ -5008,12 +5008,15 @@ function selectScanCluster(cat, el) {
   if (panel) panel.classList.add('active');
 }
 
-function selectScanSignal(key, el) {
+async function selectScanSignal(key, el) {
   _scanSignal = key;
   document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   const titleEl = document.getElementById('scanResultsTitle');
   if (titleEl) titleEl.textContent = _scanLabelMap[key] || key;
+  const list = document.getElementById('scannerList');
+  if (list) list.innerHTML = '<div class="empty"><div class="empty-text">Caricamento...</div></div>';
+  await refreshMarket();
   renderScanner();
 }
 
