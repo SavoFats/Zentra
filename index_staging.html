@@ -1992,6 +1992,21 @@ const API = 'https://crypto-agent-back-production-87b2.up.railway.app';
 
 let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
+{
+  const authParams = new URLSearchParams(window.location.search);
+  const tokenFromUrl = authParams.get('token');
+  if (tokenFromUrl) {
+    _authToken = tokenFromUrl;
+    _username = authParams.get('username') || _username || 'Zentra user';
+    localStorage.setItem('ca_token', _authToken);
+    localStorage.setItem('ca_username', _username);
+    authParams.delete('token');
+    authParams.delete('username');
+    authParams.delete('auth_error');
+    const clean = window.location.pathname + (authParams.toString() ? '?' + authParams.toString() : '') + window.location.hash;
+    window.history.replaceState({}, '', clean);
+  }
+}
 let _simMode = true;
 let _hasRevxKeys = false;
 let _exchangeKeys = { binance: false, coinbase: false };

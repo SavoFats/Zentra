@@ -46,6 +46,7 @@ def _install_import_stubs():
 
     responses = types.ModuleType("fastapi.responses")
     responses.PlainTextResponse = type("PlainTextResponse", (), {"__init__": lambda self, *a, **k: None})
+    responses.RedirectResponse = type("RedirectResponse", (), {"__init__": lambda self, *a, **k: None})
     sys.modules.setdefault("fastapi.responses", responses)
 
     pydantic = types.ModuleType("pydantic")

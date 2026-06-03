@@ -620,6 +620,66 @@ footer {
   0%,100% { opacity:0.7; transform:translate(-50%,-60%) scale(1); }
   50% { opacity:1; transform:translate(-50%,-60%) scale(1.08); }
 }
+
+/* ─── AUTH MODAL ───────────────────────────── */
+.auth-modal { position: fixed; inset: 0; z-index: 500; display: none; align-items: center; justify-content: center; padding: 24px; }
+.auth-modal.open { display: flex; }
+.auth-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.72); backdrop-filter: blur(10px); }
+.auth-panel {
+  position: relative; z-index: 1; width: min(560px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
+  background: linear-gradient(145deg, rgba(18,24,48,0.98), rgba(8,12,26,0.98));
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: 34px;
+  box-shadow: 0 32px 120px rgba(0,0,0,0.55), 0 0 70px rgba(0,82,255,0.18);
+}
+.auth-close {
+  position: absolute; top: 18px; right: 18px; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05);
+  color: var(--text2); cursor: pointer; font-size: 24px; line-height: 1;
+}
+.auth-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+.auth-mark {
+  width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center;
+  margin: 4px auto 22px; background: rgba(0,82,255,0.12); border: 1px solid rgba(0,82,255,0.28);
+}
+.auth-mark svg { width: 28px; height: 28px; }
+.auth-title { text-align: center; font-size: clamp(28px, 5vw, 40px); line-height: 1.12; font-weight: 900; letter-spacing: -0.04em; margin-bottom: 12px; }
+.auth-sub { text-align: center; color: var(--text2); font-size: 16px; line-height: 1.55; max-width: 420px; margin: 0 auto 26px; }
+.auth-google {
+  width: 100%; height: 58px; display: flex; align-items: center; justify-content: center; gap: 12px;
+  border: none; border-radius: 18px; background: linear-gradient(135deg, #0052ff, #7c3aed 55%, #f6465d);
+  color: white; font-size: 17px; font-weight: 800; font-family: var(--sans); cursor: pointer;
+  box-shadow: 0 16px 46px rgba(0,82,255,0.3);
+}
+.auth-google:disabled { cursor: not-allowed; opacity: 0.58; box-shadow: none; }
+.google-g { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: #4285f4; font-size: 19px; font-weight: 900; }
+.auth-note { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text3); font-size: 13px; font-weight: 700; margin: 14px 0 18px; }
+.auth-email-toggle {
+  width: 100%; height: 54px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.035);
+  color: var(--text); border-radius: 16px; font-family: var(--sans); font-size: 15px; font-weight: 800; cursor: pointer;
+}
+.auth-email-toggle:hover { background: rgba(255,255,255,0.06); }
+.auth-form { display: none; margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); }
+.auth-form.open { display: block; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; background: rgba(255,255,255,0.04); padding: 5px; border-radius: 14px; }
+.auth-tab { border: none; border-radius: 10px; padding: 10px 12px; background: transparent; color: var(--text2); font-family: var(--sans); font-size: 13px; font-weight: 800; cursor: pointer; }
+.auth-tab.active { background: var(--blue); color: white; }
+.auth-field { margin-bottom: 12px; }
+.auth-field label { display: block; margin-bottom: 7px; color: var(--text2); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+.auth-field input {
+  width: 100%; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.055);
+  color: var(--text); border-radius: 14px; padding: 14px 15px; font: 600 15px var(--sans); outline: none;
+}
+.auth-field input:focus { border-color: rgba(0,82,255,0.65); box-shadow: 0 0 0 3px rgba(0,82,255,0.12); }
+.auth-submit { width: 100%; height: 52px; border: none; border-radius: 16px; background: var(--blue); color: white; font-family: var(--sans); font-size: 15px; font-weight: 900; cursor: pointer; margin-top: 4px; }
+.auth-submit:disabled { opacity: 0.6; cursor: wait; }
+.auth-error { display: none; color: var(--red); font-size: 13px; line-height: 1.4; margin: 10px 0 0; text-align: center; }
+.auth-benefits { list-style: none; margin: 24px 0 0; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); }
+.auth-benefits li { color: var(--text2); font-size: 14px; font-weight: 700; margin: 11px 0; }
+.auth-benefits li::before { content: "✓"; color: var(--green); margin-right: 10px; font-weight: 900; }
+@media (max-width: 560px) {
+  .auth-panel { padding: 28px 20px; border-radius: 20px; }
+  .auth-google, .auth-email-toggle { height: 52px; font-size: 15px; }
+}
 </style>
 </head>
 <body>
@@ -641,9 +701,57 @@ footer {
   </div>
   <div class="nav-actions">
     <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇮🇹</button>
-    <a class="btn-primary" href="/app" data-i18n="nav_open_app">Open App ↗</a>
+    <a class="btn-primary js-auth-trigger" href="/app" data-i18n="nav_open_app">Open App ↗</a>
   </div>
 </nav>
+
+<!-- AUTH MODAL -->
+<div class="auth-modal" id="authModal" aria-hidden="true">
+  <div class="auth-backdrop" onclick="closeAuthModal()"></div>
+  <div class="auth-panel" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <button class="auth-close" type="button" onclick="closeAuthModal()" aria-label="Close">×</button>
+    <div class="auth-mark">
+      <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="28" height="28" rx="7" fill="#0052ff"/>
+        <polyline points="4,19 9,13 13,16 18,9 24,12" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="24" cy="12" r="2" fill="white"/>
+      </svg>
+    </div>
+    <h2 class="auth-title" id="authTitle">Almost there, open your Zentra account</h2>
+    <p class="auth-sub" id="authSub">Sign up to save your scanner, connect exchanges, and start managing trades from one dashboard.</p>
+
+    <button class="auth-google" id="googleAuthBtn" type="button" onclick="continueWithGoogle()">
+      <span class="google-g">G</span>
+      <span id="googleAuthText">Continue with Google</span>
+    </button>
+    <div class="auth-note" id="authNote">No card required · Free to start</div>
+
+    <button class="auth-email-toggle" id="emailToggleBtn" type="button" onclick="showEmailAuth()">Continue with Email</button>
+
+    <form class="auth-form" id="emailAuthForm" onsubmit="submitLandingAuth(event)">
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="authTabRegister" type="button" onclick="setAuthMode('register')">Create account</button>
+        <button class="auth-tab" id="authTabLogin" type="button" onclick="setAuthMode('login')">Log in</button>
+      </div>
+      <div class="auth-field">
+        <label for="authEmail" id="authEmailLabel">Email</label>
+        <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com">
+      </div>
+      <div class="auth-field">
+        <label for="authPassword" id="authPasswordLabel">Password</label>
+        <input id="authPassword" type="password" autocomplete="current-password" placeholder="Minimum 8 characters">
+      </div>
+      <button class="auth-submit" id="authSubmitBtn" type="submit">Create free account</button>
+      <div class="auth-error" id="authError"></div>
+    </form>
+
+    <ul class="auth-benefits" id="authBenefits">
+      <li>Save your scans and analysis</li>
+      <li>Connect Coinbase or Revolut X when ready</li>
+      <li>Access the Free Discovery Plan</li>
+    </ul>
+  </div>
+</div>
 
 <!-- MARQUEE -->
 <div class="marquee-wrap" style="margin-top:64px;">
@@ -689,7 +797,7 @@ footer {
       Automated entry signals, real-time market scanner, and smart risk management — all connected to your exchange account.
     </p>
     <div class="hero-btns">
-      <a class="btn-hero-primary" href="/app">
+      <a class="btn-hero-primary js-auth-trigger" href="/app">
         <span data-i18n="hero_cta_1">Open App</span>
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 9h10M9 4l5 5-5 5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </a>
@@ -974,7 +1082,7 @@ footer {
         <li class="unavail" data-i18n="pf5">Telegram notifications</li>
         <li class="unavail" data-i18n="pf6">Real exchange trading</li>
       </ul>
-      <a href="/app" class="btn-plan secondary" data-i18n="plan_free_btn">Get started free</a>
+      <a href="/app" class="btn-plan secondary js-auth-trigger" data-i18n="plan_free_btn">Get started free</a>
     </div>
     <div class="plan-card featured reveal delay-2">
       <div class="plan-badge" data-i18n="plan_pro_badge">Most Popular</div>
@@ -989,7 +1097,7 @@ footer {
         <li data-i18n="pp5">Real-money trading</li>
         <li data-i18n="pp6">Both strategies (Momentum + Breakout)</li>
       </ul>
-      <a href="/app" class="btn-plan primary" data-i18n="plan_pro_btn">Start with Pro</a>
+      <a href="/app" class="btn-plan primary js-auth-trigger" data-i18n="plan_pro_btn">Start with Pro</a>
     </div>
   </div>
 </section>
@@ -999,7 +1107,7 @@ footer {
   <div class="section-tag reveal" data-i18n="cta_tag">Ready?</div>
   <h2 class="final-cta-title reveal" data-i18n="cta_title">Start trading smarter today.</h2>
   <p class="final-cta-sub reveal" data-i18n="cta_sub">Join traders using Zentra to automate their crypto strategy.</p>
-  <a class="btn-cta-xl reveal" href="/app">
+  <a class="btn-cta-xl reveal js-auth-trigger" href="/app">
     <span data-i18n="cta_btn">Open Zentra</span>
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10h12M10 4l6 6-6 6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </a>
@@ -1044,6 +1152,183 @@ footer {
 </footer>
 
 <script>
+const API = 'https://crypto-agent-back-production.up.railway.app';
+let authMode = 'register';
+let googleEnabled = false;
+
+const AUTH_COPY = {
+  en: {
+    title: 'Almost there, open your Zentra account',
+    sub: 'Sign up to save your scanner, connect exchanges, and start managing trades from one dashboard.',
+    google: 'Continue with Google',
+    googleSoon: 'Google login coming soon',
+    note: 'No card required · Free to start',
+    email: 'Continue with Email',
+    register: 'Create account',
+    login: 'Log in',
+    emailLabel: 'Email',
+    passwordLabel: 'Password',
+    passwordPh: 'Minimum 8 characters',
+    submitRegister: 'Create free account',
+    submitLogin: 'Log in',
+    benefits: ['Save your scans and analysis', 'Connect Coinbase or Revolut X when ready', 'Access the Free Discovery Plan'],
+    missingEmail: 'Enter your email',
+    missingPassword: 'Enter your password',
+    shortPassword: 'Password must be at least 8 characters',
+    googleUnavailable: 'Google login is not configured yet. Use email for now.',
+    connectionError: 'Connection error. Try again in a moment.'
+  },
+  it: {
+    title: 'Ci siamo quasi, apri il tuo account Zentra',
+    sub: 'Registrati per salvare scanner, collegare exchange e gestire i trade da un unico pannello.',
+    google: 'Continua con Google',
+    googleSoon: 'Login Google in arrivo',
+    note: 'Nessuna carta richiesta · Gratis per iniziare',
+    email: 'Continua con Email',
+    register: 'Crea account',
+    login: 'Accedi',
+    emailLabel: 'Email',
+    passwordLabel: 'Password',
+    passwordPh: 'Minimo 8 caratteri',
+    submitRegister: 'Crea account gratis',
+    submitLogin: 'Accedi',
+    benefits: ['Salva scanner e analisi', 'Collega Coinbase o Revolut X quando vuoi', 'Accedi al piano Free Discovery'],
+    missingEmail: 'Inserisci la tua email',
+    missingPassword: 'Inserisci la password',
+    shortPassword: 'La password deve avere almeno 8 caratteri',
+    googleUnavailable: 'Il login Google non è ancora configurato. Usa email per ora.',
+    connectionError: 'Errore di connessione. Riprova tra poco.'
+  }
+};
+
+function authCopy() { return AUTH_COPY[lang] || AUTH_COPY.en; }
+
+function updateAuthCopy() {
+  const c = authCopy();
+  const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  setText('authTitle', c.title);
+  setText('authSub', c.sub);
+  setText('googleAuthText', googleEnabled ? c.google : c.googleSoon);
+  setText('authNote', c.note);
+  setText('emailToggleBtn', c.email);
+  setText('authTabRegister', c.register);
+  setText('authTabLogin', c.login);
+  setText('authEmailLabel', c.emailLabel);
+  setText('authPasswordLabel', c.passwordLabel);
+  const pwd = document.getElementById('authPassword');
+  if (pwd) pwd.placeholder = c.passwordPh;
+  const benefits = document.getElementById('authBenefits');
+  if (benefits) benefits.innerHTML = c.benefits.map(item => `<li>${item}</li>`).join('');
+  setAuthMode(authMode);
+}
+
+function openAuthModal(event) {
+  if (event) event.preventDefault();
+  if (localStorage.getItem('ca_token')) {
+    window.location.href = '/app';
+    return;
+  }
+  const modal = document.getElementById('authModal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  updateAuthCopy();
+}
+
+function closeAuthModal() {
+  const modal = document.getElementById('authModal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+
+function showEmailAuth() {
+  const form = document.getElementById('emailAuthForm');
+  form.classList.add('open');
+  document.getElementById('authEmail').focus();
+}
+
+function setAuthMode(mode) {
+  authMode = mode === 'login' ? 'login' : 'register';
+  const c = authCopy();
+  document.getElementById('authTabRegister')?.classList.toggle('active', authMode === 'register');
+  document.getElementById('authTabLogin')?.classList.toggle('active', authMode === 'login');
+  const btn = document.getElementById('authSubmitBtn');
+  if (btn) btn.textContent = authMode === 'register' ? c.submitRegister : c.submitLogin;
+  const pwd = document.getElementById('authPassword');
+  if (pwd) pwd.autocomplete = authMode === 'register' ? 'new-password' : 'current-password';
+}
+
+function showAuthModalError(msg) {
+  const el = document.getElementById('authError');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function submitLandingAuth(event) {
+  event.preventDefault();
+  const c = authCopy();
+  const email = document.getElementById('authEmail').value.trim().toLowerCase();
+  const password = document.getElementById('authPassword').value;
+  const err = document.getElementById('authError');
+  const btn = document.getElementById('authSubmitBtn');
+  if (err) { err.textContent = ''; err.style.display = 'none'; }
+  if (!email) return showAuthModalError(c.missingEmail);
+  if (!password) return showAuthModalError(c.missingPassword);
+  if (password.length < 8) return showAuthModalError(c.shortPassword);
+  if (btn) btn.disabled = true;
+  try {
+    const endpoint = authMode === 'register' ? '/auth/register' : '/auth/login';
+    const r = await fetch(API + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, username: email, password })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || d.error || c.connectionError);
+    localStorage.setItem('ca_token', d.token);
+    localStorage.setItem('ca_username', d.username || email);
+    window.location.href = '/app';
+  } catch (e) {
+    showAuthModalError(e.message || c.connectionError);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function continueWithGoogle() {
+  const c = authCopy();
+  if (!googleEnabled) {
+    showAuthModalError(c.googleUnavailable);
+    showEmailAuth();
+    return;
+  }
+  const redirect = window.location.origin + '/app';
+  window.location.href = API + '/auth/google/start?redirect=' + encodeURIComponent(redirect);
+}
+
+async function loadGoogleAuthStatus() {
+  const btn = document.getElementById('googleAuthBtn');
+  try {
+    const r = await fetch(API + '/auth/google/status');
+    const d = await r.json();
+    googleEnabled = !!d.enabled;
+  } catch (_) {
+    googleEnabled = false;
+  }
+  if (btn) btn.disabled = !googleEnabled;
+  updateAuthCopy();
+}
+
+document.querySelectorAll('.js-auth-trigger').forEach(el => {
+  el.addEventListener('click', openAuthModal);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeAuthModal();
+});
+loadGoogleAuthStatus();
+
 /* ─── TRANSLATIONS ─────────────────────────── */
 const T = {
   en: {
@@ -1126,6 +1411,7 @@ function toggleLang() {
     const key = el.getAttribute('data-i18n');
     if (T[lang][key] !== undefined) el.innerHTML = T[lang][key];
   });
+  updateAuthCopy();
 }
 
 /* ─── HERO CANVAS CHART ─────────────────────── */
