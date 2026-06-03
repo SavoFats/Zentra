@@ -529,6 +529,78 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(skipped["BTC"], "already_open")
         self.assertEqual(skipped["DUST"], "below_min_value")
 
+    def test_refresh_coinbase_position_price_uses_stale_price_on_api_error(self):
+        main = self.main
+        pos = {
+            "symbol": "OCEAN",
+            "symbol_pair": "OCEAN-USDC",
+            "currentPrice": 0.1324,
+            "_coinbase_price_last_fetch": 0,
+        }
+
+        async def fake_price(*args, **kwargs):
+            raise Exception("Coinbase timeout")
+
+        original_price = main.get_coinbase_product_price
+        main.get_coinbase_product_price = fake_price
+        try:
+            price, fresh = asyncio.run(main.refresh_coinbase_position_price(pos, "api-key", "api-secret"))
+        finally:
+            main.get_coinbase_product_price = original_price
+
+        self.assertEqual(price, 0.1324)
+        self.assertFalse(fresh)
+        self.assertIn("Coinbase timeout", pos["_coinbase_price_error"])
+
+    def test_imported_coinbase_position_is_not_auto_closed_by_manual_monitor(self):
+        main = self.main
+        state = main.make_session()
+        pos = {
+            "symbol": "OCEAN",
+            "entryPrice": 0.1324,
+            "currentPrice": 0.1324,
+            "highPrice": 0.1324,
+            "peak_price": 0.1324,
+            "size": 1.0,
+            "size_remaining": 1.0,
+            "entryTime": "2026-06-02T17:35:00Z",
+            "stopPrice": 0.0,
+            "tp1Price": 0.20,
+            "realMode": True,
+            "exchange": "coinbase",
+            "symbol_pair": "OCEAN-USDC",
+            "qty_purchased": 7.5,
+            "manual": True,
+            "imported": True,
+            "_manual_action_required": True,
+        }
+        state["positions"].append(pos)
+
+        async def fake_load_keys(user_id):
+            return "api-key", "api-secret"
+
+        async def fake_coinbase_price(product_id, api_key, api_secret):
+            return 0.25
+
+        async def fail_exit(*args, **kwargs):
+            raise AssertionError("Imported Coinbase position should not auto-close")
+
+        original_load = main.load_coinbase_keys_for_user
+        original_price = main.get_coinbase_product_price
+        original_exit = main.exit_position
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.get_coinbase_product_price = fake_coinbase_price
+        main.exit_position = fail_exit
+        try:
+            asyncio.run(main.monitor_manual_positions(state, user_id=123))
+        finally:
+            main.load_coinbase_keys_for_user = original_load
+            main.get_coinbase_product_price = original_price
+            main.exit_position = original_exit
+
+        self.assertIn(pos, state["positions"])
+        self.assertEqual(pos["currentPrice"], 0.25)
+
     def test_coinbase_exit_keeps_position_when_available_balance_is_zero(self):
         main = self.main
         state = main.make_session()

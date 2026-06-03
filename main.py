@@ -334,6 +334,8 @@ async def revx_request(method: str, path: str, body: dict = None,
 
 COINBASE_BASE = "https://api.coinbase.com"
 COINBASE_HOST = "api.coinbase.com"
+COINBASE_POSITION_PRICE_TTL = 10
+COINBASE_PRICE_WARN_TTL = 60
 
 def normalize_coinbase_api_secret(api_secret: str) -> str:
     """Normalizza private key Coinbase copiate con newline escapati."""
@@ -471,6 +473,25 @@ async def resolve_coinbase_product(sym: str, api_key: str, api_secret: str) -> t
         except Exception as e:
             last_exc = e
     raise ValueError(public_error(last_exc or Exception(f"Prezzo Coinbase non disponibile per {sym}"), max_len=120))
+
+async def refresh_coinbase_position_price(pos: dict, api_key: str, api_secret: str) -> tuple[float, bool]:
+    """Aggiorna il prezzo Coinbase con cache breve. In errore usa l'ultimo prezzo noto."""
+    now = time.time()
+    current = float(pos.get("currentPrice") or 0.0)
+    last_fetch = float(pos.get("_coinbase_price_last_fetch") or 0.0)
+    if current > 0 and now - last_fetch < COINBASE_POSITION_PRICE_TTL:
+        return current, False
+    try:
+        price = await get_coinbase_product_price(pos.get("symbol_pair", f"{pos['symbol']}-USDC"), api_key, api_secret)
+        pos["currentPrice"] = price
+        pos["_coinbase_price_last_fetch"] = now
+        pos.pop("_coinbase_price_error", None)
+        return price, True
+    except Exception as e:
+        pos["_coinbase_price_error"] = public_error(e, max_len=100)
+        if current > 0:
+            return current, False
+        raise
 
 def build_coinbase_preflight(accounts: list, product: dict, amount_usd: float) -> dict:
     if not isinstance(product, dict):
@@ -2328,13 +2349,20 @@ async def scan_and_trade(state: dict, user_id: int = None):
                 cb_sec = state.get("coinbase_api_secret_agent", "")
                 if not cb_key:
                     cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
-                cb_price = await get_coinbase_product_price(pos.get("symbol_pair", f"{pos['symbol']}-USDC"), cb_key, cb_sec)
-                pos["currentPrice"] = cb_price
+                _, fresh = await refresh_coinbase_position_price(pos, cb_key, cb_sec)
+                if not fresh and pos.get("_coinbase_price_error"):
+                    now_warn = time.time()
+                    if now_warn - float(pos.get("_coinbase_price_warn_ts") or 0.0) > COINBASE_PRICE_WARN_TTL:
+                        pos["_coinbase_price_warn_ts"] = now_warn
+                        add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo Coinbase non aggiornato — uso ultimo prezzo noto")
             except Exception as e:
                 add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo Coinbase non disponibile — SL/TP saltato: {public_error(e, max_len=100)}")
                 continue
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
+
+        if pos.get("_manual_action_required") or pos.get("imported"):
+            continue
 
         max_hold_hours = cfg.get("maxHoldHours", 4)
 
@@ -2992,7 +3020,12 @@ async def monitor_manual_positions(state: dict, user_id: int):
         if pos.get("exchange") == "coinbase" and pos.get("realMode"):
             try:
                 api_key, api_secret = await load_coinbase_keys_for_user(user_id)
-                cur = await get_coinbase_product_price(pos.get("symbol_pair", f"{sym}-USDC"), api_key, api_secret)
+                cur, fresh = await refresh_coinbase_position_price(pos, api_key, api_secret)
+                if not fresh and pos.get("_coinbase_price_error"):
+                    now_warn = time.time()
+                    if now_warn - float(pos.get("_coinbase_price_warn_ts") or 0.0) > COINBASE_PRICE_WARN_TTL:
+                        pos["_coinbase_price_warn_ts"] = now_warn
+                        add_log(state, "info", "WARN", f"{sym}: prezzo Coinbase non aggiornato — uso ultimo prezzo noto")
             except Exception as e:
                 add_log(state, "info", "WARN", f"{sym}: prezzo Coinbase non disponibile — monitor SL/TP saltato: {public_error(e, max_len=100)}")
                 continue
@@ -3003,6 +3036,9 @@ async def monitor_manual_positions(state: dict, user_id: int):
         pos["currentPrice"] = cur
         if cur > pos.get("peak_price", pos["entryPrice"]):
             pos["peak_price"] = cur
+
+        if pos.get("_manual_action_required") or pos.get("imported"):
+            continue
 
         if cur <= pos["stopPrice"]:
             await exit_position(state, pos, "STOP LOSS", user_id=user_id)
@@ -4261,7 +4297,8 @@ async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 
         try:
             product_id, price = await resolve_coinbase_product(sym, api_key, api_secret)
         except Exception as e:
-            skipped.append({"symbol": sym, "reason": public_error(e, api_key, api_secret, max_len=120)})
+            print(f"[coinbase_sync] {sym}: {public_error(e, api_key, api_secret, max_len=120)}")
+            skipped.append({"symbol": sym, "reason": "product_or_price_unavailable"})
             continue
         value_usd = qty * price
         if value_usd < min_value_usd:
