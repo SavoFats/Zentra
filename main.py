@@ -4794,14 +4794,12 @@ async def get_logos(request: Request, user_id: int = Depends(get_current_user)):
         "ICP":"https://assets.coingecko.com/coins/images/14495/small/Internet_Computer_logo.png",
         "RENDER":"https://assets.coingecko.com/coins/images/11636/small/rndr.png",
     }
-    # Per tutte le coin in market_data: hardcoded > CoinGecko cache > Binance CDN
+    # Per tutte le coin in market_data: hardcoded > CoinGecko cache (no fallback — il frontend usa TradingView CDN)
     result = {
-        sym: KNOWN.get(sym)
-             or _cg_logos.get(sym)
-             or f"https://bin.bnbstatic.com/image/crypto/square/{sym}.png"
+        sym: KNOWN.get(sym) or _cg_logos.get(sym) or None
         for sym in market_data
     }
-    return result
+    return {sym: url for sym, url in result.items() if url}
 
 # ── BILLING ───────────────────────────────────────────────────────────────────
 
