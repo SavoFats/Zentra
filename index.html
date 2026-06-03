@@ -3632,7 +3632,7 @@ async function poll() {
     const [sRes, tRes, mRes] = await Promise.all([
       fetch(API + '/status', { headers:authHeaders(), ...noCache }),
       fetch(API + '/trades', { headers:authHeaders(), ...noCache }),
-      fetch(API + '/market', { headers:authHeaders(), ...noCache }),
+      fetch(API + '/market?timeframe=' + _scanTimeframe, { headers:authHeaders(), ...noCache }),
     ]);
     if (sRes.status === 401) {
       if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
