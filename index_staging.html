@@ -2514,6 +2514,7 @@ async function loadUserProfile() {
     _exchangeKeys.binance = me.has_binance_keys || false;
     _exchangeKeys.coinbase = me.has_coinbase_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
+    if (_plan === 'free') _simMode = true;
     window._realMode = _plan !== 'free' && _hasRevxKeys && !_simMode;
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
@@ -3140,7 +3141,7 @@ async function setSimMode(sim) {
     return;
   }
   _simMode = sim;
-  window._realMode = _hasRevxKeys && !sim;
+  window._realMode = _plan !== 'free' && _hasRevxKeys && !sim;
   S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
   try {
     await fetch(API + '/auth/sim_mode', {
@@ -3649,6 +3650,19 @@ async function onAgentExchangeChange() {
   const display = document.getElementById('totalBalanceDisplay');
   const hint    = document.getElementById('balanceSourceHint');
   if (!display) return;
+  if (_plan === 'free') {
+    display.textContent = 'Conto Demo — $1000';
+    display.style.color = '';
+    if (hint) hint.textContent = 'Il piano Free usa solo simulazione';
+    const capUsd = document.getElementById('capitalUsd');
+    const cap = document.getElementById('capital');
+    if (capUsd) capUsd.value = 1000;
+    if (cap) cap.dataset.total = 1000;
+    updateCapitalUsd();
+    updateAlloc();
+    updateSimToggle();
+    return;
+  }
   display.textContent = 'Caricamento...';
   display.style.color = '';
   try {
@@ -3710,6 +3724,11 @@ function updateTpSchema() {
   const l2 = document.getElementById('tp2Label'); if (l2) l2.textContent = mult;
 }
 async function setMode(real) {
+  if (_plan === 'free' && real) {
+    showPaywall('Il piano Free usa solo il conto demo. Passa a Pro per collegare exchange reali.', 'plans');
+    await setMode(false);
+    return;
+  }
   _realMode = real; window._realMode = real;
   const simBtn = document.getElementById('modeSimBtn');
   const realBtn = document.getElementById('modeRealBtn');
@@ -4154,7 +4173,7 @@ function render() {
     kpiPnl.style.color = S.tradeCount > 0 ? (pnl >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
   }
   if (kpiWr) kpiWr.textContent = S.tradeCount > 0 ? Math.round(S.winRate) + '%' : '--%';
-  if (kpiSaldo && !(_hasRevxKeys && !_simMode)) {
+  if (kpiSaldo && !(_plan !== 'free' && _hasRevxKeys && !_simMode)) {
     const pnl = S.pnl || 0;
     const base = S.capital || 1000;
     kpiSaldo.textContent = '$' + (base + pnl).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -4839,7 +4858,7 @@ async function loadHomeBalance() {
   const kpiLabel = document.getElementById('homeKpiSaldoLabel');
   const kpiPnl   = document.getElementById('homeKpiPnl');
   const kpiWr    = document.getElementById('homeKpiWr');
-  const isReal = _hasRevxKeys && !_simMode;
+  const isReal = _plan !== 'free' && _hasRevxKeys && !_simMode;
 
   // Label saldo
   if (kpiLabel) kpiLabel.textContent = isReal ? 'Saldo reale' : 'Saldo simulato';
@@ -4902,7 +4921,7 @@ async function loadHomeBalance() {
 function renderHome() {
   document.getElementById('homeUsername').textContent = _username || '--';
   // Badge modalità
-  const isReal = _hasRevxKeys && !_simMode;
+  const isReal = _plan !== 'free' && _hasRevxKeys && !_simMode;
   const badge = document.getElementById('homeModeBadge');
   const modeText = document.getElementById('homeModeText');
   if (badge) { badge.className = 'home-mode-badge ' + (isReal ? 'real' : 'sim'); }
