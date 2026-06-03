@@ -2183,7 +2183,7 @@ async function doLogin() {
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
-    if (!d.has_revx_keys) { showApiKeys(); return; }
+    localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('loginPass','loginPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Accedi'; }
 }
@@ -2205,7 +2205,8 @@ async function doRegister() {
     _authToken = d.token; _username = d.username;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
-    showApiKeys();
+    localStorage.setItem('ca_active_tab', 'home');
+    hideAuthScreen(); initApp();
   } catch(e) { showFieldError('regPass','regPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Registrati'; }
 }
 
@@ -2242,10 +2243,7 @@ async function checkAuth() {
     _sessionsToday = d.sessions_today || 0;
     _sessionsPerDay = d.sessions_per_day || 1;
     localStorage.setItem('ca_username', _username);
-    if (!d.has_revx_keys) {
-      showAuthScreen();
-      showApiKeys(); return;
-    }
+    if (!localStorage.getItem('ca_active_tab')) localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
   } catch(e) {
     showAuthScreen();
