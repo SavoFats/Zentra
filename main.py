@@ -3764,8 +3764,10 @@ async def get_market(
 
     # Refresh scanner cache per il TF richiesto se assente o scaduta
     tf_age = time.time() - _scanner_candles_ts.get(timeframe, 0)
+    scanner_refreshing = False
     if tf_age > SCANNER_CACHE_TTL or timeframe not in scanner_candle_data:
         schedule_scanner_refresh(timeframe)
+        scanner_refreshing = True
 
     items = []
     user_state = user_sessions.get(user_id, {})
@@ -3821,7 +3823,7 @@ async def get_market(
         items = [i for i in items if i["symbol"] in _revx_pairs]
 
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
-    return {"market": result}
+    return {"market": result, "scanner_refreshing": scanner_refreshing}
 
 @app.get("/trades")
 async def get_trades(request: Request, user_id: int = Depends(get_current_user)):

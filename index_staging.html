@@ -1656,6 +1656,8 @@ body.auth-active .tabbar { display:none !important; }
       .scan-tf-btn { background:none; border:1px solid var(--border); border-radius:6px; color:var(--text2); font-size:12px; font-weight:600; padding:5px 12px; cursor:pointer; transition:all .15s; font-family:inherit; line-height:1; }
       .scan-tf-btn:hover { border-color:var(--blue); color:var(--blue); }
       .scan-tf-btn.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+      @keyframes scan-spin { to { transform:rotate(360deg); } }
+      .scan-loading-spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--blue); border-radius:50%; animation:scan-spin .75s linear infinite; margin:0 auto; }
     </style>
     <div class="scan-tf-bar">
       <span class="scan-tf-label">Timeframe</span>
@@ -4881,6 +4883,7 @@ async function refreshMarket() {
     const r = await fetch(API + '/market?timeframe=' + _scanTimeframe, { headers: authHeaders() });
     const d = await r.json();
     mktData = d.market || [];
+    _scannerRefreshing = d.scanner_refreshing || false;
     renderMarket();
   } catch(e) {}
 }
@@ -5016,8 +5019,11 @@ function renderExternalExchangeStatus(exchange) {
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
-let _scanSignal    = '';
-let _scanTimeframe = '1h';
+let _scanSignal        = '';
+let _scanTimeframe     = '1h';
+let _scannerRefreshing = false;
+
+const _scanSpinnerHTML = `<div style="text-align:center;padding:52px 16px"><div class="scan-loading-spinner"></div><div style="font-size:13px;color:var(--text3);margin-top:14px;font-weight:500;letter-spacing:.01em">Scansione in corso...</div></div>`;
 
 const _scanSignalFn = {
   breakout:      c => c.scanner?.breakout,
@@ -5166,7 +5172,7 @@ async function selectScanSignal(key, el) {
   if (empty) empty.style.display = 'none';
   if (card)  card.style.display  = '';
   const list = document.getElementById('scannerList');
-  if (list) list.innerHTML = '<div class="empty"><div class="empty-text">Caricamento...</div></div>';
+  if (list) list.innerHTML = _scanSpinnerHTML;
   await refreshMarket();
   renderScanner();
 }
@@ -5216,16 +5222,22 @@ function renderScanner() {
   const countEl = document.getElementById('scanCount');
   if (!list) return;
   if (!mktData.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-text">Caricamento...</div></div>';
+    list.innerHTML = _scanSpinnerHTML;
     return;
   }
   const fn = _scanSignalFn[_scanSignal];
   const matched = fn ? mktData.filter(c => c.scanner && fn(c)) : [];
-  if (countEl) countEl.textContent = matched.length + ' found';
   if (!matched.length) {
+    if (_scannerRefreshing) {
+      if (countEl) countEl.textContent = '...';
+      list.innerHTML = _scanSpinnerHTML;
+      return;
+    }
+    if (countEl) countEl.textContent = '0 found';
     list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna coin trovata</div></div>';
     return;
   }
+  if (countEl) countEl.textContent = matched.length + ' found';
   const isBear = _scanBearish.has(_scanSignal);
   const badgeColor = isBear ? 'var(--red)' : 'var(--green)';
   const label = _scanLabelMap[_scanSignal] || _scanSignal;
