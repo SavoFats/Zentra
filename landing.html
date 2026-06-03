@@ -441,12 +441,12 @@ section { padding: 120px 40px; }
   100% { transform: translateX(-50%); }
 }
 .exch-pill {
-  display: flex; align-items: center; gap: 7px;
+  display: flex; align-items: center; gap: 8px;
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: 8px; padding: 8px 13px;
   font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--text);
 }
-.exch-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.exch-pill img { width: 16px; height: 16px; border-radius: 3px; object-fit: cover; flex-shrink: 0; }
 
 /* ─── TESTIMONIALS ──────────────────────────── */
 .testimonials {
@@ -738,11 +738,11 @@ footer {
       <h3 data-i18n="f3_title">Non-Custodial &amp; Secure</h3>
       <p data-i18n="f3_desc">Your funds never leave your exchange. Zentra executes orders via API — we never hold, move, or access your capital. API keys are never stored in plaintext.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="f3_p1">Funds always stay on your exchange</span>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;">
+          <span data-i18n="f3_p1">Funds always stay on your exchange</span>
         </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="f3_p2">AES-256 encrypted API credentials</span>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;">
+          <span data-i18n="f3_p2">AES-256 encrypted API credentials</span>
         </div>
       </div>
     </div>
@@ -752,14 +752,14 @@ footer {
       <p data-i18n="f4_desc">Connect your exchange via API keys. Real buy/sell orders with market execution, automatic fill confirmation, and end-to-end encrypted credentials.</p>
       <div class="exch-track-wrap">
         <div class="exch-track">
-          <div class="exch-pill"><span class="exch-dot" style="background:#F0B90B"></span>Binance</div>
-          <div class="exch-pill"><span class="exch-dot" style="background:#0052FF"></span>Coinbase</div>
-          <div class="exch-pill"><span class="exch-dot" style="background:#F7A600"></span>Bybit</div>
-          <div class="exch-pill"><span class="exch-dot" style="background:#7C3AED"></span>Revolut X</div>
-          <div class="exch-pill"><span class="exch-dot" style="background:#F0B90B"></span>Binance</div>
-          <div class="exch-pill"><span class="exch-dot" style="background:#0052FF"></span>Coinbase</div>
-          <div class="exch-pill"><span class="exch-dot" style="background:#F7A600"></span>Bybit</div>
-          <div class="exch-pill"><span class="exch-dot" style="background:#7C3AED"></span>Revolut X</div>
+          <div class="exch-pill"><img src="https://assets.coingecko.com/markets/images/52/small/binance.jpg" alt="Binance">Binance</div>
+          <div class="exch-pill"><img src="https://assets.coingecko.com/markets/images/23/small/coinbase-pro.jpg" alt="Coinbase">Coinbase</div>
+          <div class="exch-pill"><img src="https://assets.coingecko.com/markets/images/205/small/bybit_spot.png" alt="Bybit">Bybit</div>
+          <div class="exch-pill"><svg width="16" height="16" viewBox="0 0 16 16" style="border-radius:3px;flex-shrink:0;"><rect width="16" height="16" rx="3" fill="#7C3AED"/><text x="8" y="11.5" text-anchor="middle" fill="white" font-size="7.5" font-weight="800" font-family="system-ui,sans-serif">RX</text></svg>Revolut X</div>
+          <div class="exch-pill"><img src="https://assets.coingecko.com/markets/images/52/small/binance.jpg" alt="Binance">Binance</div>
+          <div class="exch-pill"><img src="https://assets.coingecko.com/markets/images/23/small/coinbase-pro.jpg" alt="Coinbase">Coinbase</div>
+          <div class="exch-pill"><img src="https://assets.coingecko.com/markets/images/205/small/bybit_spot.png" alt="Bybit">Bybit</div>
+          <div class="exch-pill"><svg width="16" height="16" viewBox="0 0 16 16" style="border-radius:3px;flex-shrink:0;"><rect width="16" height="16" rx="3" fill="#7C3AED"/><text x="8" y="11.5" text-anchor="middle" fill="white" font-size="7.5" font-weight="800" font-family="system-ui,sans-serif">RX</text></svg>Revolut X</div>
         </div>
       </div>
     </div>
@@ -771,11 +771,11 @@ footer {
           <p data-i18n="f5_desc">Switch between <strong>Momentum</strong> (EMA breakout + volume + TSI + MACD) and <strong>Consolidation Breakout</strong> (CHOP + ATR compression + range break) from the config panel.</p>
         </div>
         <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:10px;">
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;font-size:13px;font-weight:600;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-right:8px"><path d="M20 6 9 17l-5-5"/></svg>Momentum — EMA + RSI + Keltner + TSI + MACD
+          <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:14px 18px;font-size:13px;font-weight:600;">
+            Momentum — EMA + RSI + Keltner + TSI + MACD
           </div>
-          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;font-size:13px;font-weight:600;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-right:8px"><path d="M20 6 9 17l-5-5"/></svg>Breakout — CHOP + ATR Squeeze + Volume surge
+          <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:10px;padding:14px 18px;font-size:13px;font-weight:600;">
+            Breakout — CHOP + ATR Squeeze + Volume surge
           </div>
         </div>
       </div>
