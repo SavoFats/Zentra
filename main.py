@@ -12,7 +12,7 @@ import json
 import secrets
 import stripe
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Depends, Request, Response
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 import httpx
@@ -604,6 +604,11 @@ _revoked_tokens: set = set()     # token revocati al logout
 candle_data: dict = {}
 _candles_last_update: float = 0
 CANDLE_UPDATE_INTERVAL = 60    # secondi (1 minuto)
+
+scanner_candle_data: dict = {}   # {tf: {sym: signal_indicators}}
+_scanner_candles_ts:  dict = {}   # {tf: last_update_timestamp}
+SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
+VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
 
@@ -935,6 +940,130 @@ async def fetch_all_candles():
 
     _candles_last_update = time.time()
     print(f"Candele aggiornate: {updated}/{len(syms)}")
+
+# ──────────────────────────────────────────────────────────────
+#  SCANNER MULTI-TIMEFRAME
+# ──────────────────────────────────────────────────────────────
+
+async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: str = "1h") -> dict | None:
+    """Scarica candele per UN timeframe e calcola tutti i segnali scanner su quel TF."""
+    pair   = f"{sym}USDT"
+    limits = {"5m": 300, "15m": 300, "1h": 250, "4h": 250, "1d": 300}
+    limit  = limits.get(timeframe, 250)
+    try:
+        for base in (BINANCE_BASE, BINANCE_US_BASE):
+            r = await client.get(f"{base}/api/v3/klines",
+                                 params={"symbol": pair, "interval": timeframe, "limit": limit})
+            if r.status_code == 451:
+                continue
+            if r.status_code != 200:
+                return None
+            break
+        else:
+            return None
+
+        klines = r.json()
+        if not isinstance(klines, list) or len(klines) < 220:
+            return None
+
+        closes  = [float(k[4]) for k in klines]
+        volumes = [float(k[5]) for k in klines]
+        highs   = [float(k[2]) for k in klines]
+        lows    = [float(k[3]) for k in klines]
+        closed  = closes[:-1]   # escludi candela corrente ancora aperta
+
+        # EMA 20 / 50 / 200
+        ema20      = calc_ema(closed, 20)
+        ema50      = calc_ema(closed, 50)
+        ema200     = calc_ema(closed, 200)
+        ema50_p24  = calc_ema(closed[:-24], 50)
+        ema200_p24 = calc_ema(closed[:-24], 200)
+
+        # RSI(14)
+        rsi = calc_rsi(closed, 14)
+
+        # MACD(5,13,3)
+        e5   = calc_ema_list(closed, 5)
+        e13  = calc_ema_list(closed, 13)
+        off  = len(e5) - len(e13)
+        macd_line   = [e5[off + i] - e13[i] for i in range(len(e13))]
+        sig_list    = calc_ema_list(macd_line, 3)
+        off2        = len(macd_line) - len(sig_list)
+        hist        = [macd_line[off2 + i] - sig_list[i] for i in range(len(sig_list))]
+        macd_hist      = hist[-1]  if hist           else 0.0
+        macd_hist_prev = hist[-2]  if len(hist) >= 2 else 0.0
+
+        # TSI(25,13)
+        pc     = [closed[i] - closed[i-1] for i in range(1, len(closed))]
+        abs_pc = [abs(x) for x in pc]
+        e1 = calc_ema_list(pc,     25);  e2 = calc_ema_list(e1, 13)
+        a1 = calc_ema_list(abs_pc, 25);  a2 = calc_ema_list(a1, 13)
+        tsi_cur  = round(100 * e2[-1] / a2[-1], 2) if a2 and a2[-1]  != 0 else 0.0
+        tsi_prev = round(100 * e2[-2] / a2[-2], 2) if a2 and len(a2) >= 2 and a2[-2] != 0 else 0.0
+
+        # Volume
+        vol_last  = volumes[-2] if len(volumes) >= 2 else 0.0
+        vol_avg20 = sum(volumes[-21:-1]) / 20 if len(volumes) >= 21 else 0.0
+
+        # Breakout: ultima chiusura supera il massimo delle 10 candele chiuse precedenti
+        last_close = closed[-1]
+        high10     = max(highs[-12:-2]) if len(highs) >= 12 else max(highs[:-2])
+
+        vol_spike    = (vol_last > 2.0 * vol_avg20) if vol_avg20 > 0 else False
+        golden_cross = (ema50 > ema200) and (ema50_p24 <= ema200_p24)
+        death_cross  = (ema50 < ema200) and (ema50_p24 >= ema200_p24)
+
+        return {
+            "golden_cross":   golden_cross,
+            "death_cross":    death_cross,
+            "rsi_14":         round(rsi, 1),
+            "rsi_oversold":   rsi < 30.0,
+            "rsi_overbought": rsi > 70.0,
+            "ema_stack":      (last_close > ema20 > ema50) if ema50 > 0 else False,
+            "macd_hist":      round(macd_hist, 6),
+            "macd_hist_prev": round(macd_hist_prev, 6),
+            "macd_bullish":   macd_hist > 0 and macd_hist > macd_hist_prev,
+            "macd_bearish":   macd_hist < 0 and macd_hist < macd_hist_prev,
+            "tsi_bullish":    tsi_cur > 0 and tsi_cur >= tsi_prev,
+            "breakout":       last_close > high10 and vol_spike,
+            "volume_spike":   vol_spike,
+            "vol_ratio":      round(vol_last / vol_avg20, 2) if vol_avg20 > 0 else 0.0,
+            "sparkline":      closes[-25:-1],
+        }
+    except Exception as e:
+        print(f"Scanner candle error {sym} {timeframe}: {e}")
+        return None
+
+
+async def fetch_all_scanner_candles(timeframe: str = "1h"):
+    """Aggiorna scanner_candle_data[timeframe] per tutte le coin dell'universo."""
+    global _scanner_candles_ts
+    universe = sorted(
+        [(sym, d) for sym, d in market_data.items() if d["price"] > 0 and sym in _dynamic_universe],
+        key=lambda x: x[1].get("volume24h", 0), reverse=True
+    )
+    if not _revx_pairs:
+        universe = universe[:CANDLE_UNIVERSE_SIZE]
+    if not universe:
+        return
+    syms = [s for s, _ in universe]
+    print(f"Scanner [{timeframe}] per {len(syms)} coin...")
+    async with httpx.AsyncClient(timeout=15) as client:
+        sem = asyncio.Semaphore(8)
+        async def _fetch(s):
+            async with sem:
+                return await fetch_scanner_candles(s, client, timeframe)
+        results = await asyncio.gather(*[_fetch(s) for s in syms], return_exceptions=True)
+    if timeframe not in scanner_candle_data:
+        scanner_candle_data[timeframe] = {}
+    updated = 0
+    for sym, res in zip(syms, results):
+        if res and not isinstance(res, Exception):
+            scanner_candle_data[timeframe][sym] = res
+            updated += 1
+    _scanner_candles_ts[timeframe] = time.time()
+    print(f"Scanner [{timeframe}] aggiornate: {updated}/{len(syms)}")
+
 
 def get_momentum_signal(sym: str, current_price: float,
                         max_stop_pct: float = 0.02,
@@ -2907,6 +3036,9 @@ async def background_loop():
             if time.time() - _candles_last_update >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_candles()
 
+            if time.time() - _scanner_candles_ts.get("1h", 0) >= CANDLE_UPDATE_INTERVAL:
+                await fetch_all_scanner_candles("1h")
+
             sessions_snapshot = list(user_sessions.items())
             for uid, state in sessions_snapshot:
                 if state["running"]:
@@ -3521,16 +3653,30 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
     }
 
 @app.get("/market")
-async def get_market(request: Request, user_id: int = Depends(get_current_user)):
+async def get_market(
+    request: Request,
+    user_id: int = Depends(get_current_user),
+    timeframe: str = Query("1h"),
+):
     check_rate_limit(request, max_attempts=60, window=60, key_suffix="market")
+
+    if timeframe not in VALID_TF:
+        timeframe = "1h"
+
+    # Refresh scanner cache per il TF richiesto se assente o scaduta
+    tf_age = time.time() - _scanner_candles_ts.get(timeframe, 0)
+    if tf_age > SCANNER_CACHE_TTL or timeframe not in scanner_candle_data:
+        await fetch_all_scanner_candles(timeframe)
+
     items = []
-    # Usa la configurazione della sessione dell'utente richiedente, altrimenti default
     user_state = user_sessions.get(user_id, {})
     active_cfg = user_state.get("config", {})
 
     max_stop_pct  = active_cfg.get("maxStopPct", 0.02)
     vol_mult      = active_cfg.get("volMultiplier", 1.2)
     momentum_thr  = active_cfg.get("momentumPct", 0.01)
+
+    tf_cache = scanner_candle_data.get(timeframe, {})
 
     for s, d in market_data.items():
         if d["price"] <= 0:
@@ -3553,28 +3699,25 @@ async def get_market(request: Request, user_id: int = Depends(get_current_user))
             "signal":       sig["signal"],
             "reason":       sig["reason"],
         }
-        item["sparkline"] = candle_data.get(s, {}).get("sparkline", [])
-        cd = candle_data.get(s, {})
+        sc = tf_cache.get(s, {})
+        item["sparkline"] = sc.get("sparkline", candle_data.get(s, {}).get("sparkline", []))
         item["scanner"] = {
-            "rsi_14":        round(cd.get("rsi_14", 0.0), 1),
-            "macd_hist":     round(cd.get("macd_hist", 0.0), 6),
-            "golden_cross":  cd.get("golden_cross", False),
-            "death_cross":   cd.get("death_cross", False),
-            "rsi_oversold":  cd.get("rsi_oversold", False),
-            "rsi_overbought":cd.get("rsi_overbought", False),
-            "breakout":      sig.get("breakout_ok", False) and sig.get("vol_ok", False),
-            "macd_bullish":  sig.get("macd_ok", False),
-            "macd_bearish":  cd.get("macd_hist", 0.0) < 0 and cd.get("macd_hist", 0.0) < cd.get("macd_hist_prev", 0.0),
-            "tsi_bullish":   (cd.get("tsi_1h", -1) > 0 and cd.get("tsi_15m", -1) > 0
-                              and cd.get("tsi_15m", -1) >= cd.get("tsi_15m_prev", -1)),
-            # NUOVI:
-            "ema_stack":     (cd.get("last_close_5m", 0) > cd.get("ema20_1h", 0) > cd.get("ema50_1h", 0)) if cd.get("ema50_1h", 0) > 0 else False,
-            "volume_spike":  (cd.get("vol_last", 0) > 2.0 * cd.get("vol_avg_20", 0)) if cd.get("vol_avg_20", 0) > 0 else False,
-            "vol_ratio":     round(cd.get("vol_last", 0) / cd.get("vol_avg_20", 1), 2) if cd.get("vol_avg_20", 0) > 0 else 0.0,
+            "rsi_14":         sc.get("rsi_14",         0.0),
+            "macd_hist":      sc.get("macd_hist",       0.0),
+            "golden_cross":   sc.get("golden_cross",    False),
+            "death_cross":    sc.get("death_cross",     False),
+            "rsi_oversold":   sc.get("rsi_oversold",    False),
+            "rsi_overbought": sc.get("rsi_overbought",  False),
+            "breakout":       sc.get("breakout",        False),
+            "macd_bullish":   sc.get("macd_bullish",    False),
+            "macd_bearish":   sc.get("macd_bearish",    False),
+            "tsi_bullish":    sc.get("tsi_bullish",     False),
+            "ema_stack":      sc.get("ema_stack",       False),
+            "volume_spike":   sc.get("volume_spike",    False),
+            "vol_ratio":      sc.get("vol_ratio",       0.0),
         }
         items.append(item)
 
-    # Filtra sempre alle coin RevX se disponibili — sim e reale mostrano le stesse coin
     if _revx_pairs:
         items = [i for i in items if i["symbol"] in _revx_pairs]
 

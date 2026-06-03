@@ -1648,6 +1648,23 @@ body.auth-active .tabbar { display:none !important; }
       </button>
     </div>
 
+    <!-- Timeframe bar -->
+    <style>
+      .scan-tf-bar { display:flex; align-items:center; gap:6px; padding:14px 0 6px; flex-wrap:wrap; }
+      .scan-tf-label { font-size:10px; font-weight:700; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; margin-right:4px; }
+      .scan-tf-btn { background:none; border:1px solid var(--border); border-radius:6px; color:var(--text2); font-size:12px; font-weight:600; padding:5px 12px; cursor:pointer; transition:all .15s; font-family:inherit; line-height:1; }
+      .scan-tf-btn:hover { border-color:var(--blue); color:var(--blue); }
+      .scan-tf-btn.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+    </style>
+    <div class="scan-tf-bar">
+      <span class="scan-tf-label">Timeframe</span>
+      <button class="scan-tf-btn" onclick="selectTimeframe('5m',this)">5m</button>
+      <button class="scan-tf-btn" onclick="selectTimeframe('15m',this)">15m</button>
+      <button class="scan-tf-btn active" onclick="selectTimeframe('1h',this)">1h</button>
+      <button class="scan-tf-btn" onclick="selectTimeframe('4h',this)">4h</button>
+      <button class="scan-tf-btn" onclick="selectTimeframe('1d',this)">1d</button>
+    </div>
+
     <!-- Empty state -->
     <div id="scan-empty" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:56px 32px;text-align:center;">
       <div style="margin-bottom:24px;position:relative;display:inline-block">
@@ -4807,10 +4824,9 @@ function closeDrawer() {
 
 async function refreshMarket() {
   try {
-    const r = await fetch(API + '/market', { headers: authHeaders() });
+    const r = await fetch(API + '/market?timeframe=' + _scanTimeframe, { headers: authHeaders() });
     const d = await r.json();
     mktData = d.market || [];
-    // universeCount rimosso dall'header
     renderMarket();
   } catch(e) {}
 }
@@ -4946,7 +4962,8 @@ function renderExternalExchangeStatus(exchange) {
 }
 
 // ── SCANNER ───────────────────────────────────────────────────────────────────
-let _scanSignal = '';
+let _scanSignal    = '';
+let _scanTimeframe = '1h';
 
 const _scanSignalFn = {
   breakout:      c => c.scanner?.breakout,
@@ -5047,7 +5064,8 @@ function showScanInfo(e, key) {
 }
 
 function resetScannerState() {
-  _scanSignal = '';
+  _scanSignal    = '';
+  _scanTimeframe = '1h';
   // Riporta al tab Trend preselezionato, nessun segnale attivo
   document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active'));
   const trendTab = document.querySelector('.scan-tab[onclick*="trend"]');
@@ -5056,6 +5074,10 @@ function resetScannerState() {
   const trendPanel = document.getElementById('signals-trend');
   if (trendPanel) trendPanel.classList.add('active');
   document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
+  // Reset timeframe bar a 1h
+  document.querySelectorAll('.scan-tf-btn').forEach(b => b.classList.remove('active'));
+  const tfBtn = document.querySelector('.scan-tf-btn[onclick*="\'1h\'"]');
+  if (tfBtn) tfBtn.classList.add('active');
   // Mostra empty state, nascondi risultati
   const empty = document.getElementById('scan-empty');
   const card  = document.getElementById('scan-results-card');
@@ -5093,6 +5115,17 @@ async function selectScanSignal(key, el) {
   if (list) list.innerHTML = '<div class="empty"><div class="empty-text">Caricamento...</div></div>';
   await refreshMarket();
   renderScanner();
+}
+
+async function selectTimeframe(tf, el) {
+  _scanTimeframe = tf;
+  document.querySelectorAll('.scan-tf-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  // Se c'è un segnale attivo, ri-esegui lo scan sul nuovo TF
+  if (_scanSignal) {
+    const activeCard = document.querySelector('.scan-card.active');
+    if (activeCard) await selectScanSignal(_scanSignal, activeCard);
+  }
 }
 
 function updateScannerPricesInPlace() {
@@ -5197,8 +5230,9 @@ function openTVChart(symbol) {
   document.getElementById('tvModal').style.display = 'flex';
   const container = document.getElementById('tvWidgetContainer');
   const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-  const studies  = SIGNAL_STUDIES[_scanSignal]  || [];
-  const interval = SIGNAL_INTERVAL[_scanSignal] || '15';
+  const studies  = SIGNAL_STUDIES[_scanSignal] || [];
+  const TF_MAP   = {'5m':'5','15m':'15','1h':'60','4h':'240','1d':'1D'};
+  const interval = TF_MAP[_scanTimeframe] || SIGNAL_INTERVAL[_scanSignal] || '60';
 
   if (_tvWidget) { try { _tvWidget.remove(); } catch(e) {} _tvWidget = null; }
   container.innerHTML = '';
