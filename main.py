@@ -708,7 +708,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
             r5, r15, r1h = await asyncio.gather(
                 client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "5m",  "limit": 150}),
                 client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "15m", "limit": 150}),
-                client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "1h",  "limit": 60}),
+                client.get(f"{base}/api/v3/klines", params={"symbol": pair, "interval": "1h",  "limit": 250}),
             )
             if r5.status_code == 451:
                 continue  # prova Binance US
@@ -724,7 +724,7 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
 
         if not isinstance(klines5, list) or not isinstance(klines15, list) or not isinstance(klines1h, list):
             return None
-        if len(klines5) < 100 or len(klines15) < 100 or len(klines1h) < 50:
+        if len(klines5) < 100 or len(klines15) < 100 or len(klines1h) < 200:
             return None
 
         closes5  = [float(k[4]) for k in klines5]
@@ -831,11 +831,13 @@ async def fetch_candles_for_symbol(sym: str, client: httpx.AsyncClient) -> dict 
         macd_hist      = hist_list[-1] if hist_list else 0.0
         macd_hist_prev = hist_list[-2] if len(hist_list) >= 2 else 0.0
 
-        # Golden Cross / Death Cross: EMA20 vs EMA50 su 1h, crossover avvenuto nelle ultime 3 ore
-        ema50_1h_cur   = calc_ema(closes1h[:-1], 50)
-        ema50_1h_prev3 = calc_ema(closes1h[:-4], 50)
-        golden_cross   = (ema20_1h_cur > ema50_1h_cur) and (ema20_1h_prev3 < ema50_1h_prev3)
-        death_cross    = (ema20_1h_cur < ema50_1h_cur) and (ema20_1h_prev3 > ema50_1h_prev3)
+        # Golden Cross / Death Cross: EMA50 vs EMA200 su 1h (definizione classica), crossover nelle ultime 24 ore
+        ema50_1h_cur     = calc_ema(closes1h[:-1], 50)
+        ema200_1h_cur    = calc_ema(closes1h[:-1], 200)
+        ema50_1h_prev24  = calc_ema(closes1h[:-25], 50)
+        ema200_1h_prev24 = calc_ema(closes1h[:-25], 200)
+        golden_cross     = (ema50_1h_cur > ema200_1h_cur) and (ema50_1h_prev24 <= ema200_1h_prev24)
+        death_cross      = (ema50_1h_cur < ema200_1h_cur) and (ema50_1h_prev24 >= ema200_1h_prev24)
         # RSI: entrambi su 1h per coerenza (5m è troppo rumoroso per overbought)
         rsi_oversold   = rsi_1h < 30.0
         rsi_overbought = rsi_1h > 70.0
