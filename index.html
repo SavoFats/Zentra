@@ -1241,7 +1241,7 @@ body.auth-active .tabbar { display:none !important; }
         <circle cx="168" cy="80" r="4" fill="white" opacity="0.4"/>
       </svg>
 
-      <div class="home-hero-title">Avvia<br>Zentra Core</div>
+      <div class="home-hero-title">Avvia<br>Zentra Agent Beta</div>
       <div class="home-hero-pills">
         <span class="home-hero-pill" id="heroPillDuration">Durata --</span>
         <span class="home-hero-pill" id="heroPillStrategy">Stop Loss --</span>
@@ -1917,7 +1917,7 @@ body.auth-active .tabbar { display:none !important; }
           <li>Watchlist e dashboard segnali</li>
           <li class="muted">Collegamento exchange reale</li>
           <li class="muted">Notifiche Telegram</li>
-          <li class="muted">AI Trading Agent</li>
+          <li class="muted">Zentra Agent Beta</li>
         </ul>
         <button class="app-plan-btn" id="planFreeBtn" onclick="showTab('home',document.querySelector('.sb-item[data-tab=home]'))">Piano attuale</button>
       </div>
@@ -1934,7 +1934,7 @@ body.auth-active .tabbar { display:none !important; }
           <li>Collega Coinbase e Revolut X</li>
           <li>Gestione posizioni reali</li>
           <li>Notifiche Telegram</li>
-          <li class="muted">AI Trading Agent beta</li>
+          <li class="muted">Zentra Agent Beta</li>
         </ul>
         <button class="app-plan-btn primary" id="planProBtn" onclick="checkoutPlan('pro')">Passa a Pro</button>
       </div>
@@ -1943,11 +1943,11 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-kicker">Accesso beta limitato</div>
         <div class="app-plan-name">Founder</div>
         <div class="app-plan-price">€49.99<span>/mo</span></div>
-        <div class="app-plan-sub">Accesso anticipato all'AI Trading Agent sperimentale.</div>
+        <div class="app-plan-sub">Accesso anticipato a Zentra Agent Beta.</div>
         <ul class="app-plan-feats">
           <li>Tutto incluso in Pro</li>
           <li>Analisi Zentra AI illimitate</li>
-          <li>AI Trading Agent sperimentale</li>
+          <li>Zentra Agent Beta sperimentale</li>
           <li>Ingressi automatici dai segnali Zentra</li>
           <li>Regole automatiche di rischio e uscita</li>
           <li>Strategie Momentum + Breakout</li>
@@ -3793,6 +3793,10 @@ function clearFieldError(fieldId) {
 
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
+  if (_plan !== 'founder') {
+    showPaywall('Zentra Agent Beta è disponibile solo con il piano Founder.', 'plans');
+    return;
+  }
   clearFieldError('capitalUsd');
   clearFieldError('allocUsd');
   const capitalUsdVal = parseFloat(document.getElementById('capitalUsd').value);
@@ -3845,6 +3849,7 @@ async function doStartAgent(cfg) {
     const r = await fetch(API + '/start', { method:'POST', headers:authHeaders(), body:JSON.stringify({config:cfg}) });
     const d = await r.json();
     if (d.error === 'session_limit') { showPaywall(d.message); return; }
+    if (d.error === 'agent_plan_required') { showPaywall(d.message || 'Zentra Agent Beta richiede il piano Founder.', 'plans'); return; }
     if (d.error) { showToast(d.error, true); return; }
     saveConfigToStorage(cfg);
     document.getElementById('startBtn').disabled = true;
@@ -5050,6 +5055,10 @@ function renderMarketStars() {
 
 // ── DRAWER CONFIG ─────────────────────────────────────────────────────────────
 function openDrawer() {
+  if (_plan !== 'founder') {
+    showTab('plans', document.querySelector('.sb-item[data-tab=plans]'));
+    return;
+  }
   const drawerContent = document.getElementById('drawerConfigContent');
   if (!drawerContent) return;
   const configPage = document.getElementById('page-config');
@@ -6008,14 +6017,19 @@ function updatePlanUI() {
   }
   const sesEl = document.getElementById('sessionsIndicator');
   if (sesEl) {
-    if (_plan === 'free') {
-      const rem = Math.max(0, _sessionsPerDay - _sessionsToday);
-      sesEl.textContent = rem > 0 ? `${rem}/${_sessionsPerDay} sessione disponibile` : 'Sessione gratuita esaurita oggi';
-      sesEl.style.color = rem > 0 ? 'var(--text3)' : 'var(--red)';
+    if (_plan !== 'founder') {
+      sesEl.textContent = 'Disponibile solo con il piano Founder';
+      sesEl.style.color = 'rgba(255,255,255,0.72)';
       sesEl.style.display = '';
     } else {
       sesEl.style.display = 'none';
     }
+  }
+  const homeStartBtn = document.getElementById('homeStartBtn');
+  if (homeStartBtn) {
+    homeStartBtn.innerHTML = _plan === 'founder'
+      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Avvia sessione'
+      : 'Diventa Founder';
   }
   // CTA upgrade nel menu — visibile per free sempre, nascosto per Pro
   const pmCta = document.getElementById('pmProCta');

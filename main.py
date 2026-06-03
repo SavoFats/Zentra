@@ -4220,7 +4220,6 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     real_mode = False
     revx_key_id, revx_private_key, use_revx = "", "", False
     user_plan = "free"
-    free_session_counter_update = None
     row = None
     agent_exchange = cfg.get("agentExchange", "revx").lower()
     use_coinbase = False
@@ -4255,19 +4254,13 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
                     if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
                         raw_plan = "free"
                     user_plan = raw_plan
-                    # Gate sessione giornaliera (solo free)
-                    if user_plan == "free":
-                        today = datetime.utcnow().date()
-                        last_date = row["last_session_date"]
-                        sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
-                        if sessions_today >= FREE_SESSIONS_PER_DAY:
-                            _sessions_starting.discard(user_id)
-                            return {
-                                "error": "session_limit",
-                                "message": f"Hai già usato la tua sessione gratuita di oggi. Torna domani o passa a Pro.",
-                                "plan": "free",
-                            }
-                        free_session_counter_update = (today, sessions_today + 1)
+                    if user_plan != "founder":
+                        _sessions_starting.discard(user_id)
+                        return {
+                            "error": "agent_plan_required",
+                            "message": "Zentra Agent Beta è disponibile solo con il piano Founder.",
+                            "plan": user_plan,
+                        }
         except Exception as e:
             print(f"DB key fetch error: {e}")
 
@@ -4385,16 +4378,6 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         f"Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | {strategy_params} | "
         f"Stop: -{max_stop_pct_s:.1f}% | BTC: {btc_filt_s} | MaxHold: {mxh}h | MaxLoss: {mcl}"
     )
-    if free_session_counter_update and db_pool:
-        try:
-            today, new_count = free_session_counter_update
-            async with db_pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE users SET last_session_date = $1, sessions_today = $2 WHERE id = $3",
-                    today, new_count, user_id
-                )
-        except Exception as e:
-            print(f"DB free session counter update error: {e}")
     _sessions_starting.discard(user_id)
     return {"ok": True}
 
