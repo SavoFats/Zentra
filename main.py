@@ -13,7 +13,7 @@ import secrets
 import stripe
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 import httpx
 import uvicorn
@@ -99,6 +99,8 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_ID       = os.environ.get("STRIPE_PRICE_ID", "")
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
+GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 ENABLE_DEBUG_REVX = os.environ.get("ENABLE_DEBUG_REVX", "").lower() in ("1", "true", "yes")
 ENABLE_RESTORE_DEBUG = os.environ.get("ENABLE_RESTORE_DEBUG", "").lower() in ("1", "true", "yes")
 
@@ -191,11 +193,13 @@ async def get_current_user(request: Request):
     return verify_token(auth[7:])
 
 class RegisterRequest(BaseModel):
-    username: str
+    username: str = ""
+    email: str = ""
     password: str
 
 class LoginRequest(BaseModel):
-    username: str
+    username: str = ""
+    email: str = ""
     password: str
 
 BINANCE_BASE    = "https://api.binance.com"
@@ -3252,6 +3256,8 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS sim_mode BOOLEAN DEFAULT TRUE;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_b64 TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT DEFAULT '';
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_key_id TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS revx_private_key TEXT DEFAULT '';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS binance_api_key TEXT DEFAULT '';
@@ -3511,32 +3517,76 @@ _login_attempts = _rate_buckets
 
 # ── AUTH ENDPOINTS ─────────────────────────────────────────────────────────────
 
+def _auth_identifier(req) -> str:
+    return (getattr(req, "email", "") or getattr(req, "username", "") or "").strip().lower()
+
+def _looks_like_email(value: str) -> bool:
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value))
+
+def _validate_password_auth(identifier: str, password: str):
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Inserisci email o username")
+    if _looks_like_email(identifier):
+        if len(identifier) > 254:
+            raise HTTPException(status_code=400, detail="Email troppo lunga")
+    else:
+        if len(identifier) < 3:
+            raise HTTPException(status_code=400, detail="Username troppo corto (min 3 caratteri)")
+        if len(identifier) > 30:
+            raise HTTPException(status_code=400, detail="Username troppo lungo (max 30 caratteri)")
+        if not identifier.replace("_", "").replace("-", "").replace(".", "").isalnum():
+            raise HTTPException(status_code=400, detail="Username può contenere solo lettere, numeri, _, -, .")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password troppo corta (min 8 caratteri)")
+    if len(password) > 128:
+        raise HTTPException(status_code=400, detail="Password troppo lunga (max 128 caratteri)")
+
+def _google_state_token(redirect_to: str) -> str:
+    import base64, hmac as _hmac
+    payload = json.dumps({
+        "nonce": secrets.token_urlsafe(16),
+        "redirect": redirect_to,
+        "exp": int(time.time()) + 600,
+    }, separators=(",", ":"))
+    body = base64.urlsafe_b64encode(payload.encode()).decode()
+    sig = _hmac.new(SECRET_KEY.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{body}.{sig}"
+
+def _verify_google_state(token: str) -> str:
+    import base64, hmac as _hmac
+    try:
+        body, sig = token.split(".", 1)
+        expected = _hmac.new(SECRET_KEY.encode(), body.encode(), hashlib.sha256).hexdigest()
+        if not _hmac.compare_digest(sig, expected):
+            raise ValueError("bad signature")
+        data = json.loads(base64.urlsafe_b64decode(body.encode()).decode())
+        if int(data.get("exp", 0)) < int(time.time()):
+            raise ValueError("expired")
+        redirect_to = data.get("redirect") or "/app"
+        return redirect_to if is_allowed_redirect_url(redirect_to) else "/app"
+    except Exception:
+        raise HTTPException(status_code=400, detail="OAuth state non valido")
+
 @app.post("/auth/register")
 async def register(req: RegisterRequest, request: Request):
     check_rate_limit(request, max_attempts=10, window=300, key_suffix="register")
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database non disponibile")
-    if len(req.username) < 3:
-        raise HTTPException(status_code=400, detail="Username troppo corto (min 3 caratteri)")
-    if len(req.username) > 30:
-        raise HTTPException(status_code=400, detail="Username troppo lungo (max 30 caratteri)")
-    if not req.username.replace("_", "").replace("-", "").replace(".", "").isalnum():
-        raise HTTPException(status_code=400, detail="Username può contenere solo lettere, numeri, _, -, .")
-    if len(req.password) < 8:
-        raise HTTPException(status_code=400, detail="Password troppo corta (min 8 caratteri)")
-    if len(req.password) > 128:
-        raise HTTPException(status_code=400, detail="Password troppo lunga (max 128 caratteri)")
+    identifier = _auth_identifier(req)
+    _validate_password_auth(identifier, req.password)
+    email = identifier if _looks_like_email(identifier) else ""
+    username = identifier
     pw_hash = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt()).decode()
     try:
         async with db_pool.acquire() as conn:
             row = await conn.fetchrow(
-                "INSERT INTO users (username, password_hash, display_name) VALUES ($1, $2, $3) RETURNING id",
-                req.username.lower(), pw_hash, req.username
+                "INSERT INTO users (username, email, password_hash, display_name) VALUES ($1, $2, $3, $4) RETURNING id",
+                username, email, pw_hash, identifier
             )
         token = create_token(row["id"])
-        return {"token": token, "username": req.username, "has_revx_keys": False}
+        return {"token": token, "username": identifier, "has_revx_keys": False}
     except asyncpg.UniqueViolationError:
-        raise HTTPException(status_code=400, detail="Username già in uso")
+        raise HTTPException(status_code=400, detail="Account già in uso")
     except Exception:
         raise HTTPException(status_code=500, detail="Errore durante la registrazione")
 
@@ -3552,19 +3602,109 @@ async def login(req: LoginRequest, request: Request):
     check_rate_limit(request, max_attempts=10, window=300, key_suffix="login")
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database non disponibile")
+    identifier = _auth_identifier(req)
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Inserisci email o username")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, password_hash, revx_key_id, display_name FROM users WHERE username = $1",
-            req.username.lower()
+            "SELECT id, password_hash, revx_key_id, display_name, username, email FROM users WHERE username = $1 OR email = $1",
+            identifier
         )
-    if not row:
+    if not row or not row["password_hash"]:
         raise HTTPException(status_code=401, detail="Username o password errati")
     if not bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
         raise HTTPException(status_code=401, detail="Username o password errati")
     token = create_token(row["id"])
     has_keys = bool(row.get("revx_key_id"))
-    dname = row["display_name"] or req.username
+    dname = row["display_name"] or row["email"] or row["username"] or identifier
     return {"token": token, "username": dname, "has_revx_keys": has_keys}
+
+@app.get("/auth/google/status")
+async def google_status(request: Request):
+    check_rate_limit(request, max_attempts=60, window=60, key_suffix="google_status")
+    return {"enabled": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)}
+
+@app.get("/auth/google/start")
+async def google_start(request: Request, redirect: str = "/app"):
+    check_rate_limit(request, max_attempts=20, window=300, key_suffix="google_start")
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail="Google login non configurato")
+    if redirect.startswith("/"):
+        origin = request.headers.get("origin") or _url_origin(str(request.url))
+        redirect_to = f"{origin.rstrip('/')}{redirect}"
+    else:
+        redirect_to = redirect
+    if not is_allowed_redirect_url(redirect_to):
+        raise HTTPException(status_code=400, detail="Redirect non consentito")
+    callback_url = str(request.url_for("google_callback"))
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": callback_url,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "online",
+        "prompt": "select_account",
+        "state": _google_state_token(redirect_to),
+    }
+    return RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params), status_code=302)
+
+@app.get("/auth/google/callback")
+async def google_callback(request: Request, code: str = "", state: str = ""):
+    check_rate_limit(request, max_attempts=20, window=300, key_suffix="google_callback")
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail="Google login non configurato")
+    redirect_to = _verify_google_state(state)
+    if not code:
+        return RedirectResponse(with_query_param(redirect_to, "auth_error", "google_cancelled"), status_code=302)
+    callback_url = str(request.url_for("google_callback"))
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            token_resp = await client.post("https://oauth2.googleapis.com/token", data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": callback_url,
+                "grant_type": "authorization_code",
+            })
+            if token_resp.status_code >= 400:
+                raise Exception(token_resp.text[:300])
+            access_token = token_resp.json().get("access_token", "")
+            user_resp = await client.get(
+                "https://openidconnect.googleapis.com/v1/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            if user_resp.status_code >= 400:
+                raise Exception(user_resp.text[:300])
+            profile = user_resp.json()
+    except Exception as e:
+        print(f"[GOOGLE AUTH] {public_error(e, GOOGLE_CLIENT_SECRET, max_len=180)}")
+        return RedirectResponse(with_query_param(redirect_to, "auth_error", "google_failed"), status_code=302)
+    google_sub = str(profile.get("sub") or "")
+    email = str(profile.get("email") or "").lower()
+    name = str(profile.get("name") or email or "Zentra user")
+    if not google_sub or not email:
+        return RedirectResponse(with_query_param(redirect_to, "auth_error", "google_profile"), status_code=302)
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, display_name FROM users WHERE google_sub = $1 OR email = $2 OR username = $2",
+            google_sub, email
+        )
+        if row:
+            user_id = row["id"]
+            await conn.execute(
+                "UPDATE users SET google_sub = $1, email = $2, display_name = COALESCE(NULLIF(display_name, ''), $3) WHERE id = $4",
+                google_sub, email, name, user_id
+            )
+        else:
+            row = await conn.fetchrow(
+                "INSERT INTO users (username, email, google_sub, password_hash, display_name) VALUES ($1, $2, $3, '', $4) RETURNING id",
+                email, email, google_sub, name
+            )
+            user_id = row["id"]
+    token = create_token(user_id)
+    target = with_query_param(redirect_to, "token", token)
+    target = with_query_param(target, "username", name)
+    return RedirectResponse(target, status_code=302)
 
 
 # ── WATCHLIST ─────────────────────────────────────────────────────────────────
