@@ -97,12 +97,40 @@ if not SECRET_KEY:
 STRIPE_SECRET_KEY     = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_ID       = os.environ.get("STRIPE_PRICE_ID", "")
+STRIPE_PRO_PRICE_ID   = os.environ.get("STRIPE_PRO_PRICE_ID", STRIPE_PRICE_ID)
+STRIPE_FOUNDER_PRICE_ID = os.environ.get("STRIPE_FOUNDER_PRICE_ID", "")
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
 GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 ENABLE_DEBUG_REVX = os.environ.get("ENABLE_DEBUG_REVX", "").lower() in ("1", "true", "yes")
 ENABLE_RESTORE_DEBUG = os.environ.get("ENABLE_RESTORE_DEBUG", "").lower() in ("1", "true", "yes")
+
+PAID_PLANS = {"pro", "founder"}
+
+def normalize_plan(plan: str) -> str:
+    plan = (plan or "free").strip().lower()
+    return plan if plan in ("free", "pro", "founder") else "free"
+
+def stripe_price_for_plan(plan: str) -> str:
+    plan = normalize_plan(plan)
+    if plan == "founder":
+        return STRIPE_FOUNDER_PRICE_ID
+    if plan == "pro":
+        return STRIPE_PRO_PRICE_ID
+    return ""
+
+def plan_from_stripe_subscription(sub: dict, fallback: str = "pro") -> str:
+    plan = normalize_plan((sub.get("metadata") or {}).get("plan") or fallback)
+    if plan in PAID_PLANS:
+        return plan
+    try:
+        price_id = sub["items"]["data"][0]["price"]["id"]
+    except Exception:
+        price_id = ""
+    if price_id and STRIPE_FOUNDER_PRICE_ID and price_id == STRIPE_FOUNDER_PRICE_ID:
+        return "founder"
+    return "pro"
 
 def restore_debug_log(msg: str):
     if ENABLE_RESTORE_DEBUG:
@@ -3794,9 +3822,9 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         sim = True
     dname = row["display_name"] or row["username"]
     # Calcola piano effettivo (pro scade se subscription_expires_at è nel passato)
-    raw_plan = row["plan"] or "free"
+    raw_plan = normalize_plan(row["plan"] or "free")
     exp = row["subscription_expires_at"]
-    if raw_plan == "pro" and exp and exp < datetime.utcnow():
+    if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
         raw_plan = "free"
     # Sessioni usate oggi
     today = datetime.utcnow().date()
@@ -4137,9 +4165,9 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
                         use_revx = bool(revx_key_id) and not sim
                         real_mode = use_revx
                     # Piano effettivo
-                    raw_plan = row["plan"] or "free"
+                    raw_plan = normalize_plan(row["plan"] or "free")
                     exp = row["subscription_expires_at"]
-                    if raw_plan == "pro" and exp and exp < datetime.utcnow():
+                    if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
                         raw_plan = "free"
                     user_plan = raw_plan
                     # Gate sessione giornaliera (solo free)
@@ -5280,9 +5308,9 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT plan, subscription_expires_at, last_session_date, sessions_today FROM users WHERE id = $1", user_id)
-    raw_plan = row["plan"] or "free"
+    raw_plan = normalize_plan(row["plan"] or "free")
     exp = row["subscription_expires_at"]
-    if raw_plan == "pro" and exp and exp < datetime.utcnow():
+    if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
         raw_plan = "free"
     today = datetime.utcnow().date()
     last_date = row["last_session_date"]
@@ -5293,13 +5321,17 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
         "sessions_per_day": FREE_SESSIONS_PER_DAY,
         "sessions_remaining": max(0, FREE_SESSIONS_PER_DAY - sessions_today) if raw_plan == "free" else 999,
         "subscription_expires_at": exp.isoformat() if exp else None,
-        "stripe_enabled": bool(STRIPE_SECRET_KEY),
+        "stripe_enabled": bool(STRIPE_SECRET_KEY and (STRIPE_PRO_PRICE_ID or STRIPE_FOUNDER_PRICE_ID)),
     }
 
 @app.post("/billing/checkout")
 async def billing_checkout(body: dict, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=5, window=60, key_suffix="billing_checkout")
-    if not STRIPE_SECRET_KEY or not STRIPE_PRICE_ID:
+    requested_plan = normalize_plan(body.get("plan") or "pro")
+    if requested_plan == "free":
+        raise HTTPException(status_code=400, detail="Piano non acquistabile")
+    price_id = stripe_price_for_plan(requested_plan)
+    if not STRIPE_SECRET_KEY or not price_id:
         raise HTTPException(status_code=503, detail="Pagamenti non configurati")
     success_url = body.get("success_url", "")
     cancel_url  = body.get("cancel_url", "")
@@ -5327,10 +5359,13 @@ async def billing_checkout(body: dict, request: Request, user_id: int = Depends(
         session = stripe.checkout.Session.create(
             customer=customer_id,
             payment_method_types=["card"],
-            line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+            line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
             success_url=with_query_param(success_url, "upgraded", "1"),
             cancel_url=cancel_url,
+            client_reference_id=str(user_id),
+            metadata={"user_id": str(user_id), "plan": requested_plan},
+            subscription_data={"metadata": {"user_id": str(user_id), "plan": requested_plan}},
         )
         return {"url": session["url"]}
     except stripe.error.StripeError as e:
@@ -5377,32 +5412,35 @@ async def stripe_webhook(request: Request):
     if etype == "checkout.session.completed":
         customer_id = data.get("customer", "")
         sub_id      = data.get("subscription", "")
+        checkout_plan = normalize_plan((data.get("metadata") or {}).get("plan") or "pro")
         if customer_id and db_pool:
             # Recupera subscription per data scadenza
             try:
                 sub = stripe.Subscription.retrieve(sub_id)
+                checkout_plan = plan_from_stripe_subscription(sub, checkout_plan)
                 expires_at = datetime.utcfromtimestamp(sub["current_period_end"])
             except Exception:
                 expires_at = None
             async with db_pool.acquire() as conn:
                 await conn.execute(
-                    "UPDATE users SET plan = 'pro', subscription_expires_at = $1 WHERE stripe_customer_id = $2",
-                    expires_at, customer_id
+                    "UPDATE users SET plan = $1, subscription_expires_at = $2 WHERE stripe_customer_id = $3",
+                    checkout_plan, expires_at, customer_id
                 )
-            print(f"[BILLING] upgrade a pro: customer={customer_id}, scade={expires_at}")
+            print(f"[BILLING] upgrade a {checkout_plan}: customer={customer_id}, scade={expires_at}")
     elif etype == "invoice.payment_succeeded":
         customer_id = data.get("customer", "")
         sub_id      = data.get("subscription", "")
         if customer_id and sub_id and db_pool:
             try:
                 sub = stripe.Subscription.retrieve(sub_id)
+                renewal_plan = plan_from_stripe_subscription(sub)
                 expires_at = datetime.utcfromtimestamp(sub["current_period_end"])
                 async with db_pool.acquire() as conn:
                     await conn.execute(
-                        "UPDATE users SET plan = 'pro', subscription_expires_at = $1 WHERE stripe_customer_id = $2",
-                        expires_at, customer_id
+                        "UPDATE users SET plan = $1, subscription_expires_at = $2 WHERE stripe_customer_id = $3",
+                        renewal_plan, expires_at, customer_id
                     )
-                print(f"[BILLING] rinnovo pro: customer={customer_id}, scade={expires_at}")
+                print(f"[BILLING] rinnovo {renewal_plan}: customer={customer_id}, scade={expires_at}")
             except Exception as e:
                 print(f"[BILLING] errore rinnovo: {e}")
     elif etype in ("customer.subscription.deleted", "customer.subscription.paused"):

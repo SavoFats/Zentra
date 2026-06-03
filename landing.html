@@ -1111,7 +1111,7 @@ footer {
         <li class="unavail" data-i18n="pf5">Telegram notifications</li>
         <li class="unavail" data-i18n="pf6">AI Trading Agent</li>
       </ul>
-      <a href="/app" class="btn-plan secondary js-auth-trigger" data-i18n="plan_free_btn">Start Free</a>
+      <a href="/app" class="btn-plan secondary js-auth-trigger" data-plan="free" data-i18n="plan_free_btn">Start Free</a>
     </div>
     <div class="plan-card featured reveal delay-2">
       <div class="plan-badge" data-i18n="plan_pro_badge">Best for active traders</div>
@@ -1126,7 +1126,7 @@ footer {
         <li data-i18n="pp5">Telegram notifications</li>
         <li class="unavail" data-i18n="pp6">AI Trading Agent beta</li>
       </ul>
-      <a href="/app" class="btn-plan primary js-auth-trigger" data-i18n="plan_pro_btn">Go Pro</a>
+      <a href="/app" class="btn-plan primary js-auth-trigger" data-plan="pro" data-i18n="plan_pro_btn">Go Pro</a>
     </div>
     <div class="plan-card founder reveal delay-3">
       <div class="plan-badge" data-i18n="plan_founder_badge">Limited beta access</div>
@@ -1142,7 +1142,7 @@ footer {
         <li data-i18n="fp6">Founder price locked while subscribed</li>
       </ul>
       <div class="plan-risk" data-i18n="plan_founder_risk">Beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.</div>
-      <a href="/app" class="btn-plan founder js-auth-trigger" data-i18n="plan_founder_btn">Become a Founder</a>
+      <a href="/app" class="btn-plan founder js-auth-trigger" data-plan="founder" data-i18n="plan_founder_btn">Become a Founder</a>
     </div>
   </div>
 </section>
@@ -1200,6 +1200,26 @@ footer {
 const API = 'https://api.zentra.trading';
 let authMode = 'register';
 let googleEnabled = false;
+let pendingCheckoutPlan = '';
+
+function authHeaders() {
+  const token = localStorage.getItem('ca_token') || '';
+  return token
+    ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+    : { 'Content-Type': 'application/json' };
+}
+
+function validPaidPlan(plan) {
+  return plan === 'pro' || plan === 'founder';
+}
+
+function showAuthDialog() {
+  const modal = document.getElementById('authModal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  updateAuthCopy();
+}
 
 const AUTH_COPY = {
   en: {
@@ -1264,17 +1284,60 @@ function updateAuthCopy() {
   setAuthMode(authMode);
 }
 
-function openAuthModal(event) {
-  if (event) event.preventDefault();
-  if (localStorage.getItem('ca_token')) {
+async function startCheckout(plan) {
+  const c = authCopy();
+  if (!validPaidPlan(plan)) {
     window.location.href = '/app';
     return;
   }
-  const modal = document.getElementById('authModal');
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  updateAuthCopy();
+  if (!localStorage.getItem('ca_token')) {
+    pendingCheckoutPlan = plan;
+    localStorage.setItem('ca_pending_checkout_plan', plan);
+    showAuthDialog();
+    return;
+  }
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('token');
+    url.searchParams.delete('username');
+    url.searchParams.delete('checkout');
+    url.searchParams.delete('auth_error');
+    const returnUrl = url.toString();
+    const r = await fetch(API + '/billing/checkout', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ plan, success_url: returnUrl, cancel_url: returnUrl })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.url) throw new Error(d.detail || d.error || c.connectionError);
+    localStorage.removeItem('ca_pending_checkout_plan');
+    pendingCheckoutPlan = '';
+    window.location.href = d.url;
+  } catch (e) {
+    showAuthDialog();
+    showAuthModalError(e.message || c.connectionError);
+  }
+}
+
+function openAuthModal(event) {
+  if (event) event.preventDefault();
+  const plan = event?.currentTarget?.dataset?.plan || '';
+  if (localStorage.getItem('ca_token')) {
+    if (validPaidPlan(plan)) {
+      startCheckout(plan);
+      return;
+    }
+    window.location.href = '/app';
+    return;
+  }
+  if (validPaidPlan(plan)) {
+    pendingCheckoutPlan = plan;
+    localStorage.setItem('ca_pending_checkout_plan', plan);
+  } else {
+    pendingCheckoutPlan = '';
+    localStorage.removeItem('ca_pending_checkout_plan');
+  }
+  showAuthDialog();
 }
 
 function closeAuthModal() {
@@ -1282,6 +1345,8 @@ function closeAuthModal() {
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+  pendingCheckoutPlan = '';
+  localStorage.removeItem('ca_pending_checkout_plan');
 }
 
 function showEmailAuth() {
@@ -1331,6 +1396,11 @@ async function submitLandingAuth(event) {
     if (!r.ok) throw new Error(d.detail || d.error || c.connectionError);
     localStorage.setItem('ca_token', d.token);
     localStorage.setItem('ca_username', d.username || email);
+    const plan = pendingCheckoutPlan || localStorage.getItem('ca_pending_checkout_plan') || '';
+    if (validPaidPlan(plan)) {
+      await startCheckout(plan);
+      return;
+    }
     window.location.href = '/app';
   } catch (e) {
     showAuthModalError(e.message || c.connectionError);
@@ -1346,8 +1416,27 @@ function continueWithGoogle() {
     showEmailAuth();
     return;
   }
-  const redirect = window.location.origin + '/app';
+  const plan = pendingCheckoutPlan || localStorage.getItem('ca_pending_checkout_plan') || '';
+  const redirectUrl = new URL(validPaidPlan(plan) ? window.location.href : window.location.origin + '/app');
+  if (validPaidPlan(plan)) redirectUrl.searchParams.set('checkout', plan);
+  const redirect = redirectUrl.toString();
   window.location.href = API + '/auth/google/start?redirect=' + encodeURIComponent(redirect);
+}
+
+function handleLandingAuthReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const username = params.get('username');
+  const checkout = params.get('checkout') || localStorage.getItem('ca_pending_checkout_plan') || '';
+  if (token) {
+    localStorage.setItem('ca_token', token);
+    if (username) localStorage.setItem('ca_username', username);
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete('token');
+    clean.searchParams.delete('username');
+    window.history.replaceState({}, '', clean.toString());
+    if (validPaidPlan(checkout)) startCheckout(checkout);
+  }
 }
 
 async function loadGoogleAuthStatus() {
@@ -1370,6 +1459,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeAuthModal();
 });
 loadGoogleAuthStatus();
+handleLandingAuthReturn();
 
 /* ─── TRANSLATIONS ─────────────────────────── */
 const T = {

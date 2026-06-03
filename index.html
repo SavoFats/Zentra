@@ -233,6 +233,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .btn-primary:active { opacity:0.85; }
 .plan-badge.free { background:var(--surface3); color:var(--text3); }
 .plan-badge.pro  { background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
+.plan-badge.founder { background:linear-gradient(90deg,#ffb020,#ff6b2b); color:#15110a; }
 .pro-locked { opacity:0.45; pointer-events:none; }
 .pro-lock-label { font-size:10px; font-weight:800; color:#1a1200; background:#f59e0b; border-radius:4px; padding:2px 6px; margin-left:6px; letter-spacing:0.04em; }
 #sessionsIndicator { font-size:12px; margin-top:4px; }
@@ -723,7 +724,7 @@ body.auth-active .tabbar { display:none !important; }
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     <span id="pmTelegram">Collega Telegram</span>
   </div>
-  <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? (_plan==='pro' ? manageSubscriptionClick() : (document.getElementById('profileMenu').classList.remove('open'), showPaywall())) : null" style="display:none">
+  <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? (isPaidPlan() ? manageSubscriptionClick() : (document.getElementById('profileMenu').classList.remove('open'), showPaywall())) : null" style="display:none">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
     <span id="pmBillingLabel">Abbonamento</span>
   </div>
@@ -733,7 +734,7 @@ body.auth-active .tabbar { display:none !important; }
         <div style="font-size:12px;font-weight:800;color:#fbbf24;letter-spacing:0.04em;margin-bottom:2px">ZENTRA PRO</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.75);font-weight:500">Sessioni illimitate · più posizioni</div>
       </div>
-      <div style="background:#f59e0b;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:800;color:#1a1200;white-space:nowrap;margin-left:10px">€9.99/mese →</div>
+      <div style="background:#f59e0b;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:800;color:#1a1200;white-space:nowrap;margin-left:10px">€14.99/mese →</div>
     </div>
   </div>
   <div class="profile-menu-item danger" onclick="logout()">
@@ -2032,6 +2033,22 @@ function authHeaders() {
   return _authToken
     ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _authToken }
     : { 'Content-Type': 'application/json' };
+}
+
+function isPaidPlan() {
+  return _plan === 'pro' || _plan === 'founder';
+}
+
+function planDisplayName() {
+  if (_plan === 'founder') return 'Zentra Founder';
+  if (_plan === 'pro') return 'Zentra Pro';
+  return 'Piano Free';
+}
+
+function planBadgeText() {
+  if (_plan === 'founder') return 'FOUNDER';
+  if (_plan === 'pro') return 'PRO';
+  return 'FREE';
 }
 
 // ── AVATAR / PROFILO ─────────────────────────────────────────────────────────
@@ -4963,7 +4980,7 @@ function syncSidebar() {
   const uinit = document.getElementById('sbAvatarInitial');
   const sbAv  = document.getElementById('sbAvatar');
   if (uname) uname.textContent = _username || '--';
-  if (uplan) uplan.textContent = (_plan === 'pro') ? 'Zentra Pro' : 'Piano Free';
+  if (uplan) uplan.textContent = planDisplayName();
   if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
   // sync avatar image
   const cached = localStorage.getItem('ca_avatar');
@@ -4990,14 +5007,17 @@ function renderAccountPage() {
   // Plan block
   const planBlock = document.getElementById('accPlanBlock');
   if (planBlock) {
-    const isPro = _plan === 'pro';
+    const isPro = isPaidPlan();
+    const isFounder = _plan === 'founder';
+    const planName = planDisplayName();
+    const badgeText = planBadgeText();
     planBlock.innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
         <div style="width:34px;height:34px;border-radius:9px;background:${isPro?'rgba(124,58,237,0.15)':'rgba(80,90,200,0.10)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${isPro?'#7c3aed':'var(--blue)'}" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${isFounder?'#ffb020':(isPro?'#7c3aed':'var(--blue)')}" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         </div>
         <div>
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${isPro?'Zentra Pro':'Piano Free'} <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:${isPro?'rgba(124,58,237,0.2)':'rgba(80,90,200,0.12)'};color:${isPro?'#a78bfa':'var(--blue)'};vertical-align:middle">${isPro?'PRO':'FREE'}</span></div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${planName} <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:${isFounder?'rgba(255,176,32,0.18)':(isPro?'rgba(124,58,237,0.2)':'rgba(80,90,200,0.12)')};color:${isFounder?'#ffb020':(isPro?'#a78bfa':'var(--blue)')};vertical-align:middle">${badgeText}</span></div>
           <div style="font-size:12px;color:var(--text3);margin-top:2px">${isPro?'Accesso completo':'Funzionalità base'}</div>
         </div>
       </div>
@@ -5654,7 +5674,7 @@ async function upgradeToProClick() {
   try {
     const r = await fetch(API + '/billing/checkout', {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ success_url: location.href, cancel_url: location.href })
+      body: JSON.stringify({ plan: 'pro', success_url: location.href, cancel_url: location.href })
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
@@ -5678,8 +5698,8 @@ async function manageSubscriptionClick() {
 function updatePlanUI() {
   const badge = document.getElementById('planBadge');
   if (badge) {
-    badge.textContent = _plan === 'pro' ? 'PRO' : 'FREE';
-    badge.className = 'plan-badge ' + (_plan === 'pro' ? 'pro' : 'free');
+    badge.textContent = planBadgeText();
+    badge.className = 'plan-badge ' + (_plan === 'founder' ? 'founder' : (_plan === 'pro' ? 'pro' : 'free'));
     badge.style.display = '';
   }
   const sesEl = document.getElementById('sessionsIndicator');
@@ -5700,7 +5720,7 @@ function updatePlanUI() {
   // Voce "Gestisci abbonamento" nel menu — solo Pro con Stripe configurato
   const pmBilling = document.getElementById('pmBillingItem');
   if (pmBilling) {
-    pmBilling.style.display = (STRIPE_ENABLED && _plan === 'pro') ? '' : 'none';
+    pmBilling.style.display = (STRIPE_ENABLED && isPaidPlan()) ? '' : 'none';
   }
   // Lock/unlock config pro features
   applyPlanConfig();
@@ -5749,8 +5769,8 @@ function applyPlanConfig() {
           if (r.ok) {
             const d = await r.json();
             STRIPE_ENABLED = d.stripe_enabled || STRIPE_ENABLED;
-            if (d.plan === 'pro') {
-              _plan = 'pro';
+            if (d.plan === 'pro' || d.plan === 'founder') {
+              _plan = d.plan;
               _sessionsToday = d.sessions_today ?? _sessionsToday;
               updatePlanUI();
               break;
@@ -5805,7 +5825,7 @@ function closeProWelcome() {
     <div style="font-size:20px;font-weight:700;margin-bottom:8px">Piano Free</div>
     <p id="paywallMsg" style="color:var(--text2);font-size:14px;margin-bottom:24px;line-height:1.5"></p>
     <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:20px;text-align:left">
-      <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">✦ Zentra Pro — €9.99/mese</div>
+      <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">Zentra Pro — €14.99/mese</div>
       <div style="font-size:13px;color:var(--text2);line-height:1.8">
         ✓ Sessioni illimitate al giorno<br>
         ✓ Posizioni multiple contemporaneamente<br>
