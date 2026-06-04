@@ -6272,6 +6272,7 @@ function closeProWelcome() {
 let _aiOpen = false;
 let _aiLoading = false;
 let _aiUnread = 0;
+let _aiChartSeq = 0;
 const _aiHistory = [];
 
 function updateAIUsageFromPayload(d) {
@@ -6407,35 +6408,51 @@ function _aiRenderChart(symbol) {
   const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (!msgs || !safeSymbol) return;
   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const tvSym = `BINANCE:${safeSymbol}USDT`;
+  const containerId = `aiTvChart${++_aiChartSeq}`;
   const wrap = document.createElement('div');
   const label = document.createElement('div');
-  const frame = document.createElement('iframe');
+  const frame = document.createElement('div');
   wrap.className = 'ai-chart-wrap';
   label.className = 'ai-chart-label';
   label.textContent = `${safeSymbol} · 1H`;
   frame.className = 'ai-chart-frame';
-  frame.title = `Grafico ${safeSymbol}`;
-  frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>html,body,.tradingview-widget-container,.tradingview-widget-container__widget{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}</style></head><body><div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div><script src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>${JSON.stringify({
-    autosize: true,
-    symbol: tvSym,
-    interval: '60',
-    timezone: 'Etc/UTC',
-    theme,
-    style: '1',
-    locale: 'it',
-    hide_top_toolbar: true,
-    hide_legend: false,
-    allow_symbol_change: false,
-    save_image: false,
-    calendar: false,
-    support_host: 'https://www.tradingview.com'
-  })}<\/script></div></body></html>`;
-  frame.setAttribute('allowtransparency', 'true');
-  frame.setAttribute('scrolling', 'no');
+  frame.id = containerId;
   wrap.append(label, frame);
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
+
+  function createWidget() {
+    if (!document.getElementById(containerId) || typeof TradingView === 'undefined') return;
+    new TradingView.widget({
+      autosize: true,
+      symbol: `${safeSymbol}USDT`,
+      interval: '60',
+      timezone: 'Etc/UTC',
+      theme,
+      style: '1',
+      locale: 'it',
+      enable_publishing: false,
+      allow_symbol_change: true,
+      container_id: containerId,
+      hide_side_toolbar: false,
+      hide_top_toolbar: false
+    });
+  }
+
+  if (typeof TradingView !== 'undefined') {
+    setTimeout(createWidget, 0);
+  } else {
+    const existing = document.querySelector('script[data-tv-js="1"]');
+    if (existing) {
+      existing.addEventListener('load', createWidget, { once:true });
+    } else {
+      const s = document.createElement('script');
+      s.src = 'https://s3.tradingview.com/tv.js';
+      s.dataset.tvJs = '1';
+      s.onload = createWidget;
+      document.head.appendChild(s);
+    }
+  }
 }
 
 function _aiDetectSymbolFromText(text) {
