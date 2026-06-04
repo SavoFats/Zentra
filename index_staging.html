@@ -6519,7 +6519,6 @@ async function sendAIMessage() {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
       _aiAppendMsg('ai', d.reply);
-      _aiRenderNews(d.news);
       const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg) || _aiDetectSymbolFromNews(d.news);
       if (chartSymbol) _aiRenderChart(chartSymbol);
       if (!_aiOpen) {

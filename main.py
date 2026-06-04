@@ -5270,7 +5270,7 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     news_items = await fetch_crypto_news(coins=[chart_coin] if chart_coin else None)
     news_ctx = ""
     if news_items:
-        news_ctx = "\n[Notizie crypto recenti]\n"
+        news_ctx = "\n[News/catalizzatori disponibili]\n"
         for n in news_items:
             coins_tag = f" [{','.join(n['coins'])}]" if n["coins"] else ""
             news_ctx += f"  {n['date']} | {n['source']}{coins_tag}: {n['title']}\n"
@@ -5363,6 +5363,14 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "- Segnali scanner attivi su quella coin (1H/4H)\n"
         "- Se il setup originale è ancora valido o è cambiato qualcosa\n"
         "- Se c'è motivo di muovere lo stop o uscire parzialmente\n\n"
+
+        "NEWS E CATALIZZATORI\n"
+        "Le news nel contesto non vanno mai riportate come lista separata o riga informativa. "
+        "Usale solo se cambiano davvero la lettura operativa: catalizzatore, rischio evento, "
+        "sentiment, liquidità o invalidazione del setup. Se una news è generica, vecchia, "
+        "ridondante rispetto ai dati di prezzo o non aggiunge edge, ignorala completamente. "
+        "Quando una news è utile, integrala nell'analisi spiegando in una frase il suo impatto "
+        "sul bias, sul rischio o sulla gestione del trade.\n\n"
 
         "LINGUA\n"
         "Rispondi sempre nella stessa lingua usata dall'utente nel messaggio.\n\n"
