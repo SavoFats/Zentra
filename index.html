@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.zentra.trading https://api.zentra.trading https://api.anthropic.com https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.zentra.trading https://api.anthropic.com https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -1774,6 +1774,9 @@ body.auth-active .tabbar { display:none !important; }
       .ai-send { width:40px; height:40px; border-radius:10px; border:none; background:var(--blue); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:opacity .15s; align-self:flex-end; }
       .ai-send:disabled { opacity:0.4; cursor:not-allowed; }
       .ai-send svg { width:18px; height:18px; }
+      .ai-chart-wrap { margin:8px 0 4px; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:var(--surface2); }
+      .ai-chart-label { font-size:11px; font-weight:800; color:var(--text3); padding:8px 12px 4px; letter-spacing:0.06em; text-transform:uppercase; }
+      .ai-chart-frame { width:100%; height:220px; border:none; display:block; }
       .ai-ctx-bar { padding:8px 14px; background:rgba(0,82,255,0.06); border-bottom:1px solid rgba(0,82,255,0.12); font-size:11px; color:var(--blue); font-weight:600; display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }
       .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
       .home-ai { width:min(900px,100%); margin:10px auto 28px; }
@@ -6355,6 +6358,20 @@ function _aiTime() {
   return new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
 }
 
+function _renderAiMarkdown(text) {
+  let s = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  s = s.replace(/^#{1,3} (.+)$/gm,
+    '<div style="font-weight:800;font-size:13px;color:var(--text);margin:10px 0 3px;line-height:1.3">$1</div>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/^---$/gm,
+    '<hr style="border:none;border-top:1px solid var(--border);margin:7px 0">');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
 function _aiAppendMsg(role, content) {
   const msgs = document.getElementById('aiMessages');
   if (!msgs) return null;
@@ -6364,7 +6381,11 @@ function _aiAppendMsg(role, content) {
 
   const bubble = document.createElement('div');
   bubble.className = 'ai-bubble';
-  bubble.textContent = content;
+  if (role === 'ai') {
+    bubble.innerHTML = _renderAiMarkdown(content);
+  } else {
+    bubble.textContent = content;
+  }
 
   const time = document.createElement('div');
   time.className = 'ai-msg-time';
@@ -6375,6 +6396,27 @@ function _aiAppendMsg(role, content) {
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
   return wrap;
+}
+
+function _aiRenderChart(symbol) {
+  const msgs = document.getElementById('aiMessages');
+  const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+  if (!msgs || !safeSymbol) return;
+  const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const tvSym = encodeURIComponent(`BINANCE:${safeSymbol}USDT`);
+  const wrap = document.createElement('div');
+  const label = document.createElement('div');
+  const frame = document.createElement('iframe');
+  wrap.className = 'ai-chart-wrap';
+  label.className = 'ai-chart-label';
+  label.textContent = `${safeSymbol} · 1H`;
+  frame.className = 'ai-chart-frame';
+  frame.src = `https://www.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=1&hide_side_toolbar=1&allow_symbol_change=0`;
+  frame.setAttribute('allowtransparency', 'true');
+  frame.setAttribute('scrolling', 'no');
+  wrap.append(label, frame);
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
 async function sendAIMessage() {
@@ -6410,6 +6452,7 @@ async function sendAIMessage() {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
       _aiAppendMsg('ai', d.reply);
+      if (d.chart_symbol) _aiRenderChart(d.chart_symbol);
       if (!_aiOpen) {
         _aiUnread++;
         const badge = document.getElementById('aiFabBadge');
@@ -6419,11 +6462,11 @@ async function sendAIMessage() {
         }
       }
     } else {
-      _aiAppendMsg('ai', '⚠️ ' + (d.error || d.detail || 'Errore nella risposta. Riprova.'));
+      _aiAppendMsg('ai', (d.error || d.detail || 'Errore nella risposta. Riprova.'));
     }
   } catch (e) {
     typing.classList.remove('visible');
-    _aiAppendMsg('ai', '⚠️ Connessione persa. Controlla la rete e riprova.');
+    _aiAppendMsg('ai', 'Connessione persa. Controlla la rete e riprova.');
   }
 
   _aiLoading = false;
