@@ -6719,7 +6719,6 @@ async function sendAIMessage(source = 'analysis') {
   if (source === 'home') _aiActiveThreadId = '';
   _aiEnsureThread(msg);
   showTab('analysis');
-  renderAIThread();
 
   _aiLoading = true;
   const sendBtn = document.getElementById(source === 'home' ? 'aiHomeSend' : 'aiSend');
@@ -6753,11 +6752,11 @@ async function sendAIMessage(source = 'analysis') {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
       _aiAppendMsg('ai', d.reply);
-      if (Array.isArray(d.news) && d.news.length) {
+      const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg);
+      if (chartSymbol && Array.isArray(d.news) && d.news.length) {
         _aiRenderNews(d.news);
         _aiPersistExtra({ role: 'news', data: d.news });
       }
-      const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg) || _aiDetectSymbolFromNews(d.news);
       if (chartSymbol) {
         _aiRenderChart(chartSymbol);
         _aiPersistExtra({ role: 'chart', symbol: chartSymbol });
