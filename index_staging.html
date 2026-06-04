@@ -960,11 +960,6 @@ body.auth-active .tabbar { display:none !important; }
       <div id="externalExchangeTestResult" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.45;margin-bottom:14px"></div>
       <div class="modal-actions">
         <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Chiudi</button>
-        <button class="modal-btn cancel" id="externalExchangeTestBtn" onclick="testExternalExchangeConnection()">Test connessione</button>
-        <button class="modal-btn cancel" id="externalExchangePreflightBtn" onclick="preflightExternalExchange()">Preflight BTC $1</button>
-        <button class="modal-btn cancel" id="externalExchangeSyncBtn" onclick="syncCoinbasePositions()">Sync posizioni</button>
-        <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroBuyBtn" onclick="microBuyCoinbase()">Compra BTC $1</button>
-        <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroSellBtn" onclick="microSellCoinbase()">Vendi BTC test</button>
         <button class="modal-btn cancel" style="color:var(--red);border-color:var(--red)" onclick="disconnectExternalExchange()">Scollega</button>
       </div>
     </div>
@@ -1901,6 +1896,8 @@ body.auth-active .tabbar { display:none !important; }
       <div class="home-username">Exchange</div>
     </div>
 
+    <div style="font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);margin:4px 0 10px">Disponibili</div>
+
     <div class="card" style="padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
         <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
@@ -1914,25 +1911,6 @@ body.auth-active .tabbar { display:none !important; }
           <div id="exchangeRevxSub" style="font-size:13px;color:var(--text3);margin-top:4px">Configura le API key</div>
         </div>
         <button id="exchangeRevxBtn" onclick="showRevxConfig()" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
-      </div>
-    </div>
-
-    <div class="card" style="margin-top:14px;padding:0;overflow:hidden;position:relative">
-      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
-        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
-          <img src="assets/exchanges/binance.svg" alt="Binance" style="width:27px;height:27px;display:block">
-        </div>
-        <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div style="font-size:16px;font-weight:800;color:var(--text)">Binance</div>
-            <span id="exchangeBinanceStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
-          </div>
-          <div id="exchangeBinanceSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
-        </div>
-        <button id="exchangeBinanceBtn" onclick="showExternalExchangeConfig('binance')" style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
-      </div>
-      <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">Coming Soon</span>
       </div>
     </div>
 
@@ -1955,6 +1933,27 @@ body.auth-active .tabbar { display:none !important; }
       </div>
     </div>
 
+    <div style="font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);margin:22px 0 10px">In arrivo</div>
+
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden;position:relative">
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
+          <img src="assets/exchanges/binance.svg" alt="Binance" style="width:27px;height:27px;display:block">
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:800;color:var(--text)">Binance</div>
+            <span id="exchangeBinanceStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">In arrivo</span>
+          </div>
+          <div id="exchangeBinanceSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+        </div>
+        <button disabled style="border:none;background:var(--surface2);color:var(--text3);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:default;flex-shrink:0">In arrivo</button>
+      </div>
+      <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">In arrivo</span>
+      </div>
+    </div>
+
     <div class="card" style="margin-top:14px;padding:0;overflow:hidden;position:relative">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
         <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
@@ -1963,14 +1962,14 @@ body.auth-active .tabbar { display:none !important; }
         <div style="min-width:0;flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <div style="font-size:16px;font-weight:800;color:var(--text)">Bybit</div>
-            <span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
+            <span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">In arrivo</span>
           </div>
           <div style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
         </div>
-        <button style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
+        <button disabled style="border:none;background:var(--surface2);color:var(--text3);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:default;flex-shrink:0">In arrivo</button>
       </div>
       <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">Coming Soon</span>
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">In arrivo</span>
       </div>
     </div>
   </div>
@@ -2674,36 +2673,6 @@ function showExternalExchangeConfig(exchange) {
   document.getElementById('externalExchangeConnectedLabel').textContent = label + ' collegato';
   document.getElementById('externalExchangeConnectedView').style.display = connected ? '' : 'none';
   document.getElementById('externalExchangeFormView').style.display = connected ? 'none' : '';
-  const testBtn = document.getElementById('externalExchangeTestBtn');
-  const preflightBtn = document.getElementById('externalExchangePreflightBtn');
-  const syncBtn = document.getElementById('externalExchangeSyncBtn');
-  const microBuyBtn = document.getElementById('externalExchangeMicroBuyBtn');
-  const microSellBtn = document.getElementById('externalExchangeMicroSellBtn');
-  if (testBtn) {
-    testBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    testBtn.disabled = false;
-    testBtn.textContent = 'Test connessione';
-  }
-  if (preflightBtn) {
-    preflightBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    preflightBtn.disabled = false;
-    preflightBtn.textContent = 'Preflight BTC $1';
-  }
-  if (syncBtn) {
-    syncBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    syncBtn.disabled = false;
-    syncBtn.textContent = 'Sync posizioni';
-  }
-  if (microBuyBtn) {
-    microBuyBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    microBuyBtn.disabled = false;
-    microBuyBtn.textContent = 'Compra BTC $1';
-  }
-  if (microSellBtn) {
-    microSellBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    microSellBtn.disabled = false;
-    microSellBtn.textContent = 'Vendi BTC test';
-  }
   const testResult = document.getElementById('externalExchangeTestResult');
   if (testResult) {
     testResult.style.display = 'none';
@@ -5420,7 +5389,6 @@ function renderExchangePage() {
     : 'Collega le API key Revolut X per abilitare gli ordini reali.';
   const btn = document.getElementById('exchangeRevxBtn');
   if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
-  renderExternalExchangeStatus('binance');
   renderExternalExchangeStatus('coinbase');
 }
 
