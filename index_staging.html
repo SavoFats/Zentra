@@ -379,8 +379,8 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .hero-sparkline { position:absolute; right:0; bottom:0; width:48%; height:65%; opacity:0.3; pointer-events:none; display:block; }
 /* ── MONITOR TABS ── */
 .mon-tabs { display:flex; gap:6px; margin-bottom:12px; }
-.mon-tab { padding:9px 18px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer; border:none; font-family:var(--sans); transition:all 0.15s; background:var(--surface2); color:var(--text3); }
-.mon-tab.active { background:var(--text); color:var(--bg); }
+.mon-tab { padding:9px 18px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer; border:1.5px solid var(--border); font-family:var(--sans); transition:all 0.15s; background:var(--surface2); color:var(--text2); white-space:nowrap; flex-shrink:0; }
+.mon-tab.active { background:var(--blue); border-color:var(--blue); color:#fff; }
 .scan-chip { padding:8px 16px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; border:1.5px solid var(--border); background:var(--surface2); color:var(--text2); white-space:nowrap; font-family:var(--sans); transition:all 0.15s; }
 .scan-chip.active { background:var(--green); border-color:var(--green); color:#fff; }
 .scan-chip.bear.active { background:var(--red); border-color:var(--red); color:#fff; }
