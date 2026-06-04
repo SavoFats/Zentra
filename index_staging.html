@@ -1796,9 +1796,9 @@ body.auth-active .tabbar { display:none !important; }
       .ai-msg.ai .ai-bubble { background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; border:1px solid var(--border); }
       .ai-msg-time { font-size:10px; color:var(--text3); font-weight:500; padding:0 4px; }
       .ai-msg.user .ai-msg-time { text-align:right; }
-      .ai-typing { align-self:flex-start; display:none; padding:9px 15px; background:var(--surface2); border:1px solid var(--border); border-radius:14px; border-bottom-left-radius:4px; }
+      .ai-typing { align-self:flex-start; display:none; padding:6px 0 18px; }
       .ai-typing.visible { display:flex; align-items:center; }
-      .ai-thinking-text { font-size:13px; color:var(--text3); font-style:italic; transition:opacity 0.25s ease; }
+      .ai-thinking-text { font-size:13px; color:var(--text3); font-style:italic; transition:opacity 0.35s ease; }
       .ai-thinking-text.fade { opacity:0; }
       .ai-welcome { text-align:center; padding:32px 16px; color:var(--text3); font-size:13px; line-height:1.6; }
       .ai-welcome strong { color:var(--text2); display:block; margin-bottom:6px; font-size:14px; }
@@ -6475,7 +6475,7 @@ function _aiThinkingStart() {
   _aiThinkingTimer = setInterval(() => {
     el.classList.add('fade');
     setTimeout(() => { el.textContent = pick(); el.classList.remove('fade'); }, 260);
-  }, 2400);
+  }, 4500);
 }
 
 function _aiThinkingStop() {
