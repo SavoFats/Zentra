@@ -6449,6 +6449,20 @@ function _aiGetThread(id = _aiActiveThreadId) {
   return _aiThreads.find(t => t.id === id) || null;
 }
 
+let _aiAutoScrollEnabled = true;
+
+function _aiSetupAutoScroll() {
+  const msgs = document.getElementById('aiMessages');
+  if (!msgs || msgs._scrollSetup) return;
+  msgs._scrollSetup = true;
+  msgs.addEventListener('scroll', () => {
+    _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 80;
+  }, { passive: true });
+  new MutationObserver(() => {
+    if (_aiAutoScrollEnabled) requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
+  }).observe(msgs, { childList: true });
+}
+
 const _AI_THINKING_MSGS = [
   'Analisi in corso',
   'Pensando',
@@ -6662,10 +6676,14 @@ function _aiRenderChart(symbol) {
       hide_side_toolbar: false,
       hide_top_toolbar: false
     });
-    setTimeout(() => {
-      const m = document.getElementById('aiMessages');
-      if (m) m.scrollTop = m.scrollHeight;
-    }, 600);
+    const ro = new ResizeObserver(() => {
+      if (_aiAutoScrollEnabled) requestAnimationFrame(() => {
+        const m = document.getElementById('aiMessages');
+        if (m) m.scrollTop = m.scrollHeight;
+      });
+    });
+    ro.observe(wrap);
+    setTimeout(() => ro.disconnect(), 8000);
   }
 
   if (typeof TradingView !== 'undefined') {
@@ -6739,6 +6757,7 @@ async function sendAIMessage(source = 'analysis') {
   if (!msg || _aiLoading) return;
   if (source === 'home') _aiActiveThreadId = '';
   _aiEnsureThread(msg);
+  _aiAutoScrollEnabled = true;
   showTab('analysis');
 
   _aiLoading = true;
@@ -6835,6 +6854,7 @@ function _aiInit() {
   renderAIHistory();
   renderAIThread();
   updateAIUsageUI();
+  _aiSetupAutoScroll();
   if (!_aiInit._docListenerSet) {
     document.addEventListener('click', () => {
       document.querySelectorAll('.sb-ai-thread-dropdown.open').forEach(d => d.classList.remove('open'));
