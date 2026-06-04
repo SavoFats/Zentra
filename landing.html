@@ -421,6 +421,16 @@ section { padding: 120px 40px; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cline x1='3' y1='3' x2='9' y2='9' stroke='rgba(255,255,255,0.2)' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='9' y1='3' x2='3' y2='9' stroke='rgba(255,255,255,0.2)' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: center;
 }
+.plan-features li.agent-feature { display: block; }
+.plan-features li.agent-feature::before { display: inline-block; vertical-align: -4px; margin-right: 10px; }
+.plan-subfeatures {
+  list-style: disc; margin: 8px 0 0 42px; padding: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.plan-subfeatures li {
+  display: list-item; font-size: 13px; line-height: 1.45; color: var(--text2);
+}
+.plan-subfeatures li::before { content: none; }
 .plan-risk {
   margin: auto 0 20px; padding: 12px 14px; border-radius: 12px;
   background: rgba(255,176,32,0.08); border: 1px solid rgba(255,176,32,0.22);
@@ -1105,11 +1115,13 @@ footer {
       <div class="plan-period" data-i18n="plan_free_period">For exploring Zentra without real capital</div>
       <ul class="plan-features">
         <li data-i18n="pf1">10 market scans per day</li>
-        <li data-i18n="pf2">10 Zentra AI demo analyses per day</li>
+        <li data-i18n="pf2">10 Zentra AI analyses per day</li>
         <li data-i18n="pf3">Unlimited manual trading in demo</li>
         <li data-i18n="pf4">Watchlist and signal dashboard</li>
         <li class="unavail" data-i18n="pf5">Real exchange connection</li>
-        <li class="unavail" data-i18n="pf6">Zentra Agent Beta</li>
+        <li class="unavail" data-i18n="pf6">Real position management</li>
+        <li class="unavail" data-i18n="pf7">Telegram notifications</li>
+        <li class="unavail" data-i18n="pf8">Zentra Agent Beta</li>
       </ul>
       <a href="/app" class="btn-plan secondary js-auth-trigger" data-plan="free" data-i18n="plan_free_btn">Start Free</a>
     </div>
@@ -1122,9 +1134,11 @@ footer {
         <li data-i18n="pp1">Unlimited market scans</li>
         <li data-i18n="pp2">50 Zentra AI analyses per day</li>
         <li data-i18n="pp3">Unlimited manual trading</li>
-        <li data-i18n="pp4">Connect Coinbase and Revolut X</li>
-        <li data-i18n="pp5">Telegram notifications</li>
-        <li class="unavail" data-i18n="pp6">Zentra Agent Beta</li>
+        <li data-i18n="pp4">Real exchange connections</li>
+        <li data-i18n="pp5">Real position management</li>
+        <li data-i18n="pp6">Watchlist and signal dashboard</li>
+        <li data-i18n="pp7">Telegram notifications</li>
+        <li class="unavail" data-i18n="pp8">Zentra Agent Beta</li>
       </ul>
       <a href="/app" class="btn-plan primary js-auth-trigger" data-plan="pro" data-i18n="plan_pro_btn">Go Pro</a>
     </div>
@@ -1136,12 +1150,15 @@ footer {
       <ul class="plan-features">
         <li data-i18n="fp1">Everything in Pro</li>
         <li data-i18n="fp2">Unlimited Zentra AI analyses</li>
-        <li data-i18n="fp3">Experimental Zentra Agent Beta</li>
-        <li data-i18n="fp4">Automated risk rules and exits</li>
-        <li data-i18n="fp5">Momentum + Breakout strategies</li>
-        <li data-i18n="fp6">Founder price locked while subscribed</li>
+        <li class="agent-feature"><span data-i18n="fp3">Zentra Agent Beta:</span>
+          <ul class="plan-subfeatures">
+            <li data-i18n="fp4">Automatic entries from Zentra signals</li>
+            <li data-i18n="fp5">Automated risk and exit rules</li>
+            <li data-i18n="fp6">Momentum + Breakout strategies</li>
+          </ul>
+        </li>
       </ul>
-      <div class="plan-risk" data-i18n="plan_founder_risk">Beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.</div>
+      <div class="plan-risk" data-i18n="plan_founder_risk">Zentra Agent is a beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.</div>
       <a href="/app" class="btn-plan founder js-auth-trigger" data-plan="founder" data-i18n="plan_founder_btn">Become a Founder</a>
     </div>
   </div>
@@ -1491,12 +1508,12 @@ const T = {
     t6_quote:'"Scanning 50+ pairs manually is humanly impossible. My entry quality improved the moment I stopped guessing and let Zentra\'s scanner decide. Fewer trades, better results."',
     t7_quote:'"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."',
     plans_tag:'Plans', plans_title:'Choose your level of control', plans_sub:'Start in demo, connect your exchange when you\'re ready, or join the Founder beta to unlock Zentra Agent Beta.',
-    plan_free_period:'For exploring Zentra without real capital', pf1:'10 market scans per day', pf2:'10 Zentra AI demo analyses per day', pf3:'Unlimited manual trading in demo', pf4:'Watchlist and signal dashboard', pf5:'Real exchange connection', pf6:'Zentra Agent Beta',
+    plan_free_period:'For exploring Zentra without real capital', pf1:'10 market scans per day', pf2:'10 Zentra AI analyses per day', pf3:'Unlimited manual trading in demo', pf4:'Watchlist and signal dashboard', pf5:'Real exchange connection', pf6:'Real position management', pf7:'Telegram notifications', pf8:'Zentra Agent Beta',
     plan_free_btn:'Start Free', plan_pro_badge:'Best for active traders',
-    plan_pro_period:'For manual real-money trading', pp1:'Unlimited market scans', pp2:'50 Zentra AI analyses per day', pp3:'Unlimited manual trading', pp4:'Connect Coinbase and Revolut X', pp5:'Telegram notifications', pp6:'Zentra Agent Beta',
+    plan_pro_period:'For manual real-money trading', pp1:'Unlimited market scans', pp2:'50 Zentra AI analyses per day', pp3:'Unlimited manual trading', pp4:'Real exchange connections', pp5:'Real position management', pp6:'Watchlist and signal dashboard', pp7:'Telegram notifications', pp8:'Zentra Agent Beta',
     plan_pro_btn:'Go Pro', plan_founder_badge:'Limited beta access',
-    plan_founder_period:'Early access to Zentra Agent Beta', fp1:'Everything in Pro', fp2:'Unlimited Zentra AI analyses', fp3:'Experimental Zentra Agent Beta', fp4:'Automated risk rules and exits', fp5:'Momentum + Breakout strategies', fp6:'Founder price locked while subscribed',
-    plan_founder_risk:'Beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.', plan_founder_btn:'Become a Founder',
+    plan_founder_period:'Early access to Zentra Agent Beta', fp1:'Everything in Pro', fp2:'Unlimited Zentra AI analyses', fp3:'Zentra Agent Beta:', fp4:'Automatic entries from Zentra signals', fp5:'Automated risk and exit rules', fp6:'Momentum + Breakout strategies',
+    plan_founder_risk:'Zentra Agent is a beta feature. Trading involves risk and losses can occur. The algorithm is actively improving and does not guarantee profits.', plan_founder_btn:'Become a Founder',
     cta_tag:'Ready?', cta_title:'Start trading smarter today.', cta_sub:'Join traders using Zentra to automate their crypto strategy.',
     cta_btn:'Open Zentra', cta_note:'Free to start. No credit card required.',
   },
@@ -1528,12 +1545,12 @@ const T = {
     t6_quote:'"Monitorare manualmente 50+ coppie è umanamente impossibile. La qualità dei miei ingressi è migliorata nel momento in cui ho lasciato decidere allo scanner di Zentra. Meno trade, risultati migliori."',
     t7_quote:'"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."',
     plans_tag:'Piani', plans_title:'Scegli il tuo livello di controllo', plans_sub:'Parti in demo, collega il tuo exchange quando sei pronto, oppure entra nella beta Founder per sbloccare Zentra Agent Beta.',
-    plan_free_period:'Per esplorare Zentra senza capitale reale', pf1:'10 scansioni di mercato al giorno', pf2:'10 analisi Zentra AI in demo al giorno', pf3:'Trading manuale illimitato in demo', pf4:'Watchlist e dashboard segnali', pf5:'Collegamento exchange reale', pf6:'Zentra Agent Beta',
+    plan_free_period:'Per esplorare Zentra senza capitale reale', pf1:'10 scansioni di mercato al giorno', pf2:'10 analisi Zentra AI al giorno', pf3:'Trading manuale illimitato in demo', pf4:'Watchlist e dashboard segnali', pf5:'Collegamento exchange reale', pf6:'Gestione posizioni reali', pf7:'Notifiche Telegram', pf8:'Zentra Agent Beta',
     plan_free_btn:'Inizia gratis', plan_pro_badge:'Per trader attivi',
-    plan_pro_period:'Per trading manuale con capitale reale', pp1:'Scansioni di mercato illimitate', pp2:'50 analisi Zentra AI al giorno', pp3:'Trading manuale illimitato', pp4:'Collega Coinbase e Revolut X', pp5:'Notifiche Telegram', pp6:'Zentra Agent Beta',
+    plan_pro_period:'Per trading manuale con capitale reale', pp1:'Scansioni di mercato illimitate', pp2:'50 analisi Zentra AI al giorno', pp3:'Trading manuale illimitato', pp4:'Collegamento exchange reali', pp5:'Gestione posizioni reali', pp6:'Watchlist e dashboard segnali', pp7:'Notifiche Telegram', pp8:'Zentra Agent Beta',
     plan_pro_btn:'Passa a Pro', plan_founder_badge:'Accesso beta limitato',
-    plan_founder_period:'Accesso anticipato a Zentra Agent Beta', fp1:'Tutto incluso in Pro', fp2:'Analisi Zentra AI illimitate', fp3:'Zentra Agent Beta sperimentale', fp4:'Regole automatiche di rischio e uscita', fp5:'Strategie Momentum + Breakout', fp6:'Prezzo Founder bloccato finché sei abbonato',
-    plan_founder_risk:'Funzione in beta. Il trading comporta rischi e può causare perdite. L\'algoritmo è in continuo miglioramento e non garantisce profitti.', plan_founder_btn:'Diventa Founder',
+    plan_founder_period:'Accesso anticipato a Zentra Agent Beta', fp1:'Tutto incluso in Pro', fp2:'Analisi Zentra AI illimitate', fp3:'Zentra Agent Beta:', fp4:'Ingressi automatici dai segnali Zentra', fp5:'Regole automatiche di rischio e uscita', fp6:'Strategie Momentum + Breakout',
+    plan_founder_risk:'Zentra Agent è una funzionalità beta. Il trading comporta rischi e può causare perdite. L\'algoritmo è in continuo miglioramento e non garantisce profitti.', plan_founder_btn:'Diventa Founder',
     cta_tag:'Pronti?', cta_title:'Inizia a tradare in modo più intelligente.', cta_sub:'Unisciti ai trader che usano Zentra per automatizzare la loro strategia.',
     cta_btn:'Apri Zentra', cta_note:'Gratuito per iniziare. Nessuna carta di credito.',
   }

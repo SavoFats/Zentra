@@ -250,6 +250,11 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .app-plan-feats li::before { content:'✓'; color:var(--green); font-weight:900; flex-shrink:0; }
 .app-plan-feats li.muted { color:var(--text3); }
 .app-plan-feats li.muted::before { content:'×'; color:var(--text3); }
+.app-plan-feats li.agent-feature { display:block; }
+.app-plan-feats li.agent-feature::before { content:'✓'; display:inline-block; margin-right:9px; color:var(--green); }
+.app-plan-subfeats { list-style:disc; margin:7px 0 0 27px; padding:0; display:flex; flex-direction:column; gap:5px; }
+.app-plan-subfeats li { display:list-item; font-size:12px; color:var(--text2); font-weight:600; }
+.app-plan-subfeats li::before { content:none; }
 .app-plan-risk { margin:auto 0 14px; border:1px solid rgba(255,176,32,0.22); background:rgba(255,176,32,0.08); border-radius:12px; padding:10px 11px; font-size:11px; line-height:1.45; color:var(--text2); font-weight:650; }
 .app-plan-btn { margin-top:auto; border:none; border-radius:12px; padding:12px 14px; font-family:var(--sans); font-weight:900; font-size:13px; cursor:pointer; background:var(--surface2); color:var(--text); }
 .app-plan-btn.primary { background:var(--blue); color:#fff; box-shadow:0 6px 24px rgba(0,82,255,0.25); }
@@ -1987,10 +1992,11 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-sub">Per provare Zentra senza usare capitale reale.</div>
         <ul class="app-plan-feats">
           <li>10 scansioni di mercato al giorno</li>
-          <li>10 analisi Zentra AI in demo al giorno</li>
+          <li>10 analisi Zentra AI al giorno</li>
           <li>Trading manuale illimitato in demo</li>
           <li>Watchlist e dashboard segnali</li>
           <li class="muted">Collegamento exchange reale</li>
+          <li class="muted">Gestione posizioni reali</li>
           <li class="muted">Notifiche Telegram</li>
           <li class="muted">Zentra Agent Beta</li>
         </ul>
@@ -2006,8 +2012,9 @@ body.auth-active .tabbar { display:none !important; }
           <li>Scansioni di mercato illimitate</li>
           <li>50 analisi Zentra AI al giorno</li>
           <li>Trading manuale illimitato</li>
-          <li>Collega Coinbase e Revolut X</li>
+          <li>Collegamento exchange reali</li>
           <li>Gestione posizioni reali</li>
+          <li>Watchlist e dashboard segnali</li>
           <li>Notifiche Telegram</li>
           <li class="muted">Zentra Agent Beta</li>
         </ul>
@@ -2022,13 +2029,15 @@ body.auth-active .tabbar { display:none !important; }
         <ul class="app-plan-feats">
           <li>Tutto incluso in Pro</li>
           <li>Analisi Zentra AI illimitate</li>
-          <li>Zentra Agent Beta sperimentale</li>
-          <li>Ingressi automatici dai segnali Zentra</li>
-          <li>Regole automatiche di rischio e uscita</li>
-          <li>Strategie Momentum + Breakout</li>
-          <li>Prezzo Founder bloccato finché sei abbonato</li>
+          <li class="agent-feature">Zentra Agent Beta:
+            <ul class="app-plan-subfeats">
+              <li>Ingressi automatici dai segnali Zentra</li>
+              <li>Regole automatiche di rischio e uscita</li>
+              <li>Strategie Momentum + Breakout</li>
+            </ul>
+          </li>
         </ul>
-        <div class="app-plan-risk">Funzione in beta. Il trading comporta rischi e può causare perdite. L'algoritmo è in continuo miglioramento e non garantisce profitti.</div>
+        <div class="app-plan-risk">Zentra Agent è una funzionalità beta. Il trading comporta rischi e può causare perdite. L'algoritmo è in continuo miglioramento e non garantisce profitti.</div>
         <button class="app-plan-btn founder" id="planFounderBtn" onclick="checkoutPlan('founder')">Diventa Founder</button>
       </div>
     </div>
