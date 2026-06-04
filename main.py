@@ -5372,6 +5372,14 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "Quando una news è utile, integrala nell'analisi spiegando in una frase il suo impatto "
         "sul bias, sul rischio o sulla gestione del trade.\n\n"
 
+        "INTERFACCIA\n"
+        "Sei integrato in una piattaforma che mostra grafici TradingView inline nella chat. "
+        "Quando l'utente dice 'il grafico', 'dal grafico', 'cosa mostra il grafico' o simili, "
+        "si riferisce al grafico TradingView della coin analizzata nel messaggio precedente — "
+        "NON a un'immagine allegata. Non chiedere mai di allegare screenshot o immagini: "
+        "la piattaforma non supporta upload. Usa i dati di prezzo e segnali scanner nel contesto "
+        "per rispondere come se stessi leggendo il grafico.\n\n"
+
         "LINGUA\n"
         "Rispondi sempre nella stessa lingua usata dall'utente nel messaggio.\n\n"
 
