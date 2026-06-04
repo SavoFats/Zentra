@@ -1372,11 +1372,6 @@ body.auth-active .tabbar { display:none !important; }
   <div class="page" id="page-analysis">
     <div class="ptr-indicator" id="ptr-page-analysis"><div class="ptr-spinner"></div></div>
     <div class="ai-workspace">
-      <div class="ai-workspace-head">
-        <div>
-          <div class="ai-workspace-title" id="aiThreadTitle">Nuova analisi</div>
-        </div>
-      </div>
       <div class="ai-workspace-body">
         <div class="ai-messages" id="aiMessages">
           <div class="ai-empty-state" id="aiEmptyState">
@@ -1847,8 +1842,6 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
       .ai-workspace { min-height:100%; display:flex; flex-direction:column; gap:18px; }
-      .ai-workspace-head { display:flex; align-items:flex-start; justify-content:flex-start; gap:14px; padding:12px 0 4px; }
-      .ai-workspace-title { font-size:28px; font-weight:900; color:var(--text); letter-spacing:-.04em; }
       .ai-workspace-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
       .ai-workspace .ai-messages { flex:1; min-height:360px; max-height:none; padding:10px 0 22px; }
       .ai-workspace .ai-msg.ai { max-width:min(980px,100%); }
@@ -1865,9 +1858,7 @@ body.auth-active .tabbar { display:none !important; }
         .home-ai-mark { width:34px; height:34px; border-radius:12px; }
         .home-ai-input.ai-input { font-size:13.5px; }
         .home-ai .ai-messages { max-height:260px; }
-        .ai-workspace-title { font-size:23px; }
         .ai-workspace .ai-messages { min-height:300px; padding:16px; }
-        .ai-workspace-head { flex-direction:column; }
       }
     </style>
     <div class="scan-tf-bar">
@@ -6518,10 +6509,8 @@ function renderAIHistory() {
 
 function renderAIThread() {
   const msgs = document.getElementById('aiMessages');
-  const title = document.getElementById('aiThreadTitle');
   if (!msgs) return;
   const thread = _aiGetThread();
-  if (title) title.textContent = thread?.title || 'Nuova analisi';
   msgs.innerHTML = '';
   if (!thread || !(thread.messages || []).length) {
     msgs.innerHTML = '<div class="ai-empty-state" id="aiEmptyState"><strong>Chiedi a Zentra AI</strong>Scrivi una domanda qui sotto o parti dalla barra in Home. Le tue analisi resteranno nella cronologia della sidebar.</div>';
