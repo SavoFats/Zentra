@@ -4153,8 +4153,7 @@ async function poll() {
       unlockConfig();
     }
     render();
-    // Keep AI context bar in sync
-    if (typeof _aiInit === 'function') _aiInit();
+    if (typeof updateAIUsageUI === 'function') updateAIUsageUI();
   } catch(e) { console.error(e); }
 }
 
