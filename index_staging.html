@@ -1250,35 +1250,9 @@ body.auth-active .tabbar { display:none !important; }
           </button>
         </div>
         <div class="ai-panel home-ai-panel" id="aiPanel">
-          <div class="ai-panel-hdr">
-            <div class="ai-panel-hdr-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            </div>
-            <div style="flex:1;min-width:0">
-              <div class="ai-panel-title">Zentra AI</div>
-              <div class="ai-panel-sub" id="aiPanelSub">Copilot finanziario · Live</div>
-            </div>
-          </div>
-          <div class="ai-ctx-bar" id="aiCtxBar">
-            <span class="ai-ctx-pill">Mercato live</span>
-            <span class="ai-ctx-pill">Scanner</span>
-            <span class="ai-ctx-pill" id="aiCtxPositions">Nessuna posizione</span>
-            <span class="ai-ctx-pill" id="aiCtxSession">Sessione ferma</span>
-          </div>
-          <div class="ai-messages" id="aiMessages">
-            <div class="ai-welcome" id="aiWelcome">
-              <strong>Ciao, sono Zentra AI</strong>
-              Analizzo mercato live, segnali scanner e posizioni aperte. Scrivimi una domanda o scegli un prompt rapido.
-            </div>
-          </div>
+          <div class="ai-messages" id="aiMessages"></div>
           <div class="ai-typing" id="aiTyping">
             <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
-          </div>
-          <div class="ai-suggestions" id="aiSuggestions">
-            <button class="ai-sug" onclick="aiSuggest(this)">Analizza il mercato ora</button>
-            <button class="ai-sug" onclick="aiSuggest(this)">Ci sono setup interessanti?</button>
-            <button class="ai-sug" onclick="aiSuggest(this)">Come stanno le mie posizioni?</button>
-            <button class="ai-sug" onclick="aiSuggest(this)">Spiegami i segnali migliori</button>
           </div>
         </div>
       </div>
@@ -1820,10 +1794,7 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai-send.ai-send { width:42px; height:42px; border-radius:14px; align-self:center; box-shadow:0 10px 24px rgba(0,82,255,0.24); }
       .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
-      .home-ai .ai-panel-hdr { padding:13px 16px; }
-      .home-ai .ai-messages { min-height:150px; max-height:310px; padding:15px 16px; }
-      .home-ai .ai-suggestions { padding:0 16px 16px; }
-      .home-ai .ai-ctx-bar { padding:9px 16px; }
+      .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
       @media (max-width:640px) {
         .home-ai { margin:8px auto 22px; }
         .home-ai-bar { min-height:58px; padding:9px 11px; gap:9px; }
@@ -6304,10 +6275,8 @@ function incrementAIUsageOptimistic(previousValue) {
 }
 
 function updateAIUsageUI() {
-  const sub = document.getElementById('aiPanelSub');
   const box = document.getElementById('sbAIUsage');
   if (_aiAnalysesPerDay == null || _plan === 'founder') {
-    if (sub) sub.textContent = 'Copilot finanziario · Analisi illimitate';
     if (box) {
       box.style.display = 'none';
       box.classList.remove('limit');
@@ -6317,9 +6286,6 @@ function updateAIUsageUI() {
   const total = Math.max(1, Number(_aiAnalysesPerDay) || 10);
   const used = Math.min(total, Math.max(0, Number(_aiAnalysesToday) || 0));
   const remaining = Math.max(0, total - used);
-  if (sub) sub.textContent = remaining > 0
-    ? `Copilot finanziario · ${remaining}/${total} analisi oggi`
-    : 'Copilot finanziario · limite giornaliero raggiunto';
   if (!box) return;
   const pct = Math.round((used / total) * 100);
   box.style.display = '';
@@ -6335,21 +6301,23 @@ function updateAIUsageUI() {
   }
 }
 
-function openHomeAI(focusInput = false) {
-  _aiOpen = true;
+function openHomeAI(focusInput = false, expand = false) {
+  if (expand) _aiOpen = true;
   const shell = document.getElementById('homeAiShell');
   if (shell) {
-    shell.classList.add('open');
+    shell.classList.toggle('open', expand || shell.classList.contains('open'));
     shell.classList.add('focused');
   }
-  _aiUnread = 0;
-  const badge = document.getElementById('aiFabBadge');
-  if (badge) badge.style.display = 'none';
+  if (expand) {
+    _aiUnread = 0;
+    const badge = document.getElementById('aiFabBadge');
+    if (badge) badge.style.display = 'none';
+  }
   if (focusInput) setTimeout(() => document.getElementById('aiInput')?.focus(), 0);
 }
 
 function toggleAIChat() {
-  openHomeAI(true);
+  openHomeAI(true, true);
 }
 
 function aiInputResize(el) {
@@ -6380,11 +6348,7 @@ function _aiTime() {
 
 function _aiAppendMsg(role, content) {
   const msgs = document.getElementById('aiMessages');
-  const welcome = document.getElementById('aiWelcome');
-  if (welcome) welcome.remove();
-
-  const sug = document.getElementById('aiSuggestions');
-  if (sug) sug.style.display = 'none';
+  if (!msgs) return null;
 
   const wrap = document.createElement('div');
   wrap.className = 'ai-msg ' + role;
@@ -6405,10 +6369,10 @@ function _aiAppendMsg(role, content) {
 }
 
 async function sendAIMessage() {
-  openHomeAI(false);
   const input = document.getElementById('aiInput');
   const msg = input.value.trim();
   if (!msg || _aiLoading) return;
+  openHomeAI(false, true);
 
   _aiLoading = true;
   document.getElementById('aiSend').disabled = true;
@@ -6460,14 +6424,6 @@ async function sendAIMessage() {
 
 function _aiInit() {
   updateAIUsageUI();
-
-  // Update context bar based on live state
-  const pos = (S && S.positions) ? S.positions.length : 0;
-  const running = S && S.running;
-  const posEl = document.getElementById('aiCtxPositions');
-  const sesEl = document.getElementById('aiCtxSession');
-  if (posEl) posEl.textContent = pos > 0 ? `${pos} posizione${pos > 1 ? 'i' : ''}` : 'Nessuna posizione';
-  if (sesEl) sesEl.textContent = running ? 'Sessione attiva' : 'Sessione ferma';
 }
 
 // Show AI fab after auth
