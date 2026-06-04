@@ -6532,7 +6532,11 @@ function renderAIThread() {
     msgs.innerHTML = '<div class="ai-empty-state" id="aiEmptyState"><strong>Chiedi a Zentra AI</strong>Scrivi una domanda qui sotto o parti dalla barra in Home. Le tue analisi resteranno nella cronologia della sidebar.</div>';
     return;
   }
-  (thread.messages || []).forEach(m => _aiAppendMsg(m.role, m.content, false));
+  (thread.messages || []).forEach(m => {
+    if (m.role === 'news') _aiRenderNews(m.data);
+    else if (m.role === 'chart') _aiRenderChart(m.symbol);
+    else _aiAppendMsg(m.role, m.content, false);
+  });
   msgs.scrollTop = msgs.scrollHeight;
 }
 
@@ -6553,6 +6557,15 @@ function startNewAIThread() {
   renderAIThread();
   renderAIHistory();
   setTimeout(() => document.getElementById('aiInput')?.focus(), 0);
+}
+
+function _aiPersistExtra(entry) {
+  const thread = _aiGetThread();
+  if (!thread) return;
+  thread.messages = thread.messages || [];
+  thread.messages.push({ ...entry, time: _aiNowIso() });
+  thread.updatedAt = _aiNowIso();
+  _aiSaveThreads();
 }
 
 function _aiPersistMessage(role, content) {
@@ -6737,9 +6750,15 @@ async function sendAIMessage(source = 'analysis') {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
       _aiAppendMsg('ai', d.reply);
-      if (Array.isArray(d.news) && d.news.length) _aiRenderNews(d.news);
+      if (Array.isArray(d.news) && d.news.length) {
+        _aiRenderNews(d.news);
+        _aiPersistExtra({ role: 'news', data: d.news });
+      }
       const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg) || _aiDetectSymbolFromNews(d.news);
-      if (chartSymbol) _aiRenderChart(chartSymbol);
+      if (chartSymbol) {
+        _aiRenderChart(chartSymbol);
+        _aiPersistExtra({ role: 'chart', symbol: chartSymbol });
+      }
       if (!_aiOpen) {
         _aiUnread++;
         const badge = document.getElementById('aiFabBadge');
