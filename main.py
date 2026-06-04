@@ -697,6 +697,9 @@ scanner_candle_data: dict = {}   # {tf: {sym: signal_indicators}}
 _scanner_candles_ts:  dict = {}   # {tf: last_update_timestamp}
 _scanner_refreshing: set = set()  # timeframe refresh già in corso
 _ai_conversations:   dict = {}   # {user_id: [{"role": ..., "content": ...}]}
+_news_cache:         dict = {"data": [], "ts": 0.0}
+NEWS_CACHE_TTL      = 300         # secondi — aggiorna notizie ogni 5 minuti
+CRYPTOPANIC_API_KEY = os.environ.get("CRYPTOPANIC_API_KEY", "")
 SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
 VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
 SCANNER_SIGNAL_KEYS = {
@@ -5024,6 +5027,51 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
         await persist_sessions()
         return {"ok": True, "price": price, "qty": qty}
 
+async def fetch_crypto_news(coins: list | None = None) -> list:
+    global _news_cache
+    now = time.time()
+    if now - _news_cache["ts"] < NEWS_CACHE_TTL and _news_cache["data"]:
+        return _news_cache["data"]
+    if not CRYPTOPANIC_API_KEY:
+        return []
+    try:
+        params: dict = {"auth_token": CRYPTOPANIC_API_KEY, "kind": "news", "filter": "hot", "public": "true"}
+        if coins:
+            params["currencies"] = ",".join(coins[:5])
+        async with httpx.AsyncClient(timeout=8) as client:
+            res = await client.get("https://cryptopanic.com/api/v1/posts/", params=params)
+            data = res.json()
+        items = []
+        for item in (data.get("results") or [])[:8]:
+            items.append({
+                "title": item.get("title", ""),
+                "source": (item.get("source") or {}).get("title", ""),
+                "date": (item.get("published_at") or "")[:10],
+                "coins": [c["code"] for c in (item.get("currencies") or [])],
+            })
+        _news_cache = {"data": items, "ts": now}
+        return items
+    except Exception:
+        return _news_cache.get("data", [])
+
+_COIN_NAME_MAP = {
+    "BITCOIN": "BTC", "ETHEREUM": "ETH", "SOLANA": "SOL", "RIPPLE": "XRP",
+    "DOGECOIN": "DOGE", "CARDANO": "ADA", "AVALANCHE": "AVAX", "CHAINLINK": "LINK",
+    "POLKADOT": "DOT", "TONCOIN": "TON", "BINANCE": "BNB", "SHIBA": "SHIB",
+}
+
+def detect_coin_in_message(msg: str) -> str | None:
+    import re
+    msg_upper = msg.upper()
+    for name, sym in _COIN_NAME_MAP.items():
+        if name in msg_upper:
+            return sym
+    known = list(market_data.keys()) + list(COIN_WHITELIST)
+    for sym in sorted(known, key=len, reverse=True):
+        if re.search(r'\b' + re.escape(sym) + r'\b', msg_upper):
+            return sym
+    return None
+
 @app.post("/chat")
 async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=30, window=60)
@@ -5175,9 +5223,19 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         except Exception:
             pass
 
+    # Coin detection + news
+    chart_coin = detect_coin_in_message(body.message)
+    news_items = await fetch_crypto_news(coins=[chart_coin] if chart_coin else None)
+    news_ctx = ""
+    if news_items:
+        news_ctx = "\n[Notizie crypto recenti]\n"
+        for n in news_items:
+            coins_tag = f" [{','.join(n['coins'])}]" if n["coins"] else ""
+            news_ctx += f"  {n['date']} | {n['source']}{coins_tag}: {n['title']}\n"
+
     context_block = (
         f"\n=== CONTESTO LIVE ZENTRA [{now_str}] ===\n"
-        f"{market_ctx}{positions_ctx}{session_ctx}{trades_ctx}{scanner_ctx}"
+        f"{market_ctx}{positions_ctx}{session_ctx}{trades_ctx}{scanner_ctx}{news_ctx}"
         f"=== FINE CONTESTO ===\n"
     )
 
@@ -5305,6 +5363,7 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     history.append({"role": "assistant", "content": reply})
     return {
         "reply": reply,
+        "chart_symbol": chart_coin,
         "plan": raw_plan,
         "ai_analyses_today": ai_today,
         "ai_analyses_per_day": ai_limit,

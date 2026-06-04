@@ -1774,6 +1774,9 @@ body.auth-active .tabbar { display:none !important; }
       .ai-send { width:40px; height:40px; border-radius:10px; border:none; background:var(--blue); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:opacity .15s; align-self:flex-end; }
       .ai-send:disabled { opacity:0.4; cursor:not-allowed; }
       .ai-send svg { width:18px; height:18px; }
+      .ai-chart-wrap { margin:8px 0 4px; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:var(--surface2); }
+      .ai-chart-label { font-size:11px; font-weight:800; color:var(--text3); padding:8px 12px 4px; letter-spacing:0.06em; text-transform:uppercase; }
+      .ai-chart-frame { width:100%; height:220px; border:none; display:block; }
       .ai-ctx-bar { padding:8px 14px; background:rgba(0,82,255,0.06); border-bottom:1px solid rgba(0,82,255,0.12); font-size:11px; color:var(--blue); font-weight:600; display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }
       .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
       .home-ai { width:min(900px,100%); margin:10px auto 28px; }
@@ -6377,6 +6380,22 @@ function _aiAppendMsg(role, content) {
   return wrap;
 }
 
+function _aiRenderChart(symbol) {
+  const msgs = document.getElementById('aiMessages');
+  if (!msgs || !symbol) return;
+  const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const tvSym = encodeURIComponent(`BINANCE:${symbol}USDT`);
+  const wrap = document.createElement('div');
+  wrap.className = 'ai-chart-wrap';
+  wrap.innerHTML = `
+    <div class="ai-chart-label">${symbol} · 1H</div>
+    <iframe class="ai-chart-frame"
+      src="https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=1&hide_legend=0&save_image=0"
+      allowtransparency="true" scrolling="no"></iframe>`;
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 async function sendAIMessage() {
   const input = document.getElementById('aiInput');
   const msg = input.value.trim();
@@ -6410,6 +6429,7 @@ async function sendAIMessage() {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
       _aiAppendMsg('ai', d.reply);
+      if (d.chart_symbol) _aiRenderChart(d.chart_symbol);
       if (!_aiOpen) {
         _aiUnread++;
         const badge = document.getElementById('aiFabBadge');
@@ -6419,7 +6439,7 @@ async function sendAIMessage() {
         }
       }
     } else {
-      _aiAppendMsg('ai', '⚠️ ' + (d.error || d.detail || 'Errore nella risposta. Riprova.'));
+      _aiAppendMsg('ai', (d.error || d.detail || 'Errore nella risposta. Riprova.'));
     }
   } catch (e) {
     typing.classList.remove('visible');
