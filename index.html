@@ -1187,7 +1187,7 @@ body.auth-active .tabbar { display:none !important; }
   </div>
   <div class="sb-scan-usage" id="sbScanUsage" style="display:none">
     <div class="sb-scan-usage-top">
-      <span>Scansioni Free</span>
+      <span>Scansioni gratuite</span>
       <span id="sbScanUsageText">0/10</span>
     </div>
     <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbScanUsageFill"></div></div>
@@ -2606,8 +2606,11 @@ async function loadUserProfile() {
       _sessionsPerDay   = billing.sessions_per_day ?? _sessionsPerDay;
       _scansToday       = billing.scans_today ?? _scansToday;
       _scansPerDay      = billing.scans_per_day ?? _scansPerDay;
-      _aiAnalysesToday  = billing.ai_analyses_today ?? _aiAnalysesToday;
-      if (billing.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = billing.ai_analyses_per_day;
+      if (typeof updateAIUsageFromPayload === 'function') updateAIUsageFromPayload(billing);
+      else {
+        _aiAnalysesToday  = billing.ai_analyses_today ?? _aiAnalysesToday;
+        if (billing.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = billing.ai_analyses_per_day;
+      }
     }
 
     _hasRevxKeys = me.has_revx_keys || false;
@@ -5280,7 +5283,7 @@ function syncSidebar() {
   const cached = localStorage.getItem('ca_avatar');
   if (sbAv && cached) sbAv.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
   else if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
-  updateAIUsageUI();
+  if (typeof updateAIUsageUI === 'function') updateAIUsageUI();
   updateScanUsageUI();
 }
 
@@ -6266,6 +6269,7 @@ const _aiHistory = [];
 
 function updateAIUsageFromPayload(d) {
   if (!d) return;
+  if (d.plan) _plan = d.plan;
   if (d.ai_analyses_today !== undefined) _aiAnalysesToday = d.ai_analyses_today ?? _aiAnalysesToday;
   if (d.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = d.ai_analyses_per_day;
   updateAIUsageUI();
@@ -6433,6 +6437,7 @@ function _aiInit() {
 
 // Show AI fab after auth
 document.addEventListener('zentra:authed', _aiInit);
+if (localStorage.getItem('ca_token')) _aiInit();
 </script>
 
 </body>
