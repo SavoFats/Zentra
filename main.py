@@ -5410,6 +5410,7 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     return {
         "reply": reply,
         "chart_symbol": chart_coin,
+        "news": news_items,
         "plan": raw_plan,
         "ai_analyses_today": ai_today,
         "ai_analyses_per_day": ai_limit,
