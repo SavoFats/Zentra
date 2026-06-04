@@ -3503,6 +3503,7 @@ function coinImgErr(el, sym, size) {
 
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function showTab(name, el) {
+  const wasOnAnalysis = document.getElementById('page-analysis')?.classList.contains('active');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   // Normalizza nomi vecchi per retrocompatibilità (link salvati in localStorage)
@@ -3521,8 +3522,7 @@ function showTab(name, el) {
   if (name === 'plans') renderPlansPage();
   if (name === 'account') renderAccountPage();
   if (name === 'analysis') {
-    renderAIThread();
-    renderAIHistory();
+    if (!wasOnAnalysis) { renderAIThread(); renderAIHistory(); }
   }
   if (name === 'posizioni') {
     const chiuseActive = document.getElementById('posPanelChiuse')?.style.display !== 'none';
@@ -6642,6 +6642,10 @@ function _aiRenderChart(symbol) {
       hide_side_toolbar: false,
       hide_top_toolbar: false
     });
+    setTimeout(() => {
+      const m = document.getElementById('aiMessages');
+      if (m) m.scrollTop = m.scrollHeight;
+    }, 600);
   }
 
   if (typeof TradingView !== 'undefined') {
