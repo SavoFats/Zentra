@@ -6358,6 +6358,20 @@ function _aiTime() {
   return new Date().toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
 }
 
+function _renderAiMarkdown(text) {
+  let s = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  s = s.replace(/^#{1,3} (.+)$/gm,
+    '<div style="font-weight:800;font-size:13px;color:var(--text1);margin:10px 0 3px;line-height:1.3">$1</div>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/^---$/gm,
+    '<hr style="border:none;border-top:1px solid var(--border);margin:7px 0">');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
 function _aiAppendMsg(role, content) {
   const msgs = document.getElementById('aiMessages');
   if (!msgs) return null;
@@ -6367,7 +6381,11 @@ function _aiAppendMsg(role, content) {
 
   const bubble = document.createElement('div');
   bubble.className = 'ai-bubble';
-  bubble.textContent = content;
+  if (role === 'ai') {
+    bubble.innerHTML = _renderAiMarkdown(content);
+  } else {
+    bubble.textContent = content;
+  }
 
   const time = document.createElement('div');
   time.className = 'ai-msg-time';
@@ -6390,7 +6408,7 @@ function _aiRenderChart(symbol) {
   wrap.innerHTML = `
     <div class="ai-chart-label">${symbol} · 1H</div>
     <iframe class="ai-chart-frame"
-      src="https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=1&hide_legend=0&save_image=0"
+      src="https://www.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=1&hide_side_toolbar=1&allow_symbol_change=0"
       allowtransparency="true" scrolling="no"></iframe>`;
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
@@ -6443,7 +6461,7 @@ async function sendAIMessage() {
     }
   } catch (e) {
     typing.classList.remove('visible');
-    _aiAppendMsg('ai', '⚠️ Connessione persa. Controlla la rete e riprova.');
+    _aiAppendMsg('ai', 'Connessione persa. Controlla la rete e riprova.');
   }
 
   _aiLoading = false;
