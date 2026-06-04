@@ -439,12 +439,14 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-item svg { flex-shrink:0; opacity:0.65; }
 .sb-item.active svg, .sb-item:hover svg { opacity:1; }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
-.sb-scan-usage { margin:8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
+.sb-scan-usage { margin:5px 8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
+#sbAIUsage { margin-bottom:4px; }
+#sbScanUsage { margin-top:4px; margin-bottom:14px; }
 .sb-scan-usage-top { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; font-weight:800; color:var(--text2); letter-spacing:.02em; }
 .sb-scan-usage-bar { height:6px; border-radius:999px; background:var(--border); overflow:hidden; margin-top:8px; }
 .sb-scan-usage-fill { height:100%; width:0%; border-radius:999px; background:var(--blue); transition:width .2s ease, background .2s ease; }
 .sb-scan-usage-sub { font-size:10px; color:var(--text3); margin-top:6px; line-height:1.35; }
-.sb-scan-usage.limit .sb-scan-usage-fill { background:var(--red); }
+.sb-scan-usage.limit .sb-scan-usage-fill { background:var(--blue); }
 .sb-scan-usage.limit .sb-scan-usage-sub { color:var(--red); }
 .sb-foot { padding:8px; border-top:1px solid var(--border); flex-shrink:0; }
 .sb-user { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; text-align:left; transition:background 0.15s; font-family:var(--sans); }
@@ -1181,7 +1183,7 @@ body.auth-active .tabbar { display:none !important; }
       <span id="sbAIUsageText">0/10</span>
     </div>
     <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbAIUsageFill"></div></div>
-    <div class="sb-scan-usage-sub" id="sbAIUsageSub">10 analisi disponibili oggi</div>
+    <div class="sb-scan-usage-sub" id="sbAIUsageSub"></div>
   </div>
   <div class="sb-scan-usage" id="sbScanUsage" style="display:none">
     <div class="sb-scan-usage-top">
@@ -1189,7 +1191,7 @@ body.auth-active .tabbar { display:none !important; }
       <span id="sbScanUsageText">0/10</span>
     </div>
     <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbScanUsageFill"></div></div>
-    <div class="sb-scan-usage-sub" id="sbScanUsageSub">10 scansioni disponibili oggi</div>
+    <div class="sb-scan-usage-sub" id="sbScanUsageSub"></div>
   </div>
   <div style="padding:0 8px;border-top:1px solid var(--border)">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
@@ -5333,9 +5335,8 @@ function updateScanUsageUI() {
   if (text) text.textContent = `${used}/${total}`;
   if (fill) fill.style.width = pct + '%';
   if (sub) {
-    sub.textContent = remaining > 0
-      ? `${remaining} scansioni disponibili oggi`
-      : 'Limite raggiunto. Passa a Pro o Founder.';
+    sub.textContent = remaining > 0 ? '' : 'Limite raggiunto. Passa a Pro o Founder.';
+    sub.style.display = remaining > 0 ? 'none' : '';
   }
 }
 
@@ -6294,6 +6295,14 @@ function updateAIUsageFromPayload(d) {
   updateAIUsageUI();
 }
 
+function incrementAIUsageOptimistic(previousValue) {
+  if (_aiAnalysesPerDay == null || _plan === 'founder') return;
+  const total = Math.max(1, Number(_aiAnalysesPerDay) || 10);
+  const base = Math.max(Number(previousValue) || 0, Number(_aiAnalysesToday) || 0);
+  _aiAnalysesToday = Math.min(total, base + 1);
+  updateAIUsageUI();
+}
+
 function updateAIUsageUI() {
   const sub = document.getElementById('aiPanelSub');
   const box = document.getElementById('sbAIUsage');
@@ -6321,9 +6330,8 @@ function updateAIUsageUI() {
   if (text) text.textContent = `${used}/${total}`;
   if (fill) fill.style.width = pct + '%';
   if (boxSub) {
-    boxSub.textContent = remaining > 0
-      ? `${remaining} analisi disponibili oggi`
-      : 'Limite AI raggiunto. Passa a un piano superiore.';
+    boxSub.textContent = remaining > 0 ? '' : 'Limite AI raggiunto. Passa a un piano superiore.';
+    boxSub.style.display = remaining > 0 ? 'none' : '';
   }
 }
 
@@ -6420,10 +6428,14 @@ async function sendAIMessage() {
       body: JSON.stringify({ message: msg })
     });
     const d = await r.json();
+    const aiUsageBefore = Number(_aiAnalysesToday) || 0;
     updateAIUsageFromPayload(d);
     typing.classList.remove('visible');
 
     if (d.reply) {
+      if (_aiAnalysesPerDay != null && _plan !== 'founder' && (Number(_aiAnalysesToday) || 0) <= aiUsageBefore) {
+        incrementAIUsageOptimistic(aiUsageBefore);
+      }
       _aiAppendMsg('ai', d.reply);
       if (!_aiOpen) {
         _aiUnread++;
