@@ -6415,12 +6415,36 @@ function _aiRenderChart(symbol) {
   label.className = 'ai-chart-label';
   label.textContent = `${safeSymbol} · 1H`;
   frame.className = 'ai-chart-frame';
-  frame.src = `https://www.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=1&hide_side_toolbar=1&allow_symbol_change=0`;
+  frame.src = `https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=1&hide_side_toolbar=1&allow_symbol_change=0`;
   frame.setAttribute('allowtransparency', 'true');
   frame.setAttribute('scrolling', 'no');
   wrap.append(label, frame);
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
+}
+
+function _aiDetectSymbolFromText(text) {
+  const raw = String(text || '').toUpperCase();
+  const aliases = [
+    ['BTC', 'BITCOIN'], ['ETH', 'ETHEREUM'], ['SOL', 'SOLANA'], ['XRP', 'RIPPLE'],
+    ['DOGE', 'DOGECOIN'], ['ADA', 'CARDANO'], ['AVAX', 'AVALANCHE'],
+    ['LINK', 'CHAINLINK'], ['DOT', 'POLKADOT'], ['TON', 'TONCOIN'],
+    ['BNB', 'BINANCE'], ['SHIB', 'SHIBA'], ['SUI', 'SUI']
+  ];
+  for (const [sym, name] of aliases) {
+    if (new RegExp(`\\b(${sym}|${name})\\b`).test(raw)) return sym;
+  }
+  return '';
+}
+
+function _aiDetectSymbolFromNews(news) {
+  if (!Array.isArray(news)) return '';
+  for (const item of news) {
+    if (Array.isArray(item.coins) && item.coins.length) return String(item.coins[0] || '').toUpperCase();
+    const fromTitle = _aiDetectSymbolFromText(item.title || '');
+    if (fromTitle) return fromTitle;
+  }
+  return '';
 }
 
 function _aiRenderNews(news) {
@@ -6437,7 +6461,8 @@ function _aiRenderNews(news) {
     const meta = document.createElement('span');
     row.className = 'ai-news-item';
     meta.className = 'ai-news-meta';
-    meta.textContent = [item.date, item.source].filter(Boolean).join(' · ');
+    const metaText = [item.date, item.source].filter(Boolean).join(' · ');
+    meta.textContent = metaText ? metaText + ' — ' : '';
     row.appendChild(meta);
     row.appendChild(document.createTextNode(item.title || 'Notizia crypto'));
     wrap.appendChild(row);
@@ -6480,7 +6505,8 @@ async function sendAIMessage() {
       }
       _aiAppendMsg('ai', d.reply);
       _aiRenderNews(d.news);
-      if (d.chart_symbol) _aiRenderChart(d.chart_symbol);
+      const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg) || _aiDetectSymbolFromNews(d.news);
+      if (chartSymbol) _aiRenderChart(chartSymbol);
       if (!_aiOpen) {
         _aiUnread++;
         const badge = document.getElementById('aiFabBadge');
