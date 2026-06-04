@@ -441,10 +441,19 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
 .sb-history-head { display:flex; align-items:center; padding:14px 12px 6px; font-size:10px; font-weight:800; color:var(--text3); letter-spacing:.09em; text-transform:uppercase; }
 .sb-ai-history { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
-.sb-ai-thread { width:100%; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:10px; padding:8px 12px; text-align:left; font-family:var(--sans); transition:background .15s,color .15s; }
-.sb-ai-thread:hover, .sb-ai-thread.active { background:var(--surface2); color:var(--text); }
+.sb-ai-thread-wrap { position:relative; display:flex; align-items:center; border-radius:10px; transition:background .15s; }
+.sb-ai-thread-wrap:hover, .sb-ai-thread-wrap.active { background:var(--surface2); }
+.sb-ai-thread { flex:1; min-width:0; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:10px; padding:8px 4px 8px 12px; text-align:left; font-family:var(--sans); transition:color .15s; }
+.sb-ai-thread-wrap:hover .sb-ai-thread, .sb-ai-thread-wrap.active .sb-ai-thread { color:var(--text); background:none; }
 .sb-ai-thread-title { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sb-ai-thread-meta { font-size:10px; color:var(--text3); margin-top:2px; }
+.sb-ai-thread-dots { flex-shrink:0; width:24px; height:24px; margin-right:4px; border:none; background:none; border-radius:6px; cursor:pointer; color:var(--text3); font-size:14px; font-weight:900; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .12s,background .12s,color .12s; padding:0; line-height:1; letter-spacing:-.5px; }
+.sb-ai-thread-wrap:hover .sb-ai-thread-dots, .sb-ai-thread-dots.open { opacity:1; }
+.sb-ai-thread-dots:hover, .sb-ai-thread-dots.open { background:var(--border); color:var(--text); }
+.sb-ai-thread-dropdown { position:absolute; right:0; top:calc(100% + 2px); z-index:300; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.15); padding:4px; min-width:130px; display:none; }
+.sb-ai-thread-dropdown.open { display:block; }
+.sb-ai-dd-delete { width:100%; border:none; background:none; padding:8px 10px; border-radius:8px; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--red); text-align:left; font-family:var(--sans); transition:background .1s; display:block; }
+.sb-ai-dd-delete:hover { background:var(--red-dim); }
 .sb-ai-empty { padding:8px 12px 10px; color:var(--text3); font-size:11px; line-height:1.35; }
 .sb-scan-usage { margin:5px 8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
 #sbAIUsage { margin-bottom:4px; }
@@ -6496,12 +6505,20 @@ function renderAIHistory() {
     box.innerHTML = '<div class="sb-ai-empty">Nessuna analisi ancora.</div>';
     return;
   }
-  box.innerHTML = _aiThreads.slice(0, 12).map(t => `
-    <button class="sb-ai-thread ${t.id === _aiActiveThreadId ? 'active' : ''}" onclick="openAIThread('${t.id.replace(/'/g, '')}', true)">
-      <div class="sb-ai-thread-title">${escapeHtml(t.title || 'Analisi')}</div>
-      <div class="sb-ai-thread-meta">${_aiFormatThreadTime(t.updatedAt)} · ${(t.messages || []).length} messaggi</div>
-    </button>
-  `).join('');
+  box.innerHTML = _aiThreads.slice(0, 12).map(t => {
+    const isActive = t.id === _aiActiveThreadId;
+    const sid = t.id.replace(/[^a-z0-9_]/gi, '');
+    return `<div class="sb-ai-thread-wrap${isActive ? ' active' : ''}">
+      <button class="sb-ai-thread" onclick="openAIThread('${sid}',true)">
+        <div class="sb-ai-thread-title">${escapeHtml(t.title || 'Analisi')}</div>
+        <div class="sb-ai-thread-meta">${_aiFormatThreadTime(t.updatedAt)} · ${(t.messages||[]).length} messaggi</div>
+      </button>
+      <button class="sb-ai-thread-dots" onclick="_aiThreadMenuToggle(event,'${sid}')" title="Opzioni">···</button>
+      <div class="sb-ai-thread-dropdown">
+        <button class="sb-ai-dd-delete" onclick="deleteAIThread(event,'${sid}')">Elimina</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderAIThread() {
@@ -6745,11 +6762,44 @@ async function sendAIMessage(source = 'analysis') {
   document.getElementById('aiMessages').scrollTop = 999999;
 }
 
+function _aiThreadMenuToggle(event, id) {
+  event.stopPropagation();
+  const btn = event.currentTarget;
+  const wrap = btn.closest('.sb-ai-thread-wrap');
+  const dropdown = wrap.querySelector('.sb-ai-thread-dropdown');
+  const isOpen = dropdown.classList.contains('open');
+  document.querySelectorAll('.sb-ai-thread-dropdown.open').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.sb-ai-thread-dots.open').forEach(d => d.classList.remove('open'));
+  if (!isOpen) {
+    dropdown.classList.add('open');
+    btn.classList.add('open');
+  }
+}
+
+function deleteAIThread(event, id) {
+  event.stopPropagation();
+  _aiThreads = _aiThreads.filter(t => t.id !== id);
+  if (_aiActiveThreadId === id) {
+    _aiActiveThreadId = (_aiThreads[0] && _aiThreads[0].id) || '';
+  }
+  _aiSaveThreads();
+  renderAIHistory();
+  if (_aiActiveThreadId) renderAIThread();
+  else startNewAIThread();
+}
+
 function _aiInit() {
   _aiLoadThreads();
   renderAIHistory();
   renderAIThread();
   updateAIUsageUI();
+  if (!_aiInit._docListenerSet) {
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.sb-ai-thread-dropdown.open').forEach(d => d.classList.remove('open'));
+      document.querySelectorAll('.sb-ai-thread-dots.open').forEach(d => d.classList.remove('open'));
+    });
+    _aiInit._docListenerSet = true;
+  }
 }
 
 // Show AI fab after auth
