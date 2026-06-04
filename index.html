@@ -5253,6 +5253,7 @@ async function refreshMarket(countScan = false) {
     const d = await r.json();
     updateScanUsageFromPayload(d);
     if (d.error === 'scan_limit') {
+      resetScannerAfterScanLimit();
       showScanLimitModal(d.message);
       return false;
     }
@@ -5582,6 +5583,19 @@ function resetScannerState() {
   const card  = document.getElementById('scan-results-card');
   if (empty) empty.style.display = '';
   if (card)  card.style.display  = 'none';
+}
+
+function resetScannerAfterScanLimit() {
+  _scanSignal = '';
+  document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
+  const empty = document.getElementById('scan-empty');
+  const card  = document.getElementById('scan-results-card');
+  const list  = document.getElementById('scannerList');
+  const count = document.getElementById('scanCount');
+  if (empty) empty.style.display = '';
+  if (card) card.style.display = 'none';
+  if (list) list.innerHTML = '<div class="empty"><div class="empty-text">Sblocca scansioni illimitate dal piano Pro</div></div>';
+  if (count) count.textContent = '0 found';
 }
 
 function selectScanCluster(cat, el) {
