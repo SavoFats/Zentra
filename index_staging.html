@@ -439,9 +439,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-item svg { flex-shrink:0; opacity:0.65; }
 .sb-item.active svg, .sb-item:hover svg { opacity:1; }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
-.sb-history-head { display:flex; align-items:center; justify-content:space-between; padding:14px 12px 6px; font-size:10px; font-weight:800; color:var(--text3); letter-spacing:.09em; text-transform:uppercase; }
-.sb-history-new { width:24px; height:24px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; }
-.sb-history-new:hover { border-color:var(--blue); color:var(--blue); }
+.sb-history-head { display:flex; align-items:center; padding:14px 12px 6px; font-size:10px; font-weight:800; color:var(--text3); letter-spacing:.09em; text-transform:uppercase; }
 .sb-ai-history { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
 .sb-ai-thread { width:100%; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:10px; padding:8px 12px; text-align:left; font-family:var(--sans); transition:background .15s,color .15s; }
 .sb-ai-thread:hover, .sb-ai-thread.active { background:var(--surface2); color:var(--text); }
@@ -1187,7 +1185,6 @@ body.auth-active .tabbar { display:none !important; }
     </button>
     <div class="sb-history-head">
       <span>Analisi</span>
-      <button class="sb-history-new" onclick="startNewAIThread()" title="Nuova analisi">+</button>
     </div>
     <div class="sb-ai-history" id="sbAiHistory">
       <div class="sb-ai-empty">Nessuna analisi ancora.</div>
@@ -1372,7 +1369,6 @@ body.auth-active .tabbar { display:none !important; }
           <div class="ai-workspace-title" id="aiThreadTitle">Nuova analisi</div>
           <div class="ai-workspace-sub">Analisi mercato, segnali scanner e posizioni aperte in un'unica conversazione.</div>
         </div>
-        <button class="ai-new-btn" onclick="startNewAIThread()">Nuova analisi</button>
       </div>
       <div class="ai-workspace-body">
         <div class="ai-messages" id="aiMessages">
@@ -1843,19 +1839,19 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
-      .ai-workspace { min-height:100%; display:flex; flex-direction:column; gap:14px; }
-      .ai-workspace-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:12px 0 6px; }
+      .ai-workspace { min-height:100%; display:flex; flex-direction:column; gap:18px; }
+      .ai-workspace-head { display:flex; align-items:flex-start; justify-content:flex-start; gap:14px; padding:12px 0 4px; }
       .ai-workspace-kicker { font-size:12px; font-weight:800; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; margin-bottom:5px; }
       .ai-workspace-title { font-size:28px; font-weight:900; color:var(--text); letter-spacing:-.04em; }
       .ai-workspace-sub { font-size:13px; color:var(--text3); margin-top:4px; }
-      .ai-new-btn { border:none; border-radius:12px; background:var(--blue); color:#fff; padding:10px 14px; font-size:13px; font-weight:800; cursor:pointer; font-family:var(--sans); box-shadow:0 10px 24px rgba(0,82,255,.18); }
-      .ai-workspace-body { flex:1; min-height:0; border:1px solid var(--border); border-radius:22px; background:linear-gradient(135deg,rgba(255,255,255,.72),rgba(255,255,255,.42)); display:flex; flex-direction:column; overflow:hidden; box-shadow:0 18px 48px rgba(0,82,255,.08); }
-      [data-theme="dark"] .ai-workspace-body { background:linear-gradient(135deg,rgba(16,22,51,.92),rgba(10,15,35,.78)); }
-      .ai-workspace .ai-messages { flex:1; min-height:360px; max-height:none; padding:22px; }
+      .ai-workspace-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+      .ai-workspace .ai-messages { flex:1; min-height:360px; max-height:none; padding:10px 0 22px; }
+      .ai-workspace .ai-msg.ai { max-width:min(980px,100%); }
+      .ai-workspace .ai-msg.ai .ai-bubble { background:transparent; border:none; border-radius:0; padding:0; box-shadow:none; }
       .ai-empty-state { margin:auto; max-width:520px; text-align:center; color:var(--text3); font-size:14px; line-height:1.55; }
       .ai-empty-state strong { display:block; color:var(--text); font-size:20px; margin-bottom:8px; letter-spacing:-.02em; }
-      .ai-workspace-composer { border-top:1px solid var(--border); padding:14px; display:flex; align-items:flex-end; gap:10px; background:rgba(255,255,255,.32); }
-      [data-theme="dark"] .ai-workspace-composer { background:rgba(5,8,22,.36); }
+      .ai-workspace-composer { border:1px solid var(--border); border-radius:18px; padding:8px; display:flex; align-items:flex-end; gap:10px; background:rgba(255,255,255,.48); box-shadow:0 14px 34px rgba(0,82,255,.08); }
+      [data-theme="dark"] .ai-workspace-composer { background:rgba(5,8,22,.46); }
       .ai-workspace-composer .ai-input { min-height:46px; max-height:150px; border-radius:16px; padding:13px 14px; font-size:14px; }
       .ai-workspace-composer .ai-send { width:46px; height:46px; border-radius:16px; }
       @media (max-width:640px) {
