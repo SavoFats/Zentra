@@ -439,6 +439,15 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-item svg { flex-shrink:0; opacity:0.65; }
 .sb-item.active svg, .sb-item:hover svg { opacity:1; }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
+.sb-history-head { display:flex; align-items:center; justify-content:space-between; padding:14px 12px 6px; font-size:10px; font-weight:800; color:var(--text3); letter-spacing:.09em; text-transform:uppercase; }
+.sb-history-new { width:24px; height:24px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; }
+.sb-history-new:hover { border-color:var(--blue); color:var(--blue); }
+.sb-ai-history { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
+.sb-ai-thread { width:100%; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:10px; padding:8px 12px; text-align:left; font-family:var(--sans); transition:background .15s,color .15s; }
+.sb-ai-thread:hover, .sb-ai-thread.active { background:var(--surface2); color:var(--text); }
+.sb-ai-thread-title { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sb-ai-thread-meta { font-size:10px; color:var(--text3); margin-top:2px; }
+.sb-ai-empty { padding:8px 12px 10px; color:var(--text3); font-size:11px; line-height:1.35; }
 .sb-scan-usage { margin:5px 8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
 #sbAIUsage { margin-bottom:4px; }
 #sbScanUsage { margin-top:4px; margin-bottom:14px; }
@@ -1176,6 +1185,13 @@ body.auth-active .tabbar { display:none !important; }
     <button class="sb-item" data-tab="plans" onclick="showTab('plans',this)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Piani
     </button>
+    <div class="sb-history-head">
+      <span>Analisi</span>
+      <button class="sb-history-new" onclick="startNewAIThread()" title="Nuova analisi">+</button>
+    </div>
+    <div class="sb-ai-history" id="sbAiHistory">
+      <div class="sb-ai-empty">Nessuna analisi ancora.</div>
+    </div>
   </div>
   <div class="sb-scan-usage" id="sbAIUsage" style="display:none">
     <div class="sb-scan-usage-top">
@@ -1244,16 +1260,10 @@ body.auth-active .tabbar { display:none !important; }
           <div class="home-ai-mark">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           </div>
-          <textarea class="ai-input home-ai-input" id="aiInput" rows="1" placeholder="Chiedi a Zentra AI di analizzare mercato, segnali o posizioni..." onfocus="openHomeAI(false)" onkeydown="aiInputKeydown(event)" oninput="aiInputResize(this)"></textarea>
-          <button class="ai-send home-ai-send" id="aiSend" onclick="event.stopPropagation();sendAIMessage()" disabled aria-label="Invia a Zentra AI">
+          <textarea class="ai-input home-ai-input" id="aiHomeInput" rows="1" placeholder="Chiedi a Zentra AI di analizzare mercato, segnali o posizioni..." onfocus="openHomeAI(false)" onkeydown="aiInputKeydown(event,'home')" oninput="aiInputResize(this,'home')"></textarea>
+          <button class="ai-send home-ai-send" id="aiHomeSend" onclick="event.stopPropagation();sendAIMessage('home')" disabled aria-label="Invia a Zentra AI">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
-        </div>
-        <div class="ai-panel home-ai-panel" id="aiPanel">
-          <div class="ai-messages" id="aiMessages"></div>
-          <div class="ai-typing" id="aiTyping">
-            <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -1278,8 +1288,7 @@ body.auth-active .tabbar { display:none !important; }
       </button>
       <div id="sessionsIndicator" style="display:none;font-size:11px;color:rgba(255,255,255,0.65);margin-top:10px"></div>
     </div>
-
-    <!-- Hero P&L card — visibile quando l'agente è in esecuzione (stessa posizione di homeHeroCard) -->
+  <!-- Hero P&L card — visibile quando l'agente è in esecuzione (stessa posizione di homeHeroCard) -->
     <div class="hero-card off" id="heroCard" style="margin-bottom:16px;display:none">
       <canvas class="hero-sparkline" id="heroSparkline"></canvas>
       <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;flex-direction:row;align-items:center;gap:8px">
@@ -1351,6 +1360,38 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div style="height:8px"></div>
+  </div>
+
+  <!-- ANALISI AI -->
+  <div class="page" id="page-analysis">
+    <div class="ptr-indicator" id="ptr-page-analysis"><div class="ptr-spinner"></div></div>
+    <div class="ai-workspace">
+      <div class="ai-workspace-head">
+        <div>
+          <div class="ai-workspace-kicker">Zentra AI</div>
+          <div class="ai-workspace-title" id="aiThreadTitle">Nuova analisi</div>
+          <div class="ai-workspace-sub">Analisi mercato, segnali scanner e posizioni aperte in un'unica conversazione.</div>
+        </div>
+        <button class="ai-new-btn" onclick="startNewAIThread()">Nuova analisi</button>
+      </div>
+      <div class="ai-workspace-body">
+        <div class="ai-messages" id="aiMessages">
+          <div class="ai-empty-state" id="aiEmptyState">
+            <strong>Chiedi a Zentra AI</strong>
+            Scrivi una domanda qui sotto o parti dalla barra in Home. Le tue analisi resteranno nella cronologia della sidebar.
+          </div>
+        </div>
+        <div class="ai-typing" id="aiTyping">
+          <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
+        </div>
+        <div class="ai-workspace-composer">
+          <textarea class="ai-input" id="aiInput" rows="1" placeholder="Scrivi un messaggio a Zentra AI..." onkeydown="aiInputKeydown(event,'analysis')" oninput="aiInputResize(this,'analysis')"></textarea>
+          <button class="ai-send" id="aiSend" onclick="sendAIMessage('analysis')" disabled aria-label="Invia a Zentra AI">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- CONFIG -->
@@ -1802,12 +1843,30 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
+      .ai-workspace { min-height:100%; display:flex; flex-direction:column; gap:14px; }
+      .ai-workspace-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:12px 0 6px; }
+      .ai-workspace-kicker { font-size:12px; font-weight:800; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; margin-bottom:5px; }
+      .ai-workspace-title { font-size:28px; font-weight:900; color:var(--text); letter-spacing:-.04em; }
+      .ai-workspace-sub { font-size:13px; color:var(--text3); margin-top:4px; }
+      .ai-new-btn { border:none; border-radius:12px; background:var(--blue); color:#fff; padding:10px 14px; font-size:13px; font-weight:800; cursor:pointer; font-family:var(--sans); box-shadow:0 10px 24px rgba(0,82,255,.18); }
+      .ai-workspace-body { flex:1; min-height:0; border:1px solid var(--border); border-radius:22px; background:linear-gradient(135deg,rgba(255,255,255,.72),rgba(255,255,255,.42)); display:flex; flex-direction:column; overflow:hidden; box-shadow:0 18px 48px rgba(0,82,255,.08); }
+      [data-theme="dark"] .ai-workspace-body { background:linear-gradient(135deg,rgba(16,22,51,.92),rgba(10,15,35,.78)); }
+      .ai-workspace .ai-messages { flex:1; min-height:360px; max-height:none; padding:22px; }
+      .ai-empty-state { margin:auto; max-width:520px; text-align:center; color:var(--text3); font-size:14px; line-height:1.55; }
+      .ai-empty-state strong { display:block; color:var(--text); font-size:20px; margin-bottom:8px; letter-spacing:-.02em; }
+      .ai-workspace-composer { border-top:1px solid var(--border); padding:14px; display:flex; align-items:flex-end; gap:10px; background:rgba(255,255,255,.32); }
+      [data-theme="dark"] .ai-workspace-composer { background:rgba(5,8,22,.36); }
+      .ai-workspace-composer .ai-input { min-height:46px; max-height:150px; border-radius:16px; padding:13px 14px; font-size:14px; }
+      .ai-workspace-composer .ai-send { width:46px; height:46px; border-radius:16px; }
       @media (max-width:640px) {
         .home-ai { margin:8px auto 22px; }
         .home-ai-bar { min-height:58px; padding:9px 11px; gap:9px; }
         .home-ai-mark { width:34px; height:34px; border-radius:12px; }
         .home-ai-input.ai-input { font-size:13.5px; }
         .home-ai .ai-messages { max-height:260px; }
+        .ai-workspace-title { font-size:23px; }
+        .ai-workspace .ai-messages { min-height:300px; padding:16px; }
+        .ai-workspace-head { flex-direction:column; }
       }
     </style>
     <div class="scan-tf-bar">
@@ -3456,6 +3515,10 @@ function showTab(name, el) {
   if (name === 'exchange') renderExchangePage();
   if (name === 'plans') renderPlansPage();
   if (name === 'account') renderAccountPage();
+  if (name === 'analysis') {
+    renderAIThread();
+    renderAIHistory();
+  }
   if (name === 'posizioni') {
     const chiuseActive = document.getElementById('posPanelChiuse')?.style.display !== 'none';
     if (chiuseActive) renderTransazioni();
@@ -6273,7 +6336,9 @@ let _aiOpen = false;
 let _aiLoading = false;
 let _aiUnread = 0;
 let _aiChartSeq = 0;
-const _aiHistory = [];
+let _aiThreads = [];
+let _aiActiveThreadId = '';
+const AI_THREADS_KEY = 'zentra_ai_threads_v1';
 
 function updateAIUsageFromPayload(d) {
   if (!d) return;
@@ -6318,45 +6383,39 @@ function updateAIUsageUI() {
   }
 }
 
-function openHomeAI(focusInput = false, expand = false) {
-  if (expand) _aiOpen = true;
+function openHomeAI(focusInput = false) {
   const shell = document.getElementById('homeAiShell');
   if (shell) {
-    shell.classList.toggle('open', expand || shell.classList.contains('open'));
     shell.classList.add('focused');
   }
-  if (expand) {
-    _aiUnread = 0;
-    const badge = document.getElementById('aiFabBadge');
-    if (badge) badge.style.display = 'none';
-  }
-  if (focusInput) setTimeout(() => document.getElementById('aiInput')?.focus(), 0);
+  if (focusInput) setTimeout(() => document.getElementById('aiHomeInput')?.focus(), 0);
 }
 
 function toggleAIChat() {
-  openHomeAI(true, true);
+  openAIThread(_aiActiveThreadId || (_aiThreads[0] && _aiThreads[0].id) || '', true);
 }
 
-function aiInputResize(el) {
-  openHomeAI(false);
+function aiInputResize(el, source = 'analysis') {
+  if (source === 'home') openHomeAI(false);
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-  document.getElementById('aiSend').disabled = !el.value.trim();
+  el.style.height = Math.min(el.scrollHeight, source === 'home' ? 120 : 150) + 'px';
+  const btn = document.getElementById(source === 'home' ? 'aiHomeSend' : 'aiSend');
+  if (btn) btn.disabled = !el.value.trim();
 }
 
-function aiInputKeydown(e) {
+function aiInputKeydown(e, source = 'analysis') {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    if (!document.getElementById('aiSend').disabled) sendAIMessage();
+    const btn = document.getElementById(source === 'home' ? 'aiHomeSend' : 'aiSend');
+    if (!btn?.disabled) sendAIMessage(source);
   }
 }
 
 function aiSuggest(btn) {
-  openHomeAI(false);
   const msg = btn.textContent.trim();
-  document.getElementById('aiInput').value = msg;
-  document.getElementById('aiSend').disabled = false;
-  sendAIMessage();
+  const input = document.getElementById('aiHomeInput') || document.getElementById('aiInput');
+  if (input) input.value = msg;
+  sendAIMessage(input?.id === 'aiHomeInput' ? 'home' : 'analysis');
 }
 
 function _aiTime() {
@@ -6377,9 +6436,128 @@ function _renderAiMarkdown(text) {
   return s;
 }
 
-function _aiAppendMsg(role, content) {
+function _aiNowIso() {
+  return new Date().toISOString();
+}
+
+function _aiLoadThreads() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(AI_THREADS_KEY) || '[]');
+    _aiThreads = Array.isArray(parsed) ? parsed.filter(t => t && t.id) : [];
+  } catch (_) {
+    _aiThreads = [];
+  }
+  _aiThreads.sort((a,b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  _aiActiveThreadId = localStorage.getItem('zentra_ai_active_thread') || (_aiThreads[0] && _aiThreads[0].id) || '';
+}
+
+function _aiSaveThreads() {
+  localStorage.setItem(AI_THREADS_KEY, JSON.stringify(_aiThreads.slice(0, 30)));
+  if (_aiActiveThreadId) localStorage.setItem('zentra_ai_active_thread', _aiActiveThreadId);
+}
+
+function _aiGetThread(id = _aiActiveThreadId) {
+  return _aiThreads.find(t => t.id === id) || null;
+}
+
+function _aiTitleFromMessage(msg) {
+  const clean = String(msg || '').replace(/\s+/g, ' ').trim();
+  return clean ? clean.slice(0, 42) : 'Nuova analisi';
+}
+
+function _aiEnsureThread(seedMessage = '') {
+  let thread = _aiGetThread();
+  if (thread) return thread;
+  const now = _aiNowIso();
+  thread = {
+    id: 'ai_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    title: _aiTitleFromMessage(seedMessage),
+    createdAt: now,
+    updatedAt: now,
+    messages: []
+  };
+  _aiThreads.unshift(thread);
+  _aiActiveThreadId = thread.id;
+  _aiSaveThreads();
+  renderAIHistory();
+  return thread;
+}
+
+function _aiFormatThreadTime(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
+}
+
+function escapeHtml(s) {
+  return esc(s).replace(/'/g, '&#39;');
+}
+
+function renderAIHistory() {
+  const box = document.getElementById('sbAiHistory');
+  if (!box) return;
+  if (!_aiThreads.length) {
+    box.innerHTML = '<div class="sb-ai-empty">Nessuna analisi ancora.</div>';
+    return;
+  }
+  box.innerHTML = _aiThreads.slice(0, 12).map(t => `
+    <button class="sb-ai-thread ${t.id === _aiActiveThreadId ? 'active' : ''}" onclick="openAIThread('${t.id.replace(/'/g, '')}', true)">
+      <div class="sb-ai-thread-title">${escapeHtml(t.title || 'Analisi')}</div>
+      <div class="sb-ai-thread-meta">${_aiFormatThreadTime(t.updatedAt)} · ${(t.messages || []).length} messaggi</div>
+    </button>
+  `).join('');
+}
+
+function renderAIThread() {
+  const msgs = document.getElementById('aiMessages');
+  const title = document.getElementById('aiThreadTitle');
+  if (!msgs) return;
+  const thread = _aiGetThread();
+  if (title) title.textContent = thread?.title || 'Nuova analisi';
+  msgs.innerHTML = '';
+  if (!thread || !(thread.messages || []).length) {
+    msgs.innerHTML = '<div class="ai-empty-state" id="aiEmptyState"><strong>Chiedi a Zentra AI</strong>Scrivi una domanda qui sotto o parti dalla barra in Home. Le tue analisi resteranno nella cronologia della sidebar.</div>';
+    return;
+  }
+  (thread.messages || []).forEach(m => _aiAppendMsg(m.role, m.content, false));
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function openAIThread(id = '', focusInput = false) {
+  if (id && _aiThreads.some(t => t.id === id)) _aiActiveThreadId = id;
+  else if (!_aiActiveThreadId && _aiThreads[0]) _aiActiveThreadId = _aiThreads[0].id;
+  _aiSaveThreads();
+  showTab('analysis');
+  renderAIThread();
+  renderAIHistory();
+  if (focusInput) setTimeout(() => document.getElementById('aiInput')?.focus(), 0);
+}
+
+function startNewAIThread() {
+  _aiActiveThreadId = '';
+  localStorage.removeItem('zentra_ai_active_thread');
+  showTab('analysis');
+  renderAIThread();
+  renderAIHistory();
+  setTimeout(() => document.getElementById('aiInput')?.focus(), 0);
+}
+
+function _aiPersistMessage(role, content) {
+  const thread = _aiEnsureThread(content);
+  if (!(thread.messages || []).length && role === 'user') thread.title = _aiTitleFromMessage(content);
+  thread.messages = thread.messages || [];
+  thread.messages.push({ role, content, time: _aiNowIso() });
+  thread.updatedAt = _aiNowIso();
+  _aiThreads = [thread, ..._aiThreads.filter(t => t.id !== thread.id)];
+  _aiSaveThreads();
+  renderAIHistory();
+}
+
+function _aiAppendMsg(role, content, persist = true) {
   const msgs = document.getElementById('aiMessages');
   if (!msgs) return null;
+  const empty = document.getElementById('aiEmptyState');
+  if (empty) empty.remove();
 
   const wrap = document.createElement('div');
   wrap.className = 'ai-msg ' + role;
@@ -6400,6 +6578,7 @@ function _aiAppendMsg(role, content) {
   wrap.appendChild(time);
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
+  if (persist) _aiPersistMessage(role, content);
   return wrap;
 }
 
@@ -6503,21 +6682,29 @@ function _aiRenderNews(news) {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
-async function sendAIMessage() {
-  const input = document.getElementById('aiInput');
+async function sendAIMessage(source = 'analysis') {
+  const input = document.getElementById(source === 'home' ? 'aiHomeInput' : 'aiInput');
+  if (!input) return;
   const msg = input.value.trim();
   if (!msg || _aiLoading) return;
-  openHomeAI(false, true);
+  _aiEnsureThread(msg);
+  showTab('analysis');
+  renderAIThread();
 
   _aiLoading = true;
-  document.getElementById('aiSend').disabled = true;
+  const sendBtn = document.getElementById(source === 'home' ? 'aiHomeSend' : 'aiSend');
+  if (sendBtn) sendBtn.disabled = true;
   input.value = '';
   input.style.height = 'auto';
+  const analysisInput = document.getElementById('aiInput');
+  if (analysisInput) analysisInput.value = '';
+  const analysisSend = document.getElementById('aiSend');
+  if (analysisSend) analysisSend.disabled = true;
 
   _aiAppendMsg('user', msg);
 
   const typing = document.getElementById('aiTyping');
-  typing.classList.add('visible');
+  typing?.classList.add('visible');
   document.getElementById('aiMessages').scrollTop = 999999;
 
   try {
@@ -6529,7 +6716,7 @@ async function sendAIMessage() {
     const d = await r.json();
     const aiUsageBefore = Number(_aiAnalysesToday) || 0;
     updateAIUsageFromPayload(d);
-    typing.classList.remove('visible');
+    typing?.classList.remove('visible');
 
     if (d.reply) {
       if (_aiAnalysesPerDay != null && _plan !== 'founder' && (Number(_aiAnalysesToday) || 0) <= aiUsageBefore) {
@@ -6550,16 +6737,21 @@ async function sendAIMessage() {
       _aiAppendMsg('ai', (d.error || d.detail || 'Errore nella risposta. Riprova.'));
     }
   } catch (e) {
-    typing.classList.remove('visible');
+    typing?.classList.remove('visible');
     _aiAppendMsg('ai', 'Connessione persa. Controlla la rete e riprova.');
   }
 
   _aiLoading = false;
-  document.getElementById('aiSend').disabled = true;
+  if (analysisSend) analysisSend.disabled = true;
+  const homeSend = document.getElementById('aiHomeSend');
+  if (homeSend) homeSend.disabled = true;
   document.getElementById('aiMessages').scrollTop = 999999;
 }
 
 function _aiInit() {
+  _aiLoadThreads();
+  renderAIHistory();
+  renderAIThread();
   updateAIUsageUI();
 }
 
