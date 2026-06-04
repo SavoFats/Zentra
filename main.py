@@ -699,7 +699,6 @@ _scanner_refreshing: set = set()  # timeframe refresh già in corso
 _ai_conversations:   dict = {}   # {user_id: [{"role": ..., "content": ...}]}
 _news_cache:         dict = {"data": [], "ts": 0.0}
 NEWS_CACHE_TTL      = 300         # secondi — aggiorna notizie ogni 5 minuti
-CRYPTOPANIC_API_KEY = os.environ.get("CRYPTOPANIC_API_KEY", "")
 SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
 VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
 SCANNER_SIGNAL_KEYS = {
@@ -5032,22 +5031,25 @@ async def fetch_crypto_news(coins: list | None = None) -> list:
     now = time.time()
     if now - _news_cache["ts"] < NEWS_CACHE_TTL and _news_cache["data"]:
         return _news_cache["data"]
-    if not CRYPTOPANIC_API_KEY:
-        return []
     try:
-        params: dict = {"auth_token": CRYPTOPANIC_API_KEY, "kind": "news", "filter": "hot", "public": "true"}
+        # CryptoCompare News — gratuito, senza API key
+        params: dict = {"lang": "EN", "sortOrder": "latest", "extraParams": "Zentra"}
         if coins:
-            params["currencies"] = ",".join(coins[:5])
+            params["categories"] = ",".join(coins[:3])
         async with httpx.AsyncClient(timeout=8) as client:
-            res = await client.get("https://cryptopanic.com/api/v1/posts/", params=params)
+            res = await client.get("https://min-api.cryptocompare.com/data/v2/news/", params=params)
             data = res.json()
         items = []
-        for item in (data.get("results") or [])[:8]:
+        for item in (data.get("Data") or [])[:8]:
+            from datetime import datetime as _dt
+            ts = item.get("published_on", 0)
+            date = _dt.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else ""
+            cats = [c.strip() for c in (item.get("categories") or "").split("|") if c.strip()]
             items.append({
                 "title": item.get("title", ""),
-                "source": (item.get("source") or {}).get("title", ""),
-                "date": (item.get("published_at") or "")[:10],
-                "coins": [c["code"] for c in (item.get("currencies") or [])],
+                "source": item.get("source_info", {}).get("name", item.get("source", "")),
+                "date": date,
+                "coins": cats[:4],
             })
         _news_cache = {"data": items, "ts": now}
         return items
