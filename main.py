@@ -5027,38 +5027,36 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
         return {"ok": True, "price": price, "qty": qty}
 
 async def fetch_crypto_news(coins: list | None = None) -> list:
+    import xml.etree.ElementTree as ET
     cache_key = coins[0] if coins else "general"
     bucket = _news_cache.get(cache_key, {"data": [], "ts": 0.0})
     now = time.time()
     if now - bucket["ts"] < NEWS_CACHE_TTL and bucket["data"]:
         return bucket["data"]
-
-    def _parse_news(data: dict, limit: int = 8) -> list:
-        items = []
-        for item in (data.get("Data") or [])[:limit]:
-            ts = item.get("published_on", 0)
-            date = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else ""
-            cats = [c.strip() for c in (item.get("categories") or "").split("|") if c.strip()]
-            items.append({
-                "title": item.get("title", ""),
-                "source": item.get("source_info", {}).get("name", item.get("source", "")),
-                "date": date,
-                "coins": cats[:4],
-            })
-        return items
-
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            params: dict = {"lang": "EN", "sortOrder": "latest", "extraParams": "Zentra"}
-            if coins:
-                params["categories"] = ",".join(coins[:3])
-            res = await client.get("https://min-api.cryptocompare.com/data/v2/news/", params=params)
-            items = _parse_news(res.json())
-            # Se coin-specific è vuoto, fallback su general news
-            if not items and coins:
-                res2 = await client.get("https://min-api.cryptocompare.com/data/v2/news/",
-                                        params={"lang": "EN", "sortOrder": "latest", "extraParams": "Zentra"})
-                items = _parse_news(res2.json())
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            res = await client.get("https://cointelegraph.com/rss",
+                                   headers={"User-Agent": "ZentraTrading/1.0"})
+        root = ET.fromstring(res.text)
+        ns = {"media": "http://search.yahoo.com/mrss/"}
+        items = []
+        keywords = [c.upper() for c in (coins or [])]
+        for item in root.iter("item"):
+            title = (item.findtext("title") or "").strip()
+            pub   = (item.findtext("pubDate") or "")[:16]
+            if keywords and not any(k in title.upper() for k in keywords):
+                continue
+            items.append({"title": title, "source": "CoinTelegraph", "date": pub, "coins": coins or []})
+            if len(items) >= 6:
+                break
+        # Se filtro coin non ha trovato nulla, prendi le ultime notizie generali
+        if not items:
+            for item in root.iter("item"):
+                title = (item.findtext("title") or "").strip()
+                pub   = (item.findtext("pubDate") or "")[:16]
+                items.append({"title": title, "source": "CoinTelegraph", "date": pub, "coins": []})
+                if len(items) >= 6:
+                    break
         _news_cache[cache_key] = {"data": items, "ts": now}
         return items
     except Exception:
