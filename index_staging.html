@@ -6700,6 +6700,7 @@ async function sendAIMessage(source = 'analysis') {
   if (!input) return;
   const msg = input.value.trim();
   if (!msg || _aiLoading) return;
+  if (source === 'home') _aiActiveThreadId = '';
   _aiEnsureThread(msg);
   showTab('analysis');
   renderAIThread();
