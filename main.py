@@ -5272,8 +5272,7 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
     # ── Conversation history ─────────────────────────────────────────────────
     history = _ai_conversations.setdefault(user_id, [])
-    prefixed_msg = f"[IMPORTANTE: rispondi senza emoji e senza saluti iniziali]\n{user_msg}"
-    history.append({"role": "user", "content": prefixed_msg})
+    history.append({"role": "user", "content": user_msg})
     if len(history) > 20:
         history[:] = history[-20:]
 
