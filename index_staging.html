@@ -1798,7 +1798,7 @@ body.auth-active .tabbar { display:none !important; }
       .ai-msg.user .ai-msg-time { text-align:right; }
       .ai-typing { align-self:flex-start; display:none; padding:6px 0 18px; }
       .ai-typing.visible { display:flex; align-items:center; }
-      .ai-thinking-text { font-size:13px; color:var(--text3); font-style:italic; transition:opacity 0.35s ease; }
+      .ai-thinking-text { font-size:13px; color:var(--text2); transition:opacity 0.35s ease; }
       .ai-thinking-text.fade { opacity:0; }
       .ai-welcome { text-align:center; padding:32px 16px; color:var(--text3); font-size:13px; line-height:1.6; }
       .ai-welcome strong { color:var(--text2); display:block; margin-bottom:6px; font-size:14px; }
@@ -1839,7 +1839,7 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
-      .ai-workspace { min-height:100%; display:flex; flex-direction:column; gap:18px; }
+      .ai-workspace { height:100%; display:flex; flex-direction:column; }
       .ai-workspace-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
       .ai-workspace .ai-messages { flex:1; min-height:360px; max-height:none; padding:10px 0 22px; }
       .ai-workspace .ai-msg.ai { max-width:min(980px,100%); }
@@ -6450,16 +6450,26 @@ function _aiGetThread(id = _aiActiveThreadId) {
 }
 
 let _aiAutoScrollEnabled = true;
+let _aiScrollProg = false;
+
+function _aiScrollBottom() {
+  const msgs = document.getElementById('aiMessages');
+  if (!msgs || !_aiAutoScrollEnabled) return;
+  _aiScrollProg = true;
+  msgs.scrollTop = msgs.scrollHeight;
+  requestAnimationFrame(() => { _aiScrollProg = false; });
+}
 
 function _aiSetupAutoScroll() {
   const msgs = document.getElementById('aiMessages');
   if (!msgs || msgs._scrollSetup) return;
   msgs._scrollSetup = true;
   msgs.addEventListener('scroll', () => {
+    if (_aiScrollProg) return;
     _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 80;
   }, { passive: true });
   new MutationObserver(() => {
-    if (_aiAutoScrollEnabled) requestAnimationFrame(() => requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; }));
+    if (_aiAutoScrollEnabled) requestAnimationFrame(() => requestAnimationFrame(() => _aiScrollBottom()));
   }).observe(msgs, { childList: true });
 }
 
@@ -6560,6 +6570,7 @@ function renderAIHistory() {
 function renderAIThread() {
   const msgs = document.getElementById('aiMessages');
   if (!msgs) return;
+  _aiAutoScrollEnabled = true;
   const thread = _aiGetThread();
   msgs.innerHTML = '';
   if (!thread || !(thread.messages || []).length) {
@@ -6636,12 +6647,11 @@ async function _aiStreamMsg(content) {
     const t = setInterval(() => {
       i = Math.min(i + step, n);
       bubble.textContent = content.slice(0, i);
-      if (_aiAutoScrollEnabled) msgs.scrollTop = msgs.scrollHeight;
+      _aiScrollBottom();
       if (i >= n) {
         clearInterval(t);
         bubble.innerHTML = _renderAiMarkdown(content);
-        if (_aiAutoScrollEnabled) msgs.scrollTop = msgs.scrollHeight;
-        resolve();
+        requestAnimationFrame(() => requestAnimationFrame(() => { _aiScrollBottom(); resolve(); }));
       }
     }, tickMs);
   });
@@ -6672,7 +6682,7 @@ function _aiAppendMsg(role, content, persist = true) {
   wrap.appendChild(bubble);
   wrap.appendChild(time);
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  _aiScrollBottom();
   if (persist) _aiPersistMessage(role, content);
   return wrap;
 }
@@ -6693,7 +6703,7 @@ function _aiRenderChart(symbol) {
   frame.id = containerId;
   wrap.append(label, frame);
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  _aiScrollBottom();
 
   function createWidget() {
     if (!document.getElementById(containerId) || typeof TradingView === 'undefined') return;
@@ -6711,12 +6721,7 @@ function _aiRenderChart(symbol) {
       hide_side_toolbar: false,
       hide_top_toolbar: false
     });
-    const ro = new ResizeObserver(() => {
-      if (_aiAutoScrollEnabled) requestAnimationFrame(() => {
-        const m = document.getElementById('aiMessages');
-        if (m) m.scrollTop = m.scrollHeight;
-      });
-    });
+    const ro = new ResizeObserver(() => { _aiScrollBottom(); });
     ro.observe(wrap);
     setTimeout(() => ro.disconnect(), 8000);
   }
@@ -6782,7 +6787,7 @@ function _aiRenderNews(news) {
     wrap.appendChild(row);
   });
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  _aiScrollBottom();
 }
 
 async function sendAIMessage(source = 'analysis') {
@@ -6808,7 +6813,7 @@ async function sendAIMessage(source = 'analysis') {
   _aiAppendMsg('user', msg);
 
   _aiThinkingStart();
-  document.getElementById('aiMessages').scrollTop = 999999;
+  _aiScrollBottom();
 
   try {
     const r = await fetch(API + '/chat', {
@@ -6855,7 +6860,7 @@ async function sendAIMessage(source = 'analysis') {
   if (analysisSend) analysisSend.disabled = true;
   const homeSend = document.getElementById('aiHomeSend');
   if (homeSend) homeSend.disabled = true;
-  document.getElementById('aiMessages').scrollTop = 999999;
+  _aiScrollBottom();
 }
 
 function _aiThreadMenuToggle(event, id) {
