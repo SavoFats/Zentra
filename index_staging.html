@@ -1374,9 +1374,7 @@ body.auth-active .tabbar { display:none !important; }
     <div class="ai-workspace">
       <div class="ai-workspace-head">
         <div>
-          <div class="ai-workspace-kicker">Zentra AI</div>
           <div class="ai-workspace-title" id="aiThreadTitle">Nuova analisi</div>
-          <div class="ai-workspace-sub">Analisi mercato, segnali scanner e posizioni aperte in un'unica conversazione.</div>
         </div>
       </div>
       <div class="ai-workspace-body">
@@ -1850,9 +1848,7 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
       .ai-workspace { min-height:100%; display:flex; flex-direction:column; gap:18px; }
       .ai-workspace-head { display:flex; align-items:flex-start; justify-content:flex-start; gap:14px; padding:12px 0 4px; }
-      .ai-workspace-kicker { font-size:12px; font-weight:800; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; margin-bottom:5px; }
       .ai-workspace-title { font-size:28px; font-weight:900; color:var(--text); letter-spacing:-.04em; }
-      .ai-workspace-sub { font-size:13px; color:var(--text3); margin-top:4px; }
       .ai-workspace-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
       .ai-workspace .ai-messages { flex:1; min-height:360px; max-height:none; padding:10px 0 22px; }
       .ai-workspace .ai-msg.ai { max-width:min(980px,100%); }
@@ -3512,7 +3508,7 @@ function showTab(name, el) {
   const page = document.getElementById('page-' + name);
   if (!page) return;
   page.classList.add('active');
-  page.scrollTop = 0;
+  if (name !== 'analysis' || !wasOnAnalysis) page.scrollTop = 0;
   if (el) el.classList.add('active');
   localStorage.setItem('ca_active_tab', name);
   updateSidebarActive(name);
