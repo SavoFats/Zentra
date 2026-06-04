@@ -6459,7 +6459,7 @@ function _aiSetupAutoScroll() {
     _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 80;
   }, { passive: true });
   new MutationObserver(() => {
-    if (_aiAutoScrollEnabled) requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; });
+    if (_aiAutoScrollEnabled) requestAnimationFrame(() => requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; }));
   }).observe(msgs, { childList: true });
 }
 
@@ -6611,6 +6611,41 @@ function _aiPersistMessage(role, content) {
   _aiThreads = [thread, ..._aiThreads.filter(t => t.id !== thread.id)];
   _aiSaveThreads();
   renderAIHistory();
+}
+
+async function _aiStreamMsg(content) {
+  const msgs = document.getElementById('aiMessages');
+  if (!msgs) return;
+  const empty = document.getElementById('aiEmptyState');
+  if (empty) empty.remove();
+  const wrap = document.createElement('div');
+  const bubble = document.createElement('div');
+  const time = document.createElement('div');
+  wrap.className = 'ai-msg ai';
+  bubble.className = 'ai-bubble';
+  time.className = 'ai-msg-time';
+  time.textContent = _aiTime();
+  wrap.append(bubble, time);
+  msgs.appendChild(wrap);
+  const n = content.length;
+  const targetMs = Math.min(1600, Math.max(350, n * 5));
+  const tickMs = 33;
+  const step = Math.max(1, Math.ceil(n / (targetMs / tickMs)));
+  await new Promise(resolve => {
+    let i = 0;
+    const t = setInterval(() => {
+      i = Math.min(i + step, n);
+      bubble.textContent = content.slice(0, i);
+      if (_aiAutoScrollEnabled) msgs.scrollTop = msgs.scrollHeight;
+      if (i >= n) {
+        clearInterval(t);
+        bubble.innerHTML = _renderAiMarkdown(content);
+        if (_aiAutoScrollEnabled) msgs.scrollTop = msgs.scrollHeight;
+        resolve();
+      }
+    }, tickMs);
+  });
+  _aiPersistMessage('ai', content);
 }
 
 function _aiAppendMsg(role, content, persist = true) {
@@ -6790,7 +6825,7 @@ async function sendAIMessage(source = 'analysis') {
       if (_aiAnalysesPerDay != null && _plan !== 'founder' && (Number(_aiAnalysesToday) || 0) <= aiUsageBefore) {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
-      _aiAppendMsg('ai', d.reply);
+      await _aiStreamMsg(d.reply);
       const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg);
       if (chartSymbol && Array.isArray(d.news) && d.news.length) {
         _aiRenderNews(d.news);
