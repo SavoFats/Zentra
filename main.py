@@ -120,6 +120,14 @@ def stripe_price_for_plan(plan: str) -> str:
         return STRIPE_PRO_PRICE_ID
     return ""
 
+def ai_daily_limit_for_plan(plan: str):
+    plan = normalize_plan(plan)
+    if plan == "founder":
+        return None
+    if plan == "pro":
+        return PRO_AI_ANALYSES_PER_DAY
+    return FREE_AI_ANALYSES_PER_DAY
+
 def plan_from_stripe_subscription(sub: dict, fallback: str = "pro") -> str:
     plan = normalize_plan((sub.get("metadata") or {}).get("plan") or fallback)
     if plan in PAID_PLANS:
@@ -139,6 +147,8 @@ def restore_debug_log(msg: str):
 # ── FREE PLAN LIMITS ──────────────────────────────────────────────────────────
 FREE_SESSIONS_PER_DAY  = 1
 FREE_SCANS_PER_DAY     = 10
+FREE_AI_ANALYSES_PER_DAY = 10
+PRO_AI_ANALYSES_PER_DAY  = 50
 FREE_MAX_SESSION_HOURS = 2
 FREE_MAX_POSITIONS     = 1
 FREE_ALLOC_PCT         = 1.0    # allocazione fissa 100% — 1 posizione = tutto il capitale sessione
@@ -689,6 +699,18 @@ _scanner_refreshing: set = set()  # timeframe refresh già in corso
 _ai_conversations:   dict = {}   # {user_id: [{"role": ..., "content": ...}]}
 SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
 VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
+SCANNER_SIGNAL_KEYS = {
+    "breakout",
+    "golden_cross",
+    "ema_stack",
+    "rsi_oversold",
+    "rsi_overbought",
+    "macd_bullish",
+    "macd_bearish",
+    "tsi_bullish",
+    "death_cross",
+    "volume_spike",
+}
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
 
@@ -3306,6 +3328,8 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_today INT DEFAULT 0;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_scan_date DATE;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS scans_today INT DEFAULT 0;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ai_chat_date DATE;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_chats_today INT DEFAULT 0;
                     CREATE TABLE IF NOT EXISTS trades_history (
                         id SERIAL PRIMARY KEY,
                         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -3633,6 +3657,35 @@ async def logout_user(request: Request):
         _revoked_tokens.add(auth[7:])
     return {"ok": True}
 
+@app.delete("/auth/account")
+async def delete_account(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=3, window=300, key_suffix="delete_account")
+    state = user_sessions.get(user_id)
+    if state and (state.get("running") or state.get("positions")):
+        raise HTTPException(
+            status_code=409,
+            detail="Ferma la sessione e chiudi le posizioni aperte prima di eliminare l'account."
+        )
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database non disponibile")
+
+    async with db_pool.acquire() as conn:
+        result = await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+    if result.endswith("0"):
+        raise HTTPException(status_code=404, detail="Account non trovato")
+
+    user_sessions.pop(user_id, None)
+    _ai_conversations.pop(user_id, None)
+    _sessions_starting.discard(user_id)
+    for code, (linked_user_id, _) in list(_tg_link_codes.items()):
+        if linked_user_id == user_id:
+            _tg_link_codes.pop(code, None)
+
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        _revoked_tokens.add(auth[7:])
+    return {"ok": True}
+
 @app.post("/auth/login")
 async def login(req: LoginRequest, request: Request):
     check_rate_limit(request, max_attempts=10, window=300, key_suffix="login")
@@ -3821,7 +3874,8 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
             "SELECT username, display_name, avatar_b64, sim_mode, revx_key_id, "
             "binance_api_key, coinbase_api_key, telegram_chat_id, "
             "plan, subscription_expires_at, last_session_date, sessions_today, "
-            "last_scan_date, scans_today FROM users WHERE id = $1", user_id
+            "last_scan_date, scans_today, last_ai_chat_date, ai_chats_today "
+            "FROM users WHERE id = $1", user_id
         )
     has_keys = bool(row.get("revx_key_id"))
     has_binance_keys = bool(row.get("binance_api_key"))
@@ -3841,6 +3895,9 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
     sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
     last_scan_date = row["last_scan_date"]
     scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
+    last_ai_date = row["last_ai_chat_date"]
+    ai_today = (row["ai_chats_today"] or 0) if (last_ai_date and last_ai_date == today) else 0
+    ai_limit = ai_daily_limit_for_plan(raw_plan)
     return {
         "username": dname,
         "has_revx_keys": has_keys,
@@ -3855,6 +3912,9 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         "scans_today": scans_today,
         "scans_per_day": FREE_SCANS_PER_DAY,
         "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today) if raw_plan == "free" else 999,
+        "ai_analyses_today": ai_today,
+        "ai_analyses_per_day": ai_limit,
+        "ai_analyses_remaining": None if ai_limit is None else max(0, ai_limit - ai_today),
         "subscription_expires_at": exp.isoformat() if exp else None,
     }
 
@@ -3939,6 +3999,7 @@ async def get_market(
     user_id: int = Depends(get_current_user),
     timeframe: str = Query("1h"),
     count_scan: bool = Query(False),
+    scan_signal: str = Query(""),
 ):
     check_rate_limit(request, max_attempts=60, window=60, key_suffix="market")
 
@@ -3961,33 +4022,6 @@ async def get_market(
                     raw_plan = "free"
                 last_scan_date = row["last_scan_date"]
                 scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
-                if count_scan and raw_plan == "free":
-                    updated = await conn.fetchrow(
-                        """
-                        UPDATE users
-                           SET last_scan_date = $1,
-                               scans_today = CASE
-                                   WHEN last_scan_date = $1 THEN COALESCE(scans_today, 0) + 1
-                                   ELSE 1
-                               END
-                         WHERE id = $2
-                           AND (last_scan_date IS DISTINCT FROM $1 OR COALESCE(scans_today, 0) < $3)
-                     RETURNING scans_today
-                        """,
-                        today, user_id, FREE_SCANS_PER_DAY
-                    )
-                    if not updated:
-                        return {
-                            "error": "scan_limit",
-                            "message": "Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.",
-                            "plan": raw_plan,
-                            "scans_today": scans_today,
-                            "scans_per_day": FREE_SCANS_PER_DAY,
-                            "scans_remaining": 0,
-                            "market": [],
-                            "scanner_refreshing": False,
-                        }
-                    scans_today = updated["scans_today"] or scans_today
 
     # Refresh scanner cache per il TF richiesto se assente o scaduta
     tf_age = time.time() - _scanner_candles_ts.get(timeframe, 0)
@@ -4050,6 +4084,42 @@ async def get_market(
         items = [i for i in items if i["symbol"] in _revx_pairs]
 
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
+
+    scan_signal = (scan_signal or "").strip()
+    scan_has_results = (
+        scan_signal in SCANNER_SIGNAL_KEYS
+        and not scanner_refreshing
+        and any((item.get("scanner") or {}).get(scan_signal) for item in result)
+    )
+    if count_scan and raw_plan == "free" and db_pool and scan_has_results:
+        async with db_pool.acquire() as conn:
+            updated = await conn.fetchrow(
+                """
+                UPDATE users
+                   SET last_scan_date = $1,
+                       scans_today = CASE
+                           WHEN last_scan_date = $1 THEN COALESCE(scans_today, 0) + 1
+                           ELSE 1
+                       END
+                 WHERE id = $2
+                   AND (last_scan_date IS DISTINCT FROM $1 OR COALESCE(scans_today, 0) < $3)
+             RETURNING scans_today
+                """,
+                today, user_id, FREE_SCANS_PER_DAY
+            )
+        if not updated:
+            return {
+                "error": "scan_limit",
+                "message": "Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.",
+                "plan": raw_plan,
+                "scans_today": scans_today,
+                "scans_per_day": FREE_SCANS_PER_DAY,
+                "scans_remaining": 0,
+                "market": [],
+                "scanner_refreshing": False,
+            }
+        scans_today = updated["scans_today"] or scans_today
+
     return {
         "market": result,
         "scanner_refreshing": scanner_refreshing,
@@ -4201,7 +4271,6 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     real_mode = False
     revx_key_id, revx_private_key, use_revx = "", "", False
     user_plan = "free"
-    free_session_counter_update = None
     row = None
     agent_exchange = cfg.get("agentExchange", "revx").lower()
     use_coinbase = False
@@ -4236,24 +4305,21 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
                     if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
                         raw_plan = "free"
                     user_plan = raw_plan
-                    # Gate sessione giornaliera (solo free)
-                    if user_plan == "free":
-                        today = datetime.utcnow().date()
-                        last_date = row["last_session_date"]
-                        sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
-                        if sessions_today >= FREE_SESSIONS_PER_DAY:
-                            _sessions_starting.discard(user_id)
-                            return {
-                                "error": "session_limit",
-                                "message": f"Hai già usato la tua sessione gratuita di oggi. Torna domani o passa a Pro.",
-                                "plan": "free",
-                            }
-                        free_session_counter_update = (today, sessions_today + 1)
+                    if user_plan != "founder":
+                        _sessions_starting.discard(user_id)
+                        return {
+                            "error": "agent_plan_required",
+                            "message": "Zentra Agent Beta è disponibile solo con il piano Founder.",
+                            "plan": user_plan,
+                        }
         except Exception as e:
             print(f"DB key fetch error: {e}")
 
     # Override configurazione per utenti free
     if user_plan == "free":
+        real_mode = False
+        use_revx = False
+        use_coinbase = False
         cfg["allocPct"]        = FREE_ALLOC_PCT
         free_duration = int(cfg.get("sessionDuration", FREE_MAX_SESSION_HOURS))
         cfg["sessionDuration"] = FREE_MAX_SESSION_HOURS if free_duration <= 0 else min(free_duration, FREE_MAX_SESSION_HOURS)
@@ -4363,16 +4429,6 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         f"Cap: {capp:.0f}% | Alloc: {alloc:.0f}% | {strategy_params} | "
         f"Stop: -{max_stop_pct_s:.1f}% | BTC: {btc_filt_s} | MaxHold: {mxh}h | MaxLoss: {mcl}"
     )
-    if free_session_counter_update and db_pool:
-        try:
-            today, new_count = free_session_counter_update
-            async with db_pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE users SET last_session_date = $1, sessions_today = $2 WHERE id = $3",
-                    today, new_count, user_id
-                )
-        except Exception as e:
-            print(f"DB free session counter update error: {e}")
     _sessions_starting.discard(user_id)
     return {"ok": True}
 
@@ -4760,6 +4816,22 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
     sl_pct = max(0.1, min(req.sl_pct, 50.0))
     tp_pct = max(0.1, min(req.tp_pct, 200.0))
     state = get_session(user_id)
+    user_plan = normalize_plan(state.get("plan", "free"))
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                plan_row = await conn.fetchrow(
+                    "SELECT plan, subscription_expires_at FROM users WHERE id = $1",
+                    user_id
+                )
+            if plan_row:
+                user_plan = normalize_plan(plan_row["plan"] or "free")
+                exp = plan_row["subscription_expires_at"]
+                if user_plan in PAID_PLANS and exp and exp < datetime.utcnow():
+                    user_plan = "free"
+                state["plan"] = user_plan
+        except Exception as _e:
+            print(f"[MANUAL TRADE] plan lookup: {_e}")
     # Leggi chiavi RevX: prima dalla sessione in memoria, poi dal DB
     revx_key_id = state.get("revx_key_id", "")
     revx_priv   = state.get("revx_private_key", "")
@@ -4781,6 +4853,13 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                     state["use_revx"]         = True
         except Exception as _e:
             print(f"[MANUAL TRADE] DB lookup: {_e}")
+    if user_plan == "free":
+        if exchange == "coinbase":
+            raise HTTPException(
+                status_code=403,
+                detail="Il piano Free supporta solo trade manuali in simulazione. Passa a Pro per usare exchange reali."
+            )
+        is_real = False
     price = market_data.get(sym, {}).get("price", 0.0)
     if not price:
         raise HTTPException(status_code=400, detail="Prezzo non disponibile per questa coin")
@@ -4951,12 +5030,52 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         raise HTTPException(status_code=503, detail="AI non configurata")
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="Database non disponibile")
 
     user_msg = body.message.strip()
     if not user_msg:
         raise HTTPException(status_code=400, detail="Messaggio vuoto")
     if len(user_msg) > 2000:
         raise HTTPException(status_code=400, detail="Messaggio troppo lungo (max 2000 caratteri)")
+
+    today = datetime.utcnow().date()
+    async with db_pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            "SELECT plan, subscription_expires_at, last_ai_chat_date, ai_chats_today "
+            "FROM users WHERE id = $1",
+            user_id
+        )
+        raw_plan = normalize_plan(plan_row["plan"] if plan_row else "free")
+        exp = plan_row["subscription_expires_at"] if plan_row else None
+        if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
+            raw_plan = "free"
+        ai_limit = ai_daily_limit_for_plan(raw_plan)
+        ai_today = 0
+        if plan_row:
+            last_ai_date = plan_row["last_ai_chat_date"]
+            ai_today = (plan_row["ai_chats_today"] or 0) if (last_ai_date and last_ai_date == today) else 0
+        if ai_limit is not None:
+            updated = await conn.fetchrow(
+                """
+                UPDATE users
+                   SET last_ai_chat_date = $1,
+                       ai_chats_today = CASE
+                           WHEN last_ai_chat_date = $1 THEN COALESCE(ai_chats_today, 0) + 1
+                           ELSE 1
+                       END
+                 WHERE id = $2
+                   AND (last_ai_chat_date IS DISTINCT FROM $1 OR COALESCE(ai_chats_today, 0) < $3)
+             RETURNING ai_chats_today
+                """,
+                today, user_id, ai_limit
+            )
+            if not updated:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Hai raggiunto il limite di {ai_limit} analisi Zentra AI di oggi. Passa a un piano superiore per continuare."
+                )
+            ai_today = updated["ai_chats_today"] or ai_today
 
     if body.reset:
         _ai_conversations[user_id] = []
@@ -4998,18 +5117,20 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         pos_lines = []
         for pos in positions:
             sym  = pos["symbol"]
-            cur  = market_data.get(sym.replace("USDT",""), {}).get("price") or \
-                   market_data.get(sym, {}).get("price") or pos.get("currentPrice", pos["entryPrice"])
+            sym_base = sym.replace("USDT","").replace("-USDC","").replace("-USD","")
+            pos_price = pos.get("currentPrice") or pos.get("entryPrice")
+            market_price = market_data.get(sym_base, {}).get("price") or market_data.get(sym, {}).get("price")
+            cur = pos_price if pos.get("realMode") else (market_price or pos_price)
             entry = pos["entryPrice"]
             sl    = pos.get("stopPrice", 0)
-            tp1   = pos.get("tp1_price", 0)
+            tp1   = pos.get("tp1Price", pos.get("tp1_price", 0))
             pct   = (cur - entry) / entry * 100 if entry else 0
             usd   = pos.get("size", 0) * pct / 100
             sl_d  = (cur - sl) / cur * 100 if sl and cur else 0
             tp1_d = (tp1 - cur) / cur * 100 if tp1 and cur else 0
             pos_sigs = []
             for tf in ["1h","4h"]:
-                td = scanner_candle_data.get(tf, {}).get(sym.replace("USDT",""), {})
+                td = scanner_candle_data.get(tf, {}).get(sym_base, {})
                 pos_sigs += [f"{s}@{tf}" for s in _SIGNALS if td.get(s)]
             line = (f"  {sym}: entry ${entry:.4f} | now ${cur:.4f} | P&L {pct:+.2f}% (${usd:+.2f})"
                     f" | SL ${sl:.4f} ({sl_d:+.1f}%) | TP1 ${tp1:.4f} (+{tp1_d:.1f}%)"
@@ -5065,12 +5186,18 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "Sei Zentra AI, il copilot finanziario integrato nella piattaforma Zentra Trading.\n\n"
         "RUOLO\n"
         "Sei un analista tecnico esperto di crypto. Analizzi dati di mercato live, "
-        "segnali dello scanner, posizioni aperte e dai consigli concreti e azionabili. "
+        "segnali dello scanner e posizioni aperte. Dai analisi pratiche e scenari operativi, "
         "Non sei un chatbot generico — sei focalizzato esclusivamente sul trading crypto con approccio tecnico.\n\n"
+        "LIMITI E RESPONSABILITA\n"
+        "- Non presentare mai una previsione come certa\n"
+        "- Non promettere rendimenti o profitti\n"
+        "- Ricorda che il trading comporta rischio di perdita del capitale quando proponi un'azione\n"
+        "- Formula le idee come analisi informativa, non come consulenza finanziaria personalizzata\n"
+        "- Se i dati sono incompleti, esplicitalo prima di trarre conclusioni\n\n"
         "STILE\n"
         "- Risposte concise e dirette, mai verbose\n"
         "- Usa numeri reali dal contesto (prezzi, % P&L, distanza SL/TP)\n"
-        "- Se suggerisci un'azione, specifica: direzione, motivazione, stop loss consigliato\n"
+        "- Se descrivi un possibile setup, specifica: direzione, motivazione, invalidazione e rischio\n"
         "- Se il setup non è chiaro, dillo — non inventare segnali\n"
         "- Usa il simbolo della coin senza USDT (es. BTC, ETH)\n\n"
         "INDICATORI ZENTRA\n"
@@ -5099,13 +5226,24 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
     messages_to_send = [{"role": m["role"], "content": m["content"]} for m in history]
 
-    async with httpx.AsyncClient(timeout=45) as client:
-        res = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-            json={"model": "claude-sonnet-4-6", "max_tokens": 1024, "system": system_prompt, "messages": messages_to_send}
-        )
-        data = res.json()
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            res = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                json={"model": "claude-sonnet-4-6", "max_tokens": 1024, "system": system_prompt, "messages": messages_to_send}
+            )
+        try:
+            data = res.json()
+        except Exception:
+            data = {}
+        if res.status_code >= 400:
+            history.pop()
+            detail = data.get("error", {}).get("message") if isinstance(data.get("error"), dict) else ""
+            return {"error": detail or "Zentra AI temporaneamente non disponibile. Riprova tra poco."}
+    except Exception as e:
+        history.pop()
+        return {"error": public_error(e, api_key, max_len=160)}
 
     if "content" not in data:
         history.pop()
@@ -5113,7 +5251,13 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
     reply = data["content"][0]["text"]
     history.append({"role": "assistant", "content": reply})
-    return {"reply": reply}
+    return {
+        "reply": reply,
+        "plan": raw_plan,
+        "ai_analyses_today": ai_today,
+        "ai_analyses_per_day": ai_limit,
+        "ai_analyses_remaining": None if ai_limit is None else max(0, ai_limit - ai_today),
+    }
 
 @app.delete("/chat/history")
 async def clear_chat_history(request: Request, user_id: int = Depends(get_current_user)):
@@ -5507,7 +5651,9 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
         raise HTTPException(status_code=500, detail="DB non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT plan, subscription_expires_at, last_session_date, sessions_today, last_scan_date, scans_today FROM users WHERE id = $1", user_id)
+            "SELECT plan, subscription_expires_at, last_session_date, sessions_today, "
+            "last_scan_date, scans_today, last_ai_chat_date, ai_chats_today "
+            "FROM users WHERE id = $1", user_id)
     raw_plan = normalize_plan(row["plan"] or "free")
     exp = row["subscription_expires_at"]
     if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
@@ -5517,6 +5663,9 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
     sessions_today = (row["sessions_today"] or 0) if (last_date and last_date == today) else 0
     last_scan_date = row["last_scan_date"]
     scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
+    last_ai_date = row["last_ai_chat_date"]
+    ai_today = (row["ai_chats_today"] or 0) if (last_ai_date and last_ai_date == today) else 0
+    ai_limit = ai_daily_limit_for_plan(raw_plan)
     return {
         "plan": raw_plan,
         "sessions_today": sessions_today,
@@ -5525,6 +5674,9 @@ async def billing_status(request: Request, user_id: int = Depends(get_current_us
         "scans_today": scans_today,
         "scans_per_day": FREE_SCANS_PER_DAY,
         "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today) if raw_plan == "free" else 999,
+        "ai_analyses_today": ai_today,
+        "ai_analyses_per_day": ai_limit,
+        "ai_analyses_remaining": None if ai_limit is None else max(0, ai_limit - ai_today),
         "subscription_expires_at": exp.isoformat() if exp else None,
         "stripe_enabled": bool(STRIPE_SECRET_KEY and (STRIPE_PRO_PRICE_ID or STRIPE_FOUNDER_PRICE_ID)),
     }

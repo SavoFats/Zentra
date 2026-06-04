@@ -250,6 +250,11 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .app-plan-feats li::before { content:'✓'; color:var(--green); font-weight:900; flex-shrink:0; }
 .app-plan-feats li.muted { color:var(--text3); }
 .app-plan-feats li.muted::before { content:'×'; color:var(--text3); }
+.app-plan-feats li.agent-feature { display:block; }
+.app-plan-feats li.agent-feature::before { content:'✓'; display:inline-block; margin-right:9px; color:var(--green); }
+.app-plan-subfeats { list-style:disc; margin:7px 0 0 27px; padding:0; display:flex; flex-direction:column; gap:5px; }
+.app-plan-subfeats li { display:list-item; font-size:12px; color:var(--text2); font-weight:600; }
+.app-plan-subfeats li::before { content:none; }
 .app-plan-risk { margin:auto 0 14px; border:1px solid rgba(255,176,32,0.22); background:rgba(255,176,32,0.08); border-radius:12px; padding:10px 11px; font-size:11px; line-height:1.45; color:var(--text2); font-weight:650; }
 .app-plan-btn { margin-top:auto; border:none; border-radius:12px; padding:12px 14px; font-family:var(--sans); font-weight:900; font-size:13px; cursor:pointer; background:var(--surface2); color:var(--text); }
 .app-plan-btn.primary { background:var(--blue); color:#fff; box-shadow:0 6px 24px rgba(0,82,255,0.25); }
@@ -434,12 +439,14 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-item svg { flex-shrink:0; opacity:0.65; }
 .sb-item.active svg, .sb-item:hover svg { opacity:1; }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
-.sb-scan-usage { margin:8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
+.sb-scan-usage { margin:5px 8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
+#sbAIUsage { margin-bottom:4px; }
+#sbScanUsage { margin-top:4px; margin-bottom:14px; }
 .sb-scan-usage-top { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; font-weight:800; color:var(--text2); letter-spacing:.02em; }
 .sb-scan-usage-bar { height:6px; border-radius:999px; background:var(--border); overflow:hidden; margin-top:8px; }
 .sb-scan-usage-fill { height:100%; width:0%; border-radius:999px; background:var(--blue); transition:width .2s ease, background .2s ease; }
 .sb-scan-usage-sub { font-size:10px; color:var(--text3); margin-top:6px; line-height:1.35; }
-.sb-scan-usage.limit .sb-scan-usage-fill { background:var(--red); }
+.sb-scan-usage.limit .sb-scan-usage-fill { background:var(--blue); }
 .sb-scan-usage.limit .sb-scan-usage-sub { color:var(--red); }
 .sb-foot { padding:8px; border-top:1px solid var(--border); flex-shrink:0; }
 .sb-user { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; text-align:left; transition:background 0.15s; font-family:var(--sans); }
@@ -447,12 +454,13 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-uname { font-size:13px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sb-uplan { font-size:11px; color:var(--text3); margin-top:1px; }
 /* ── ACCOUNT PAGE ──────────────────────────────────────────────────────── */
-.acc-hero { display:flex; align-items:center; gap:16px; padding:20px; background:var(--surface); border-radius:var(--radius); margin-bottom:14px; }
-.acc-avatar { width:56px; height:56px; border-radius:50%; background:var(--blue); border:2px solid var(--border); overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; color:#fff; flex-shrink:0; }
+.acc-hero { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:24px 20px; background:var(--surface); border-radius:var(--radius); margin-bottom:14px; text-align:center; }
+.acc-avatar { width:66px; height:66px; border-radius:50%; background:var(--blue); border:2px solid var(--border); overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:#fff; flex-shrink:0; }
 .acc-avatar img { width:100%; height:100%; object-fit:cover; }
-.acc-name { font-size:17px; font-weight:700; color:var(--text); }
+.acc-name { font-size:17px; font-weight:800; color:var(--text); }
 .acc-email { font-size:12px; color:var(--text3); margin-top:3px; }
 .acc-section { background:var(--surface); border-radius:var(--radius); margin-bottom:14px; overflow:hidden; }
+.acc-section.no-title .acc-row:first-child { border-top:none; }
 .acc-sec-title { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.1em; padding:14px 16px 8px; }
 .acc-row { display:flex; align-items:center; gap:12px; padding:13px 16px; border-top:1px solid var(--border); transition:background 0.15s; }
 .acc-row.clickable { cursor:pointer; }
@@ -466,8 +474,10 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .acc-row-right { color:var(--text3); display:flex; align-items:center; gap:8px; flex-shrink:0; }
 .acc-feat-row { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; font-size:13px; color:var(--text2); border-top:1px solid var(--border); }
 .acc-feat-val { font-size:12px; font-weight:600; color:var(--text3); }
-.acc-upgrade-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:14px; background:linear-gradient(135deg,#7c3aed,#db2777); border:none; border-radius:12px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; font-family:var(--sans); margin-top:8px; transition:opacity 0.15s; }
+.acc-upgrade-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:calc(100% - 32px); padding:12px; background:linear-gradient(135deg,#0052ff,#7c3aed); border:none; border-radius:10px; color:#fff; font-size:13px; font-weight:800; cursor:pointer; font-family:var(--sans); margin:12px 16px 14px; transition:opacity 0.15s; }
 .acc-upgrade-btn:hover { opacity:0.9; }
+.delete-confirm-input { width:100%; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); padding:13px 14px; font:600 14px var(--sans); outline:none; margin:4px 0 18px; }
+.delete-confirm-input:focus { border-color:var(--red); box-shadow:0 0 0 3px rgba(246,70,93,0.12); }
 /* ── POSITION BAR SL→TP ── */
 .pos-rl-wrap { padding:4px 16px 14px; }
 .pos-rl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:18px 0 16px; }
@@ -626,7 +636,7 @@ body.auth-active .tabbar { display:none !important; }
 .home-mode-badge.sim { background:rgba(240,185,11,0.15); color:#b8860b; border:1px solid rgba(240,185,11,0.35); }
 .home-mode-badge.real { background:rgba(246,70,93,0.12); color:var(--red); border:1px solid rgba(246,70,93,0.3); }
 [data-theme="dark"] .home-mode-badge.sim { color:#f0c040; }
-.home-hero { background:linear-gradient(135deg,#0052ff 0%,#1a70ff 55%,#003dd6 100%); border-radius:var(--radius); padding:22px 20px 22px; margin-bottom:10px; position:relative; overflow:hidden; }
+.home-hero { background:linear-gradient(135deg,#0052ff 0%,#1a70ff 55%,#003dd6 100%); border-radius:var(--radius); padding:22px 20px 22px; margin-bottom:16px; position:relative; overflow:hidden; }
 .home-hero-circles { position:absolute; right:16px; top:50%; transform:translateY(-50%); pointer-events:none; }
 @keyframes hero-pulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
 .home-hero-circles { animation: hero-pulse 3s ease-in-out infinite; }
@@ -637,7 +647,7 @@ body.auth-active .tabbar { display:none !important; }
 .home-hero-btn { display:inline-flex; align-items:center; gap:8px; padding:12px 22px; background:rgba(255,255,255,0.95); border:none; border-radius:var(--radius-sm); color:#0040cc; font-size:14px; font-weight:700; cursor:pointer; font-family:var(--sans); transition:all 0.15s; letter-spacing:-0.01em; }
 .home-hero-btn:active { transform:scale(0.97); }
 .home-hero-btn:disabled { opacity:0.45; cursor:not-allowed; transform:none; }
-.home-kpi-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px; }
+.home-kpi-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:16px; }
 .home-kpi-sm { background:var(--surface); border:1px solid var(--glass-border); border-radius:var(--radius-sm); padding:12px 12px 10px; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); box-shadow:0 4px 16px rgba(0,0,0,0.04),inset 0 1px 0 rgba(255,255,255,0.6); }
 [data-theme="dark"] .home-kpi-sm { box-shadow:0 4px 20px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.05); }
 .home-kpi-sm-label { font-size:9px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -955,11 +965,6 @@ body.auth-active .tabbar { display:none !important; }
       <div id="externalExchangeTestResult" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.45;margin-bottom:14px"></div>
       <div class="modal-actions">
         <button class="modal-btn cancel" onclick="closeExternalExchangeModal()">Chiudi</button>
-        <button class="modal-btn cancel" id="externalExchangeTestBtn" onclick="testExternalExchangeConnection()">Test connessione</button>
-        <button class="modal-btn cancel" id="externalExchangePreflightBtn" onclick="preflightExternalExchange()">Preflight BTC $1</button>
-        <button class="modal-btn cancel" id="externalExchangeSyncBtn" onclick="syncCoinbasePositions()">Sync posizioni</button>
-        <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroBuyBtn" onclick="microBuyCoinbase()">Compra BTC $1</button>
-        <button class="modal-btn confirm-real" style="background:var(--red)" id="externalExchangeMicroSellBtn" onclick="microSellCoinbase()">Vendi BTC test</button>
         <button class="modal-btn cancel" style="color:var(--red);border-color:var(--red)" onclick="disconnectExternalExchange()">Scollega</button>
       </div>
     </div>
@@ -1172,13 +1177,21 @@ body.auth-active .tabbar { display:none !important; }
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Piani
     </button>
   </div>
+  <div class="sb-scan-usage" id="sbAIUsage" style="display:none">
+    <div class="sb-scan-usage-top">
+      <span>Analisi Zentra AI</span>
+      <span id="sbAIUsageText">0/10</span>
+    </div>
+    <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbAIUsageFill"></div></div>
+    <div class="sb-scan-usage-sub" id="sbAIUsageSub"></div>
+  </div>
   <div class="sb-scan-usage" id="sbScanUsage" style="display:none">
     <div class="sb-scan-usage-top">
-      <span>Scansioni Free</span>
+      <span>Scansioni gratuite</span>
       <span id="sbScanUsageText">0/10</span>
     </div>
     <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbScanUsageFill"></div></div>
-    <div class="sb-scan-usage-sub" id="sbScanUsageSub">10 scansioni disponibili oggi</div>
+    <div class="sb-scan-usage-sub" id="sbScanUsageSub"></div>
   </div>
   <div style="padding:0 8px;border-top:1px solid var(--border)">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
@@ -1225,6 +1238,26 @@ body.auth-active .tabbar { display:none !important; }
       <span id="homeModeBadge" style="display:none"></span><span id="homeModeDot" style="display:none"></span><span id="homeModeText" style="display:none"></span>
     </div>
 
+    <div class="home-ai" id="homeAiShell">
+      <div class="home-ai-frame" id="homeAiFrame">
+        <div class="home-ai-bar" onclick="openHomeAI(true)">
+          <div class="home-ai-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <textarea class="ai-input home-ai-input" id="aiInput" rows="1" placeholder="Chiedi a Zentra AI di analizzare mercato, segnali o posizioni..." onfocus="openHomeAI(false)" onkeydown="aiInputKeydown(event)" oninput="aiInputResize(this)"></textarea>
+          <button class="ai-send home-ai-send" id="aiSend" onclick="event.stopPropagation();sendAIMessage()" disabled aria-label="Invia a Zentra AI">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        <div class="ai-panel home-ai-panel" id="aiPanel">
+          <div class="ai-messages" id="aiMessages"></div>
+          <div class="ai-typing" id="aiTyping">
+            <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Hero card — nascosta quando sessione attiva -->
     <div class="home-hero" id="homeHeroCard">
       <svg class="home-hero-circles" width="170" height="170" viewBox="0 0 192 192" fill="none" aria-hidden="true">
@@ -1233,7 +1266,7 @@ body.auth-active .tabbar { display:none !important; }
         <circle cx="168" cy="80" r="4" fill="white" opacity="0.4"/>
       </svg>
 
-      <div class="home-hero-title">Avvia<br>Zentra Core</div>
+      <div class="home-hero-title">Avvia<br>Zentra Agent Beta</div>
       <div class="home-hero-pills">
         <span class="home-hero-pill" id="heroPillDuration">Durata --</span>
         <span class="home-hero-pill" id="heroPillStrategy">Stop Loss --</span>
@@ -1247,7 +1280,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <!-- Hero P&L card — visibile quando l'agente è in esecuzione (stessa posizione di homeHeroCard) -->
-    <div class="hero-card off" id="heroCard" style="margin-bottom:12px;display:none">
+    <div class="hero-card off" id="heroCard" style="margin-bottom:16px;display:none">
       <canvas class="hero-sparkline" id="heroSparkline"></canvas>
       <div id="sessionBtns" style="display:none;position:absolute;top:14px;right:16px;flex-direction:row;align-items:center;gap:8px">
         <button id="pauseBtn" onclick="pauseAgent()" disabled
@@ -1743,6 +1776,32 @@ body.auth-active .tabbar { display:none !important; }
       .ai-send svg { width:18px; height:18px; }
       .ai-ctx-bar { padding:8px 14px; background:rgba(0,82,255,0.06); border-bottom:1px solid rgba(0,82,255,0.12); font-size:11px; color:var(--blue); font-weight:600; display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }
       .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
+      .home-ai { width:min(900px,100%); margin:10px auto 28px; }
+      .home-ai-frame { position:relative; isolation:isolate; overflow:hidden; border-radius:24px; padding:2px; box-shadow:0 18px 54px rgba(0,82,255,0.14),0 1px 0 rgba(255,255,255,0.38) inset; }
+      .home-ai-frame::before { content:""; position:absolute; inset:-45%; z-index:-2; background:conic-gradient(from 0deg,#0052ff,#28d7ff,#22c55e,#f59e0b,#ef3b74,#7c3aed,#0052ff); animation:home-ai-rgb 7s linear infinite; opacity:.56; }
+      .home-ai-frame::after { content:""; position:absolute; inset:2px; z-index:-1; border-radius:22px; background:linear-gradient(135deg,#f7faff,#eef4ff); border:1px solid rgba(255,255,255,0.42); }
+      [data-theme="dark"] .home-ai-frame::after { background:linear-gradient(135deg,#101633,#0b1026); border-color:rgba(255,255,255,0.08); }
+      .home-ai.open .home-ai-frame::before,
+      .home-ai.focused .home-ai-frame::before { animation-play-state:paused; opacity:.26; }
+      @keyframes home-ai-rgb { to { transform:rotate(360deg); } }
+      .home-ai-frame > * { position:relative; z-index:1; }
+      .home-ai-bar { min-height:62px; display:flex; align-items:center; gap:12px; padding:11px 14px 11px 16px; cursor:text; }
+      .home-ai-mark { width:38px; height:38px; border-radius:14px; background:linear-gradient(135deg,#0b5cff,#0046d9); display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; box-shadow:0 10px 24px rgba(0,82,255,0.26); }
+      .home-ai-mark svg { width:19px; height:19px; }
+      .home-ai-input.ai-input { min-height:38px; max-height:118px; padding:9px 4px; border:none; background:transparent; box-shadow:none; color:var(--text); font-size:14px; line-height:1.45; }
+      .home-ai-input.ai-input:focus { border:none; box-shadow:none; }
+      .home-ai-input::placeholder { color:var(--text3); }
+      .home-ai-send.ai-send { width:42px; height:42px; border-radius:14px; align-self:center; box-shadow:0 10px 24px rgba(0,82,255,0.24); }
+      .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
+      .home-ai.open .home-ai-panel.ai-panel { display:flex; }
+      .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
+      @media (max-width:640px) {
+        .home-ai { margin:8px auto 22px; }
+        .home-ai-bar { min-height:58px; padding:9px 11px; gap:9px; }
+        .home-ai-mark { width:34px; height:34px; border-radius:12px; }
+        .home-ai-input.ai-input { font-size:13.5px; }
+        .home-ai .ai-messages { max-height:260px; }
+      }
     </style>
     <div class="scan-tf-bar">
       <span class="scan-tf-label">Timeframe</span>
@@ -1813,6 +1872,8 @@ body.auth-active .tabbar { display:none !important; }
       <div class="home-username">Exchange</div>
     </div>
 
+    <div style="font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);margin:4px 0 10px">Disponibili</div>
+
     <div class="card" style="padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
         <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
@@ -1826,25 +1887,6 @@ body.auth-active .tabbar { display:none !important; }
           <div id="exchangeRevxSub" style="font-size:13px;color:var(--text3);margin-top:4px">Configura le API key</div>
         </div>
         <button id="exchangeRevxBtn" onclick="showRevxConfig()" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
-      </div>
-    </div>
-
-    <div class="card" style="margin-top:14px;padding:0;overflow:hidden;position:relative">
-      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
-        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
-          <img src="assets/exchanges/binance.svg" alt="Binance" style="width:27px;height:27px;display:block">
-        </div>
-        <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div style="font-size:16px;font-weight:800;color:var(--text)">Binance</div>
-            <span id="exchangeBinanceStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
-          </div>
-          <div id="exchangeBinanceSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
-        </div>
-        <button id="exchangeBinanceBtn" onclick="showExternalExchangeConfig('binance')" style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
-      </div>
-      <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">Coming Soon</span>
       </div>
     </div>
 
@@ -1867,6 +1909,27 @@ body.auth-active .tabbar { display:none !important; }
       </div>
     </div>
 
+    <div style="font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);margin:22px 0 10px">In arrivo</div>
+
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden;position:relative">
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
+          <img src="assets/exchanges/binance.svg" alt="Binance" style="width:27px;height:27px;display:block">
+        </div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="font-size:16px;font-weight:800;color:var(--text)">Binance</div>
+            <span id="exchangeBinanceStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">In arrivo</span>
+          </div>
+          <div id="exchangeBinanceSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+        </div>
+        <button disabled style="border:none;background:var(--surface2);color:var(--text3);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:default;flex-shrink:0">In arrivo</button>
+      </div>
+      <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">In arrivo</span>
+      </div>
+    </div>
+
     <div class="card" style="margin-top:14px;padding:0;overflow:hidden;position:relative">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
         <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
@@ -1875,14 +1938,14 @@ body.auth-active .tabbar { display:none !important; }
         <div style="min-width:0;flex:1">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <div style="font-size:16px;font-weight:800;color:var(--text)">Bybit</div>
-            <span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
+            <span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">In arrivo</span>
           </div>
           <div style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
         </div>
-        <button style="border:none;background:var(--surface2);color:var(--text);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
+        <button disabled style="border:none;background:var(--surface2);color:var(--text3);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:default;flex-shrink:0">In arrivo</button>
       </div>
       <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">Coming Soon</span>
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">In arrivo</span>
       </div>
     </div>
   </div>
@@ -1904,11 +1967,13 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-sub">Per provare Zentra senza usare capitale reale.</div>
         <ul class="app-plan-feats">
           <li>10 scansioni di mercato al giorno</li>
+          <li>10 analisi Zentra AI al giorno</li>
           <li>Trading manuale illimitato in demo</li>
           <li>Watchlist e dashboard segnali</li>
           <li class="muted">Collegamento exchange reale</li>
+          <li class="muted">Gestione posizioni reali</li>
           <li class="muted">Notifiche Telegram</li>
-          <li class="muted">AI Trading Agent</li>
+          <li class="muted">Zentra Agent Beta</li>
         </ul>
         <button class="app-plan-btn" id="planFreeBtn" onclick="showTab('home',document.querySelector('.sb-item[data-tab=home]'))">Piano attuale</button>
       </div>
@@ -1920,11 +1985,13 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-sub">Per trading manuale con capitale reale e notifiche operative.</div>
         <ul class="app-plan-feats">
           <li>Scansioni di mercato illimitate</li>
+          <li>50 analisi Zentra AI al giorno</li>
           <li>Trading manuale illimitato</li>
-          <li>Collega Coinbase e Revolut X</li>
+          <li>Collegamento exchange reali</li>
           <li>Gestione posizioni reali</li>
+          <li>Watchlist e dashboard segnali</li>
           <li>Notifiche Telegram</li>
-          <li class="muted">AI Trading Agent beta</li>
+          <li class="muted">Zentra Agent Beta</li>
         </ul>
         <button class="app-plan-btn primary" id="planProBtn" onclick="checkoutPlan('pro')">Passa a Pro</button>
       </div>
@@ -1933,16 +2000,19 @@ body.auth-active .tabbar { display:none !important; }
         <div class="app-plan-kicker">Accesso beta limitato</div>
         <div class="app-plan-name">Founder</div>
         <div class="app-plan-price">€49.99<span>/mo</span></div>
-        <div class="app-plan-sub">Accesso anticipato all'AI Trading Agent sperimentale.</div>
+        <div class="app-plan-sub">Accesso anticipato a Zentra Agent Beta.</div>
         <ul class="app-plan-feats">
           <li>Tutto incluso in Pro</li>
-          <li>AI Trading Agent sperimentale</li>
-          <li>Ingressi automatici dai segnali Zentra</li>
-          <li>Regole automatiche di rischio e uscita</li>
-          <li>Strategie Momentum + Breakout</li>
-          <li>Prezzo Founder bloccato finché sei abbonato</li>
+          <li>Analisi Zentra AI illimitate</li>
+          <li class="agent-feature">Zentra Agent Beta:
+            <ul class="app-plan-subfeats">
+              <li>Ingressi automatici dai segnali Zentra</li>
+              <li>Regole automatiche di rischio e uscita</li>
+              <li>Strategie Momentum + Breakout</li>
+            </ul>
+          </li>
         </ul>
-        <div class="app-plan-risk">Funzione in beta. Il trading comporta rischi e può causare perdite. L'algoritmo è in continuo miglioramento e non garantisce profitti.</div>
+        <div class="app-plan-risk">Zentra Agent è una funzionalità beta. Il trading comporta rischi e può causare perdite. L'algoritmo è in continuo miglioramento e non garantisce profitti.</div>
         <button class="app-plan-btn founder" id="planFounderBtn" onclick="checkoutPlan('founder')">Diventa Founder</button>
       </div>
     </div>
@@ -1970,27 +2040,12 @@ body.auth-active .tabbar { display:none !important; }
       <div id="accPlanBlock"></div>
     </div>
 
-    <!-- Exchange -->
-    <div class="acc-section">
-      <div class="acc-sec-title">Exchange</div>
-      <div class="acc-row clickable" onclick="showRevxConfig()">
-        <div class="acc-icon" style="background:rgba(80,90,200,0.12)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-        </div>
-        <div class="acc-row-body">
-          <div class="acc-row-label">Revolut X</div>
-          <div class="acc-row-sub" id="accRevxSub">Configura le API key</div>
-        </div>
-        <div class="acc-row-right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
-      </div>
-    </div>
-
     <!-- Telegram -->
     <div class="acc-section">
       <div class="acc-sec-title">Notifiche</div>
       <div class="acc-row clickable" onclick="showTelegramConfig()">
         <div class="acc-icon" style="background:rgba(0,136,204,0.12)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0088cc" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <svg width="22" height="22" viewBox="0 0 240 240" fill="none" aria-hidden="true"><circle cx="120" cy="120" r="120" fill="#229ED9"/><path d="M179.7 70.8 155.8 183c-1.8 8-6.5 9.9-13.1 6.2l-36.2-26.7-17.5 16.8c-1.9 1.9-3.5 3.5-7.2 3.5l2.6-36.8 67-60.5c2.9-2.6-.6-4-4.5-1.4l-82.8 52.1-35.7-11.2c-7.8-2.4-7.9-7.8 1.6-11.5l139.6-53.8c6.5-2.4 12.2 1.6 10.1 11.1Z" fill="#fff"/></svg>
         </div>
         <div class="acc-row-body">
           <div class="acc-row-label">Telegram</div>
@@ -2001,8 +2056,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <!-- Sessione -->
-    <div class="acc-section" style="margin-bottom:32px">
-      <div class="acc-sec-title">Sessione</div>
+    <div class="acc-section no-title" style="margin-bottom:32px">
       <div class="acc-row danger" onclick="logout()">
         <div class="acc-icon" style="background:rgba(246,70,93,0.1)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -2012,9 +2066,33 @@ body.auth-active .tabbar { display:none !important; }
           <div class="acc-row-sub">Esci dal tuo account</div>
         </div>
       </div>
+      <div class="acc-row danger" onclick="deleteAccount()">
+        <div class="acc-icon" style="background:rgba(246,70,93,0.1)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </div>
+        <div class="acc-row-body">
+          <div class="acc-row-label" style="color:var(--red)">Elimina account</div>
+          <div class="acc-row-sub">Cancella definitivamente profilo e dati Zentra</div>
+        </div>
+      </div>
     </div>
   </div>
 
+</div>
+
+<div class="modal-overlay" id="deleteAccountModal" onclick="if(event.target===this)closeDeleteAccountModal()">
+  <div class="modal-card" style="max-width:420px">
+    <div class="modal-title" style="color:var(--red)">Elimina account</div>
+    <div class="modal-body" style="margin-bottom:14px">
+      Questa azione cancella definitivamente profilo, storico, watchlist, credenziali salvate e sessioni Zentra. Per sicurezza non puoi eliminare l'account mentre hai posizioni aperte.
+    </div>
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:8px">Scrivi ELIMINA per confermare</div>
+    <input class="delete-confirm-input" id="deleteAccountInput" autocomplete="off" spellcheck="false" placeholder="ELIMINA">
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="closeDeleteAccountModal()">Annulla</button>
+      <button class="modal-btn confirm-real" onclick="confirmDeleteAccount()">Elimina account</button>
+    </div>
+  </div>
 </div>
 
 <!-- TradingView Modal -->
@@ -2169,6 +2247,8 @@ let _sessionsToday = 0;
 let _sessionsPerDay = 1;
 let _scansToday = 0;
 let _scansPerDay = 10;
+let _aiAnalysesToday = 0;
+let _aiAnalysesPerDay = 10;
 let STRIPE_ENABLED = false;
 let _pendingStartCfg = null;
 let _newTradeCount = 0;
@@ -2388,6 +2468,39 @@ async function logout() {
   location.reload();
 }
 
+function deleteAccount() {
+  const modal = document.getElementById('deleteAccountModal');
+  const input = document.getElementById('deleteAccountInput');
+  if (input) input.value = '';
+  if (modal) modal.classList.add('open');
+  setTimeout(() => input?.focus(), 120);
+}
+
+function closeDeleteAccountModal() {
+  document.getElementById('deleteAccountModal')?.classList.remove('open');
+}
+
+async function confirmDeleteAccount() {
+  const input = document.getElementById('deleteAccountInput');
+  if ((input?.value || '').trim() !== 'ELIMINA') {
+    showToast('Scrivi ELIMINA per confermare');
+    input?.focus();
+    return;
+  }
+  try {
+    const r = await fetch(API + '/auth/account', { method: 'DELETE', headers: authHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Eliminazione account fallita');
+    localStorage.removeItem('ca_token');
+    localStorage.removeItem('ca_username');
+    localStorage.removeItem('ca_avatar');
+    localStorage.removeItem('ca_active_tab');
+    location.reload();
+  } catch (e) {
+    showToast(e.message || 'Eliminazione account fallita');
+  }
+}
+
 async function checkAuth() {
   // Nascondi authScreen subito se sembra già loggato (evita flash)
   if (localStorage.getItem('ca_username')) {
@@ -2408,6 +2521,8 @@ async function checkAuth() {
     _sessionsPerDay = d.sessions_per_day || 1;
     _scansToday = d.scans_today ?? _scansToday;
     _scansPerDay = d.scans_per_day ?? _scansPerDay;
+    _aiAnalysesToday = d.ai_analyses_today ?? _aiAnalysesToday;
+    if (d.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = d.ai_analyses_per_day;
     localStorage.setItem('ca_username', _username);
     if (!localStorage.getItem('ca_active_tab')) localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
@@ -2491,13 +2606,19 @@ async function loadUserProfile() {
       _sessionsPerDay   = billing.sessions_per_day ?? _sessionsPerDay;
       _scansToday       = billing.scans_today ?? _scansToday;
       _scansPerDay      = billing.scans_per_day ?? _scansPerDay;
+      if (typeof updateAIUsageFromPayload === 'function') updateAIUsageFromPayload(billing);
+      else {
+        _aiAnalysesToday  = billing.ai_analyses_today ?? _aiAnalysesToday;
+        if (billing.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = billing.ai_analyses_per_day;
+      }
     }
 
     _hasRevxKeys = me.has_revx_keys || false;
     _exchangeKeys.binance = me.has_binance_keys || false;
     _exchangeKeys.coinbase = me.has_coinbase_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
-    window._realMode = _hasRevxKeys && !_simMode;
+    if (_plan === 'free') _simMode = true;
+    window._realMode = _plan !== 'free' && _hasRevxKeys && !_simMode;
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
     if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram ✓' : 'Collega Telegram';
@@ -2572,36 +2693,6 @@ function showExternalExchangeConfig(exchange) {
   document.getElementById('externalExchangeConnectedLabel').textContent = label + ' collegato';
   document.getElementById('externalExchangeConnectedView').style.display = connected ? '' : 'none';
   document.getElementById('externalExchangeFormView').style.display = connected ? 'none' : '';
-  const testBtn = document.getElementById('externalExchangeTestBtn');
-  const preflightBtn = document.getElementById('externalExchangePreflightBtn');
-  const syncBtn = document.getElementById('externalExchangeSyncBtn');
-  const microBuyBtn = document.getElementById('externalExchangeMicroBuyBtn');
-  const microSellBtn = document.getElementById('externalExchangeMicroSellBtn');
-  if (testBtn) {
-    testBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    testBtn.disabled = false;
-    testBtn.textContent = 'Test connessione';
-  }
-  if (preflightBtn) {
-    preflightBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    preflightBtn.disabled = false;
-    preflightBtn.textContent = 'Preflight BTC $1';
-  }
-  if (syncBtn) {
-    syncBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    syncBtn.disabled = false;
-    syncBtn.textContent = 'Sync posizioni';
-  }
-  if (microBuyBtn) {
-    microBuyBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    microBuyBtn.disabled = false;
-    microBuyBtn.textContent = 'Compra BTC $1';
-  }
-  if (microSellBtn) {
-    microSellBtn.style.display = exchange === 'coinbase' ? '' : 'none';
-    microSellBtn.disabled = false;
-    microSellBtn.textContent = 'Vendi BTC test';
-  }
   const testResult = document.getElementById('externalExchangeTestResult');
   if (testResult) {
     testResult.style.display = 'none';
@@ -3109,6 +3200,11 @@ function showToast(msg, isError = false) {
 }
 
 async function setSimMode(sim) {
+  if (_plan === 'free' && !sim) {
+    showPaywall('Il piano Free usa solo il conto demo. Passa a Pro per collegare exchange reali.', 'plans');
+    updateSimToggle();
+    return;
+  }
   // Blocca switch se sessione attiva
   if (S.running) {
     document.getElementById('profileMenu').classList.remove('open');
@@ -3118,7 +3214,7 @@ async function setSimMode(sim) {
     return;
   }
   _simMode = sim;
-  window._realMode = _hasRevxKeys && !sim;
+  window._realMode = _plan !== 'free' && _hasRevxKeys && !sim;
   S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
   try {
     await fetch(API + '/auth/sim_mode', {
@@ -3137,11 +3233,13 @@ function updateSimToggle() {
   const row = document.getElementById('simModeRow');
   // Mostra toggle simulazione solo se ha almeno un exchange reale configurato
   const hasAnyRealExchange = _hasRevxKeys || (_exchangeKeys && _exchangeKeys.coinbase);
-  if (row) row.style.display = hasAnyRealExchange ? 'flex' : 'none';
+  const realAllowed = _plan !== 'free';
+  if (!realAllowed) _simMode = true;
+  if (row) row.style.display = (realAllowed && hasAnyRealExchange) ? 'flex' : 'none';
   if (toggle) toggle.classList.toggle('on', _simMode);
   const sbSimToggle = document.getElementById('sbSimToggle');
   const sbSimRow = document.getElementById('sbSimRow');
-  if (sbSimRow) sbSimRow.style.display = hasAnyRealExchange ? 'flex' : 'none';
+  if (sbSimRow) sbSimRow.style.display = (realAllowed && hasAnyRealExchange) ? 'flex' : 'none';
   if (sbSimToggle) sbSimToggle.classList.toggle('on', _simMode);
   // Aggiorna badge in config
   const lbl = document.getElementById('cfgModeLabel');
@@ -3149,7 +3247,7 @@ function updateSimToggle() {
   const selectedExchange = document.getElementById('agentExchange')?.value || 'revx';
   const exchangeName = selectedExchange === 'coinbase' ? 'Coinbase' : 'Revolut X';
   const hasExchangeKeys = selectedExchange === 'coinbase' ? (_exchangeKeys && _exchangeKeys.coinbase) : _hasRevxKeys;
-  const isReal = !!hasExchangeKeys && !_simMode;
+  const isReal = realAllowed && !!hasExchangeKeys && !_simMode;
   let modeLabel = 'Conto Demo';
   if (isReal) modeLabel = 'Reale — ' + exchangeName;
   if (lbl) lbl.textContent = modeLabel;
@@ -3476,7 +3574,7 @@ function restoreConfigFromStorage() {
   if (saved.chopMin !== undefined) { document.getElementById('chopMin').value=saved.chopMin; document.getElementById('chopMinVal').textContent=parseFloat(saved.chopMin).toFixed(1); }
   if (saved.atrRatioMax !== undefined) { const v=Math.round(saved.atrRatioMax*100); document.getElementById('atrRatioMax').value=v; document.getElementById('atrRatioVal').textContent=v+'%'; }
   if (saved.breakoutVolMultiplier !== undefined) { document.getElementById('breakoutVolMultiplier').value=saved.breakoutVolMultiplier; document.getElementById('breakoutVolVal').textContent=parseFloat(saved.breakoutVolMultiplier).toFixed(1)+'×'; }
-  if (saved.realMode) {
+  if (saved.realMode && _plan !== 'free') {
     _realMode = true; window._realMode = true;
     document.getElementById('modeRealBtn').classList.add('active-real');
     document.getElementById('modeSimBtn').classList.remove('active-sim');
@@ -3625,6 +3723,19 @@ async function onAgentExchangeChange() {
   const display = document.getElementById('totalBalanceDisplay');
   const hint    = document.getElementById('balanceSourceHint');
   if (!display) return;
+  if (_plan === 'free') {
+    display.textContent = 'Conto Demo — $1000';
+    display.style.color = '';
+    if (hint) hint.textContent = 'Il piano Free usa solo simulazione';
+    const capUsd = document.getElementById('capitalUsd');
+    const cap = document.getElementById('capital');
+    if (capUsd) capUsd.value = 1000;
+    if (cap) cap.dataset.total = 1000;
+    updateCapitalUsd();
+    updateAlloc();
+    updateSimToggle();
+    return;
+  }
   display.textContent = 'Caricamento...';
   display.style.color = '';
   try {
@@ -3686,6 +3797,11 @@ function updateTpSchema() {
   const l2 = document.getElementById('tp2Label'); if (l2) l2.textContent = mult;
 }
 async function setMode(real) {
+  if (_plan === 'free' && real) {
+    showPaywall('Il piano Free usa solo il conto demo. Passa a Pro per collegare exchange reali.', 'plans');
+    await setMode(false);
+    return;
+  }
   _realMode = real; window._realMode = real;
   const simBtn = document.getElementById('modeSimBtn');
   const realBtn = document.getElementById('modeRealBtn');
@@ -3750,6 +3866,10 @@ function clearFieldError(fieldId) {
 
 // ── START AGENT ──────────────────────────────────────────────────────────────
 async function startAgent() {
+  if (_plan !== 'founder') {
+    showPaywall('Zentra Agent Beta è disponibile solo con il piano Founder.', 'plans');
+    return;
+  }
   clearFieldError('capitalUsd');
   clearFieldError('allocUsd');
   const capitalUsdVal = parseFloat(document.getElementById('capitalUsd').value);
@@ -3763,7 +3883,7 @@ async function startAgent() {
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
   const selectedExch = document.getElementById('agentExchange')?.value || 'revx';
   const hasCoinbaseKeys = _exchangeKeys && _exchangeKeys.coinbase;
-  const isReal = !_simMode && (selectedExch === 'coinbase' ? !!hasCoinbaseKeys : _hasRevxKeys);
+  const isReal = _plan !== 'free' && !_simMode && (selectedExch === 'coinbase' ? !!hasCoinbaseKeys : _hasRevxKeys);
   const capitalVal = parseFloat(capitalUsdVal.toFixed(2));
   if (isReal && capitalVal <= 0) { showFieldError('capitalUsd', 'Saldo non ancora caricato — attendi e riprova'); return; }
   if (isReal && total > 0 && capitalVal > total) { showFieldError('capitalUsd', 'Supera il saldo disponibile (' + getCurrSym() + total.toFixed(2) + ')'); return; }
@@ -3802,6 +3922,7 @@ async function doStartAgent(cfg) {
     const r = await fetch(API + '/start', { method:'POST', headers:authHeaders(), body:JSON.stringify({config:cfg}) });
     const d = await r.json();
     if (d.error === 'session_limit') { showPaywall(d.message); return; }
+    if (d.error === 'agent_plan_required') { showPaywall(d.message || 'Zentra Agent Beta richiede il piano Founder.', 'plans'); return; }
     if (d.error) { showToast(d.error, true); return; }
     saveConfigToStorage(cfg);
     document.getElementById('startBtn').disabled = true;
@@ -4130,7 +4251,7 @@ function render() {
     kpiPnl.style.color = S.tradeCount > 0 ? (pnl >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
   }
   if (kpiWr) kpiWr.textContent = S.tradeCount > 0 ? Math.round(S.winRate) + '%' : '--%';
-  if (kpiSaldo && !(_hasRevxKeys && !_simMode)) {
+  if (kpiSaldo && !(_plan !== 'free' && _hasRevxKeys && !_simMode)) {
     const pnl = S.pnl || 0;
     const base = S.capital || 1000;
     kpiSaldo.textContent = '$' + (base + pnl).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -4815,7 +4936,7 @@ async function loadHomeBalance() {
   const kpiLabel = document.getElementById('homeKpiSaldoLabel');
   const kpiPnl   = document.getElementById('homeKpiPnl');
   const kpiWr    = document.getElementById('homeKpiWr');
-  const isReal = _hasRevxKeys && !_simMode;
+  const isReal = _plan !== 'free' && _hasRevxKeys && !_simMode;
 
   // Label saldo
   if (kpiLabel) kpiLabel.textContent = isReal ? 'Saldo reale' : 'Saldo simulato';
@@ -4878,7 +4999,7 @@ async function loadHomeBalance() {
 function renderHome() {
   document.getElementById('homeUsername').textContent = _username || '--';
   // Badge modalità
-  const isReal = _hasRevxKeys && !_simMode;
+  const isReal = _plan !== 'free' && _hasRevxKeys && !_simMode;
   const badge = document.getElementById('homeModeBadge');
   const modeText = document.getElementById('homeModeText');
   if (badge) { badge.className = 'home-mode-badge ' + (isReal ? 'real' : 'sim'); }
@@ -4894,6 +5015,9 @@ function renderHome() {
 }
 
 function renderHomeHeroPills() {
+  const pills = document.querySelector('.home-hero-pills');
+  if (pills) pills.style.display = _plan === 'founder' ? 'flex' : 'none';
+  if (_plan !== 'founder') return;
   const durEl = document.getElementById('heroPillDuration');
   const slEl  = document.getElementById('heroPillStrategy');
   const capEl = document.getElementById('heroPillCapital');
@@ -5007,6 +5131,10 @@ function renderMarketStars() {
 
 // ── DRAWER CONFIG ─────────────────────────────────────────────────────────────
 function openDrawer() {
+  if (_plan !== 'founder') {
+    showTab('plans', document.querySelector('.sb-item[data-tab=plans]'));
+    return;
+  }
   const drawerContent = document.getElementById('drawerConfigContent');
   if (!drawerContent) return;
   const configPage = document.getElementById('page-config');
@@ -5096,11 +5224,17 @@ function closeDrawer() {
 
 async function refreshMarket(countScan = false) {
   try {
-    const url = API + '/market?timeframe=' + encodeURIComponent(_scanTimeframe) + (countScan ? '&count_scan=1' : '');
+    const params = new URLSearchParams({ timeframe: _scanTimeframe });
+    if (countScan) {
+      params.set('count_scan', '1');
+      if (_scanSignal) params.set('scan_signal', _scanSignal);
+    }
+    const url = API + '/market?' + params.toString();
     const r = await fetch(url, { headers: authHeaders() });
     const d = await r.json();
     updateScanUsageFromPayload(d);
     if (d.error === 'scan_limit') {
+      resetScannerAfterScanLimit();
       showScanLimitModal(d.message);
       return false;
     }
@@ -5149,6 +5283,7 @@ function syncSidebar() {
   const cached = localStorage.getItem('ca_avatar');
   if (sbAv && cached) sbAv.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
   else if (uinit) uinit.textContent = (_username[0] || '?').toUpperCase();
+  if (typeof updateAIUsageUI === 'function') updateAIUsageUI();
   updateScanUsageUI();
 }
 
@@ -5179,9 +5314,8 @@ function updateScanUsageUI() {
   if (text) text.textContent = `${used}/${total}`;
   if (fill) fill.style.width = pct + '%';
   if (sub) {
-    sub.textContent = remaining > 0
-      ? `${remaining} scansioni disponibili oggi`
-      : 'Limite raggiunto. Passa a Pro o Founder.';
+    sub.textContent = remaining > 0 ? '' : 'Limite raggiunto. Passa a Pro o Founder.';
+    sub.style.display = remaining > 0 ? 'none' : '';
   }
 }
 
@@ -5206,30 +5340,26 @@ function renderAccountPage() {
   if (planBlock) {
     const isPro = isPaidPlan();
     const isFounder = _plan === 'founder';
+    const isFree = _plan === 'free';
     const planName = planDisplayName();
-    const badgeText = planBadgeText();
+    const scanLimit = isFree ? '10/giorno' : 'Illimitate';
+    const aiLimit = isFounder ? 'Illimitate' : (isPro ? '50/giorno' : '10/giorno');
     planBlock.innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;padding:14px 16px">
-        <div style="width:34px;height:34px;border-radius:9px;background:${isPro?'rgba(124,58,237,0.15)':'rgba(80,90,200,0.10)'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${isFounder?'#ffb020':(isPro?'#7c3aed':'var(--blue)')}" stroke-width="2" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        </div>
         <div>
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${planName} <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:${isFounder?'rgba(255,176,32,0.18)':(isPro?'rgba(124,58,237,0.2)':'rgba(80,90,200,0.12)')};color:${isFounder?'#ffb020':(isPro?'#a78bfa':'var(--blue)')};vertical-align:middle">${badgeText}</span></div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">${isPro?'Accesso completo':'Funzionalità base'}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${planName}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${isFounder?'Accesso beta completo':(isPro?'Trading reale manuale':'Solo demo e analisi base')}</div>
         </div>
       </div>
-      <div class="acc-feat-row"><span>Sessioni giornaliere</span><span class="acc-feat-val">${isPro?'Illimitate':'1/giorno'}</span></div>
-      <div class="acc-feat-row"><span>Durata massima</span><span class="acc-feat-val">${isPro?'Illimitata':'2h'}</span></div>
-      <div class="acc-feat-row"><span>Posizioni simultanee</span><span class="acc-feat-val">${isPro?'Multiple':'1'}</span></div>
-      <div class="acc-feat-row"><span>Notifiche Telegram</span><span class="acc-feat-val">${isPro?'Si':'No'}</span></div>
-      ${!isPro && STRIPE_ENABLED ? '<button class="acc-upgrade-btn" onclick="navigateToAccount(); showPaywall()">Passa a Zentra Pro</button>' : ''}
+      <div class="acc-feat-row"><span>Scansioni di mercato</span><span class="acc-feat-val">${scanLimit}</span></div>
+      <div class="acc-feat-row"><span>Analisi Zentra AI</span><span class="acc-feat-val">${aiLimit}</span></div>
+      <div class="acc-feat-row"><span>Trading manuale reale</span><span class="acc-feat-val">${isPro?'Incluso':'Non incluso'}</span></div>
+      <div class="acc-feat-row"><span>Notifiche Telegram</span><span class="acc-feat-val">${isPro?'Incluse':'Non incluse'}</span></div>
+      <div class="acc-feat-row"><span>Zentra Agent Beta</span><span class="acc-feat-val">${isFounder?'Incluso':'Non incluso'}</span></div>
+      ${!isFounder && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"showTab('plans',document.querySelector('.sb-item[data-tab=plans]'))\">Confronta i piani</button>" : ''}
       ${!isPro && STRIPE_ENABLED ? '<div style="height:12px"></div>' : ''}
     `;
   }
-
-  // RevX status
-  const revxSub = document.getElementById('accRevxSub');
-  if (revxSub) revxSub.textContent = _hasRevxKeys ? 'API key configurate' : 'Configura le API key';
 
   // Telegram
   const tgSub = document.getElementById('accTgSub');
@@ -5280,7 +5410,6 @@ function renderExchangePage() {
     : 'Collega le API key Revolut X per abilitare gli ordini reali.';
   const btn = document.getElementById('exchangeRevxBtn');
   if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
-  renderExternalExchangeStatus('binance');
   renderExternalExchangeStatus('coinbase');
 }
 
@@ -5434,6 +5563,19 @@ function resetScannerState() {
   const card  = document.getElementById('scan-results-card');
   if (empty) empty.style.display = '';
   if (card)  card.style.display  = 'none';
+}
+
+function resetScannerAfterScanLimit() {
+  _scanSignal = '';
+  document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
+  const empty = document.getElementById('scan-empty');
+  const card  = document.getElementById('scan-results-card');
+  const list  = document.getElementById('scannerList');
+  const count = document.getElementById('scanCount');
+  if (empty) empty.style.display = '';
+  if (card) card.style.display = 'none';
+  if (list) list.innerHTML = '<div class="empty"><div class="empty-text">Sblocca scansioni illimitate dal piano Pro</div></div>';
+  if (count) count.textContent = '0 found';
 }
 
 function selectScanCluster(cat, el) {
@@ -5688,6 +5830,11 @@ function openTradeModal(sym, price) {
 function renderTradeExchangeOptions() {
   const sel = document.getElementById('tmExchange');
   if (!sel) return;
+  if (_plan === 'free') {
+    sel.innerHTML = '<option value="revx">Conto Demo</option>';
+    sel.value = 'revx';
+    return;
+  }
   const previous = sel.value || 'revx';
   const options = [];
   if (_hasRevxKeys) options.push(['revx', 'Revolut X']);
@@ -5958,15 +6105,12 @@ function updatePlanUI() {
     badge.style.display = '';
   }
   const sesEl = document.getElementById('sessionsIndicator');
-  if (sesEl) {
-    if (_plan === 'free') {
-      const rem = Math.max(0, _sessionsPerDay - _sessionsToday);
-      sesEl.textContent = rem > 0 ? `${rem}/${_sessionsPerDay} sessione disponibile` : 'Sessione gratuita esaurita oggi';
-      sesEl.style.color = rem > 0 ? 'var(--text3)' : 'var(--red)';
-      sesEl.style.display = '';
-    } else {
-      sesEl.style.display = 'none';
-    }
+  if (sesEl) sesEl.style.display = 'none';
+  const homeStartBtn = document.getElementById('homeStartBtn');
+  if (homeStartBtn) {
+    homeStartBtn.innerHTML = _plan === 'founder'
+      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Avvia sessione'
+      : 'Diventa Founder';
   }
   // CTA upgrade nel menu — visibile per free sempre, nascosto per Pro
   const pmCta = document.getElementById('pmProCta');
@@ -5979,7 +6123,9 @@ function updatePlanUI() {
   }
   // Lock/unlock config pro features
   applyPlanConfig();
+  updateAIUsageUI();
   updateScanUsageUI();
+  if (typeof _aiInit === 'function') _aiInit();
   if (document.getElementById('page-plans')?.classList.contains('active')) renderPlansPage();
 }
 
@@ -6099,51 +6245,6 @@ function closeProWelcome() {
 </div>
 
 <!-- Banner informativa storage -->
-<!-- ── Zentra AI Chat Widget ── -->
-<button class="ai-fab" id="aiFab" onclick="toggleAIChat()" aria-label="Zentra AI" style="display:none">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12"/><path d="M12 8v4l3 3"/><circle cx="4.5" cy="4.5" r="1.5"/></svg>
-  <span class="ai-fab-badge" id="aiFabBadge"></span>
-</button>
-
-<div class="ai-panel" id="aiPanel">
-  <div class="ai-panel-hdr">
-    <div class="ai-panel-hdr-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    </div>
-    <div style="flex:1;min-width:0">
-      <div class="ai-panel-title">Zentra AI</div>
-      <div class="ai-panel-sub" id="aiPanelSub">Copilot finanziario · Live</div>
-    </div>
-    <button class="ai-panel-close" onclick="toggleAIChat()">×</button>
-  </div>
-  <div class="ai-ctx-bar" id="aiCtxBar">
-    <span class="ai-ctx-pill">📊 Mercato live</span>
-    <span class="ai-ctx-pill">📡 Scanner</span>
-    <span class="ai-ctx-pill" id="aiCtxPositions">📂 Posizioni</span>
-    <span class="ai-ctx-pill" id="aiCtxSession">⚙️ Sessione</span>
-  </div>
-  <div class="ai-messages" id="aiMessages">
-    <div class="ai-welcome" id="aiWelcome">
-      <strong>Ciao, sono Zentra AI</strong>
-      Analizzo il mercato live, i tuoi segnali scanner e le posizioni aperte.<br>Chiedimi qualsiasi cosa sul trading.
-    </div>
-  </div>
-  <div class="ai-typing" id="aiTyping">
-    <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
-  </div>
-  <div class="ai-suggestions" id="aiSuggestions">
-    <button class="ai-sug" onclick="aiSuggest(this)">Analizza il mercato ora</button>
-    <button class="ai-sug" onclick="aiSuggest(this)">Ci sono setup interessanti?</button>
-    <button class="ai-sug" onclick="aiSuggest(this)">Come stanno le mie posizioni?</button>
-    <button class="ai-sug" onclick="aiSuggest(this)">Consigli sulla sessione attiva</button>
-  </div>
-  <div class="ai-input-row">
-    <textarea class="ai-input" id="aiInput" rows="1" placeholder="Chiedi a Zentra AI…" onkeydown="aiInputKeydown(event)" oninput="aiInputResize(this)"></textarea>
-    <button class="ai-send" id="aiSend" onclick="sendAIMessage()" disabled>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-    </button>
-  </div>
-</div>
 
 <div id="cookieBanner" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);left:12px;right:12px;z-index:450;background:var(--surface);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--glass-border);border-radius:14px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.28);flex-direction:column;gap:10px">
   <div style="font-size:12px;color:var(--text2);line-height:1.5">
@@ -6166,17 +6267,70 @@ let _aiLoading = false;
 let _aiUnread = 0;
 const _aiHistory = [];
 
-function toggleAIChat() {
-  _aiOpen = !_aiOpen;
-  document.getElementById('aiPanel').classList.toggle('open', _aiOpen);
-  if (_aiOpen) {
-    _aiUnread = 0;
-    document.getElementById('aiFabBadge').style.display = 'none';
-    setTimeout(() => document.getElementById('aiInput').focus(), 300);
+function updateAIUsageFromPayload(d) {
+  if (!d) return;
+  if (d.plan) _plan = d.plan;
+  if (d.ai_analyses_today !== undefined) _aiAnalysesToday = d.ai_analyses_today ?? _aiAnalysesToday;
+  if (d.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = d.ai_analyses_per_day;
+  updateAIUsageUI();
+}
+
+function incrementAIUsageOptimistic(previousValue) {
+  if (_aiAnalysesPerDay == null || _plan === 'founder') return;
+  const total = Math.max(1, Number(_aiAnalysesPerDay) || 10);
+  const base = Math.max(Number(previousValue) || 0, Number(_aiAnalysesToday) || 0);
+  _aiAnalysesToday = Math.min(total, base + 1);
+  updateAIUsageUI();
+}
+
+function updateAIUsageUI() {
+  const box = document.getElementById('sbAIUsage');
+  if (_aiAnalysesPerDay == null || _plan === 'founder') {
+    if (box) {
+      box.style.display = 'none';
+      box.classList.remove('limit');
+    }
+    return;
+  }
+  const total = Math.max(1, Number(_aiAnalysesPerDay) || 10);
+  const used = Math.min(total, Math.max(0, Number(_aiAnalysesToday) || 0));
+  const remaining = Math.max(0, total - used);
+  if (!box) return;
+  const pct = Math.round((used / total) * 100);
+  box.style.display = '';
+  box.classList.toggle('limit', remaining <= 0);
+  const text = document.getElementById('sbAIUsageText');
+  const fill = document.getElementById('sbAIUsageFill');
+  const boxSub = document.getElementById('sbAIUsageSub');
+  if (text) text.textContent = `${used}/${total}`;
+  if (fill) fill.style.width = pct + '%';
+  if (boxSub) {
+    boxSub.textContent = remaining > 0 ? '' : 'Limite AI raggiunto. Passa a un piano superiore.';
+    boxSub.style.display = remaining > 0 ? 'none' : '';
   }
 }
 
+function openHomeAI(focusInput = false, expand = false) {
+  if (expand) _aiOpen = true;
+  const shell = document.getElementById('homeAiShell');
+  if (shell) {
+    shell.classList.toggle('open', expand || shell.classList.contains('open'));
+    shell.classList.add('focused');
+  }
+  if (expand) {
+    _aiUnread = 0;
+    const badge = document.getElementById('aiFabBadge');
+    if (badge) badge.style.display = 'none';
+  }
+  if (focusInput) setTimeout(() => document.getElementById('aiInput')?.focus(), 0);
+}
+
+function toggleAIChat() {
+  openHomeAI(true, true);
+}
+
 function aiInputResize(el) {
+  openHomeAI(false);
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   document.getElementById('aiSend').disabled = !el.value.trim();
@@ -6190,6 +6344,7 @@ function aiInputKeydown(e) {
 }
 
 function aiSuggest(btn) {
+  openHomeAI(false);
   const msg = btn.textContent.trim();
   document.getElementById('aiInput').value = msg;
   document.getElementById('aiSend').disabled = false;
@@ -6202,11 +6357,7 @@ function _aiTime() {
 
 function _aiAppendMsg(role, content) {
   const msgs = document.getElementById('aiMessages');
-  const welcome = document.getElementById('aiWelcome');
-  if (welcome) welcome.remove();
-
-  const sug = document.getElementById('aiSuggestions');
-  if (sug) sug.style.display = 'none';
+  if (!msgs) return null;
 
   const wrap = document.createElement('div');
   wrap.className = 'ai-msg ' + role;
@@ -6230,6 +6381,7 @@ async function sendAIMessage() {
   const input = document.getElementById('aiInput');
   const msg = input.value.trim();
   if (!msg || _aiLoading) return;
+  openHomeAI(false, true);
 
   _aiLoading = true;
   document.getElementById('aiSend').disabled = true;
@@ -6249,18 +6401,25 @@ async function sendAIMessage() {
       body: JSON.stringify({ message: msg })
     });
     const d = await r.json();
+    const aiUsageBefore = Number(_aiAnalysesToday) || 0;
+    updateAIUsageFromPayload(d);
     typing.classList.remove('visible');
 
     if (d.reply) {
+      if (_aiAnalysesPerDay != null && _plan !== 'founder' && (Number(_aiAnalysesToday) || 0) <= aiUsageBefore) {
+        incrementAIUsageOptimistic(aiUsageBefore);
+      }
       _aiAppendMsg('ai', d.reply);
       if (!_aiOpen) {
         _aiUnread++;
         const badge = document.getElementById('aiFabBadge');
-        badge.textContent = _aiUnread;
-        badge.style.display = 'flex';
+        if (badge) {
+          badge.textContent = _aiUnread;
+          badge.style.display = 'flex';
+        }
       }
     } else {
-      _aiAppendMsg('ai', '⚠️ ' + (d.error || 'Errore nella risposta. Riprova.'));
+      _aiAppendMsg('ai', '⚠️ ' + (d.error || d.detail || 'Errore nella risposta. Riprova.'));
     }
   } catch (e) {
     typing.classList.remove('visible');
@@ -6268,25 +6427,17 @@ async function sendAIMessage() {
   }
 
   _aiLoading = false;
-  document.getElementById('aiSend').disabled = false;
+  document.getElementById('aiSend').disabled = true;
   document.getElementById('aiMessages').scrollTop = 999999;
 }
 
 function _aiInit() {
-  const fab = document.getElementById('aiFab');
-  if (fab) fab.style.display = 'flex';
-
-  // Update context bar based on live state
-  const pos = (S && S.positions) ? S.positions.length : 0;
-  const running = S && S.running;
-  const posEl = document.getElementById('aiCtxPositions');
-  const sesEl = document.getElementById('aiCtxSession');
-  if (posEl) posEl.textContent = pos > 0 ? `📂 ${pos} posizione${pos > 1 ? 'i' : ''}` : '📂 Nessuna posizione';
-  if (sesEl) sesEl.textContent = running ? '⚙️ Sessione attiva' : '⚙️ Sessione ferma';
+  updateAIUsageUI();
 }
 
 // Show AI fab after auth
 document.addEventListener('zentra:authed', _aiInit);
+if (localStorage.getItem('ca_token')) _aiInit();
 </script>
 
 </body>

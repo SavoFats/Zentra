@@ -313,6 +313,7 @@ class RevxGuardrailTests(unittest.TestCase):
         main = self.main
         calls = []
         state = main.make_session()
+        state["plan"] = "pro"
         state["currentCapital"] = 100.0
         state["capital"] = 100.0
         state["config"] = {}
@@ -393,6 +394,34 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(post_body["side"], "BUY")
         self.assertEqual(post_body["product_id"], "BTC-USDC")
         self.assertEqual(post_body["order_configuration"]["market_market_ioc"]["quote_size"], "10.00")
+
+    def test_manual_trade_free_blocks_real_coinbase_order(self):
+        main = self.main
+        state = main.make_session()
+        state["plan"] = "free"
+        state["currentCapital"] = 100.0
+        state["capital"] = 100.0
+
+        original_sessions = main.user_sessions
+        original_market = main.market_data
+        original_rate_limit = main.check_rate_limit
+        original_pool = main.db_pool
+        main.user_sessions = {123: state}
+        main.market_data = {"BTC": {"price": 50000.0, "icon": "B"}}
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.db_pool = None
+        try:
+            req = types.SimpleNamespace(symbol="BTCUSDT", amount_usdt=10.0, sl_pct=2.0, tp_pct=4.0, exchange="coinbase")
+            with self.assertRaises(main.HTTPException) as ctx:
+                asyncio.run(main.manual_trade(req, request=object(), user_id=123))
+        finally:
+            main.user_sessions = original_sessions
+            main.market_data = original_market
+            main.check_rate_limit = original_rate_limit
+            main.db_pool = original_pool
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertIn("solo trade manuali in simulazione", ctx.exception.detail)
 
     def test_monitor_coinbase_position_uses_coinbase_price_before_tp(self):
         main = self.main
@@ -955,6 +984,186 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(restored["tradeCount"], 0)
         self.assertEqual(restored["log"], [])
         self.assertTrue(sent_messages)
+
+    def test_chat_enforces_daily_ai_limit_for_free_plan(self):
+        main = self.main
+
+        class Row(dict):
+            def __getitem__(self, key):
+                return self.get(key)
+
+        class Conn:
+            async def fetchrow(self, sql, *args):
+                if sql.lstrip().upper().startswith("SELECT"):
+                    return Row({
+                        "plan": "free",
+                        "subscription_expires_at": None,
+                        "last_ai_chat_date": main.datetime.utcnow().date(),
+                        "ai_chats_today": main.FREE_AI_ANALYSES_PER_DAY,
+                    })
+                return None
+
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_env = os.environ.get("ANTHROPIC_API_KEY")
+        main.db_pool = FakePool(Conn())
+        main.check_rate_limit = lambda *args, **kwargs: None
+        os.environ["ANTHROPIC_API_KEY"] = "anthropic-secret"
+        body = types.SimpleNamespace(message="Analizza BTC", reset=False)
+        try:
+            with self.assertRaises(main.HTTPException) as ctx:
+                asyncio.run(main.chat(body, request=object(), user_id=123))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+            if original_env is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = original_env
+
+        self.assertEqual(ctx.exception.status_code, 429)
+        self.assertIn("limite", ctx.exception.detail)
+
+    def test_chat_allows_pro_and_returns_ai_usage(self):
+        main = self.main
+
+        class Row(dict):
+            def __getitem__(self, key):
+                return self.get(key)
+
+        class Conn:
+            async def fetchrow(self, sql, *args):
+                if sql.lstrip().upper().startswith("SELECT"):
+                    return Row({
+                        "plan": "pro",
+                        "subscription_expires_at": None,
+                        "last_ai_chat_date": None,
+                        "ai_chats_today": 0,
+                    })
+                return Row({"ai_chats_today": 1})
+
+        class Response:
+            status_code = 200
+
+            def json(self):
+                return {"content": [{"text": "Analisi pronta."}]}
+
+        class Client:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, *args, **kwargs):
+                return Response()
+
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_client = main.httpx.AsyncClient
+        original_history = dict(main._ai_conversations)
+        original_env = os.environ.get("ANTHROPIC_API_KEY")
+        main.db_pool = FakePool(Conn())
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.httpx.AsyncClient = Client
+        main._ai_conversations = {}
+        os.environ["ANTHROPIC_API_KEY"] = "anthropic-secret"
+        body = types.SimpleNamespace(message="Analizza ETH", reset=False)
+        try:
+            result = asyncio.run(main.chat(body, request=object(), user_id=123))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+            main.httpx.AsyncClient = original_client
+            main._ai_conversations = original_history
+            if original_env is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = original_env
+
+        self.assertEqual(result["reply"], "Analisi pronta.")
+        self.assertEqual(result["ai_analyses_today"], 1)
+        self.assertEqual(result["ai_analyses_per_day"], main.PRO_AI_ANALYSES_PER_DAY)
+        self.assertEqual(result["ai_analyses_remaining"], main.PRO_AI_ANALYSES_PER_DAY - 1)
+
+    def test_chat_allows_founder_and_uses_anthropic_reply(self):
+        main = self.main
+
+        class Row(dict):
+            def __getitem__(self, key):
+                return self.get(key)
+
+        class Conn:
+            async def fetchrow(self, sql, *args):
+                return Row({
+                    "plan": "founder",
+                    "subscription_expires_at": None,
+                    "last_ai_chat_date": None,
+                    "ai_chats_today": 0,
+                })
+
+        class Response:
+            status_code = 200
+
+            def json(self):
+                return {"content": [{"text": "Setup non chiaro: meglio aspettare."}]}
+
+        class Client:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, *args, **kwargs):
+                return Response()
+
+        state = main.make_session()
+        state["positions"] = [{
+            "symbol": "BTC",
+            "entryPrice": 100.0,
+            "currentPrice": 105.0,
+            "stopPrice": 95.0,
+            "tp1Price": 110.0,
+            "size": 10.0,
+            "realMode": True,
+            "exchange": "coinbase",
+        }]
+
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_client = main.httpx.AsyncClient
+        original_get_session = main.get_session
+        original_history = dict(main._ai_conversations)
+        original_env = os.environ.get("ANTHROPIC_API_KEY")
+        main.db_pool = FakePool(Conn())
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.httpx.AsyncClient = Client
+        main.get_session = lambda user_id: state
+        main._ai_conversations = {}
+        os.environ["ANTHROPIC_API_KEY"] = "anthropic-secret"
+        body = types.SimpleNamespace(message="Come sta BTC?", reset=False)
+        try:
+            result = asyncio.run(main.chat(body, request=object(), user_id=123))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+            main.httpx.AsyncClient = original_client
+            main.get_session = original_get_session
+            main._ai_conversations = original_history
+            if original_env is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = original_env
+
+        self.assertEqual(result["reply"], "Setup non chiaro: meglio aspettare.")
+        self.assertIsNone(result["ai_analyses_per_day"])
 
 
 if __name__ == "__main__":
