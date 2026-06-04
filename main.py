@@ -5032,15 +5032,10 @@ async def fetch_crypto_news(coins: list | None = None) -> list:
     now = time.time()
     if now - bucket["ts"] < NEWS_CACHE_TTL and bucket["data"]:
         return bucket["data"]
-    try:
-        params: dict = {"lang": "EN", "sortOrder": "latest", "extraParams": "Zentra"}
-        if coins:
-            params["categories"] = ",".join(coins[:3])
-        async with httpx.AsyncClient(timeout=8) as client:
-            res = await client.get("https://min-api.cryptocompare.com/data/v2/news/", params=params)
-            data = res.json()
+
+    def _parse_news(data: dict, limit: int = 8) -> list:
         items = []
-        for item in (data.get("Data") or [])[:8]:
+        for item in (data.get("Data") or [])[:limit]:
             ts = item.get("published_on", 0)
             date = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else ""
             cats = [c.strip() for c in (item.get("categories") or "").split("|") if c.strip()]
@@ -5050,6 +5045,20 @@ async def fetch_crypto_news(coins: list | None = None) -> list:
                 "date": date,
                 "coins": cats[:4],
             })
+        return items
+
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            params: dict = {"lang": "EN", "sortOrder": "latest", "extraParams": "Zentra"}
+            if coins:
+                params["categories"] = ",".join(coins[:3])
+            res = await client.get("https://min-api.cryptocompare.com/data/v2/news/", params=params)
+            items = _parse_news(res.json())
+            # Se coin-specific è vuoto, fallback su general news
+            if not items and coins:
+                res2 = await client.get("https://min-api.cryptocompare.com/data/v2/news/",
+                                        params={"lang": "EN", "sortOrder": "latest", "extraParams": "Zentra"})
+                items = _parse_news(res2.json())
         _news_cache[cache_key] = {"data": items, "ts": now}
         return items
     except Exception:
