@@ -5221,7 +5221,12 @@ function closeDrawer() {
 
 async function refreshMarket(countScan = false) {
   try {
-    const url = API + '/market?timeframe=' + encodeURIComponent(_scanTimeframe) + (countScan ? '&count_scan=1' : '');
+    const params = new URLSearchParams({ timeframe: _scanTimeframe });
+    if (countScan) {
+      params.set('count_scan', '1');
+      if (_scanSignal) params.set('scan_signal', _scanSignal);
+    }
+    const url = API + '/market?' + params.toString();
     const r = await fetch(url, { headers: authHeaders() });
     const d = await r.json();
     updateScanUsageFromPayload(d);

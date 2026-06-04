@@ -699,6 +699,18 @@ _scanner_refreshing: set = set()  # timeframe refresh già in corso
 _ai_conversations:   dict = {}   # {user_id: [{"role": ..., "content": ...}]}
 SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
 VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
+SCANNER_SIGNAL_KEYS = {
+    "breakout",
+    "golden_cross",
+    "ema_stack",
+    "rsi_oversold",
+    "rsi_overbought",
+    "macd_bullish",
+    "macd_bearish",
+    "tsi_bullish",
+    "death_cross",
+    "volume_spike",
+}
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
 
@@ -3987,6 +3999,7 @@ async def get_market(
     user_id: int = Depends(get_current_user),
     timeframe: str = Query("1h"),
     count_scan: bool = Query(False),
+    scan_signal: str = Query(""),
 ):
     check_rate_limit(request, max_attempts=60, window=60, key_suffix="market")
 
@@ -4009,33 +4022,6 @@ async def get_market(
                     raw_plan = "free"
                 last_scan_date = row["last_scan_date"]
                 scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
-                if count_scan and raw_plan == "free":
-                    updated = await conn.fetchrow(
-                        """
-                        UPDATE users
-                           SET last_scan_date = $1,
-                               scans_today = CASE
-                                   WHEN last_scan_date = $1 THEN COALESCE(scans_today, 0) + 1
-                                   ELSE 1
-                               END
-                         WHERE id = $2
-                           AND (last_scan_date IS DISTINCT FROM $1 OR COALESCE(scans_today, 0) < $3)
-                     RETURNING scans_today
-                        """,
-                        today, user_id, FREE_SCANS_PER_DAY
-                    )
-                    if not updated:
-                        return {
-                            "error": "scan_limit",
-                            "message": "Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.",
-                            "plan": raw_plan,
-                            "scans_today": scans_today,
-                            "scans_per_day": FREE_SCANS_PER_DAY,
-                            "scans_remaining": 0,
-                            "market": [],
-                            "scanner_refreshing": False,
-                        }
-                    scans_today = updated["scans_today"] or scans_today
 
     # Refresh scanner cache per il TF richiesto se assente o scaduta
     tf_age = time.time() - _scanner_candles_ts.get(timeframe, 0)
@@ -4098,6 +4084,42 @@ async def get_market(
         items = [i for i in items if i["symbol"] in _revx_pairs]
 
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
+
+    scan_signal = (scan_signal or "").strip()
+    scan_has_results = (
+        scan_signal in SCANNER_SIGNAL_KEYS
+        and not scanner_refreshing
+        and any((item.get("scanner") or {}).get(scan_signal) for item in result)
+    )
+    if count_scan and raw_plan == "free" and db_pool and scan_has_results:
+        async with db_pool.acquire() as conn:
+            updated = await conn.fetchrow(
+                """
+                UPDATE users
+                   SET last_scan_date = $1,
+                       scans_today = CASE
+                           WHEN last_scan_date = $1 THEN COALESCE(scans_today, 0) + 1
+                           ELSE 1
+                       END
+                 WHERE id = $2
+                   AND (last_scan_date IS DISTINCT FROM $1 OR COALESCE(scans_today, 0) < $3)
+             RETURNING scans_today
+                """,
+                today, user_id, FREE_SCANS_PER_DAY
+            )
+        if not updated:
+            return {
+                "error": "scan_limit",
+                "message": "Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.",
+                "plan": raw_plan,
+                "scans_today": scans_today,
+                "scans_per_day": FREE_SCANS_PER_DAY,
+                "scans_remaining": 0,
+                "market": [],
+                "scanner_refreshing": False,
+            }
+        scans_today = updated["scans_today"] or scans_today
+
     return {
         "market": result,
         "scanner_refreshing": scanner_refreshing,
