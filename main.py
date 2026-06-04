@@ -697,7 +697,7 @@ scanner_candle_data: dict = {}   # {tf: {sym: signal_indicators}}
 _scanner_candles_ts:  dict = {}   # {tf: last_update_timestamp}
 _scanner_refreshing: set = set()  # timeframe refresh già in corso
 _ai_conversations:   dict = {}   # {user_id: [{"role": ..., "content": ...}]}
-_news_cache:         dict = {"data": [], "ts": 0.0}
+_news_cache:         dict = {}     # {category_key: {"data": [], "ts": 0.0}}
 NEWS_CACHE_TTL      = 300         # secondi — aggiorna notizie ogni 5 minuti
 SCANNER_CACHE_TTL   = 60          # secondi — invalida cache scanner per TF non-default
 VALID_TF = {"5m", "15m", "1h", "4h", "1d"}
@@ -5027,12 +5027,12 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
         return {"ok": True, "price": price, "qty": qty}
 
 async def fetch_crypto_news(coins: list | None = None) -> list:
-    global _news_cache
+    cache_key = coins[0] if coins else "general"
+    bucket = _news_cache.get(cache_key, {"data": [], "ts": 0.0})
     now = time.time()
-    if now - _news_cache["ts"] < NEWS_CACHE_TTL and _news_cache["data"]:
-        return _news_cache["data"]
+    if now - bucket["ts"] < NEWS_CACHE_TTL and bucket["data"]:
+        return bucket["data"]
     try:
-        # CryptoCompare News — gratuito, senza API key
         params: dict = {"lang": "EN", "sortOrder": "latest", "extraParams": "Zentra"}
         if coins:
             params["categories"] = ",".join(coins[:3])
@@ -5041,9 +5041,8 @@ async def fetch_crypto_news(coins: list | None = None) -> list:
             data = res.json()
         items = []
         for item in (data.get("Data") or [])[:8]:
-            from datetime import datetime as _dt
             ts = item.get("published_on", 0)
-            date = _dt.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else ""
+            date = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else ""
             cats = [c.strip() for c in (item.get("categories") or "").split("|") if c.strip()]
             items.append({
                 "title": item.get("title", ""),
@@ -5051,10 +5050,10 @@ async def fetch_crypto_news(coins: list | None = None) -> list:
                 "date": date,
                 "coins": cats[:4],
             })
-        _news_cache = {"data": items, "ts": now}
+        _news_cache[cache_key] = {"data": items, "ts": now}
         return items
     except Exception:
-        return _news_cache.get("data", [])
+        return bucket.get("data", [])
 
 _COIN_NAME_MAP = {
     "BITCOIN": "BTC", "ETHEREUM": "ETH", "SOLANA": "SOL", "RIPPLE": "XRP",
