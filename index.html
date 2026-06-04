@@ -1233,6 +1233,52 @@ body.auth-active .tabbar { display:none !important; }
       <span id="homeModeBadge" style="display:none"></span><span id="homeModeDot" style="display:none"></span><span id="homeModeText" style="display:none"></span>
     </div>
 
+    <div class="home-ai" id="homeAiShell">
+      <div class="home-ai-frame" id="homeAiFrame">
+        <div class="home-ai-bar" onclick="openHomeAI(true)">
+          <div class="home-ai-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <textarea class="ai-input home-ai-input" id="aiInput" rows="1" placeholder="Chiedi a Zentra AI di analizzare mercato, segnali o posizioni..." onfocus="openHomeAI(false)" onkeydown="aiInputKeydown(event)" oninput="aiInputResize(this)"></textarea>
+          <button class="ai-send home-ai-send" id="aiSend" onclick="event.stopPropagation();sendAIMessage()" disabled aria-label="Invia a Zentra AI">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+        <div class="ai-panel home-ai-panel" id="aiPanel">
+          <div class="ai-panel-hdr">
+            <div class="ai-panel-hdr-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div class="ai-panel-title">Zentra AI</div>
+              <div class="ai-panel-sub" id="aiPanelSub">Copilot finanziario · Live</div>
+            </div>
+          </div>
+          <div class="ai-ctx-bar" id="aiCtxBar">
+            <span class="ai-ctx-pill">Mercato live</span>
+            <span class="ai-ctx-pill">Scanner</span>
+            <span class="ai-ctx-pill" id="aiCtxPositions">Nessuna posizione</span>
+            <span class="ai-ctx-pill" id="aiCtxSession">Sessione ferma</span>
+          </div>
+          <div class="ai-messages" id="aiMessages">
+            <div class="ai-welcome" id="aiWelcome">
+              <strong>Ciao, sono Zentra AI</strong>
+              Analizzo mercato live, segnali scanner e posizioni aperte. Scrivimi una domanda o scegli un prompt rapido.
+            </div>
+          </div>
+          <div class="ai-typing" id="aiTyping">
+            <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
+          </div>
+          <div class="ai-suggestions" id="aiSuggestions">
+            <button class="ai-sug" onclick="aiSuggest(this)">Analizza il mercato ora</button>
+            <button class="ai-sug" onclick="aiSuggest(this)">Ci sono setup interessanti?</button>
+            <button class="ai-sug" onclick="aiSuggest(this)">Come stanno le mie posizioni?</button>
+            <button class="ai-sug" onclick="aiSuggest(this)">Spiegami i segnali migliori</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Hero card — nascosta quando sessione attiva -->
     <div class="home-hero" id="homeHeroCard">
       <svg class="home-hero-circles" width="170" height="170" viewBox="0 0 192 192" fill="none" aria-hidden="true">
@@ -1751,6 +1797,35 @@ body.auth-active .tabbar { display:none !important; }
       .ai-send svg { width:18px; height:18px; }
       .ai-ctx-bar { padding:8px 14px; background:rgba(0,82,255,0.06); border-bottom:1px solid rgba(0,82,255,0.12); font-size:11px; color:var(--blue); font-weight:600; display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }
       .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
+      .home-ai { width:min(900px,100%); margin:0 auto 18px; }
+      .home-ai-frame { position:relative; overflow:hidden; border-radius:24px; padding:1px; box-shadow:0 18px 54px rgba(0,82,255,0.14),0 1px 0 rgba(255,255,255,0.38) inset; }
+      .home-ai-frame::before { content:""; position:absolute; inset:-45%; background:conic-gradient(from 0deg,#0052ff,#28d7ff,#22c55e,#f59e0b,#ef3b74,#7c3aed,#0052ff); animation:home-ai-rgb 7s linear infinite; opacity:.44; }
+      .home-ai-frame::after { content:""; position:absolute; inset:1px; border-radius:23px; background:linear-gradient(135deg,rgba(255,255,255,0.9),rgba(244,248,255,0.82)); border:1px solid rgba(255,255,255,0.42); }
+      [data-theme="dark"] .home-ai-frame::after { background:linear-gradient(135deg,rgba(15,20,45,0.96),rgba(10,15,34,0.92)); border-color:rgba(255,255,255,0.08); }
+      .home-ai.open .home-ai-frame::before,
+      .home-ai.focused .home-ai-frame::before { animation-play-state:paused; opacity:.26; }
+      @keyframes home-ai-rgb { to { transform:rotate(360deg); } }
+      .home-ai-frame > * { position:relative; z-index:1; }
+      .home-ai-bar { min-height:62px; display:flex; align-items:center; gap:12px; padding:11px 14px 11px 16px; cursor:text; }
+      .home-ai-mark { width:38px; height:38px; border-radius:14px; background:linear-gradient(135deg,#0b5cff,#0046d9); display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; box-shadow:0 10px 24px rgba(0,82,255,0.26); }
+      .home-ai-mark svg { width:19px; height:19px; }
+      .home-ai-input.ai-input { min-height:38px; max-height:118px; padding:9px 4px; border:none; background:transparent; box-shadow:none; color:var(--text); font-size:14px; line-height:1.45; }
+      .home-ai-input.ai-input:focus { border:none; box-shadow:none; }
+      .home-ai-input::placeholder { color:var(--text3); }
+      .home-ai-send.ai-send { width:42px; height:42px; border-radius:14px; align-self:center; box-shadow:0 10px 24px rgba(0,82,255,0.24); }
+      .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
+      .home-ai.open .home-ai-panel.ai-panel { display:flex; }
+      .home-ai .ai-panel-hdr { padding:13px 16px; }
+      .home-ai .ai-messages { min-height:150px; max-height:310px; padding:15px 16px; }
+      .home-ai .ai-suggestions { padding:0 16px 16px; }
+      .home-ai .ai-ctx-bar { padding:9px 16px; }
+      @media (max-width:640px) {
+        .home-ai { margin-bottom:14px; }
+        .home-ai-bar { min-height:58px; padding:9px 11px; gap:9px; }
+        .home-ai-mark { width:34px; height:34px; border-radius:12px; }
+        .home-ai-input.ai-input { font-size:13.5px; }
+        .home-ai .ai-messages { max-height:260px; }
+      }
     </style>
     <div class="scan-tf-bar">
       <span class="scan-tf-label">Timeframe</span>
@@ -6159,51 +6234,6 @@ function closeProWelcome() {
 </div>
 
 <!-- Banner informativa storage -->
-<!-- ── Zentra AI Chat Widget ── -->
-<button class="ai-fab" id="aiFab" onclick="toggleAIChat()" aria-label="Zentra AI" style="display:none">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12"/><path d="M12 8v4l3 3"/><circle cx="4.5" cy="4.5" r="1.5"/></svg>
-  <span class="ai-fab-badge" id="aiFabBadge"></span>
-</button>
-
-<div class="ai-panel" id="aiPanel">
-  <div class="ai-panel-hdr">
-    <div class="ai-panel-hdr-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    </div>
-    <div style="flex:1;min-width:0">
-      <div class="ai-panel-title">Zentra AI</div>
-      <div class="ai-panel-sub" id="aiPanelSub">Copilot finanziario · Live</div>
-    </div>
-    <button class="ai-panel-close" onclick="toggleAIChat()">×</button>
-  </div>
-  <div class="ai-ctx-bar" id="aiCtxBar">
-    <span class="ai-ctx-pill">📊 Mercato live</span>
-    <span class="ai-ctx-pill">📡 Scanner</span>
-    <span class="ai-ctx-pill" id="aiCtxPositions">📂 Posizioni</span>
-    <span class="ai-ctx-pill" id="aiCtxSession">⚙️ Sessione</span>
-  </div>
-  <div class="ai-messages" id="aiMessages">
-    <div class="ai-welcome" id="aiWelcome">
-      <strong>Ciao, sono Zentra AI</strong>
-      Analizzo il mercato live, i tuoi segnali scanner e le posizioni aperte.<br>Chiedimi qualsiasi cosa sul trading.
-    </div>
-  </div>
-  <div class="ai-typing" id="aiTyping">
-    <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
-  </div>
-  <div class="ai-suggestions" id="aiSuggestions">
-    <button class="ai-sug" onclick="aiSuggest(this)">Analizza il mercato ora</button>
-    <button class="ai-sug" onclick="aiSuggest(this)">Ci sono setup interessanti?</button>
-    <button class="ai-sug" onclick="aiSuggest(this)">Come stanno le mie posizioni?</button>
-    <button class="ai-sug" onclick="aiSuggest(this)">Consigli sulla sessione attiva</button>
-  </div>
-  <div class="ai-input-row">
-    <textarea class="ai-input" id="aiInput" rows="1" placeholder="Chiedi a Zentra AI…" onkeydown="aiInputKeydown(event)" oninput="aiInputResize(this)"></textarea>
-    <button class="ai-send" id="aiSend" onclick="sendAIMessage()" disabled>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-    </button>
-  </div>
-</div>
 
 <div id="cookieBanner" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);left:12px;right:12px;z-index:450;background:var(--surface);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--glass-border);border-radius:14px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,0.28);flex-direction:column;gap:10px">
   <div style="font-size:12px;color:var(--text2);line-height:1.5">
@@ -6266,17 +6296,25 @@ function updateAIUsageUI() {
   }
 }
 
-function toggleAIChat() {
-  _aiOpen = !_aiOpen;
-  document.getElementById('aiPanel').classList.toggle('open', _aiOpen);
-  if (_aiOpen) {
-    _aiUnread = 0;
-    document.getElementById('aiFabBadge').style.display = 'none';
-    setTimeout(() => document.getElementById('aiInput').focus(), 300);
+function openHomeAI(focusInput = false) {
+  _aiOpen = true;
+  const shell = document.getElementById('homeAiShell');
+  if (shell) {
+    shell.classList.add('open');
+    shell.classList.add('focused');
   }
+  _aiUnread = 0;
+  const badge = document.getElementById('aiFabBadge');
+  if (badge) badge.style.display = 'none';
+  if (focusInput) setTimeout(() => document.getElementById('aiInput')?.focus(), 0);
+}
+
+function toggleAIChat() {
+  openHomeAI(true);
 }
 
 function aiInputResize(el) {
+  openHomeAI(false);
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   document.getElementById('aiSend').disabled = !el.value.trim();
@@ -6290,6 +6328,7 @@ function aiInputKeydown(e) {
 }
 
 function aiSuggest(btn) {
+  openHomeAI(false);
   const msg = btn.textContent.trim();
   document.getElementById('aiInput').value = msg;
   document.getElementById('aiSend').disabled = false;
@@ -6327,6 +6366,7 @@ function _aiAppendMsg(role, content) {
 }
 
 async function sendAIMessage() {
+  openHomeAI(false);
   const input = document.getElementById('aiInput');
   const msg = input.value.trim();
   if (!msg || _aiLoading) return;
@@ -6357,8 +6397,10 @@ async function sendAIMessage() {
       if (!_aiOpen) {
         _aiUnread++;
         const badge = document.getElementById('aiFabBadge');
-        badge.textContent = _aiUnread;
-        badge.style.display = 'flex';
+        if (badge) {
+          badge.textContent = _aiUnread;
+          badge.style.display = 'flex';
+        }
       }
     } else {
       _aiAppendMsg('ai', '⚠️ ' + (d.error || d.detail || 'Errore nella risposta. Riprova.'));
@@ -6369,13 +6411,11 @@ async function sendAIMessage() {
   }
 
   _aiLoading = false;
-  document.getElementById('aiSend').disabled = false;
+  document.getElementById('aiSend').disabled = true;
   document.getElementById('aiMessages').scrollTop = 999999;
 }
 
 function _aiInit() {
-  const fab = document.getElementById('aiFab');
-  if (fab) fab.style.display = 'flex';
   updateAIUsageUI();
 
   // Update context bar based on live state
@@ -6383,8 +6423,8 @@ function _aiInit() {
   const running = S && S.running;
   const posEl = document.getElementById('aiCtxPositions');
   const sesEl = document.getElementById('aiCtxSession');
-  if (posEl) posEl.textContent = pos > 0 ? `📂 ${pos} posizione${pos > 1 ? 'i' : ''}` : '📂 Nessuna posizione';
-  if (sesEl) sesEl.textContent = running ? '⚙️ Sessione attiva' : '⚙️ Sessione ferma';
+  if (posEl) posEl.textContent = pos > 0 ? `${pos} posizione${pos > 1 ? 'i' : ''}` : 'Nessuna posizione';
+  if (sesEl) sesEl.textContent = running ? 'Sessione attiva' : 'Sessione ferma';
 }
 
 // Show AI fab after auth
