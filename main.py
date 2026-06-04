@@ -5225,8 +5225,26 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         except Exception:
             pass
 
-    # Coin detection + news
+    # Coin detection + dati specifici + news
     chart_coin = detect_coin_in_message(body.message)
+    coin_ctx = ""
+    if chart_coin:
+        cd = market_data.get(chart_coin, {})
+        if cd.get("price"):
+            coin_ctx = f"\n[Dati {chart_coin}]\n"
+            coin_ctx += f"  Prezzo: ${cd['price']:,.4f} | 24h: {cd.get('change24h', 0):+.2f}% | Volume: ${cd.get('volume24h', 0)/1e6:.1f}M\n"
+            # Scanner signals per tutti i TF
+            sig_lines = []
+            for tf in ["5m", "15m", "1h", "4h", "1d"]:
+                td = scanner_candle_data.get(tf, {}).get(chart_coin, {})
+                sigs = [s for s in _SIGNALS if td.get(s)]
+                if sigs:
+                    sig_lines.append(f"  {tf}: {', '.join(sigs)}")
+            if sig_lines:
+                coin_ctx += "\n".join(sig_lines) + "\n"
+            else:
+                coin_ctx += "  Nessun segnale scanner attivo su nessun timeframe.\n"
+
     news_items = await fetch_crypto_news(coins=[chart_coin] if chart_coin else None)
     news_ctx = ""
     if news_items:
@@ -5237,7 +5255,7 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
     context_block = (
         f"\n=== CONTESTO LIVE ZENTRA [{now_str}] ===\n"
-        f"{market_ctx}{positions_ctx}{session_ctx}{trades_ctx}{scanner_ctx}{news_ctx}"
+        f"{market_ctx}{coin_ctx}{positions_ctx}{session_ctx}{trades_ctx}{scanner_ctx}{news_ctx}"
         f"=== FINE CONTESTO ===\n"
     )
 
