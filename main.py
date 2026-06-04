@@ -3645,6 +3645,35 @@ async def logout_user(request: Request):
         _revoked_tokens.add(auth[7:])
     return {"ok": True}
 
+@app.delete("/auth/account")
+async def delete_account(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=3, window=300, key_suffix="delete_account")
+    state = user_sessions.get(user_id)
+    if state and (state.get("running") or state.get("positions")):
+        raise HTTPException(
+            status_code=409,
+            detail="Ferma la sessione e chiudi le posizioni aperte prima di eliminare l'account."
+        )
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database non disponibile")
+
+    async with db_pool.acquire() as conn:
+        result = await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+    if result.endswith("0"):
+        raise HTTPException(status_code=404, detail="Account non trovato")
+
+    user_sessions.pop(user_id, None)
+    _ai_conversations.pop(user_id, None)
+    _sessions_starting.discard(user_id)
+    for code, (linked_user_id, _) in list(_tg_link_codes.items()):
+        if linked_user_id == user_id:
+            _tg_link_codes.pop(code, None)
+
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        _revoked_tokens.add(auth[7:])
+    return {"ok": True}
+
 @app.post("/auth/login")
 async def login(req: LoginRequest, request: Request):
     check_rate_limit(request, max_attempts=10, window=300, key_suffix="login")
