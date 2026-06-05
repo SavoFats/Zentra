@@ -27,7 +27,7 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 import sys
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
 if not _raw_origins or _raw_origins == "*":
-    print("⚠️  WARNING: ALLOWED_ORIGINS non impostata o wildcard. Imposta il dominio Vercel in produzione.", file=sys.stderr)
+    print("WARNING: ALLOWED_ORIGINS non impostata o wildcard. Imposta il dominio Vercel in produzione.", file=sys.stderr)
     _ORIGIN_SET: set[str] = set()
     _ORIGINS_ANY = True
 else:
@@ -241,9 +241,13 @@ class LoginRequest(BaseModel):
     email: str = ""
     password: str
 
+class ProfileRequest(BaseModel):
+    display_name: str
+
 class ChatRequest(BaseModel):
     message: str
     reset: bool = False
+    history: list[dict[str, str]] = []
 
 BINANCE_BASE    = "https://api.binance.com"
 BINANCE_US_BASE = "https://api.binance.us"
@@ -1826,7 +1830,7 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
 
     if attempt >= len(REVX_LIMIT_DROPS):
         add_log(state, "info", "WARN", f"{sym}: 10 tentativi GTC limit esauriti — market sell emergenza")
-        await notify(state, f"⚠️ {sym}: 10 GTC falliti. Tentativo market sell emergenza...")
+        await notify(state, f"ATTENZIONE: {sym}: 10 GTC falliti. Tentativo market sell emergenza...")
         pos.pop("_sell_mode", None)
         pos.pop("_sell_limit_order_id", None)
         try:
@@ -1846,7 +1850,7 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
                 filled_qty = od.get("filled_quantity", 0.0)
                 if sell_price <= 0 or filled_qty <= 0:
                     add_log(state, "info", "ERRORE", f"{sym}: emergency market sell non confermato — verifica manualmente su RevX")
-                    await notify(state, f"🚨 {sym}: market sell emergenza non confermato. Verifica manualmente su RevX.")
+                    await notify(state, f"ALLARME: {sym}: market sell emergenza non confermato. Verifica manualmente su RevX.")
                     return
                 sell_fee = od.get("total_fee", 0.0)
                 fee_currency = od.get("fee_currency", "USD")
@@ -1858,10 +1862,10 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
             else:
                 err = em_result.get("message") or em_result.get("error") or str(em_result)
                 add_log(state, "info", "ERRORE", f"{sym}: market sell emergenza fallito: {err[:80]} — vendi manualmente su RevX")
-                await notify(state, f"🚨 {sym}: impossibile vendere automaticamente. Vendi manualmente su RevX!")
+                await notify(state, f"ALLARME: {sym}: impossibile vendere automaticamente. Vendi manualmente su RevX!")
         except Exception as _em_e:
             add_log(state, "info", "ERRORE", f"{sym}: market sell emergenza eccezione: {_em_e} — vendi manualmente su RevX")
-            await notify(state, f"🚨 {sym}: errore market sell ({_em_e}). Vendi manualmente su RevX!")
+            await notify(state, f"ALLARME: {sym}: errore market sell ({_em_e}). Vendi manualmente su RevX!")
         return
 
     drop = REVX_LIMIT_DROPS[attempt]
@@ -2307,7 +2311,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
             add_log(state, "info", "STOP AUTO",
                 f"{max_losses} perdite consecutive — nuovi ingressi bloccati, posizioni esistenti monitorate")
             await notify(state,
-                f"⚠️ STOP AUTO: {max_losses} perdite consecutive\n"
+                f"STOP AUTO: {max_losses} perdite consecutive\n"
                 "Nessun nuovo ingresso. Le posizioni aperte restano monitorate fino alla chiusura.")
 
 # ── main loop ─────────────────────────────────────────────────────────────────
@@ -2363,7 +2367,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
                 add_log(state, "info", "CIRCUIT BREAKER",
                     f"Perdita giornaliera {daily_loss_pct*100:.1f}% — soglia {limit*100:.0f}% raggiunta. Bot fermato per oggi.")
                 await notify(state,
-                    f"🚨 CIRCUIT BREAKER\n"
+                    f"CIRCUIT BREAKER\n"
                     f"Perdita giornaliera: {daily_loss_pct*100:.1f}%\n"
                     f"Soglia: {limit*100:.0f}%\n"
                     f"Bot fermato fino a mezzanotte UTC.")
@@ -2472,7 +2476,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
             state["running"] = False
             state.pop("_draining", None)
             add_log(state, "info", "STOP", "Tutte le posizioni chiuse — sessione terminata.")
-            await notify(state, "✅ Zentra — sessione terminata\nTutte le posizioni aperte sono state chiuse.")
+            await notify(state, "Zentra — sessione terminata\nTutte le posizioni aperte sono state chiuse.")
             await persist_sessions()
         else:
             _update_pnl(state)
@@ -2556,7 +2560,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
     slots     = max_pos - len(state["positions"])
     if is_free and slots <= 0:
         add_log(state, "info", "PIANO FREE", "Limite di 1 posizione contemporanea raggiunto. Passa a Pro per aprire più posizioni.")
-        await notify(state, "⚠️ Piano Free: limite 1 posizione raggiunto.")
+        await notify(state, "Piano Free: limite 1 posizione raggiunto.")
         _update_pnl(state)
         return
 
@@ -2764,12 +2768,12 @@ async def handle_revx_wizard(chat_id: str, uid: int, event: str, data: str):
     if event == "start":
         _revx_wizard[chat_id] = {"step": "os", "uid": uid}
         await tg_send_keyboard(chat_id,
-            "⚙️ <b>Configurazione Revolut X</b>\n\n"
+            "<b>Configurazione Revolut X</b>\n\n"
             "Ti guido in 5 minuti.\n"
             "Dovrai eseguire 2 comandi nel terminale del tuo computer.\n\n"
             "Che sistema operativo usi?",
-            [[{"text": "🍎  macOS / Linux", "callback_data": "revx_os_mac"},
-              {"text": "🪟  Windows",        "callback_data": "revx_os_win"}]]
+            [[{"text": "macOS / Linux", "callback_data": "revx_os_mac"},
+              {"text": "Windows",        "callback_data": "revx_os_win"}]]
         )
         return
 
@@ -2781,7 +2785,7 @@ async def handle_revx_wizard(chat_id: str, uid: int, event: str, data: str):
             _revx_wizard[chat_id]["os"]   = os_key
             _revx_wizard[chat_id]["step"] = "terminal"
             if os_key == "mac":
-                msg = ("📂 <b>Apri il Terminale</b>\n\n"
+                msg = ("<b>Apri il Terminale</b>\n\n"
                        "Vai in <b>Applicazioni → Utility → Terminale</b>\n"
                        "oppure premi <b>Cmd+Spazio</b> e cerca <i>Terminale</i>.\n\n"
                        "Quando è aperto, devi installare OpenSSL. "
@@ -2793,33 +2797,33 @@ async def handle_revx_wizard(chat_id: str, uid: int, event: str, data: str):
                        "<code>eval \"$(/opt/homebrew/bin/brew shellenv zsh)\"</code>\n\n"
                        "③ Installa OpenSSL:\n"
                        "<code>brew install openssl</code>\n\n"
-                       "⚠️ Se Homebrew era già installato, esegui solo ② e ③.")
+                       "Nota: se Homebrew era già installato, esegui solo ② e ③.")
             else:
-                msg = ("📂 <b>Apri PowerShell</b>\n\n"
+                msg = ("<b>Apri PowerShell</b>\n\n"
                        "Premi <b>Win+X</b> → <b>Windows PowerShell</b>\n"
                        "oppure cerca <i>PowerShell</i> nel menu Start.\n\n"
-                       "⚠️ Verifica che OpenSSL sia installato:\n"
+                       "Verifica che OpenSSL sia installato:\n"
                        "<code>openssl version</code>")
             await tg_send_keyboard(chat_id, msg,
-                [[{"text": "✅  Aperto, continua →", "callback_data": "revx_step_cmd1"}]])
+                [[{"text": "Aperto, continua →", "callback_data": "revx_step_cmd1"}]])
 
         elif data == "revx_step_cmd1":
             _revx_wizard[chat_id]["step"] = "cmd1"
             os_key = wizard.get("os", "mac")
             if os_key == "mac":
-                msg = ("1️⃣ <b>Genera la chiave privata</b>\n\n"
+                msg = ("1. <b>Genera la chiave privata</b>\n\n"
                        "Prima spostati sul Desktop (così trovi i file facilmente):\n"
                        "<code>cd ~/Desktop</code>\n\n"
                        "Poi esegui:\n"
                        "<code>$(brew --prefix openssl)/bin/openssl genpkey -algorithm ed25519 -out private.pem</code>")
             else:
-                msg = ("1️⃣ <b>Genera la chiave privata</b>\n\n"
+                msg = ("1. <b>Genera la chiave privata</b>\n\n"
                        "Prima spostati sul Desktop:\n"
                        "<code>cd %USERPROFILE%\\Desktop</code>\n\n"
                        "Poi esegui:\n"
                        "<code>openssl genpkey -algorithm ed25519 -out private.pem</code>")
             await tg_send_keyboard(chat_id, msg,
-                [[{"text": "✅  Fatto, continua →", "callback_data": "revx_step_cmd2"}]])
+                [[{"text": "Fatto, continua →", "callback_data": "revx_step_cmd2"}]])
 
         elif data == "revx_step_cmd2":
             _revx_wizard[chat_id]["step"] = "cmd2"
@@ -2829,13 +2833,13 @@ async def handle_revx_wizard(chat_id: str, uid: int, event: str, data: str):
             else:
                 cmd2 = "openssl pkey -in private.pem -pubout -out public.pem"
             await tg_send_keyboard(chat_id,
-                f"2️⃣ <b>Genera la chiave pubblica</b>\n\n"
+                f"2. <b>Genera la chiave pubblica</b>\n\n"
                 f"Esegui questo comando:\n\n"
                 f"<code>{cmd2}</code>\n\n"
                 f"Trovi ora due file sul <b>Desktop</b>:\n"
-                f"📄 <b>private.pem</b>  —  chiave privata (tienila al sicuro)\n"
-                f"📄 <b>public.pem</b>   —  chiave pubblica",
-                [[{"text": "✅  Fatto, continua →", "callback_data": "revx_step_register"}]])
+                f"<b>private.pem</b>  —  chiave privata (tienila al sicuro)\n"
+                f"<b>public.pem</b>   —  chiave pubblica",
+                [[{"text": "Fatto, continua →", "callback_data": "revx_step_register"}]])
 
         elif data == "revx_step_register":
             _revx_wizard[chat_id]["step"] = "register"
@@ -2850,12 +2854,12 @@ async def handle_revx_wizard(chat_id: str, uid: int, event: str, data: str):
                              "• Oppure: tasto destro sul file → <b>Apri con → Blocco Note</b>")
             _revx_wizard.pop(chat_id, None)
             await send_telegram_to(chat_id,
-                f"3️⃣ <b>Registra la chiave su Revolut X</b>\n\n"
+                f"3. <b>Registra la chiave su Revolut X</b>\n\n"
                 f"1. Vai su <b>exchange.revolut.com</b> → <b>Profile → API Keys</b> (da browser)\n"
                 f"2. {open_hint}\n"
                 f"3. Copia tutto il testo (incluse le righe BEGIN/END) e incollalo su Revolut X\n"
                 f"4. Revolut genera una stringa di <b>64 caratteri</b> — è il tuo API Key\n\n"
-                f"✅ <b>Ora torna su Zentra</b> → menu profilo → <b>Configura Revolut X</b> "
+                f"<b>Ora torna su Zentra</b> → menu profilo → <b>Configura Revolut X</b> "
                 f"e inserisci lì l'API Key e la chiave privata.")
 
 async def poll_telegram():
@@ -2943,7 +2947,7 @@ async def poll_telegram():
                         if state:
                             state["telegram_chat_id"] = chat_id
                         await send_telegram_to(chat_id,
-                            "✅ Account collegato!\nOra puoi usare:\n/status — stato sessione\n/stop — ferma l'agente\n/close BTC — chiudi posizione\n/configrevx — configura Revolut X guidato")
+                            "Account collegato.\nOra puoi usare:\n/status — stato sessione\n/stop — ferma l'agente\n/close BTC — chiudi posizione\n/configrevx — configura Revolut X guidato")
                     else:
                         already_linked = False
                         if db_pool:
@@ -2953,7 +2957,7 @@ async def poll_telegram():
                                 )
                             already_linked = bool(row_chk)
                         if not already_linked:
-                            await send_telegram_to(chat_id, "❌ Codice non valido o scaduto. Genera un nuovo codice dall'app.")
+                            await send_telegram_to(chat_id, "Codice non valido o scaduto. Genera un nuovo codice dall'app.")
                     continue
 
                 # Per tutti gli altri comandi: trova l'utente dal chat_id registrato
@@ -3012,14 +3016,14 @@ async def poll_telegram():
                             state.pop("_stopping", None)
                             syms = ", ".join(p["symbol"] for p in remaining_agent)
                             add_log(state, "info", "ERRORE", f"Stop Telegram annullato: vendita fallita per {syms} — riprova")
-                            await send_telegram_to(chat_id, f"⚠️ Stop annullato: vendita fallita per {syms}. Sessione ancora attiva.")
+                            await send_telegram_to(chat_id, f"Stop annullato: vendita fallita per {syms}. Sessione ancora attiva.")
                             continue
                         state["running"] = False
                         state.pop("_stopping", None)
                         pnl = state["currentCapital"] - state["capital"]
                         add_log(state, "info", "STOP", f"P&L finale: {pnl:+.2f}$")
                         await persist_sessions()
-                        msg = "✅ Agente fermato"
+                        msg = "Agente fermato"
                         if closed:
                             msg += f"\nPosizioni chiuse: {', '.join(closed)}"
                         msg += f"\nP&L sessione: {pnl:+.2f}$"
@@ -3035,9 +3039,9 @@ async def poll_telegram():
                             if pos:
                                 await exit_position(state, pos, "TELEGRAM", user_id=uid)
                                 if pos in state.get("positions", []):
-                                    await send_telegram_to(chat_id, f"⚠️ Chiusura {sym} non confermata. Posizione ancora aperta, verifica su Zentra/Revolut X.")
+                                    await send_telegram_to(chat_id, f"Chiusura {sym} non confermata. Posizione ancora aperta, verifica su Zentra/Revolut X.")
                                 else:
-                                    await send_telegram_to(chat_id, f"✅ Posizione {sym} chiusa")
+                                    await send_telegram_to(chat_id, f"Posizione {sym} chiusa")
                             else:
                                 await send_telegram_to(chat_id, f"Nessuna posizione aperta su {sym}")
                         else:
@@ -3070,7 +3074,7 @@ async def monitor_manual_positions(state: dict, user_id: int):
                     pos["currentPrice"] = cur
                     add_log(state, "sell", "CHIUSO ESTERNAMENTE",
                             f"{sym} — posizione non trovata su Revolut X (saldo {coin_bal:.6f})")
-                    await notify(state, f"⚠️ {sym} chiuso esternamente su Revolut X")
+                    await notify(state, f"{sym} chiuso esternamente su Revolut X")
                     state["positions"].remove(pos)
                     state["currentCapital"] += pos.get("size_remaining", pos["size"])
         except Exception as e:
@@ -3130,7 +3134,7 @@ async def binance_ws_loop():
             async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
                 _ws_connected = True
                 backoff = 5
-                print("[WS] ✅ Connesso — stream prezzi attivo")
+                print("[WS] Connesso — stream prezzi attivo")
                 async for raw in ws:
                     _ws_last_msg_ts = time.time()
                     try:
@@ -3172,7 +3176,7 @@ async def binance_ws_loop():
         except Exception as e:
             _ws_connected = False
             url_idx += 1
-            print(f"[WS] ❌ Disconnesso: {e} — provo {urls[url_idx % len(urls)]} in {backoff}s")
+            print(f"[WS] Disconnesso: {e} — provo {urls[url_idx % len(urls)]} in {backoff}s")
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60)
 
@@ -3521,7 +3525,7 @@ async def restore_sessions_from_db(pool):
                               if was_running else
                               "Monitoraggio SL/TP attivo.")
                 msg = (
-                    f"🔄 <b>Zentra — server riavviato</b>\n"
+                    f"<b>Zentra — server riavviato</b>\n"
                     f"Trovate <b>{n}</b> posizioni aperte: {syms}\n"
                     f"Le posizioni sono attive e monitorate (SL/TP operativi).\n"
                     f"{pausa_note}"
@@ -3603,6 +3607,35 @@ def _validate_password_auth(identifier: str, password: str):
     if len(password) > 128:
         raise HTTPException(status_code=400, detail="Password troppo lunga (max 128 caratteri)")
 
+def _validate_registration_email(email: str):
+    if not email:
+        raise HTTPException(status_code=400, detail="Inserisci una email")
+    if not _looks_like_email(email):
+        raise HTTPException(status_code=400, detail="Inserisci una email valida")
+    if len(email) > 254:
+        raise HTTPException(status_code=400, detail="Email troppo lunga")
+
+def _normalize_display_name(value: str) -> str:
+    name = re.sub(r"\s+", " ", (value or "").strip())
+    if len(name) < 2:
+        raise HTTPException(status_code=400, detail="Username troppo corto (min 2 caratteri)")
+    if len(name) > 40:
+        raise HTTPException(status_code=400, detail="Username troppo lungo (max 40 caratteri)")
+    if any(ord(ch) < 32 for ch in name):
+        raise HTTPException(status_code=400, detail="Username non valido")
+    return name
+
+async def _generate_random_username(conn) -> str:
+    for _ in range(12):
+        username = f"zentra_{secrets.token_hex(4)}"
+        existing = await conn.fetchrow("SELECT id FROM users WHERE username = $1", username)
+        if not existing:
+            return username
+    return f"zentra_{int(time.time())}_{secrets.token_hex(2)}"
+
+def _random_display_name() -> str:
+    return f"Trader {secrets.randbelow(9000) + 1000}"
+
 def _google_state_token(redirect_to: str) -> str:
     import base64, hmac as _hmac
     payload = json.dumps({
@@ -3634,19 +3667,28 @@ async def register(req: RegisterRequest, request: Request):
     check_rate_limit(request, max_attempts=10, window=300, key_suffix="register")
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database non disponibile")
-    identifier = _auth_identifier(req)
-    _validate_password_auth(identifier, req.password)
-    email = identifier if _looks_like_email(identifier) else ""
-    username = identifier
+    email = (getattr(req, "email", "") or "").strip().lower()
+    _validate_registration_email(email)
+    _validate_password_auth(email, req.password)
     pw_hash = bcrypt.hashpw(req.password.encode(), bcrypt.gensalt()).decode()
     try:
         async with db_pool.acquire() as conn:
+            existing = await conn.fetchrow(
+                "SELECT id FROM users WHERE LOWER(email) = LOWER($1)",
+                email
+            )
+            if existing:
+                raise HTTPException(status_code=400, detail="Account già in uso")
+            username = await _generate_random_username(conn)
+            display_name = _random_display_name()
             row = await conn.fetchrow(
                 "INSERT INTO users (username, email, password_hash, display_name) VALUES ($1, $2, $3, $4) RETURNING id",
-                username, email, pw_hash, identifier
+                username, email, pw_hash, display_name
             )
         token = create_token(row["id"])
-        return {"token": token, "username": identifier, "has_revx_keys": False}
+        return {"token": token, "username": display_name, "email": email, "has_revx_keys": False}
+    except HTTPException:
+        raise
     except asyncpg.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Account già in uso")
     except Exception:
@@ -3708,7 +3750,7 @@ async def login(req: LoginRequest, request: Request):
     token = create_token(row["id"])
     has_keys = bool(row.get("revx_key_id"))
     dname = row["display_name"] or row["email"] or row["username"] or identifier
-    return {"token": token, "username": dname, "has_revx_keys": has_keys}
+    return {"token": token, "username": dname, "email": row["email"] or "", "has_revx_keys": has_keys}
 
 @app.get("/auth/google/status")
 async def google_status(request: Request):
@@ -3847,6 +3889,22 @@ async def remove_watchlist(symbol: str, request: Request, user_id: int = Depends
 class AvatarRequest(BaseModel):
     avatar_b64: str
 
+@app.patch("/auth/profile")
+async def save_profile(req: ProfileRequest, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=10, window=60, key_suffix="profile")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    display_name = _normalize_display_name(req.display_name)
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET display_name = $1 WHERE id = $2",
+            display_name, user_id
+        )
+    state = user_sessions.get(user_id)
+    if state is not None:
+        state["username"] = display_name
+    return {"ok": True, "username": display_name}
+
 @app.post("/auth/avatar")
 async def save_avatar(req: AvatarRequest, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=10, window=60, key_suffix="avatar")
@@ -3873,7 +3931,7 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT username, display_name, avatar_b64, sim_mode, revx_key_id, "
+            "SELECT username, display_name, email, avatar_b64, sim_mode, revx_key_id, "
             "binance_api_key, coinbase_api_key, telegram_chat_id, "
             "plan, subscription_expires_at, last_session_date, sessions_today, "
             "last_scan_date, scans_today, last_ai_chat_date, ai_chats_today "
@@ -3902,6 +3960,7 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
     ai_limit = ai_daily_limit_for_plan(raw_plan)
     return {
         "username": dname,
+        "email": row["email"] or "",
         "has_revx_keys": has_keys,
         "has_binance_keys": has_binance_keys,
         "has_coinbase_keys": has_coinbase_keys,
@@ -5112,6 +5171,29 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         raise HTTPException(status_code=400, detail="Messaggio troppo lungo (max 2000 caratteri)")
 
     today = datetime.utcnow().date()
+    ai_reserved = False
+
+    async def rollback_ai_usage():
+        nonlocal ai_today, ai_reserved
+        if not ai_reserved or ai_limit is None or not db_pool:
+            return
+        try:
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE users
+                       SET ai_chats_today = GREATEST(COALESCE(ai_chats_today, 0) - 1, 0)
+                     WHERE id = $1
+                       AND last_ai_chat_date = $2
+                       AND COALESCE(ai_chats_today, 0) > 0
+                    """,
+                    user_id, today
+                )
+            ai_today = max(0, ai_today - 1)
+            ai_reserved = False
+        except Exception as e:
+            print(f"[AI USAGE] rollback fallito user={user_id}: {public_error(e, max_len=120)}")
+
     async with db_pool.acquire() as conn:
         plan_row = await conn.fetchrow(
             "SELECT plan, subscription_expires_at, last_ai_chat_date, ai_chats_today "
@@ -5148,9 +5230,10 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
                     detail=f"Hai raggiunto il limite di {ai_limit} analisi Zentra AI di oggi. Passa a un piano superiore per continuare."
                 )
             ai_today = updated["ai_chats_today"] or ai_today
+            ai_reserved = True
 
-    if body.reset:
-        _ai_conversations[user_id] = []
+    if getattr(body, "reset", False):
+        _ai_conversations.pop(user_id, None)
 
     # ── Live context ────────────────────────────────────────────────────────
     state = get_session(user_id)
@@ -5391,12 +5474,22 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     )
 
     # ── Conversation history ─────────────────────────────────────────────────
-    history = _ai_conversations.setdefault(user_id, [])
-    history.append({"role": "user", "content": user_msg})
-    if len(history) > 20:
-        history[:] = history[-20:]
-
-    messages_to_send = [{"role": m["role"], "content": m["content"]} for m in history]
+    messages_to_send = []
+    for item in (getattr(body, "history", None) or [])[-12:]:
+        role = (item.get("role") or "").strip().lower()
+        content = (item.get("content") or "").strip()
+        if role == "ai":
+            role = "assistant"
+        if role not in ("user", "assistant") or not content:
+            continue
+        messages_to_send.append({"role": role, "content": content[:4000]})
+    if (
+        not messages_to_send
+        or messages_to_send[-1]["role"] != "user"
+        or messages_to_send[-1]["content"].strip() != user_msg
+    ):
+        messages_to_send.append({"role": "user", "content": user_msg})
+    messages_to_send = messages_to_send[-12:]
 
     try:
         async with httpx.AsyncClient(timeout=45) as client:
@@ -5410,19 +5503,18 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         except Exception:
             data = {}
         if res.status_code >= 400:
-            history.pop()
+            await rollback_ai_usage()
             detail = data.get("error", {}).get("message") if isinstance(data.get("error"), dict) else ""
             return {"error": detail or "Zentra AI temporaneamente non disponibile. Riprova tra poco."}
     except Exception as e:
-        history.pop()
+        await rollback_ai_usage()
         return {"error": public_error(e, api_key, max_len=160)}
 
     if "content" not in data:
-        history.pop()
+        await rollback_ai_usage()
         return {"error": public_error(Exception(str(data.get("error", data))), api_key)}
 
     reply = data["content"][0]["text"]
-    history.append({"role": "assistant", "content": reply})
     return {
         "reply": reply,
         "chart_symbol": chart_coin,

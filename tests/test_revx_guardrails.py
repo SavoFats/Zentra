@@ -1089,6 +1089,157 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(result["ai_analyses_per_day"], main.PRO_AI_ANALYSES_PER_DAY)
         self.assertEqual(result["ai_analyses_remaining"], main.PRO_AI_ANALYSES_PER_DAY - 1)
 
+    def test_chat_uses_request_history_instead_of_global_memory(self):
+        main = self.main
+        captured = {}
+
+        class Row(dict):
+            def __getitem__(self, key):
+                return self.get(key)
+
+        class Conn:
+            async def fetchrow(self, sql, *args):
+                if sql.lstrip().upper().startswith("SELECT"):
+                    return Row({
+                        "plan": "pro",
+                        "subscription_expires_at": None,
+                        "last_ai_chat_date": None,
+                        "ai_chats_today": 0,
+                    })
+                return Row({"ai_chats_today": 1})
+
+        class Response:
+            status_code = 200
+
+            def json(self):
+                return {"content": [{"text": "Continuo dal thread corretto."}]}
+
+        class Client:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, *args, **kwargs):
+                captured["messages"] = kwargs["json"]["messages"]
+                return Response()
+
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_client = main.httpx.AsyncClient
+        original_history = dict(main._ai_conversations)
+        original_env = os.environ.get("ANTHROPIC_API_KEY")
+        main.db_pool = FakePool(Conn())
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.httpx.AsyncClient = Client
+        main._ai_conversations = {123: [{"role": "user", "content": "vecchio thread"}]}
+        os.environ["ANTHROPIC_API_KEY"] = "anthropic-secret"
+        body = types.SimpleNamespace(
+            message="E adesso?",
+            reset=False,
+            history=[
+                {"role": "user", "content": "Analizza XRP"},
+                {"role": "assistant", "content": "XRP e' debole."},
+                {"role": "user", "content": "E adesso?"},
+            ],
+        )
+        try:
+            result = asyncio.run(main.chat(body, request=object(), user_id=123))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+            main.httpx.AsyncClient = original_client
+            main._ai_conversations = original_history
+            if original_env is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = original_env
+
+        self.assertEqual(result["reply"], "Continuo dal thread corretto.")
+        self.assertEqual(
+            captured["messages"],
+            [
+                {"role": "user", "content": "Analizza XRP"},
+                {"role": "assistant", "content": "XRP e' debole."},
+                {"role": "user", "content": "E adesso?"},
+            ],
+        )
+        self.assertNotIn({"role": "user", "content": "vecchio thread"}, captured["messages"])
+
+    def test_chat_rolls_back_ai_usage_when_provider_fails(self):
+        main = self.main
+        conn = None
+
+        class Row(dict):
+            def __getitem__(self, key):
+                return self.get(key)
+
+        class Conn:
+            def __init__(self):
+                self.rollback_calls = 0
+
+            async def fetchrow(self, sql, *args):
+                if sql.lstrip().upper().startswith("SELECT"):
+                    return Row({
+                        "plan": "pro",
+                        "subscription_expires_at": None,
+                        "last_ai_chat_date": None,
+                        "ai_chats_today": 0,
+                    })
+                return Row({"ai_chats_today": 1})
+
+            async def execute(self, sql, *args):
+                if "GREATEST(COALESCE(ai_chats_today, 0) - 1, 0)" in sql:
+                    self.rollback_calls += 1
+                return "UPDATE 1"
+
+        class Response:
+            status_code = 500
+
+            def json(self):
+                return {"error": {"message": "provider down"}}
+
+        class Client:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def post(self, *args, **kwargs):
+                return Response()
+
+        conn = Conn()
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_client = main.httpx.AsyncClient
+        original_env = os.environ.get("ANTHROPIC_API_KEY")
+        main.db_pool = FakePool(conn)
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.httpx.AsyncClient = Client
+        os.environ["ANTHROPIC_API_KEY"] = "anthropic-secret"
+        body = types.SimpleNamespace(message="Analizza SOL", reset=False, history=[])
+        try:
+            result = asyncio.run(main.chat(body, request=object(), user_id=123))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+            main.httpx.AsyncClient = original_client
+            if original_env is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = original_env
+
+        self.assertEqual(result["error"], "provider down")
+        self.assertEqual(conn.rollback_calls, 1)
+
     def test_chat_allows_founder_and_uses_anthropic_reply(self):
         main = self.main
 
@@ -1164,6 +1315,105 @@ class RevxGuardrailTests(unittest.TestCase):
 
         self.assertEqual(result["reply"], "Setup non chiaro: meglio aspettare.")
         self.assertIsNone(result["ai_analyses_per_day"])
+
+    def test_register_rejects_username_without_email(self):
+        main = self.main
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        main.db_pool = object()
+        main.check_rate_limit = lambda *args, **kwargs: None
+        body = types.SimpleNamespace(email="", username="savo", password="password123")
+        try:
+            with self.assertRaises(main.HTTPException) as ctx:
+                asyncio.run(main.register(body, request=object()))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("email", ctx.exception.detail.lower())
+
+    def test_register_uses_email_and_generates_display_identity(self):
+        main = self.main
+
+        class Conn:
+            def __init__(self):
+                self.insert_args = None
+
+            async def fetchrow(self, sql, *args):
+                if "LOWER(email)" in sql:
+                    return None
+                if "WHERE username = $1" in sql:
+                    return None
+                if "INSERT INTO users" in sql:
+                    self.insert_args = args
+                    return {"id": 77}
+                return None
+
+        conn = Conn()
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_hashpw = getattr(main.bcrypt, "hashpw", None)
+        original_gensalt = getattr(main.bcrypt, "gensalt", None)
+        original_create_token = main.create_token
+        main.db_pool = FakePool(conn)
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.bcrypt.hashpw = lambda password, salt: b"hashed-password"
+        main.bcrypt.gensalt = lambda: b"salt"
+        main.create_token = lambda user_id: f"token-{user_id}"
+        body = types.SimpleNamespace(email="Savo@example.com", username="ignored", password="password123")
+        try:
+            result = asyncio.run(main.register(body, request=object()))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+            if original_hashpw is None:
+                delattr(main.bcrypt, "hashpw")
+            else:
+                main.bcrypt.hashpw = original_hashpw
+            if original_gensalt is None:
+                delattr(main.bcrypt, "gensalt")
+            else:
+                main.bcrypt.gensalt = original_gensalt
+            main.create_token = original_create_token
+
+        username, email, password_hash, display_name = conn.insert_args
+        self.assertTrue(username.startswith("zentra_"))
+        self.assertEqual(email, "savo@example.com")
+        self.assertEqual(password_hash, "hashed-password")
+        self.assertTrue(display_name.startswith("Trader "))
+        self.assertEqual(result["token"], "token-77")
+        self.assertEqual(result["username"], display_name)
+        self.assertEqual(result["email"], "savo@example.com")
+
+    def test_profile_update_normalizes_and_saves_display_name(self):
+        main = self.main
+
+        class Conn:
+            def __init__(self):
+                self.execute_args = None
+
+            async def execute(self, sql, *args):
+                self.execute_args = args
+                return "UPDATE 1"
+
+        conn = Conn()
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_sessions = dict(main.user_sessions)
+        main.db_pool = FakePool(conn)
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.user_sessions = {5: {"username": "Old Name"}}
+        body = types.SimpleNamespace(display_name="  Savo   Fats  ")
+        try:
+            result = asyncio.run(main.save_profile(body, request=object(), user_id=5))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+            main.user_sessions = original_sessions
+
+        self.assertEqual(conn.execute_args, ("Savo Fats", 5))
+        self.assertEqual(result, {"ok": True, "username": "Savo Fats"})
 
 
 if __name__ == "__main__":

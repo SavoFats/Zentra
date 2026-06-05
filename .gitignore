@@ -1,0 +1,16 @@
+.vercel
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.env.*
+*.pem
+*.key
+private*.key
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+test_ws.py

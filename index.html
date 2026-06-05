@@ -229,6 +229,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .mkt-sym-sub { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
 .mkt-in-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:4px; padding:1px 5px; font-weight:700; margin-left:4px; vertical-align:middle; }
 .plan-badge { font-size:9px; font-weight:800; padding:2px 7px; border-radius:20px; letter-spacing:0.06em; margin-left:6px; vertical-align:middle; }
+.hdr .plan-badge { display:inline-flex; align-items:center; min-height:26px; padding:0 11px; border-radius:999px; font-size:10px; letter-spacing:0.04em; white-space:nowrap; box-shadow:0 8px 24px rgba(0,0,0,0.06); }
 .btn-primary { background:var(--blue); color:#fff; border:none; border-radius:var(--radius-sm); font-weight:700; font-family:var(--sans); box-shadow:0 4px 16px rgba(0,82,255,0.3); transition:opacity 0.15s; }
 .btn-primary:active { opacity:0.85; }
 .plan-badge.free { background:var(--surface3); color:var(--text3); }
@@ -247,11 +248,11 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .app-plan-sub { font-size:12px; color:var(--text3); line-height:1.45; margin:6px 0 18px; min-height:34px; }
 .app-plan-feats { list-style:none; display:flex; flex-direction:column; gap:9px; margin:0 0 18px; padding:0; }
 .app-plan-feats li { display:flex; gap:9px; font-size:12.5px; color:var(--text2); line-height:1.35; font-weight:600; }
-.app-plan-feats li::before { content:'✓'; color:var(--green); font-weight:900; flex-shrink:0; }
+.app-plan-feats li::before { content:''; width:7px; height:7px; border-radius:999px; background:var(--green); flex-shrink:0; margin-top:7px; }
 .app-plan-feats li.muted { color:var(--text3); }
-.app-plan-feats li.muted::before { content:'×'; color:var(--text3); }
+.app-plan-feats li.muted::before { background:var(--text3); opacity:.45; }
 .app-plan-feats li.agent-feature { display:block; }
-.app-plan-feats li.agent-feature::before { content:'✓'; display:inline-block; margin-right:9px; color:var(--green); }
+.app-plan-feats li.agent-feature::before { content:''; display:inline-block; width:7px; height:7px; border-radius:999px; background:var(--green); margin-right:9px; }
 .app-plan-subfeats { list-style:disc; margin:7px 0 0 27px; padding:0; display:flex; flex-direction:column; gap:5px; }
 .app-plan-subfeats li { display:list-item; font-size:12px; color:var(--text2); font-weight:600; }
 .app-plan-subfeats li::before { content:none; }
@@ -260,7 +261,24 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .app-plan-btn.primary { background:var(--blue); color:#fff; box-shadow:0 6px 24px rgba(0,82,255,0.25); }
 .app-plan-btn.founder { background:linear-gradient(135deg,#ffb020,#ff6b2b); color:#15110a; box-shadow:0 6px 24px rgba(255,176,32,0.22); }
 .app-plan-btn:disabled { opacity:0.6; cursor:default; box-shadow:none; }
+.billing-manage-card { display:none; align-items:center; justify-content:space-between; gap:16px; margin:0 0 16px; padding:16px 18px; border:1px solid var(--border); border-radius:18px; background:linear-gradient(135deg,var(--surface),rgba(0,82,255,0.045)); box-shadow:0 14px 34px rgba(0,0,0,0.04); }
+.billing-manage-card.open { display:flex; }
+.billing-manage-title { font-size:15px; font-weight:900; color:var(--text); letter-spacing:-0.02em; }
+.billing-manage-sub { font-size:12px; color:var(--text3); margin-top:4px; line-height:1.45; }
+.billing-manage-actions { display:flex; gap:10px; flex-shrink:0; }
+.billing-manage-btn { border:none; border-radius:12px; padding:11px 14px; font-family:var(--sans); font-size:13px; font-weight:900; cursor:pointer; background:var(--blue); color:#fff; box-shadow:0 6px 22px rgba(0,82,255,0.22); }
+.billing-manage-btn.secondary { background:var(--surface2); color:var(--text); box-shadow:none; }
 @media (max-width:980px) { .plans-page-grid { grid-template-columns:1fr; } .app-plan-card { min-height:auto; } }
+@media (max-width:640px) {
+  .hdr .plan-badge { min-height:24px; padding:0 9px; font-size:9px; max-width:92px; overflow:hidden; text-overflow:ellipsis; }
+  .plans-page-grid { gap:12px; }
+  .app-plan-card { padding:16px; border-radius:16px; }
+  .app-plan-price { font-size:32px; }
+  .app-plan-sub { min-height:0; }
+  .billing-manage-card { flex-direction:column; align-items:stretch; padding:15px; }
+  .billing-manage-actions { width:100%; flex-direction:column; }
+  .billing-manage-btn { width:100%; }
+}
 .pro-locked { opacity:0.45; pointer-events:none; }
 .pro-lock-label { font-size:10px; font-weight:800; color:#1a1200; background:#f59e0b; border-radius:4px; padding:2px 6px; margin-left:6px; letter-spacing:0.04em; }
 #sessionsIndicator { font-size:12px; margin-top:4px; }
@@ -475,6 +493,14 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .acc-avatar img { width:100%; height:100%; object-fit:cover; }
 .acc-name { font-size:17px; font-weight:800; color:var(--text); }
 .acc-email { font-size:12px; color:var(--text3); margin-top:3px; }
+.acc-profile-edit { padding:14px 16px 16px; border-top:1px solid var(--border); display:flex; gap:10px; align-items:flex-end; }
+.acc-profile-field { flex:1; min-width:0; }
+.acc-profile-label { font-size:10px; font-weight:800; color:var(--text3); text-transform:uppercase; letter-spacing:.08em; margin-bottom:7px; }
+.acc-profile-input { width:100%; border:1px solid var(--border); background:var(--surface2); color:var(--text); border-radius:12px; padding:12px 13px; font-size:14px; font-family:var(--sans); outline:none; }
+.acc-profile-input:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,82,255,.12); }
+.acc-profile-save { border:none; border-radius:12px; background:var(--blue); color:#fff; font-size:13px; font-weight:800; padding:12px 16px; cursor:pointer; font-family:var(--sans); white-space:nowrap; }
+.acc-profile-save:disabled { opacity:.55; cursor:not-allowed; }
+.acc-profile-error { font-size:11px; color:var(--red); margin-top:7px; display:none; }
 .acc-section { background:var(--surface); border-radius:var(--radius); margin-bottom:14px; overflow:hidden; }
 .acc-section.no-title .acc-row:first-child { border-top:none; }
 .acc-sec-title { font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.1em; padding:14px 16px 8px; }
@@ -708,8 +734,8 @@ body.auth-active .tabbar { display:none !important; }
     <div class="auth-title">Crea account</div>
     <div class="auth-sub">Inizia a tradare con il tuo agente AI</div>
     <div class="auth-field">
-      <label>Email o username</label>
-      <div class="auth-field-wrap"><input type="text" id="regUser" placeholder="email o username"></div>
+      <label>Email</label>
+      <div class="auth-field-wrap"><input type="email" id="regUser" placeholder="you@example.com" autocomplete="email"></div>
       <div class="auth-field-error" id="regUserErr"></div>
     </div>
     <div class="auth-field">
@@ -779,17 +805,17 @@ body.auth-active .tabbar { display:none !important; }
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     <span id="pmTelegram">Collega Telegram</span>
   </div>
-  <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? (isPaidPlan() ? manageSubscriptionClick() : (document.getElementById('profileMenu').classList.remove('open'), showPaywall())) : null" style="display:none">
+  <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? manageSubscriptionClick() : null" style="display:none">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-    <span id="pmBillingLabel">Abbonamento</span>
+    <span id="pmBillingLabel">Gestisci abbonamento</span>
   </div>
-  <div id="pmProCta" style="display:none;margin:8px 4px 4px;background:linear-gradient(135deg,#78350f,#92400e);border-radius:10px;padding:12px 14px;cursor:pointer" onclick="document.getElementById('profileMenu').classList.remove('open'); showPaywall()">
+  <div id="pmProCta" style="display:none;margin:8px 4px 4px;background:linear-gradient(135deg,#0b4cff,#7c3aed);border-radius:10px;padding:12px 14px;cursor:pointer" onclick="document.getElementById('profileMenu').classList.remove('open'); showTab('plans',document.querySelector('.sb-item[data-tab=plans]'))">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div>
-        <div style="font-size:12px;font-weight:800;color:#fbbf24;letter-spacing:0.04em;margin-bottom:2px">ZENTRA PRO</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.75);font-weight:500">Sessioni illimitate · più posizioni</div>
+        <div style="font-size:12px;font-weight:800;color:#fff;letter-spacing:0.04em;margin-bottom:2px">PIANI ZENTRA</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.78);font-weight:500">Sblocca exchange reali, AI e notifiche</div>
       </div>
-      <div style="background:#f59e0b;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:800;color:#1a1200;white-space:nowrap;margin-left:10px">€14.99/mese →</div>
+      <div style="background:#fff;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:800;color:#0b4cff;white-space:nowrap;margin-left:10px">Vedi</div>
     </div>
   </div>
   <div class="profile-menu-item danger" onclick="logout()">
@@ -860,30 +886,30 @@ body.auth-active .tabbar { display:none !important; }
             <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">① Installa Homebrew</div>
             <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;word-break:break-all">
               <span style="flex:1">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</span>
-              <button onclick="navigator.clipboard.writeText('/bin/bash -c &quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)&quot;');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+              <button onclick="navigator.clipboard.writeText('/bin/bash -c &quot;$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)&quot;');this.textContent='Copiato';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
             </div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">② Attiva Homebrew nella sessione corrente</div>
             <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <span>eval "$(/opt/homebrew/bin/brew shellenv zsh)"</span>
-              <button onclick="navigator.clipboard.writeText('eval &quot;$(/opt/homebrew/bin/brew shellenv zsh)&quot;');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+              <button onclick="navigator.clipboard.writeText('eval &quot;$(/opt/homebrew/bin/brew shellenv zsh)&quot;');this.textContent='Copiato';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
             </div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">③ Installa OpenSSL</div>
             <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <span>brew install openssl</span>
-              <button onclick="navigator.clipboard.writeText('brew install openssl');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+              <button onclick="navigator.clipboard.writeText('brew install openssl');this.textContent='Copiato';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
             </div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;margin-top:4px">④ Vai sul Desktop e genera le chiavi</div>
             <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <span>cd ~/Desktop</span>
-              <button onclick="navigator.clipboard.writeText('cd ~/Desktop');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+              <button onclick="navigator.clipboard.writeText('cd ~/Desktop');this.textContent='Copiato';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
             </div>
             <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <span>$(brew --prefix openssl)/bin/openssl genpkey -algorithm ed25519 -out private.pem</span>
-              <button onclick="navigator.clipboard.writeText('$(brew --prefix openssl)/bin/openssl genpkey -algorithm ed25519 -out private.pem');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+              <button onclick="navigator.clipboard.writeText('$(brew --prefix openssl)/bin/openssl genpkey -algorithm ed25519 -out private.pem');this.textContent='Copiato';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
             </div>
             <div style="background:var(--surface3);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:11px;color:var(--text);display:flex;align-items:center;justify-content:space-between">
               <span>$(brew --prefix openssl)/bin/openssl pkey -in private.pem -pubout -out public.pem</span>
-              <button onclick="navigator.clipboard.writeText('$(brew --prefix openssl)/bin/openssl pkey -in private.pem -pubout -out public.pem');this.textContent='✓';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
+              <button onclick="navigator.clipboard.writeText('$(brew --prefix openssl)/bin/openssl pkey -in private.pem -pubout -out public.pem');this.textContent='Copiato';setTimeout(()=>this.textContent='Copia',1500)" style="background:var(--blue);color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">Copia</button>
             </div>
           </div>
         </div>
@@ -893,7 +919,7 @@ body.auth-active .tabbar { display:none !important; }
         </div>
       </div>
       <div style="background:rgba(246,70,93,0.08);border:1px solid rgba(246,70,93,0.2);border-radius:12px;padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:18px">
-        🔒 <strong style="color:var(--text)">private.pem è segreto.</strong> Non condividerlo mai. Zentra lo usa solo per firmare le richieste sul tuo dispositivo — non viene mai inviato ai nostri server in chiaro.
+        <strong style="color:var(--text)">private.pem è segreto.</strong> Non condividerlo mai. Zentra lo usa solo per firmare le richieste sul tuo dispositivo — non viene mai inviato ai nostri server in chiaro.
       </div>
       <div class="modal-actions" style="grid-template-columns:1fr 1fr">
         <button class="modal-btn cancel" onclick="closeRevxModal()">Annulla</button>
@@ -936,7 +962,6 @@ body.auth-active .tabbar { display:none !important; }
 
       <!-- Upload file -->
       <div id="revxDropZone" onclick="document.getElementById('revxFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--blue)';this.style.background='var(--blue-dim)'" ondragleave="this.style.borderColor='var(--border2)';this.style.background=''" ondrop="event.preventDefault();this.style.borderColor='var(--border2)';this.style.background='';revxLoadFile({target:{files:event.dataTransfer.files}})" style="border:2px dashed var(--border2);border-radius:14px;padding:20px;text-align:center;cursor:pointer;margin-bottom:12px;transition:border-color 0.2s,background 0.2s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border2)'">
-        <div style="font-size:28px;margin-bottom:6px">📄</div>
         <div style="font-size:13px;font-weight:600;color:var(--text)">Clicca per caricare <code>private_key.pem</code></div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">oppure trascina il file qui</div>
       </div>
@@ -2021,6 +2046,17 @@ body.auth-active .tabbar { display:none !important; }
       <div class="home-username">Piani</div>
     </div>
 
+    <div class="billing-manage-card" id="billingManageCard">
+      <div>
+        <div class="billing-manage-title">Gestione abbonamento</div>
+        <div class="billing-manage-sub" id="billingManageSub">Gestisci metodo di pagamento, upgrade, downgrade o disdetta dal portale Stripe.</div>
+      </div>
+      <div class="billing-manage-actions">
+        <button class="billing-manage-btn" onclick="manageSubscriptionClick()">Gestisci su Stripe</button>
+        <button class="billing-manage-btn secondary" onclick="showTab('account',document.querySelector('.sb-user'))">Impostazioni</button>
+      </div>
+    </div>
+
     <div class="plans-page-grid">
       <div class="app-plan-card">
         <div class="app-plan-kicker">Demo</div>
@@ -2055,7 +2091,7 @@ body.auth-active .tabbar { display:none !important; }
           <li>Notifiche Telegram</li>
           <li class="muted">Zentra Agent Beta</li>
         </ul>
-        <button class="app-plan-btn primary" id="planProBtn" onclick="checkoutPlan('pro')">Passa a Pro</button>
+        <button class="app-plan-btn primary" id="planProBtn" onclick="selectBillingPlan('pro')">Passa a Pro</button>
       </div>
 
       <div class="app-plan-card founder">
@@ -2075,7 +2111,7 @@ body.auth-active .tabbar { display:none !important; }
           </li>
         </ul>
         <div class="app-plan-risk">Zentra Agent è una funzionalità beta. Il trading comporta rischi e può causare perdite. L'algoritmo è in continuo miglioramento e non garantisce profitti.</div>
-        <button class="app-plan-btn founder" id="planFounderBtn" onclick="checkoutPlan('founder')">Diventa Founder</button>
+        <button class="app-plan-btn founder" id="planFounderBtn" onclick="selectBillingPlan('founder')">Diventa Founder</button>
       </div>
     </div>
   </div>
@@ -2093,6 +2129,18 @@ body.auth-active .tabbar { display:none !important; }
       <div>
         <div class="acc-name" id="accName">--</div>
         <div class="acc-email" id="accEmail"></div>
+      </div>
+    </div>
+
+    <div class="acc-section">
+      <div class="acc-sec-title">Profilo</div>
+      <div class="acc-profile-edit">
+        <div class="acc-profile-field">
+          <div class="acc-profile-label">Username visibile</div>
+          <input class="acc-profile-input" id="displayNameInput" maxlength="40" autocomplete="nickname" placeholder="Il tuo nome su Zentra">
+          <div class="acc-profile-error" id="displayNameErr"></div>
+        </div>
+        <button class="acc-profile-save" id="displayNameSaveBtn" onclick="saveDisplayName()">Salva</button>
       </div>
     </div>
 
@@ -2271,6 +2319,10 @@ body.auth-active .tabbar { display:none !important; }
     </span>
     <span>Posizioni</span>
   </button>
+  <button class="tab" id="tabPiani" onclick="showTab('plans',this)">
+    <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg></span>
+    <span>Piani</span>
+  </button>
 </div>
 
 <script>
@@ -2278,6 +2330,7 @@ const API = 'https://api.zentra.trading';
 
 let _authToken = localStorage.getItem('ca_token') || '';
 let _username  = localStorage.getItem('ca_username') || '';
+let _email     = localStorage.getItem('ca_email') || '';
 let _pendingAuthError = '';
 {
   const authParams = new URLSearchParams(window.location.search);
@@ -2335,9 +2388,9 @@ function planDisplayName() {
 }
 
 function planBadgeText() {
-  if (_plan === 'founder') return 'FOUNDER';
-  if (_plan === 'pro') return 'PRO';
-  return 'FREE';
+  if (_plan === 'founder') return 'Founder';
+  if (_plan === 'pro') return 'Pro';
+  return 'Free';
 }
 
 // ── AVATAR / PROFILO ─────────────────────────────────────────────────────────
@@ -2486,9 +2539,10 @@ async function doLogin() {
     const r = await fetch(API + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
     const d = await r.json();
     if (!r.ok) { showFieldError('loginPass','loginPassErr', d.detail || 'Username o password errati'); btn.disabled=false; btn.textContent='Accedi'; return; }
-    _authToken = d.token; _username = d.username;
+    _authToken = d.token; _username = d.username; _email = d.email || _email;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
+    if (_email) localStorage.setItem('ca_email', _email);
     localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('loginPass','loginPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Accedi'; }
@@ -2496,21 +2550,22 @@ async function doLogin() {
 
 async function doRegister() {
   clearFieldError('regUser','regUserErr'); clearFieldError('regPass','regPassErr');
-  const username = document.getElementById('regUser').value.trim();
+  const email = document.getElementById('regUser').value.trim().toLowerCase();
   const password = document.getElementById('regPass').value;
-  if (!username) return showFieldError('regUser','regUserErr','Inserisci email o username');
-  if (username.length < 3) return showFieldError('regUser','regUserErr','Username troppo corto (min 3 caratteri)');
+  if (!email) return showFieldError('regUser','regUserErr','Inserisci la tua email');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showFieldError('regUser','regUserErr','Inserisci una email valida');
   if (!password) return showFieldError('regPass','regPassErr','Scegli una password');
   if (password.length < 8) return showFieldError('regPass','regPassErr','Password troppo corta (min 8 caratteri)');
   const btn = document.getElementById('regBtn');
   btn.disabled = true; btn.textContent = 'Registrazione in corso...';
   try {
-    const r = await fetch(API + '/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
+    const r = await fetch(API + '/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email, password}) });
     const d = await r.json();
     if (!r.ok) { showFieldError('regUser','regUserErr', d.detail || 'Errore registrazione'); btn.disabled=false; btn.textContent='Registrati'; return; }
-    _authToken = d.token; _username = d.username;
+    _authToken = d.token; _username = d.username; _email = d.email || email;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
+    localStorage.setItem('ca_email', _email);
     localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
   } catch(e) { showFieldError('regPass','regPassErr','Errore di connessione'); btn.disabled=false; btn.textContent='Registrati'; }
@@ -2525,6 +2580,7 @@ async function logout() {
   await fetch(API + '/auth/logout', { method: 'POST', headers: authHeaders() }).catch(() => {});
   localStorage.removeItem('ca_token');
   localStorage.removeItem('ca_username');
+  localStorage.removeItem('ca_email');
   localStorage.removeItem('ca_avatar');
   localStorage.removeItem('ca_active_tab');
   location.reload();
@@ -2555,6 +2611,7 @@ async function confirmDeleteAccount() {
     if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Eliminazione account fallita');
     localStorage.removeItem('ca_token');
     localStorage.removeItem('ca_username');
+    localStorage.removeItem('ca_email');
     localStorage.removeItem('ca_avatar');
     localStorage.removeItem('ca_active_tab');
     location.reload();
@@ -2573,11 +2630,13 @@ async function checkAuth() {
     if (!r.ok) {
       localStorage.removeItem('ca_token');
       localStorage.removeItem('ca_username');
+      localStorage.removeItem('ca_email');
       showAuthScreen();
       showLogin(); return;
     }
     const d = await r.json();
     _username = d.username;
+    _email = d.email || _email;
     _plan = d.plan || 'free';
     _sessionsToday = d.sessions_today || 0;
     _sessionsPerDay = d.sessions_per_day || 1;
@@ -2586,6 +2645,7 @@ async function checkAuth() {
     _aiAnalysesToday = d.ai_analyses_today ?? _aiAnalysesToday;
     if (d.ai_analyses_per_day !== undefined) _aiAnalysesPerDay = d.ai_analyses_per_day;
     localStorage.setItem('ca_username', _username);
+    if (_email) localStorage.setItem('ca_email', _email);
     if (!localStorage.getItem('ca_active_tab')) localStorage.setItem('ca_active_tab', 'home');
     hideAuthScreen(); initApp();
   } catch(e) {
@@ -2676,6 +2736,7 @@ async function loadUserProfile() {
     }
 
     _hasRevxKeys = me.has_revx_keys || false;
+    _email = me.email || _email;
     _exchangeKeys.binance = me.has_binance_keys || false;
     _exchangeKeys.coinbase = me.has_coinbase_keys || false;
     _simMode = me.sim_mode !== undefined ? me.sim_mode : true;
@@ -2683,7 +2744,7 @@ async function loadUserProfile() {
     window._realMode = _plan !== 'free' && _hasRevxKeys && !_simMode;
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
-    if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram ✓' : 'Collega Telegram';
+    if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram collegato' : 'Collega Telegram';
 
     if (me.avatar_b64) {
       applyAvatar(me.avatar_b64);
@@ -2693,6 +2754,7 @@ async function loadUserProfile() {
     }
 
     _watchlist = new Set(wl.symbols || []);
+    if (_email) localStorage.setItem('ca_email', _email);
 
     // Carica loghi dal server prima di renderizzare (così le coin senza logo locale le prendono dal backend)
     await loadServerLogos();
@@ -3117,7 +3179,7 @@ async function handleTelegramAction() {
           clearInterval(timer);
           window._tgLinked = true;
           const pmTg = document.getElementById('pmTelegram');
-          if (pmTg) pmTg.textContent = 'Telegram ✓';
+          if (pmTg) pmTg.textContent = 'Telegram collegato';
           document.getElementById('tgLinkedView').style.display = 'block';
           document.getElementById('tgUnlinkedView').style.display = 'none';
           document.getElementById('tgCodeBox').style.display = 'none';
@@ -3184,7 +3246,7 @@ function revxValidateStep3() {
     status.textContent = '';
     status.style.color = 'var(--text3)';
   } else if (valid) {
-    status.textContent = '✓ Chiave privata valida';
+    status.textContent = 'Chiave privata valida';
     status.style.color = 'var(--green)';
   } else {
     status.textContent = 'Formato non valido — assicurati di copiare tutto il contenuto del file .pem';
@@ -3200,7 +3262,7 @@ function revxLoadFile(event) {
     document.getElementById('revxPrivateKey').value = e.target.result;
     revxValidateStep3();
     const zone = document.getElementById('revxDropZone');
-    zone.innerHTML = '<div style="font-size:22px;margin-bottom:4px">✅</div><div style="font-size:13px;font-weight:600;color:var(--green)">' + file.name + ' caricato</div>';
+    zone.innerHTML = '<div style="font-size:13px;font-weight:600;color:var(--green)">' + file.name + ' caricato</div>';
   };
   reader.readAsText(file);
 }
@@ -3670,7 +3732,7 @@ function updateCapitalUsd() {
   if (total > 0) {
     const pct = usd / total * 100;
     hint.innerHTML = pct.toFixed(1) + '% del saldo disponibile (' + sym + total.toFixed(2) + ')' +
-      (usd > total ? ' <span style="color:var(--red)">⚠ supera il saldo</span>' : '');
+      (usd > total ? ' <span style="color:var(--red)">Supera il saldo</span>' : '');
   } else {
     hint.textContent = 'Capitale simulato';
   }
@@ -3920,7 +3982,7 @@ function showFieldError(fieldId, message) {
   const hintId = hintMap[fieldId];
   if (hintId) {
     const hint = document.getElementById(hintId);
-    if (hint) hint.innerHTML = '<span style="color:var(--red);font-weight:600">⚠ ' + message + '</span>';
+    if (hint) hint.innerHTML = '<span style="color:var(--red);font-weight:600">' + message + '</span>';
   }
   showToast(message, true);
 }
@@ -5395,7 +5457,11 @@ function renderAccountPage() {
   const nameEl  = document.getElementById('accName');
   const initEl  = document.getElementById('accAvatarInitial');
   const avEl    = document.getElementById('accAvatar');
+  const emailEl = document.getElementById('accEmail');
+  const nameInput = document.getElementById('displayNameInput');
   if (nameEl) nameEl.textContent = _username || '--';
+  if (emailEl) emailEl.textContent = _email || '';
+  if (nameInput) nameInput.value = _username || '';
   if (initEl) initEl.textContent = (_username[0]||'?').toUpperCase();
   const cached = localStorage.getItem('ca_avatar');
   if (avEl && cached) avEl.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
@@ -5422,6 +5488,7 @@ function renderAccountPage() {
       <div class="acc-feat-row"><span>Notifiche Telegram</span><span class="acc-feat-val">${isPro?'Incluse':'Non incluse'}</span></div>
       <div class="acc-feat-row"><span>Zentra Agent Beta</span><span class="acc-feat-val">${isFounder?'Incluso':'Non incluso'}</span></div>
       ${!isFounder && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"showTab('plans',document.querySelector('.sb-item[data-tab=plans]'))\">Confronta i piani</button>" : ''}
+      ${isPro && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"manageSubscriptionClick()\">Gestisci abbonamento</button>" : ''}
       ${!isPro && STRIPE_ENABLED ? '<div style="height:12px"></div>' : ''}
     `;
   }
@@ -5435,6 +5502,12 @@ function renderPlansPage() {
   const freeBtn = document.getElementById('planFreeBtn');
   const proBtn = document.getElementById('planProBtn');
   const founderBtn = document.getElementById('planFounderBtn');
+  const manageCard = document.getElementById('billingManageCard');
+  const manageSub = document.getElementById('billingManageSub');
+  if (manageCard) manageCard.classList.toggle('open', STRIPE_ENABLED && isPaidPlan());
+  if (manageSub) manageSub.textContent = _plan === 'founder'
+    ? 'Sei Founder. Da qui puoi aggiornare metodo di pagamento, scaricare fatture o annullare il rinnovo.'
+    : 'Sei Pro. Da qui puoi passare a Founder, modificare metodo di pagamento o annullare il rinnovo.';
   if (freeBtn) {
     freeBtn.textContent = _plan === 'free' ? 'Piano attuale' : 'Incluso nel tuo piano';
     freeBtn.disabled = true;
@@ -5458,6 +5531,45 @@ function renderPlansPage() {
       founderBtn.textContent = _plan === 'pro' ? 'Passa a Founder' : 'Diventa Founder';
     }
     founderBtn.disabled = false;
+  }
+}
+
+async function saveDisplayName() {
+  const input = document.getElementById('displayNameInput');
+  const err = document.getElementById('displayNameErr');
+  const btn = document.getElementById('displayNameSaveBtn');
+  const displayName = (input?.value || '').trim().replace(/\s+/g, ' ');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+  if (displayName.length < 2) {
+    if (err) { err.textContent = 'Inserisci almeno 2 caratteri'; err.style.display = ''; }
+    input?.focus();
+    return;
+  }
+  if (displayName.length > 40) {
+    if (err) { err.textContent = 'Massimo 40 caratteri'; err.style.display = ''; }
+    input?.focus();
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvo...'; }
+  try {
+    const r = await fetch(API + '/auth/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ display_name: displayName })
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Salvataggio fallito');
+    _username = d.username || displayName;
+    localStorage.setItem('ca_username', _username);
+    renderAccountPage();
+    syncSidebar();
+    updateProfileMenu();
+    renderHome();
+    showToast('Username aggiornato');
+  } catch (e) {
+    if (err) { err.textContent = e.message || 'Salvataggio fallito'; err.style.display = ''; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Salva'; }
   }
 }
 
@@ -6061,7 +6173,7 @@ function showDotTooltip(el) {
   const on = ema[keyMap[key] ?? key];
   const tip = document.getElementById('emaTooltip');
   const color = on ? 'var(--green)' : 'var(--red)';
-  const icon = on ? '✓' : '✗';
+  const icon = on ? 'OK' : 'NO';
   tip.innerHTML =
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
       '<div style="width:10px;height:10px;border-radius:50%;background:' + color + ';flex-shrink:0"></div>' +
@@ -6133,10 +6245,18 @@ function showScanLimitModal(msg) {
   showPaywall(msg || 'Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.', 'plans');
 }
 
+async function selectBillingPlan(plan) {
+  if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
+  if (isPaidPlan()) {
+    await manageSubscriptionClick();
+    return;
+  }
+  await checkoutPlan(plan);
+}
+
 async function checkoutPlan(plan) {
   if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
-  if (plan === 'pro' && _plan === 'pro') { await manageSubscriptionClick(); return; }
-  if (plan === 'founder' && _plan === 'founder') { await manageSubscriptionClick(); return; }
+  if (isPaidPlan()) { await manageSubscriptionClick(); return; }
   if (plan !== 'pro' && plan !== 'founder') { return; }
   try {
     const r = await fetch(API + '/billing/checkout', {
@@ -6272,16 +6392,15 @@ function closeProWelcome() {
 <!-- WELCOME PRO MODAL -->
 <div class="modal-overlay" id="proWelcomeModal">
   <div class="modal-card" style="max-width:380px;text-align:center;padding:36px 28px">
-    <div style="font-size:52px;margin-bottom:4px">✦</div>
     <div style="font-size:11px;font-weight:800;letter-spacing:0.12em;color:#f59e0b;margin-bottom:10px">ZENTRA PRO</div>
     <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:-0.02em">Benvenuto nel piano Pro</div>
     <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Il tuo abbonamento è attivo. Hai ora accesso completo a tutte le funzionalità.</div>
     <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:24px;text-align:left">
       <div style="font-size:13px;color:var(--text2);line-height:2">
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#f59e0b;font-weight:700">✓</span> Sessioni illimitate al giorno</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#f59e0b;font-weight:700">✓</span> Posizioni multiple contemporaneamente</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#f59e0b;font-weight:700">✓</span> Filtri personalizzabili (Trend 1h, BTC EMA, RSI, TP)</div>
-        <div style="display:flex;align-items:center;gap:8px"><span style="color:#f59e0b;font-weight:700">✓</span> Allocazione per trade personalizzabile</div>
+        <div>Sessioni illimitate al giorno</div>
+        <div>Posizioni multiple contemporaneamente</div>
+        <div>Filtri personalizzabili (Trend 1h, BTC EMA, RSI, TP)</div>
+        <div>Allocazione per trade personalizzabile</div>
       </div>
     </div>
     <button onclick="closeProWelcome()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#ef4444);border:none;border-radius:var(--radius);color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:var(--sans);letter-spacing:-0.01em">Inizia ora →</button>
@@ -6291,21 +6410,19 @@ function closeProWelcome() {
 <!-- PAYWALL MODAL -->
 <div class="modal-overlay" id="paywallModal" onclick="if(event.target===this)closePaywall()">
   <div class="modal-card" style="max-width:360px;text-align:center;padding:32px 24px">
-    <div style="font-size:40px;margin-bottom:12px">🔒</div>
     <div id="paywallTitle" style="font-size:20px;font-weight:700;margin-bottom:8px">Piano Free</div>
     <p id="paywallMsg" style="color:var(--text2);font-size:14px;margin-bottom:24px;line-height:1.5"></p>
     <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:20px;text-align:left">
-      <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">Zentra Pro — €14.99/mese</div>
+      <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">Cosa sblocchi con Pro</div>
       <div style="font-size:13px;color:var(--text2);line-height:1.8">
-        ✓ Sessioni illimitate al giorno<br>
-        ✓ Posizioni multiple contemporaneamente<br>
-        ✓ Filtri personalizzabili (Trend 1h, BTC EMA, RSI, TP)<br>
-        ✓ Allocazione per trade personalizzabile
+        Scansioni di mercato illimitate<br>
+        50 analisi Zentra AI al giorno<br>
+        Collegamento exchange reali<br>
+        Notifiche Telegram
       </div>
     </div>
     <button class="btn-primary" id="paywallPrimaryBtn" style="width:100%;padding:14px;font-size:16px;margin-bottom:10px;cursor:pointer" onclick="handlePaywallPrimary()">Passa a Pro</button>
     <button onclick="closePaywall()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">Forse dopo</button>
-    <div style="font-size:11px;color:var(--text3);margin-top:14px;line-height:1.6">Procedendo accetti i <a href="terms.html" style="color:var(--blue)">Termini di Servizio</a> e la <a href="privacy.html" style="color:var(--blue)">Privacy Policy</a></div>
   </div>
 </div>
 
@@ -6332,6 +6449,7 @@ let _aiLoading = false;
 let _aiUnread = 0;
 let _aiThreads = [];
 let _aiActiveThreadId = '';
+let _aiChartSeq = 0;
 const AI_THREADS_KEY = 'zentra_ai_threads_v1';
 
 function updateAIUsageFromPayload(d) {
@@ -6688,7 +6806,7 @@ function _aiRenderChart(symbol) {
   const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (!msgs || !safeSymbol) return;
   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const cid = `tv_ai_${Date.now()}`;
+  const cid = `tv_ai_${Date.now()}_${++_aiChartSeq}`;
   const wrap = document.createElement('div');
   const label = document.createElement('div');
   const frame = document.createElement('div');
