@@ -5506,8 +5506,8 @@ function renderPlansPage() {
   const manageSub = document.getElementById('billingManageSub');
   if (manageCard) manageCard.classList.toggle('open', STRIPE_ENABLED && isPaidPlan());
   if (manageSub) manageSub.textContent = _plan === 'founder'
-    ? 'Sei Founder. Da qui puoi aggiornare metodo di pagamento, scaricare fatture o annullare il rinnovo.'
-    : 'Sei Pro. Da qui puoi passare a Founder, modificare metodo di pagamento o annullare il rinnovo.';
+    ? 'Da qui puoi aggiornare metodo di pagamento, scaricare fatture o annullare il rinnovo.'
+    : 'Da qui puoi passare a Founder, modificare metodo di pagamento o annullare il rinnovo.';
   // free card
   if (freeBtn) {
     if (_plan === 'free') {
