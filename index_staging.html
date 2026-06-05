@@ -2128,20 +2128,20 @@ body.auth-active .tabbar { display:none !important; }
         <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
       </div>
       <div>
-        <div class="acc-name" id="accName">--</div>
-        <div class="acc-email" id="accEmail"></div>
-      </div>
-    </div>
-
-    <div class="acc-section">
-      <div class="acc-sec-title">Profilo</div>
-      <div class="acc-profile-edit">
-        <div class="acc-profile-field">
-          <div class="acc-profile-label">Username visibile</div>
-          <input class="acc-profile-input" id="displayNameInput" maxlength="40" autocomplete="nickname" placeholder="Il tuo nome su Zentra">
-          <div class="acc-profile-error" id="displayNameErr"></div>
+        <div style="display:flex;align-items:center;gap:5px" id="accNameRow">
+          <div class="acc-name" id="accName">--</div>
+          <button onclick="startEditName()" title="Modifica username" style="background:none;border:none;padding:3px;cursor:pointer;color:var(--text3);display:flex;align-items:center;border-radius:6px;line-height:1" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text3)'">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
         </div>
-        <button class="acc-profile-save" id="displayNameSaveBtn" onclick="saveDisplayName()">Salva</button>
+        <div id="editNameRow" style="display:none;align-items:center;gap:6px">
+          <input id="displayNameInput" maxlength="40" autocomplete="nickname" placeholder="Il tuo nome" onkeydown="if(event.key==='Enter')confirmEditName();if(event.key==='Escape')cancelEditName()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 9px;font-size:13px;font-family:var(--sans);color:var(--text);outline:none;width:130px">
+          <button id="displayNameSaveBtn" onclick="confirmEditName()" title="Salva" style="background:var(--blue);border:none;border-radius:8px;padding:5px 8px;cursor:pointer;display:flex;align-items:center;color:#fff">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+        </div>
+        <div id="displayNameErr" style="font-size:11px;color:var(--red);margin-top:2px;display:none"></div>
+        <div class="acc-email" id="accEmail"></div>
       </div>
     </div>
 
@@ -5461,10 +5461,8 @@ function renderAccountPage() {
   const initEl  = document.getElementById('accAvatarInitial');
   const avEl    = document.getElementById('accAvatar');
   const emailEl = document.getElementById('accEmail');
-  const nameInput = document.getElementById('displayNameInput');
   if (nameEl) nameEl.textContent = _username || '--';
   if (emailEl) emailEl.textContent = _email || '';
-  if (nameInput) nameInput.value = _username || '';
   if (initEl) initEl.textContent = (_username[0]||'?').toUpperCase();
   const cached = localStorage.getItem('ca_avatar');
   if (avEl && cached) avEl.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
@@ -5490,8 +5488,7 @@ function renderAccountPage() {
       <div class="acc-feat-row"><span>Trading manuale reale</span><span class="acc-feat-val">${isPro?'Incluso':'Non incluso'}</span></div>
       <div class="acc-feat-row"><span>Notifiche Telegram</span><span class="acc-feat-val">${isPro?'Incluse':'Non incluse'}</span></div>
       <div class="acc-feat-row"><span>Zentra Agent Beta</span><span class="acc-feat-val">${isFounder?'Incluso':'Non incluso'}</span></div>
-      ${!isFounder && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"showTab('plans',document.querySelector('.sb-item[data-tab=plans]'))\">Confronta i piani</button>" : ''}
-      ${isPro && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"manageSubscriptionClick()\">Gestisci abbonamento</button>" : ''}
+      ${isPaidPlan() && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"manageSubscriptionClick()\">Gestisci abbonamento</button>" : ''}
       ${!isPro && STRIPE_ENABLED ? '<div style="height:12px"></div>' : ''}
     `;
   }
@@ -5569,7 +5566,7 @@ async function saveDisplayName() {
     input?.focus();
     return;
   }
-  if (btn) { btn.disabled = true; btn.textContent = 'Salvo...'; }
+  if (btn) btn.disabled = true;
   try {
     const r = await fetch(API + '/auth/profile', {
       method: 'PATCH',
@@ -5580,6 +5577,7 @@ async function saveDisplayName() {
     if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Salvataggio fallito');
     _username = d.username || displayName;
     localStorage.setItem('ca_username', _username);
+    cancelEditName();
     renderAccountPage();
     syncSidebar();
     updateProfileMenu();
@@ -5588,8 +5586,29 @@ async function saveDisplayName() {
   } catch (e) {
     if (err) { err.textContent = e.message || 'Salvataggio fallito'; err.style.display = ''; }
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Salva'; }
+    if (btn) btn.disabled = false;
   }
+}
+
+function startEditName() {
+  document.getElementById('accNameRow').style.display = 'none';
+  const row = document.getElementById('editNameRow');
+  row.style.display = 'flex';
+  const inp = document.getElementById('displayNameInput');
+  inp.value = _username || '';
+  inp.focus();
+  inp.select();
+}
+
+function cancelEditName() {
+  document.getElementById('editNameRow').style.display = 'none';
+  document.getElementById('accNameRow').style.display = 'flex';
+  const err = document.getElementById('displayNameErr');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+}
+
+async function confirmEditName() {
+  await saveDisplayName();
 }
 
 function renderExchangePage() {
