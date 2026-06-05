@@ -6703,11 +6703,8 @@ function _aiRenderChart(symbol) {
   function makeWidget() {
     const el = document.getElementById(cid);
     if (!el || typeof TradingView === 'undefined') return;
-    const w = el.clientWidth || el.offsetWidth || 620;
     new TradingView.widget({
-      width: w,
-      height: 300,
-      autosize: false,
+      autosize: true,
       symbol: `${safeSymbol}USDT`,
       interval: '60',
       timezone: 'Etc/UTC',
@@ -6807,10 +6804,21 @@ async function sendAIMessage(source = 'analysis') {
   _aiScrollBottom();
 
   try {
+    const _thread = _aiGetThread();
+    const _history = (_thread?.messages || []).slice(-12).reduce((acc, m) => {
+      if (m.role === 'user') acc.push({ role: 'user', content: m.content });
+      else if (m.role === 'ai') acc.push({ role: 'assistant', content: m.content });
+      else if (m.role === 'chart' && acc.length) {
+        const last = acc[acc.length - 1];
+        if (last.role === 'assistant') last.content += `\n\n[Grafico ${m.symbol}USDT 1H visualizzato nell'interfaccia]`;
+        else acc.push({ role: 'assistant', content: `[Grafico ${m.symbol}USDT 1H visualizzato nell'interfaccia]` });
+      }
+      return acc;
+    }, []);
     const r = await fetch(API + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ message: msg })
+      body: JSON.stringify({ message: msg, history: _history })
     });
     const d = await r.json();
     const aiUsageBefore = Number(_aiAnalysesToday) || 0;
