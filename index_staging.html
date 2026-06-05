@@ -6334,7 +6334,6 @@ function closeProWelcome() {
 let _aiOpen = false;
 let _aiLoading = false;
 let _aiUnread = 0;
-let _aiChartSeq = 0;
 let _aiThreads = [];
 let _aiActiveThreadId = '';
 const AI_THREADS_KEY = 'zentra_ai_threads_v1';
@@ -6716,55 +6715,21 @@ function _aiRenderChart(symbol) {
   const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (!msgs || !safeSymbol) return;
   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const containerId = `aiTvChart${++_aiChartSeq}`;
+  const tvSym = encodeURIComponent(`BINANCE:${safeSymbol}USDT`);
+  const src = `https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0&hideideas=1`;
   const wrap = document.createElement('div');
   const label = document.createElement('div');
-  const frame = document.createElement('div');
+  const iframe = document.createElement('iframe');
   wrap.className = 'ai-chart-wrap';
   label.className = 'ai-chart-label';
   label.textContent = `${safeSymbol} · 1H`;
-  frame.className = 'ai-chart-frame';
-  frame.id = containerId;
-  wrap.append(label, frame);
+  iframe.className = 'ai-chart-frame';
+  iframe.src = src;
+  iframe.setAttribute('allowfullscreen', '');
+  wrap.append(label, iframe);
   msgs.appendChild(wrap);
-  requestAnimationFrame(() => requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; }));
-
-  function createWidget() {
-    if (!document.getElementById(containerId) || typeof TradingView === 'undefined') return;
-    new TradingView.widget({
-      width: '100%',
-      height: 360,
-      symbol: `${safeSymbol}USDT`,
-      interval: '60',
-      timezone: 'Etc/UTC',
-      theme,
-      style: '1',
-      locale: 'it',
-      enable_publishing: false,
-      allow_symbol_change: true,
-      container_id: containerId,
-      hide_side_toolbar: false,
-      hide_top_toolbar: false
-    });
-    const ro = new ResizeObserver(() => { _aiScrollBottom(); });
-    ro.observe(wrap);
-    setTimeout(() => ro.disconnect(), 8000);
-  }
-
-  if (typeof TradingView !== 'undefined') {
-    setTimeout(createWidget, 0);
-  } else {
-    const existing = document.querySelector('script[data-tv-js="1"]');
-    if (existing) {
-      existing.addEventListener('load', createWidget, { once:true });
-    } else {
-      const s = document.createElement('script');
-      s.src = 'https://s3.tradingview.com/tv.js';
-      s.dataset.tvJs = '1';
-      s.onload = createWidget;
-      document.head.appendChild(s);
-    }
-  }
+  iframe.addEventListener('load', () => _aiScrollBottom(), { once: true });
+  requestAnimationFrame(() => requestAnimationFrame(() => _aiScrollBottom()));
 }
 
 function _aiDetectSymbolFromText(text) {

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
 <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.zentra.trading https://api.anthropic.com https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.zentra.trading https://api.zentra.trading https://api.anthropic.com https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Applica tema prima del rendering per evitare flash
@@ -1787,6 +1787,10 @@ body.auth-active .tabbar { display:none !important; }
       .ai-panel-sub { font-size:11px; color:var(--text3); font-weight:500; }
       .ai-panel-close { width:32px; height:32px; border-radius:8px; border:none; background:var(--surface2); color:var(--text2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; }
       .ai-panel-close:hover { background:var(--border); color:var(--text); }
+      :root { --ai-enter-dur:200ms; --ai-user-enter-dur:150ms; --ai-token-dur:100ms; }
+      @keyframes ai-msg-enter { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+      @keyframes ai-token-in { from{opacity:0} to{opacity:1} }
+      @keyframes ai-cursor-blink { 0%,100%{opacity:1} 50%{opacity:0} }
       .ai-messages { flex:1; overflow-y:auto; padding:16px 14px; display:flex; flex-direction:column; gap:12px; }
       .ai-msg { max-width:88%; display:flex; flex-direction:column; gap:4px; }
       .ai-msg.user { align-self:flex-end; }
@@ -1796,9 +1800,13 @@ body.auth-active .tabbar { display:none !important; }
       .ai-msg.ai .ai-bubble { background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; border:1px solid var(--border); }
       .ai-msg-time { font-size:10px; color:var(--text3); font-weight:500; padding:0 4px; }
       .ai-msg.user .ai-msg-time { text-align:right; }
+      .ai-msg-new { animation:ai-msg-enter var(--ai-enter-dur) ease-out both; will-change:transform,opacity; }
+      .ai-msg-new.user { animation-duration:var(--ai-user-enter-dur); }
+      .ai-token { animation:ai-token-in var(--ai-token-dur) ease-out both; }
+      .ai-cursor { animation:ai-cursor-blink 1s ease-in-out infinite; user-select:none; }
       .ai-typing { align-self:flex-start; display:none; padding:6px 0 18px; }
       .ai-typing.visible { display:flex; align-items:center; }
-      .ai-thinking-text { font-size:13px; color:var(--text3); font-style:italic; transition:opacity 0.35s ease; }
+      .ai-thinking-text { font-size:13px; color:var(--text2); transition:opacity 0.35s ease; }
       .ai-thinking-text.fade { opacity:0; }
       .ai-welcome { text-align:center; padding:32px 16px; color:var(--text3); font-size:13px; line-height:1.6; }
       .ai-welcome strong { color:var(--text2); display:block; margin-bottom:6px; font-size:14px; }
@@ -1813,7 +1821,7 @@ body.auth-active .tabbar { display:none !important; }
       .ai-send svg { width:18px; height:18px; }
       .ai-chart-wrap { margin:8px 0 4px; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:var(--surface2); }
       .ai-chart-label { font-size:11px; font-weight:800; color:var(--text3); padding:8px 12px 4px; letter-spacing:0.06em; text-transform:uppercase; }
-      .ai-chart-frame { width:100%; height:220px; border:none; display:block; }
+      .ai-chart-frame { width:100%; height:360px; border:none; display:block; }
       .ai-news-wrap { margin:8px 0 4px; border-radius:14px; border:1px solid var(--border); background:var(--surface2); padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
       .ai-news-label { font-size:11px; font-weight:800; color:var(--text3); letter-spacing:0.06em; text-transform:uppercase; }
       .ai-news-item { font-size:12.5px; line-height:1.45; color:var(--text2); font-weight:600; }
@@ -1839,9 +1847,11 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
-      .ai-workspace { min-height:100%; display:flex; flex-direction:column; gap:18px; }
+      #page-analysis { overflow:hidden; }
+      #page-analysis.active { display:flex; flex-direction:column; }
+      .ai-workspace { flex:1; min-height:0; display:flex; flex-direction:column; }
       .ai-workspace-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-      .ai-workspace .ai-messages { flex:1; min-height:360px; max-height:none; padding:10px 0 22px; }
+      .ai-workspace .ai-messages { flex:1; min-height:0; overflow-y:auto; padding:10px 0 22px; }
       .ai-workspace .ai-msg.ai { max-width:min(980px,100%); }
       .ai-workspace .ai-msg.ai .ai-bubble { background:transparent; border:none; border-radius:0; padding:0; box-shadow:none; }
       .ai-empty-state { margin:auto; max-width:520px; text-align:center; color:var(--text3); font-size:14px; line-height:1.55; }
@@ -6324,7 +6334,6 @@ function closeProWelcome() {
 let _aiOpen = false;
 let _aiLoading = false;
 let _aiUnread = 0;
-let _aiChartSeq = 0;
 let _aiThreads = [];
 let _aiActiveThreadId = '';
 const AI_THREADS_KEY = 'zentra_ai_threads_v1';
@@ -6450,16 +6459,26 @@ function _aiGetThread(id = _aiActiveThreadId) {
 }
 
 let _aiAutoScrollEnabled = true;
+let _aiScrollProg = false;
+
+function _aiScrollBottom() {
+  const msgs = document.getElementById('aiMessages');
+  if (!msgs || !_aiAutoScrollEnabled) return;
+  _aiScrollProg = true;
+  msgs.scrollTop = msgs.scrollHeight;
+  requestAnimationFrame(() => { _aiScrollProg = false; });
+}
 
 function _aiSetupAutoScroll() {
   const msgs = document.getElementById('aiMessages');
   if (!msgs || msgs._scrollSetup) return;
   msgs._scrollSetup = true;
   msgs.addEventListener('scroll', () => {
-    _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 80;
+    if (_aiScrollProg) return;
+    _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 150;
   }, { passive: true });
   new MutationObserver(() => {
-    if (_aiAutoScrollEnabled) requestAnimationFrame(() => requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; }));
+    if (_aiAutoScrollEnabled) requestAnimationFrame(() => requestAnimationFrame(() => _aiScrollBottom()));
   }).observe(msgs, { childList: true });
 }
 
@@ -6560,6 +6579,7 @@ function renderAIHistory() {
 function renderAIThread() {
   const msgs = document.getElementById('aiMessages');
   if (!msgs) return;
+  _aiAutoScrollEnabled = true;
   const thread = _aiGetThread();
   msgs.innerHTML = '';
   if (!thread || !(thread.messages || []).length) {
@@ -6621,27 +6641,40 @@ async function _aiStreamMsg(content) {
   const wrap = document.createElement('div');
   const bubble = document.createElement('div');
   const time = document.createElement('div');
-  wrap.className = 'ai-msg ai';
+  wrap.className = 'ai-msg ai ai-msg-new';
   bubble.className = 'ai-bubble';
   time.className = 'ai-msg-time';
   time.textContent = _aiTime();
   wrap.append(bubble, time);
   msgs.appendChild(wrap);
+
+  const cursor = document.createElement('span');
+  cursor.className = 'ai-cursor';
+  cursor.textContent = '▌';
+  bubble.appendChild(cursor);
+
   const n = content.length;
   const targetMs = Math.min(1600, Math.max(350, n * 5));
   const tickMs = 33;
   const step = Math.max(1, Math.ceil(n / (targetMs / tickMs)));
+  let prev = 0;
   await new Promise(resolve => {
     let i = 0;
     const t = setInterval(() => {
       i = Math.min(i + step, n);
-      bubble.textContent = content.slice(0, i);
-      if (_aiAutoScrollEnabled) msgs.scrollTop = msgs.scrollHeight;
+      if (i > prev) {
+        const chunk = document.createElement('span');
+        chunk.className = 'ai-token';
+        chunk.textContent = content.slice(prev, i);
+        bubble.insertBefore(chunk, cursor);
+        prev = i;
+        _aiScrollBottom();
+      }
       if (i >= n) {
         clearInterval(t);
+        cursor.remove();
         bubble.innerHTML = _renderAiMarkdown(content);
-        if (_aiAutoScrollEnabled) msgs.scrollTop = msgs.scrollHeight;
-        resolve();
+        requestAnimationFrame(() => requestAnimationFrame(() => { _aiScrollBottom(); resolve(); }));
       }
     }, tickMs);
   });
@@ -6655,7 +6688,7 @@ function _aiAppendMsg(role, content, persist = true) {
   if (empty) empty.remove();
 
   const wrap = document.createElement('div');
-  wrap.className = 'ai-msg ' + role;
+  wrap.className = 'ai-msg ' + role + (persist ? ' ai-msg-new' : '');
 
   const bubble = document.createElement('div');
   bubble.className = 'ai-bubble';
@@ -6672,7 +6705,7 @@ function _aiAppendMsg(role, content, persist = true) {
   wrap.appendChild(bubble);
   wrap.appendChild(time);
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  _aiScrollBottom();
   if (persist) _aiPersistMessage(role, content);
   return wrap;
 }
@@ -6682,59 +6715,21 @@ function _aiRenderChart(symbol) {
   const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (!msgs || !safeSymbol) return;
   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const containerId = `aiTvChart${++_aiChartSeq}`;
+  const tvSym = encodeURIComponent(`BINANCE:${safeSymbol}USDT`);
+  const src = `https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0&hideideas=1`;
   const wrap = document.createElement('div');
   const label = document.createElement('div');
-  const frame = document.createElement('div');
+  const iframe = document.createElement('iframe');
   wrap.className = 'ai-chart-wrap';
   label.className = 'ai-chart-label';
   label.textContent = `${safeSymbol} · 1H`;
-  frame.className = 'ai-chart-frame';
-  frame.id = containerId;
-  wrap.append(label, frame);
+  iframe.className = 'ai-chart-frame';
+  iframe.src = src;
+  iframe.setAttribute('allowfullscreen', '');
+  wrap.append(label, iframe);
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  function createWidget() {
-    if (!document.getElementById(containerId) || typeof TradingView === 'undefined') return;
-    new TradingView.widget({
-      autosize: true,
-      symbol: `${safeSymbol}USDT`,
-      interval: '60',
-      timezone: 'Etc/UTC',
-      theme,
-      style: '1',
-      locale: 'it',
-      enable_publishing: false,
-      allow_symbol_change: true,
-      container_id: containerId,
-      hide_side_toolbar: false,
-      hide_top_toolbar: false
-    });
-    const ro = new ResizeObserver(() => {
-      if (_aiAutoScrollEnabled) requestAnimationFrame(() => {
-        const m = document.getElementById('aiMessages');
-        if (m) m.scrollTop = m.scrollHeight;
-      });
-    });
-    ro.observe(wrap);
-    setTimeout(() => ro.disconnect(), 8000);
-  }
-
-  if (typeof TradingView !== 'undefined') {
-    setTimeout(createWidget, 0);
-  } else {
-    const existing = document.querySelector('script[data-tv-js="1"]');
-    if (existing) {
-      existing.addEventListener('load', createWidget, { once:true });
-    } else {
-      const s = document.createElement('script');
-      s.src = 'https://s3.tradingview.com/tv.js';
-      s.dataset.tvJs = '1';
-      s.onload = createWidget;
-      document.head.appendChild(s);
-    }
-  }
+  iframe.addEventListener('load', () => _aiScrollBottom(), { once: true });
+  requestAnimationFrame(() => requestAnimationFrame(() => _aiScrollBottom()));
 }
 
 function _aiDetectSymbolFromText(text) {
@@ -6782,7 +6777,7 @@ function _aiRenderNews(news) {
     wrap.appendChild(row);
   });
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  _aiScrollBottom();
 }
 
 async function sendAIMessage(source = 'analysis') {
@@ -6808,7 +6803,7 @@ async function sendAIMessage(source = 'analysis') {
   _aiAppendMsg('user', msg);
 
   _aiThinkingStart();
-  document.getElementById('aiMessages').scrollTop = 999999;
+  _aiScrollBottom();
 
   try {
     const r = await fetch(API + '/chat', {
@@ -6826,6 +6821,7 @@ async function sendAIMessage(source = 'analysis') {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
       await _aiStreamMsg(d.reply);
+      _aiAutoScrollEnabled = true;
       const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg);
       if (chartSymbol && Array.isArray(d.news) && d.news.length) {
         _aiRenderNews(d.news);
@@ -6855,7 +6851,7 @@ async function sendAIMessage(source = 'analysis') {
   if (analysisSend) analysisSend.disabled = true;
   const homeSend = document.getElementById('aiHomeSend');
   if (homeSend) homeSend.disabled = true;
-  document.getElementById('aiMessages').scrollTop = 999999;
+  _aiScrollBottom();
 }
 
 function _aiThreadMenuToggle(event, id) {
