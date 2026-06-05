@@ -6288,7 +6288,7 @@ async function manageSubscriptionClick() {
   try {
     const r = await fetch(API + '/billing/portal', {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ return_url: location.href })
+      body: JSON.stringify({ return_url: location.href.split('?')[0] + '?portal_return=1' })
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
@@ -6356,37 +6356,46 @@ function applyPlanConfig() {
   });
 }
 
-// Check ?upgraded=1 param al ritorno da Stripe
+// Polling piano dopo ritorno da Stripe (checkout o portale)
+async function _pollPlanChange(prevPlan, onUpgrade) {
+  document.getElementById('upgradingOverlay').style.display = 'flex';
+  for (let i = 0; i < 8; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const r = await fetch(API + '/billing/status', { headers: authHeaders() });
+      if (r.ok) {
+        const d = await r.json();
+        STRIPE_ENABLED = d.stripe_enabled || STRIPE_ENABLED;
+        _plan = d.plan || _plan;
+        _sessionsToday = d.sessions_today ?? _sessionsToday;
+        _scansToday = d.scans_today ?? _scansToday;
+        _scansPerDay = d.scans_per_day ?? _scansPerDay;
+        updatePlanUI();
+        if (d.plan !== prevPlan) { _upgradedPlan = d.plan; break; }
+      }
+    } catch(e) {}
+  }
+  document.getElementById('upgradingOverlay').style.display = 'none';
+  onUpgrade(_upgradedPlan);
+}
+
+// Check ?upgraded=1 param al ritorno da Stripe checkout
 (function() {
   const p = new URLSearchParams(location.search);
   if (p.get('upgraded') === '1') {
     history.replaceState({}, '', location.pathname);
-    setTimeout(async () => {
-      // Mostra overlay di caricamento subito
-      document.getElementById('upgradingOverlay').style.display = 'flex';
-      // Polling: webhook Stripe è asincrono, aspetta max 14s
-      for (let i = 0; i < 7; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        try {
-          const r = await fetch(API + '/billing/status', { headers: authHeaders() });
-          if (r.ok) {
-            const d = await r.json();
-            STRIPE_ENABLED = d.stripe_enabled || STRIPE_ENABLED;
-            if (d.plan === 'pro' || d.plan === 'founder') {
-              _plan = d.plan;
-              _sessionsToday = d.sessions_today ?? _sessionsToday;
-              _scansToday = d.scans_today ?? _scansToday;
-              _scansPerDay = d.scans_per_day ?? _scansPerDay;
-              updatePlanUI();
-              _upgradedPlan = d.plan;
-              break;
-            }
-          }
-        } catch(e) {}
+    setTimeout(() => _pollPlanChange('free', plan => {
+      if (plan === 'founder') showFounderWelcome(); else if (plan === 'pro') showProWelcome();
+    }), 400);
+  } else if (p.get('portal_return') === '1') {
+    const prevPlan = _plan;
+    history.replaceState({}, '', location.pathname);
+    setTimeout(() => _pollPlanChange(prevPlan, plan => {
+      if (plan && plan !== prevPlan) {
+        if (plan === 'founder') showFounderWelcome();
+        else if (plan === 'pro') showProWelcome();
       }
-      document.getElementById('upgradingOverlay').style.display = 'none';
-      if (_upgradedPlan === 'founder') showFounderWelcome(); else showProWelcome();
-    }, 400);
+    }), 400);
   }
 })();
 
