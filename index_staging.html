@@ -234,7 +234,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .btn-primary:active { opacity:0.85; }
 .plan-badge.pro  { background:var(--blue); color:#fff; }
 .plan-badge.founder { background:linear-gradient(90deg,#ffb020,#ff6b2b); color:#15110a; }
-.plans-page-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; max-width:900px; }
+.plans-page-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; max-width:900px; margin:0 auto; }
 .app-plan-card { background:var(--surface); border:1.5px solid var(--border); border-radius:18px; padding:0 18px 18px; display:flex; flex-direction:column; box-shadow:0 16px 40px rgba(0,0,0,0.06); overflow:hidden; }
 .app-plan-card.pro { border-color:rgba(0,82,255,0.45); box-shadow:0 18px 48px rgba(0,82,255,0.14); }
 .app-plan-card.founder { border-color:rgba(255,176,32,0.55); box-shadow:0 18px 52px rgba(255,176,32,0.14); }
@@ -2103,13 +2103,13 @@ body.auth-active .tabbar { display:none !important; }
         <ul class="app-plan-feats">
           <li>Tutto incluso in Pro</li>
           <li>Analisi Zentra AI illimitate</li>
-          <li class="agent-feature">Zentra Agent Beta:
+          <li class="agent-feature"><div>Zentra Agent Beta:
             <ul class="app-plan-subfeats">
               <li>Ingressi automatici dai segnali Zentra</li>
               <li>Regole automatiche di rischio e uscita</li>
               <li>Strategie Momentum + Breakout</li>
             </ul>
-          </li>
+          </div></li>
         </ul>
         <div class="app-plan-risk">Zentra Agent è una funzionalità beta. Il trading comporta rischi e può causare perdite. L'algoritmo è in continuo miglioramento e non garantisce profitti.</div>
         <button class="app-plan-btn founder" id="planFounderBtn" onclick="selectBillingPlan('founder')">Diventa Founder</button>
