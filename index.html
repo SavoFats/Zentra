@@ -440,7 +440,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
   .tabbar { display:none !important; }
   .pages { bottom:0 !important; }
   .hdr-hamburger { display:flex !important; }
-  .hdr-avatar-wrap { display:none !important; }
+  body.sidebar-open .hdr-avatar-wrap { display:none !important; }
 }
 @media (max-width:767px) { .sidebar { display:none !important; } .hdr-hamburger { display:none !important; } }
 .hdr-hamburger { display:none; }
@@ -774,10 +774,12 @@ body.auth-active .tabbar { display:none !important; }
       Zentra
     </div>
   </div>
-  <div class="hdr-right hdr-avatar-wrap" style="display:flex;align-items:center;gap:8px">
+  <div class="hdr-right" style="display:flex;align-items:center;gap:8px">
     <span id="planBadge" class="plan-badge free" style="display:none">FREE</span>
-    <div class="avatar-btn" id="avatarBtn" onclick="navigateToAccount()">
-      <span id="avatarInitial">?</span>
+    <div class="hdr-avatar-wrap" style="display:flex;align-items:center">
+      <div class="avatar-btn" id="avatarBtn" onclick="navigateToAccount()">
+        <span id="avatarInitial">?</span>
+      </div>
     </div>
   </div>
 </div>
