@@ -6382,23 +6382,34 @@ function applyPlanConfig() {
               _scansToday = d.scans_today ?? _scansToday;
               _scansPerDay = d.scans_per_day ?? _scansPerDay;
               updatePlanUI();
+              _upgradedPlan = d.plan;
               break;
             }
           }
         } catch(e) {}
       }
       document.getElementById('upgradingOverlay').style.display = 'none';
-      showProWelcome();
+      if (_upgradedPlan === 'founder') showFounderWelcome(); else showProWelcome();
     }, 400);
   }
 })();
 
+let _upgradedPlan = '';
 function showProWelcome() {
   document.getElementById('proWelcomeModal').classList.add('open');
 }
 function closeProWelcome() {
   document.getElementById('proWelcomeModal').classList.remove('open');
   updatePlanUI();
+  showTab('home', document.querySelector('.sb-item[data-tab=home]'));
+}
+function showFounderWelcome() {
+  document.getElementById('founderWelcomeModal').classList.add('open');
+}
+function closeFounderWelcome() {
+  document.getElementById('founderWelcomeModal').classList.remove('open');
+  updatePlanUI();
+  showTab('home', document.querySelector('.sb-item[data-tab=home]'));
 }
 </script>
 
@@ -6425,6 +6436,25 @@ function closeProWelcome() {
       </div>
     </div>
     <button onclick="closeProWelcome()" style="width:100%;padding:14px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:var(--sans);letter-spacing:-0.01em;box-shadow:0 6px 24px rgba(0,82,255,0.3)">Inizia ora →</button>
+  </div>
+</div>
+
+<!-- WELCOME FOUNDER MODAL -->
+<div class="modal-overlay" id="founderWelcomeModal">
+  <div class="modal-card" style="max-width:380px;text-align:center;padding:36px 28px">
+    <div style="font-size:11px;font-weight:800;letter-spacing:0.12em;color:#ff6b2b;margin-bottom:10px">ZENTRA FOUNDER</div>
+    <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:-0.02em">Benvenuto nel piano Founder</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Hai accesso anticipato a Zentra Agent Beta e a tutte le funzionalità illimitate.</div>
+    <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:24px;text-align:left">
+      <div style="font-size:13px;color:var(--text2);line-height:2">
+        <div>Tutto incluso in Pro</div>
+        <div>Analisi Zentra AI illimitate</div>
+        <div>Zentra Agent Beta — ingressi automatici</div>
+        <div>Regole automatiche di rischio e uscita</div>
+        <div>Strategie Momentum + Breakout</div>
+      </div>
+    </div>
+    <button onclick="closeFounderWelcome()" style="width:100%;padding:14px;background:linear-gradient(135deg,#ffb020,#ff6b2b);border:none;border-radius:var(--radius);color:#15110a;font-size:16px;font-weight:800;cursor:pointer;font-family:var(--sans);letter-spacing:-0.01em;box-shadow:0 6px 24px rgba(255,176,32,0.35)">Inizia ora →</button>
   </div>
 </div>
 
