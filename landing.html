@@ -620,7 +620,9 @@ footer {
   .footer-left { align-items: center; }
   .footer-right { align-items: center; }
   .footer-legal { justify-content: center; }
-  .reveal, .reveal-left, .reveal-right { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .reveal { transform: translateY(20px); transition: opacity 0.35s ease, transform 0.35s ease; }
+  .reveal-left { transform: translateX(-24px); transition: opacity 0.35s ease, transform 0.35s ease; }
+  .reveal-right { transform: translateX(24px); transition: opacity 0.35s ease, transform 0.35s ease; }
   .delay-1, .delay-2, .delay-3, .delay-4 { transition-delay: 0s !important; }
 }
 
