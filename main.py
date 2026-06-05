@@ -3596,12 +3596,10 @@ def _validate_password_auth(identifier: str, password: str):
         if len(identifier) > 254:
             raise HTTPException(status_code=400, detail="Email troppo lunga")
     else:
-        if len(identifier) < 3:
-            raise HTTPException(status_code=400, detail="Username troppo corto (min 3 caratteri)")
-        if len(identifier) > 30:
-            raise HTTPException(status_code=400, detail="Username troppo lungo (max 30 caratteri)")
-        if not identifier.replace("_", "").replace("-", "").replace(".", "").isalnum():
-            raise HTTPException(status_code=400, detail="Username può contenere solo lettere, numeri, _, -, .")
+        if len(identifier) < 2:
+            raise HTTPException(status_code=400, detail="Username troppo corto")
+        if len(identifier) > 40:
+            raise HTTPException(status_code=400, detail="Username troppo lungo")
     if len(password) < 8:
         raise HTTPException(status_code=400, detail="Password troppo corta (min 8 caratteri)")
     if len(password) > 128:
@@ -3624,6 +3622,11 @@ def _normalize_display_name(value: str) -> str:
     if any(ord(ch) < 32 for ch in name):
         raise HTTPException(status_code=400, detail="Username non valido")
     return name
+
+def _login_username_from_display(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9_]", "", name.lower().replace(" ", "_").replace("-", "_"))
+    slug = re.sub(r"_+", "_", slug).strip("_")
+    return slug[:30]
 
 async def _generate_random_username(conn) -> str:
     for _ in range(12):
@@ -3740,7 +3743,7 @@ async def login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=400, detail="Inserisci email o username")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, password_hash, revx_key_id, display_name, username, email FROM users WHERE username = $1 OR email = $1",
+            "SELECT id, password_hash, revx_key_id, display_name, username, email FROM users WHERE username = $1 OR email = $1 OR LOWER(display_name) = LOWER($1)",
             identifier
         )
     if not row or not row["password_hash"]:
@@ -3895,11 +3898,23 @@ async def save_profile(req: ProfileRequest, request: Request, user_id: int = Dep
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
     display_name = _normalize_display_name(req.display_name)
+    login_slug = _login_username_from_display(display_name)
     async with db_pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE users SET display_name = $1 WHERE id = $2",
-            display_name, user_id
-        )
+        if login_slug and len(login_slug) >= 2:
+            conflict = await conn.fetchrow(
+                "SELECT id FROM users WHERE username = $1 AND id != $2", login_slug, user_id
+            )
+            if conflict:
+                login_slug = (login_slug[:26] + "_" + secrets.token_hex(1))[:30]
+            await conn.execute(
+                "UPDATE users SET display_name = $1, username = $2 WHERE id = $3",
+                display_name, login_slug, user_id
+            )
+        else:
+            await conn.execute(
+                "UPDATE users SET display_name = $1 WHERE id = $2",
+                display_name, user_id
+            )
     state = user_sessions.get(user_id)
     if state is not None:
         state["username"] = display_name
