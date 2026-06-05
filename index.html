@@ -1380,7 +1380,7 @@ body.auth-active .tabbar { display:none !important; }
           </div>
         </div>
         <div class="ai-typing" id="aiTyping">
-          <span class="ai-thinking-text" id="aiThinkingText">Analisi in corso</span>
+          <svg class="ai-thinking-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         </div>
         <div class="ai-workspace-composer">
           <textarea class="ai-input" id="aiInput" rows="1" placeholder="Scrivi un messaggio a Zentra AI..." onkeydown="aiInputKeydown(event,'analysis')" oninput="aiInputResize(this,'analysis')"></textarea>
@@ -1806,8 +1806,8 @@ body.auth-active .tabbar { display:none !important; }
       .ai-cursor { animation:ai-cursor-blink 1s ease-in-out infinite; user-select:none; }
       .ai-typing { align-self:flex-start; display:none; padding:6px 0 18px; }
       .ai-typing.visible { display:flex; align-items:center; }
-      .ai-thinking-text { font-size:13px; color:var(--text2); transition:opacity 0.35s ease; }
-      .ai-thinking-text.fade { opacity:0; }
+      @keyframes ai-logo-pulse { 0%,100%{opacity:0.25;transform:scale(0.92)} 50%{opacity:1;transform:scale(1)} }
+      .ai-thinking-logo { width:22px; height:22px; color:var(--blue); animation:ai-logo-pulse 1.6s ease-in-out infinite; }
       .ai-welcome { text-align:center; padding:32px 16px; color:var(--text3); font-size:13px; line-height:1.6; }
       .ai-welcome strong { color:var(--text2); display:block; margin-bottom:6px; font-size:14px; }
       .ai-suggestions { display:flex; flex-wrap:wrap; gap:8px; padding:0 14px 12px; }
@@ -6482,42 +6482,12 @@ function _aiSetupAutoScroll() {
   }).observe(msgs, { childList: true });
 }
 
-const _AI_THINKING_MSGS = [
-  'Analisi in corso',
-  'Pensando',
-  'Raccogliendo dati dal mercato',
-  'Elaborando la risposta',
-  'Consultando i segnali scanner',
-  'Valutando il contesto di mercato',
-  'Leggendo il mercato',
-  'Incrociando i dati',
-];
-let _aiThinkingTimer = null;
-
 function _aiThinkingStart() {
-  const el = document.getElementById('aiThinkingText');
-  const box = document.getElementById('aiTyping');
-  if (!el || !box) return;
-  const pick = () => {
-    const pool = _AI_THINKING_MSGS.filter(m => m !== el.textContent);
-    return pool[Math.floor(Math.random() * pool.length)];
-  };
-  el.textContent = pick();
-  el.classList.remove('fade');
-  box.classList.add('visible');
-  _aiThinkingTimer = setInterval(() => {
-    el.classList.add('fade');
-    setTimeout(() => { el.textContent = pick(); el.classList.remove('fade'); }, 260);
-  }, 4500);
+  document.getElementById('aiTyping')?.classList.add('visible');
 }
 
 function _aiThinkingStop() {
-  clearInterval(_aiThinkingTimer);
-  _aiThinkingTimer = null;
-  const el = document.getElementById('aiThinkingText');
-  const box = document.getElementById('aiTyping');
-  if (el) el.classList.remove('fade');
-  if (box) box.classList.remove('visible');
+  document.getElementById('aiTyping')?.classList.remove('visible');
 }
 
 function _aiTitleFromMessage(msg) {
@@ -6588,7 +6558,6 @@ function renderAIThread() {
     return;
   }
   (thread.messages || []).forEach(m => {
-    if (m.role === 'news') _aiRenderNews(m.data);
     else if (m.role === 'chart') _aiRenderChart(m.symbol);
     else _aiAppendMsg(m.role, m.content, false);
   });
@@ -6716,21 +6685,48 @@ function _aiRenderChart(symbol) {
   const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (!msgs || !safeSymbol) return;
   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const tvSym = encodeURIComponent(`${safeSymbol}USDT`);
-  const src = `https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&allow_symbol_change=1`;
+  const cid = `tv_ai_${Date.now()}`;
   const wrap = document.createElement('div');
   const label = document.createElement('div');
-  const iframe = document.createElement('iframe');
+  const frame = document.createElement('div');
   wrap.className = 'ai-chart-wrap';
   label.className = 'ai-chart-label';
   label.textContent = `${safeSymbol} · 1H`;
-  iframe.className = 'ai-chart-frame';
-  iframe.src = src;
-  iframe.setAttribute('allowfullscreen', '');
-  wrap.append(label, iframe);
+  frame.className = 'ai-chart-frame';
+  frame.id = cid;
+  wrap.append(label, frame);
   msgs.appendChild(wrap);
-  iframe.addEventListener('load', () => _aiScrollBottom(), { once: true });
-  requestAnimationFrame(() => requestAnimationFrame(() => _aiScrollBottom()));
+
+  function makeWidget() {
+    if (!document.getElementById(cid) || typeof TradingView === 'undefined') return;
+    new TradingView.widget({
+      autosize: true,
+      symbol: `${safeSymbol}USDT`,
+      interval: '60',
+      timezone: 'Etc/UTC',
+      theme,
+      style: '1',
+      locale: 'it',
+      enable_publishing: false,
+      allow_symbol_change: true,
+      container_id: cid,
+    });
+    const ro = new ResizeObserver(() => _aiScrollBottom());
+    ro.observe(wrap);
+    setTimeout(() => ro.disconnect(), 8000);
+  }
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    _aiScrollBottom();
+    if (typeof TradingView !== 'undefined') {
+      makeWidget();
+    } else {
+      const s = document.createElement('script');
+      s.src = 'https://s3.tradingview.com/tv.js';
+      s.onload = makeWidget;
+      document.head.appendChild(s);
+    }
+  }));
 }
 
 function _aiDetectSymbolFromText(text) {
@@ -6824,10 +6820,6 @@ async function sendAIMessage(source = 'analysis') {
       await _aiStreamMsg(d.reply);
       _aiAutoScrollEnabled = true;
       const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg);
-      if (chartSymbol && Array.isArray(d.news) && d.news.length) {
-        _aiRenderNews(d.news);
-        _aiPersistExtra({ role: 'news', data: d.news });
-      }
       if (chartSymbol) {
         _aiRenderChart(chartSymbol);
         _aiPersistExtra({ role: 'chart', symbol: chartSymbol });
