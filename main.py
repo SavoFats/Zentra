@@ -6100,17 +6100,20 @@ async def stripe_webhook(request: Request):
     elif etype == "customer.subscription.updated":
         customer_id = data.get("customer", "")
         status = data.get("status", "")
+        sub_id = data.get("id", "")
         if customer_id and db_pool:
             try:
                 if status in ("active", "trialing"):
-                    updated_plan = plan_from_stripe_subscription(data)
-                    expires_at = datetime.utcfromtimestamp(data["current_period_end"])
+                    sub = stripe.Subscription.retrieve(sub_id)
+                    updated_plan = plan_from_stripe_subscription(sub)
+                    expires_ts = sub.get("current_period_end")
+                    expires_at = datetime.utcfromtimestamp(expires_ts) if expires_ts else None
                     async with db_pool.acquire() as conn:
                         await conn.execute(
                             "UPDATE users SET plan = $1, subscription_expires_at = $2 WHERE stripe_customer_id = $3",
                             updated_plan, expires_at, customer_id
                         )
-                    print(f"[BILLING] subscription updated → {updated_plan}: customer={customer_id}")
+                    print(f"[BILLING] subscription updated → {updated_plan}: customer={customer_id}, scade={expires_at}")
                 elif status in ("canceled", "unpaid", "paused"):
                     async with db_pool.acquire() as conn:
                         await conn.execute(
