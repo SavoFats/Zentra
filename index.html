@@ -1887,6 +1887,7 @@ body.auth-active .tabbar { display:none !important; }
         .home-ai-bar { min-height:58px; padding:9px 11px; gap:9px; }
         .home-ai-mark { width:34px; height:34px; border-radius:12px; }
         .home-ai-input.ai-input { font-size:13.5px; height:40px; max-height:40px; overflow:hidden; }
+        .home-ai-input::placeholder { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .home-ai .ai-messages { max-height:260px; }
         .ai-workspace .ai-messages { min-height:300px; padding:16px; }
       }
@@ -2708,6 +2709,10 @@ function initApp() {
   updateProfileMenu();
   updatePlanUI();
   initSidebar();
+  if (window.innerWidth < 640) {
+    const inp = document.getElementById('aiHomeInput');
+    if (inp) inp.placeholder = 'Chiedi a Zentra AI…';
+  }
   loadUserProfile();
   startupSession();
   applyIOSSafeAreaFix();
