@@ -6561,7 +6561,8 @@ function renderAIHistory() {
     return;
   }
   box.innerHTML = _aiThreads.slice(0, 12).map(t => {
-    const isActive = t.id === _aiActiveThreadId;
+    const onAnalysis = document.getElementById('page-analysis')?.classList.contains('active');
+    const isActive = onAnalysis && t.id === _aiActiveThreadId;
     const sid = t.id.replace(/[^a-z0-9_]/gi, '');
     return `<div class="sb-ai-thread-wrap${isActive ? ' active' : ''}">
       <button class="sb-ai-thread" onclick="openAIThread('${sid}',true)">
