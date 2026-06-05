@@ -2704,6 +2704,7 @@ function initApp() {
   // Avatar: mostra iniziale subito, poi sovrascrive con foto dal server
   applyAvatar(null); // mostra iniziale username
   updateProfileMenu();
+  updatePlanUI();
   initSidebar();
   loadUserProfile();
   startupSession();
@@ -2768,6 +2769,7 @@ async function loadUserProfile() {
     renderExchangePage();
   } catch(e) {
     applyAvatar(localStorage.getItem('ca_avatar'));
+    updatePlanUI();
   }
 }
 
