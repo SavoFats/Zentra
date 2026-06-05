@@ -1839,8 +1839,8 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
-      #page-analysis { overflow:hidden; }
-      .ai-workspace { position:absolute; inset:16px; display:flex; flex-direction:column; }
+      #page-analysis { overflow:hidden; display:flex; flex-direction:column; }
+      .ai-workspace { flex:1; min-height:0; display:flex; flex-direction:column; }
       .ai-workspace-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
       .ai-workspace .ai-messages { flex:1; min-height:0; overflow-y:auto; padding:10px 0 22px; }
       .ai-workspace .ai-msg.ai { max-width:min(980px,100%); }
