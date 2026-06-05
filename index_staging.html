@@ -429,7 +429,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-btn { width:32px; height:32px; display:flex; align-items:center; justify-content:center; border:none; background:none; cursor:pointer; color:var(--text2); border-radius:8px; transition:background 0.15s; flex-shrink:0; }
 .sb-btn:hover { background:var(--surface2); }
 .sb-logo { display:flex; align-items:center; gap:8px; font-size:17px; font-weight:700; letter-spacing:-0.03em; color:var(--text); }
-.sb-nav { flex:1; padding:10px 8px; overflow-y:auto; }
+.sb-nav { flex:1; min-height:0; padding:10px 8px 0; display:flex; flex-direction:column; overflow:hidden; }
 .sb-item { display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; font-size:13px; font-weight:600; color:var(--text2); font-family:var(--sans); text-align:left; transition:background 0.15s,color 0.15s; margin-bottom:2px; }
 .sb-item:hover { background:var(--surface2); color:var(--text); }
 .sb-item.active { background:var(--surface2); color:var(--text); font-weight:700; }
@@ -440,7 +440,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-item.active svg, .sb-item:hover svg { opacity:1; }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
 .sb-history-head { display:flex; align-items:center; padding:14px 12px 6px; font-size:10px; font-weight:800; color:var(--text3); letter-spacing:.09em; text-transform:uppercase; }
-.sb-ai-history { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
+.sb-ai-history { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding-bottom:8px; }
 .sb-ai-thread-wrap { position:relative; display:flex; align-items:center; border-radius:10px; transition:background .15s; }
 .sb-ai-thread-wrap:hover, .sb-ai-thread-wrap.active { background:var(--surface2); }
 .sb-ai-thread { flex:1; min-width:0; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:10px; padding:8px 4px 8px 12px; text-align:left; font-family:var(--sans); transition:color .15s; }
@@ -450,12 +450,12 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-ai-thread-dots { flex-shrink:0; width:24px; height:24px; margin-right:4px; border:none; background:none; border-radius:6px; cursor:pointer; color:var(--text3); font-size:14px; font-weight:900; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .12s,background .12s,color .12s; padding:0; line-height:1; letter-spacing:-.5px; }
 .sb-ai-thread-wrap:hover .sb-ai-thread-dots, .sb-ai-thread-dots.open { opacity:1; }
 .sb-ai-thread-dots:hover, .sb-ai-thread-dots.open { background:var(--border); color:var(--text); }
-.sb-ai-thread-dropdown { position:absolute; right:0; top:calc(100% + 2px); z-index:300; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.15); padding:4px; min-width:130px; display:none; }
+.sb-ai-thread-dropdown { position:absolute; right:0; bottom:calc(100% + 2px); z-index:300; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.15); padding:4px; min-width:130px; display:none; }
 .sb-ai-thread-dropdown.open { display:block; }
 .sb-ai-dd-delete { width:100%; border:none; background:none; padding:8px 10px; border-radius:8px; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--red); text-align:left; font-family:var(--sans); transition:background .1s; display:block; }
 .sb-ai-dd-delete:hover { background:var(--red-dim); }
 .sb-ai-empty { padding:8px 12px 10px; color:var(--text3); font-size:11px; line-height:1.35; }
-.sb-scan-usage { margin:5px 8px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
+.sb-scan-usage { margin:20px 8px 5px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); flex-shrink:0; }
 #sbAIUsage { margin-bottom:4px; }
 #sbScanUsage { margin-top:4px; margin-bottom:14px; }
 .sb-scan-usage-top { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; font-weight:800; color:var(--text2); letter-spacing:.02em; }
@@ -1379,9 +1379,6 @@ body.auth-active .tabbar { display:none !important; }
             Scrivi una domanda qui sotto o parti dalla barra in Home. Le tue analisi resteranno nella cronologia della sidebar.
           </div>
         </div>
-        <div class="ai-typing" id="aiTyping">
-          <span class="ai-thinking-text" id="aiThinkingText">Analisi in corso</span>
-        </div>
         <div class="ai-workspace-composer">
           <textarea class="ai-input" id="aiInput" rows="1" placeholder="Scrivi un messaggio a Zentra AI..." onkeydown="aiInputKeydown(event,'analysis')" oninput="aiInputResize(this,'analysis')"></textarea>
           <button class="ai-send" id="aiSend" onclick="sendAIMessage('analysis')" disabled aria-label="Invia a Zentra AI">
@@ -1787,6 +1784,10 @@ body.auth-active .tabbar { display:none !important; }
       .ai-panel-sub { font-size:11px; color:var(--text3); font-weight:500; }
       .ai-panel-close { width:32px; height:32px; border-radius:8px; border:none; background:var(--surface2); color:var(--text2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; }
       .ai-panel-close:hover { background:var(--border); color:var(--text); }
+      :root { --ai-enter-dur:200ms; --ai-user-enter-dur:150ms; --ai-token-dur:100ms; }
+      @keyframes ai-msg-enter { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+      @keyframes ai-token-in { from{opacity:0} to{opacity:1} }
+      @keyframes ai-cursor-blink { 0%,100%{opacity:1} 50%{opacity:0} }
       .ai-messages { flex:1; overflow-y:auto; padding:16px 14px; display:flex; flex-direction:column; gap:12px; }
       .ai-msg { max-width:88%; display:flex; flex-direction:column; gap:4px; }
       .ai-msg.user { align-self:flex-end; }
@@ -1796,10 +1797,13 @@ body.auth-active .tabbar { display:none !important; }
       .ai-msg.ai .ai-bubble { background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; border:1px solid var(--border); }
       .ai-msg-time { font-size:10px; color:var(--text3); font-weight:500; padding:0 4px; }
       .ai-msg.user .ai-msg-time { text-align:right; }
-      .ai-typing { align-self:flex-start; display:none; padding:6px 0 18px; }
-      .ai-typing.visible { display:flex; align-items:center; }
-      .ai-thinking-text { font-size:13px; color:var(--text3); font-style:italic; transition:opacity 0.35s ease; }
-      .ai-thinking-text.fade { opacity:0; }
+      .ai-msg-new { animation:ai-msg-enter var(--ai-enter-dur) ease-out both; will-change:transform,opacity; }
+      .ai-msg-new.user { animation-duration:var(--ai-user-enter-dur); }
+      .ai-token { animation:ai-token-in var(--ai-token-dur) ease-out both; }
+      .ai-cursor { animation:ai-cursor-blink 1s ease-in-out infinite; user-select:none; }
+      @keyframes ai-logo-pulse { 0%,100%{opacity:0.2;transform:scale(0.88)} 50%{opacity:1;transform:scale(1)} }
+      .ai-thinking-logo { width:34px; height:26px; color:var(--blue); animation:ai-logo-pulse 1.6s ease-in-out infinite; display:block; }
+      .ai-thinking-bubble { padding:10px 14px; }
       .ai-welcome { text-align:center; padding:32px 16px; color:var(--text3); font-size:13px; line-height:1.6; }
       .ai-welcome strong { color:var(--text2); display:block; margin-bottom:6px; font-size:14px; }
       .ai-suggestions { display:flex; flex-wrap:wrap; gap:8px; padding:0 14px 12px; }
@@ -1813,7 +1817,7 @@ body.auth-active .tabbar { display:none !important; }
       .ai-send svg { width:18px; height:18px; }
       .ai-chart-wrap { margin:8px 0 4px; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:var(--surface2); }
       .ai-chart-label { font-size:11px; font-weight:800; color:var(--text3); padding:8px 12px 4px; letter-spacing:0.06em; text-transform:uppercase; }
-      .ai-chart-frame { width:100%; height:220px; border:none; display:block; }
+      .ai-chart-frame { width:100%; height:300px; border:none; display:block; }
       .ai-news-wrap { margin:8px 0 4px; border-radius:14px; border:1px solid var(--border); background:var(--surface2); padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
       .ai-news-label { font-size:11px; font-weight:800; color:var(--text3); letter-spacing:0.06em; text-transform:uppercase; }
       .ai-news-item { font-size:12.5px; line-height:1.45; color:var(--text2); font-weight:600; }
@@ -1839,9 +1843,11 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
-      .ai-workspace { min-height:100%; display:flex; flex-direction:column; gap:18px; }
+      #page-analysis { overflow:hidden; }
+      #page-analysis.active { display:flex; flex-direction:column; }
+      .ai-workspace { flex:1; min-height:0; display:flex; flex-direction:column; }
       .ai-workspace-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
-      .ai-workspace .ai-messages { flex:1; min-height:360px; max-height:none; padding:10px 0 22px; }
+      .ai-workspace .ai-messages { flex:1; min-height:0; overflow-y:auto; padding:10px 0 22px; }
       .ai-workspace .ai-msg.ai { max-width:min(980px,100%); }
       .ai-workspace .ai-msg.ai .ai-bubble { background:transparent; border:none; border-radius:0; padding:0; box-shadow:none; }
       .ai-empty-state { margin:auto; max-width:520px; text-align:center; color:var(--text3); font-size:14px; line-height:1.55; }
@@ -6324,7 +6330,6 @@ function closeProWelcome() {
 let _aiOpen = false;
 let _aiLoading = false;
 let _aiUnread = 0;
-let _aiChartSeq = 0;
 let _aiThreads = [];
 let _aiActiveThreadId = '';
 const AI_THREADS_KEY = 'zentra_ai_threads_v1';
@@ -6450,55 +6455,42 @@ function _aiGetThread(id = _aiActiveThreadId) {
 }
 
 let _aiAutoScrollEnabled = true;
+let _aiScrollProg = false;
+
+function _aiScrollBottom() {
+  const msgs = document.getElementById('aiMessages');
+  if (!msgs || !_aiAutoScrollEnabled) return;
+  _aiScrollProg = true;
+  msgs.scrollTop = msgs.scrollHeight;
+  requestAnimationFrame(() => { _aiScrollProg = false; });
+}
 
 function _aiSetupAutoScroll() {
   const msgs = document.getElementById('aiMessages');
   if (!msgs || msgs._scrollSetup) return;
   msgs._scrollSetup = true;
   msgs.addEventListener('scroll', () => {
-    _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 80;
+    if (_aiScrollProg) return;
+    _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 150;
   }, { passive: true });
   new MutationObserver(() => {
-    if (_aiAutoScrollEnabled) requestAnimationFrame(() => requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; }));
+    if (_aiAutoScrollEnabled) requestAnimationFrame(() => requestAnimationFrame(() => _aiScrollBottom()));
   }).observe(msgs, { childList: true });
 }
 
-const _AI_THINKING_MSGS = [
-  'Analisi in corso',
-  'Pensando',
-  'Raccogliendo dati dal mercato',
-  'Elaborando la risposta',
-  'Consultando i segnali scanner',
-  'Valutando il contesto di mercato',
-  'Leggendo il mercato',
-  'Incrociando i dati',
-];
-let _aiThinkingTimer = null;
-
 function _aiThinkingStart() {
-  const el = document.getElementById('aiThinkingText');
-  const box = document.getElementById('aiTyping');
-  if (!el || !box) return;
-  const pick = () => {
-    const pool = _AI_THINKING_MSGS.filter(m => m !== el.textContent);
-    return pool[Math.floor(Math.random() * pool.length)];
-  };
-  el.textContent = pick();
-  el.classList.remove('fade');
-  box.classList.add('visible');
-  _aiThinkingTimer = setInterval(() => {
-    el.classList.add('fade');
-    setTimeout(() => { el.textContent = pick(); el.classList.remove('fade'); }, 260);
-  }, 4500);
+  const msgs = document.getElementById('aiMessages');
+  if (!msgs || document.getElementById('aiTypingBubble')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'aiTypingBubble';
+  wrap.className = 'ai-msg ai';
+  wrap.innerHTML = '<div class="ai-bubble ai-thinking-bubble"><svg class="ai-thinking-logo" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg"><polyline points="0,100 40,62 68,82 100,32 140,48" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="140" cy="48" r="11" fill="currentColor"/></svg></div>';
+  msgs.appendChild(wrap);
+  _aiScrollBottom();
 }
 
 function _aiThinkingStop() {
-  clearInterval(_aiThinkingTimer);
-  _aiThinkingTimer = null;
-  const el = document.getElementById('aiThinkingText');
-  const box = document.getElementById('aiTyping');
-  if (el) el.classList.remove('fade');
-  if (box) box.classList.remove('visible');
+  document.getElementById('aiTypingBubble')?.remove();
 }
 
 function _aiTitleFromMessage(msg) {
@@ -6542,7 +6534,8 @@ function renderAIHistory() {
     return;
   }
   box.innerHTML = _aiThreads.slice(0, 12).map(t => {
-    const isActive = t.id === _aiActiveThreadId;
+    const onAnalysis = document.getElementById('page-analysis')?.classList.contains('active');
+    const isActive = onAnalysis && t.id === _aiActiveThreadId;
     const sid = t.id.replace(/[^a-z0-9_]/gi, '');
     return `<div class="sb-ai-thread-wrap${isActive ? ' active' : ''}">
       <button class="sb-ai-thread" onclick="openAIThread('${sid}',true)">
@@ -6560,6 +6553,7 @@ function renderAIHistory() {
 function renderAIThread() {
   const msgs = document.getElementById('aiMessages');
   if (!msgs) return;
+  _aiAutoScrollEnabled = true;
   const thread = _aiGetThread();
   msgs.innerHTML = '';
   if (!thread || !(thread.messages || []).length) {
@@ -6567,8 +6561,7 @@ function renderAIThread() {
     return;
   }
   (thread.messages || []).forEach(m => {
-    if (m.role === 'news') _aiRenderNews(m.data);
-    else if (m.role === 'chart') _aiRenderChart(m.symbol);
+    if (m.role === 'chart') _aiRenderChart(m.symbol);
     else _aiAppendMsg(m.role, m.content, false);
   });
   msgs.scrollTop = msgs.scrollHeight;
@@ -6621,27 +6614,40 @@ async function _aiStreamMsg(content) {
   const wrap = document.createElement('div');
   const bubble = document.createElement('div');
   const time = document.createElement('div');
-  wrap.className = 'ai-msg ai';
+  wrap.className = 'ai-msg ai ai-msg-new';
   bubble.className = 'ai-bubble';
   time.className = 'ai-msg-time';
   time.textContent = _aiTime();
   wrap.append(bubble, time);
   msgs.appendChild(wrap);
+
+  const cursor = document.createElement('span');
+  cursor.className = 'ai-cursor';
+  cursor.textContent = '▌';
+  bubble.appendChild(cursor);
+
   const n = content.length;
   const targetMs = Math.min(1600, Math.max(350, n * 5));
   const tickMs = 33;
   const step = Math.max(1, Math.ceil(n / (targetMs / tickMs)));
+  let prev = 0;
   await new Promise(resolve => {
     let i = 0;
     const t = setInterval(() => {
       i = Math.min(i + step, n);
-      bubble.textContent = content.slice(0, i);
-      if (_aiAutoScrollEnabled) msgs.scrollTop = msgs.scrollHeight;
+      if (i > prev) {
+        const chunk = document.createElement('span');
+        chunk.className = 'ai-token';
+        chunk.textContent = content.slice(prev, i);
+        bubble.insertBefore(chunk, cursor);
+        prev = i;
+        _aiScrollBottom();
+      }
       if (i >= n) {
         clearInterval(t);
+        cursor.remove();
         bubble.innerHTML = _renderAiMarkdown(content);
-        if (_aiAutoScrollEnabled) msgs.scrollTop = msgs.scrollHeight;
-        resolve();
+        requestAnimationFrame(() => requestAnimationFrame(() => { _aiScrollBottom(); resolve(); }));
       }
     }, tickMs);
   });
@@ -6655,7 +6661,7 @@ function _aiAppendMsg(role, content, persist = true) {
   if (empty) empty.remove();
 
   const wrap = document.createElement('div');
-  wrap.className = 'ai-msg ' + role;
+  wrap.className = 'ai-msg ' + role + (persist ? ' ai-msg-new' : '');
 
   const bubble = document.createElement('div');
   bubble.className = 'ai-bubble';
@@ -6672,7 +6678,7 @@ function _aiAppendMsg(role, content, persist = true) {
   wrap.appendChild(bubble);
   wrap.appendChild(time);
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  _aiScrollBottom();
   if (persist) _aiPersistMessage(role, content);
   return wrap;
 }
@@ -6682,7 +6688,7 @@ function _aiRenderChart(symbol) {
   const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (!msgs || !safeSymbol) return;
   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const containerId = `aiTvChart${++_aiChartSeq}`;
+  const cid = `tv_ai_${Date.now()}`;
   const wrap = document.createElement('div');
   const label = document.createElement('div');
   const frame = document.createElement('div');
@@ -6690,13 +6696,13 @@ function _aiRenderChart(symbol) {
   label.className = 'ai-chart-label';
   label.textContent = `${safeSymbol} · 1H`;
   frame.className = 'ai-chart-frame';
-  frame.id = containerId;
+  frame.id = cid;
   wrap.append(label, frame);
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
 
-  function createWidget() {
-    if (!document.getElementById(containerId) || typeof TradingView === 'undefined') return;
+  function makeWidget() {
+    const el = document.getElementById(cid);
+    if (!el || typeof TradingView === 'undefined') return;
     new TradingView.widget({
       autosize: true,
       symbol: `${safeSymbol}USDT`,
@@ -6707,34 +6713,21 @@ function _aiRenderChart(symbol) {
       locale: 'it',
       enable_publishing: false,
       allow_symbol_change: true,
-      container_id: containerId,
-      hide_side_toolbar: false,
-      hide_top_toolbar: false
+      container_id: cid,
     });
-    const ro = new ResizeObserver(() => {
-      if (_aiAutoScrollEnabled) requestAnimationFrame(() => {
-        const m = document.getElementById('aiMessages');
-        if (m) m.scrollTop = m.scrollHeight;
-      });
-    });
-    ro.observe(wrap);
-    setTimeout(() => ro.disconnect(), 8000);
   }
 
-  if (typeof TradingView !== 'undefined') {
-    setTimeout(createWidget, 0);
-  } else {
-    const existing = document.querySelector('script[data-tv-js="1"]');
-    if (existing) {
-      existing.addEventListener('load', createWidget, { once:true });
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    _aiScrollBottom();
+    if (typeof TradingView !== 'undefined') {
+      makeWidget();
     } else {
       const s = document.createElement('script');
       s.src = 'https://s3.tradingview.com/tv.js';
-      s.dataset.tvJs = '1';
-      s.onload = createWidget;
+      s.onload = makeWidget;
       document.head.appendChild(s);
     }
-  }
+  }));
 }
 
 function _aiDetectSymbolFromText(text) {
@@ -6782,7 +6775,7 @@ function _aiRenderNews(news) {
     wrap.appendChild(row);
   });
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  _aiScrollBottom();
 }
 
 async function sendAIMessage(source = 'analysis') {
@@ -6808,13 +6801,24 @@ async function sendAIMessage(source = 'analysis') {
   _aiAppendMsg('user', msg);
 
   _aiThinkingStart();
-  document.getElementById('aiMessages').scrollTop = 999999;
+  _aiScrollBottom();
 
   try {
+    const _thread = _aiGetThread();
+    const _history = (_thread?.messages || []).slice(-12).reduce((acc, m) => {
+      if (m.role === 'user') acc.push({ role: 'user', content: m.content });
+      else if (m.role === 'ai') acc.push({ role: 'assistant', content: m.content });
+      else if (m.role === 'chart' && acc.length) {
+        const last = acc[acc.length - 1];
+        if (last.role === 'assistant') last.content += `\n\n[Grafico ${m.symbol}USDT 1H visualizzato nell'interfaccia]`;
+        else acc.push({ role: 'assistant', content: `[Grafico ${m.symbol}USDT 1H visualizzato nell'interfaccia]` });
+      }
+      return acc;
+    }, []);
     const r = await fetch(API + '/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ message: msg })
+      body: JSON.stringify({ message: msg, history: _history })
     });
     const d = await r.json();
     const aiUsageBefore = Number(_aiAnalysesToday) || 0;
@@ -6826,11 +6830,8 @@ async function sendAIMessage(source = 'analysis') {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
       await _aiStreamMsg(d.reply);
+      _aiAutoScrollEnabled = true;
       const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg);
-      if (chartSymbol && Array.isArray(d.news) && d.news.length) {
-        _aiRenderNews(d.news);
-        _aiPersistExtra({ role: 'news', data: d.news });
-      }
       if (chartSymbol) {
         _aiRenderChart(chartSymbol);
         _aiPersistExtra({ role: 'chart', symbol: chartSymbol });
@@ -6855,7 +6856,7 @@ async function sendAIMessage(source = 'analysis') {
   if (analysisSend) analysisSend.disabled = true;
   const homeSend = document.getElementById('aiHomeSend');
   if (homeSend) homeSend.disabled = true;
-  document.getElementById('aiMessages').scrollTop = 999999;
+  _aiScrollBottom();
 }
 
 function _aiThreadMenuToggle(event, id) {
