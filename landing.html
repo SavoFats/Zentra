@@ -664,7 +664,7 @@ footer {
 .auth-panel {
   position: relative; z-index: 1; width: min(560px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
   background: linear-gradient(145deg, rgba(18,24,48,0.98), rgba(8,12,26,0.98));
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: 34px;
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: 34px 34px 44px;
   box-shadow: 0 32px 120px rgba(0,0,0,0.55), 0 0 70px rgba(0,82,255,0.18);
 }
 .auth-close {
@@ -685,7 +685,7 @@ footer {
   border: none; border-radius: 18px; background: linear-gradient(135deg, #0052ff, #7c3aed 55%, #f6465d);
   color: white; font-size: 17px; font-weight: 800; font-family: var(--sans); cursor: pointer;
   box-shadow: 0 16px 46px rgba(0,82,255,0.3);
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .auth-google:disabled { cursor: not-allowed; opacity: 0.58; box-shadow: none; }
 .google-g { width: 28px; height: 28px; flex-shrink: 0; display: block; }
@@ -774,7 +774,7 @@ footer {
       </div>
       <div class="auth-field">
         <label for="authEmail" id="authEmailLabel">Email</label>
-        <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com">
+        <input id="authEmail" type="text" autocomplete="email" placeholder="you@example.com">
       </div>
       <div class="auth-field">
         <label for="authPassword" id="authPasswordLabel">Password</label>
@@ -784,11 +784,6 @@ footer {
       <div class="auth-error" id="authError"></div>
     </form>
 
-    <ul class="auth-benefits" id="authBenefits">
-      <li>Tieni sincronizzati segnali scanner e watchlist</li>
-      <li>Fai trading dalle tue API exchange, senza custodia fondi</li>
-      <li>Monitora le posizioni aperte con i controlli rischio Zentra</li>
-    </ul>
   </div>
 </div>
 
@@ -1381,6 +1376,15 @@ function setAuthMode(mode) {
   if (btn) btn.textContent = authMode === 'register' ? c.submitRegister : c.submitLogin;
   const pwd = document.getElementById('authPassword');
   if (pwd) pwd.autocomplete = authMode === 'register' ? 'new-password' : 'current-password';
+  const emailInput = document.getElementById('authEmail');
+  const emailLabel = document.getElementById('authEmailLabel');
+  if (authMode === 'login') {
+    if (emailInput) { emailInput.autocomplete = 'username'; emailInput.placeholder = 'Email o username'; }
+    if (emailLabel) emailLabel.textContent = 'Email o username';
+  } else {
+    if (emailInput) { emailInput.autocomplete = 'email'; emailInput.placeholder = 'you@example.com'; }
+    if (emailLabel) emailLabel.textContent = 'Email';
+  }
 }
 
 function showAuthModalError(msg) {
@@ -1393,7 +1397,8 @@ function showAuthModalError(msg) {
 async function submitLandingAuth(event) {
   event.preventDefault();
   const c = authCopy();
-  const email = document.getElementById('authEmail').value.trim().toLowerCase();
+  const rawIdentifier = document.getElementById('authEmail').value.trim();
+  const email = authMode === 'register' ? rawIdentifier.toLowerCase() : rawIdentifier;
   const password = document.getElementById('authPassword').value;
   const err = document.getElementById('authError');
   const btn = document.getElementById('authSubmitBtn');

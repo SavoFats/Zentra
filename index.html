@@ -229,30 +229,29 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .mkt-sym-sub { font-size:11px; color:var(--text3); margin-top:2px; font-weight:500; }
 .mkt-in-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:4px; padding:1px 5px; font-weight:700; margin-left:4px; vertical-align:middle; }
 .plan-badge { font-size:9px; font-weight:800; padding:2px 7px; border-radius:20px; letter-spacing:0.06em; margin-left:6px; vertical-align:middle; }
-.hdr .plan-badge { display:inline-flex; align-items:center; min-height:26px; padding:0 11px; border-radius:999px; font-size:10px; letter-spacing:0.04em; white-space:nowrap; box-shadow:0 8px 24px rgba(0,0,0,0.06); }
+.hdr .plan-badge { display:inline-flex; align-items:center; min-height:24px; padding:0 13px; border-radius:4px; font-size:11.5px; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; white-space:nowrap; transform:skewX(-10deg); }
 .btn-primary { background:var(--blue); color:#fff; border:none; border-radius:var(--radius-sm); font-weight:700; font-family:var(--sans); box-shadow:0 4px 16px rgba(0,82,255,0.3); transition:opacity 0.15s; }
 .btn-primary:active { opacity:0.85; }
-.plan-badge.free { background:var(--surface3); color:var(--text3); }
-.plan-badge.pro  { background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
+.plan-badge.pro  { background:var(--blue); color:#fff; }
 .plan-badge.founder { background:linear-gradient(90deg,#ffb020,#ff6b2b); color:#15110a; }
-.plans-page-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
-.app-plan-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:18px; display:flex; flex-direction:column; min-height:430px; box-shadow:0 16px 40px rgba(0,0,0,0.04); }
-.app-plan-card.pro { border-color:rgba(0,82,255,0.35); box-shadow:0 18px 48px rgba(0,82,255,0.12); }
-.app-plan-card.founder { border-color:rgba(255,176,32,0.45); background:linear-gradient(160deg,rgba(255,176,32,0.10),rgba(0,82,255,0.035)); box-shadow:0 18px 52px rgba(255,176,32,0.12); }
-.app-plan-kicker { font-size:10px; font-weight:900; letter-spacing:0.09em; text-transform:uppercase; color:var(--text3); margin-bottom:10px; min-height:18px; }
-.app-plan-card.pro .app-plan-kicker { color:var(--blue); }
-.app-plan-card.founder .app-plan-kicker { color:#d97706; }
-.app-plan-name { font-size:18px; font-weight:900; color:var(--text); letter-spacing:-0.03em; }
-.app-plan-price { font-size:36px; font-weight:900; color:var(--text); letter-spacing:-0.05em; margin-top:10px; }
+.plans-page-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:26px; max-width:1100px; margin:24px auto 0; }
+.app-plan-card { background:var(--surface); border:1.5px solid var(--border); border-radius:18px; padding:0 18px 18px; display:flex; flex-direction:column; box-shadow:0 16px 40px rgba(0,0,0,0.06); overflow:hidden; }
+.app-plan-card.pro { border-color:rgba(0,82,255,0.45); box-shadow:0 18px 48px rgba(0,82,255,0.14); }
+.app-plan-card.founder { border-color:rgba(255,176,32,0.55); box-shadow:0 18px 52px rgba(255,176,32,0.14); }
+.app-plan-kicker { margin:0 -18px 16px; padding:9px 18px; font-size:10px; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; background:var(--surface2); color:var(--text3); }
+.app-plan-card.pro .app-plan-kicker { background:var(--blue); color:#fff; }
+.app-plan-card.founder .app-plan-kicker { background:linear-gradient(90deg,#ffb020,#ff6b2b); color:#15110a; }
+.app-plan-name { font-size:20px; font-weight:900; color:var(--text); letter-spacing:-0.03em; }
+.app-plan-price { font-size:38px; font-weight:900; color:var(--text); letter-spacing:-0.05em; margin-top:8px; }
 .app-plan-price span { font-size:15px; color:var(--text3); letter-spacing:0; font-weight:700; }
 .app-plan-sub { font-size:12px; color:var(--text3); line-height:1.45; margin:6px 0 18px; min-height:34px; }
 .app-plan-feats { list-style:none; display:flex; flex-direction:column; gap:9px; margin:0 0 18px; padding:0; }
-.app-plan-feats li { display:flex; gap:9px; font-size:12.5px; color:var(--text2); line-height:1.35; font-weight:600; }
-.app-plan-feats li::before { content:''; width:7px; height:7px; border-radius:999px; background:var(--green); flex-shrink:0; margin-top:7px; }
+.app-plan-feats li { display:flex; align-items:flex-start; gap:9px; font-size:12.5px; color:var(--text2); line-height:1.35; font-weight:600; }
+.app-plan-feats li::before { content:'✓'; width:18px; height:18px; border-radius:50%; background:rgba(34,197,94,0.15); color:var(--green); font-size:11px; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
 .app-plan-feats li.muted { color:var(--text3); }
-.app-plan-feats li.muted::before { background:var(--text3); opacity:.45; }
-.app-plan-feats li.agent-feature { display:block; }
-.app-plan-feats li.agent-feature::before { content:''; display:inline-block; width:7px; height:7px; border-radius:999px; background:var(--green); margin-right:9px; }
+.app-plan-feats li.muted::before { content:'×'; background:var(--surface2); color:var(--text3); font-size:13px; }
+.app-plan-feats li.agent-feature { display:flex; }
+.app-plan-feats li.agent-feature::before { content:'✓'; width:18px; height:18px; border-radius:50%; background:rgba(34,197,94,0.15); color:var(--green); font-size:11px; font-weight:900; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
 .app-plan-subfeats { list-style:disc; margin:7px 0 0 27px; padding:0; display:flex; flex-direction:column; gap:5px; }
 .app-plan-subfeats li { display:list-item; font-size:12px; color:var(--text2); font-weight:600; }
 .app-plan-subfeats li::before { content:none; }
@@ -261,14 +260,15 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .app-plan-btn.primary { background:var(--blue); color:#fff; box-shadow:0 6px 24px rgba(0,82,255,0.25); }
 .app-plan-btn.founder { background:linear-gradient(135deg,#ffb020,#ff6b2b); color:#15110a; box-shadow:0 6px 24px rgba(255,176,32,0.22); }
 .app-plan-btn:disabled { opacity:0.6; cursor:default; box-shadow:none; }
-.billing-manage-card { display:none; align-items:center; justify-content:space-between; gap:16px; margin:0 0 16px; padding:16px 18px; border:1px solid var(--border); border-radius:18px; background:linear-gradient(135deg,var(--surface),rgba(0,82,255,0.045)); box-shadow:0 14px 34px rgba(0,0,0,0.04); }
+      .app-plan-btn.current-plan { background:none; color:var(--text3); font-size:12px; font-weight:700; cursor:default; box-shadow:none; padding:12px 0; text-align:center; opacity:1; }
+.billing-manage-card { display:none; align-items:center; justify-content:space-between; gap:16px; margin:0 0 28px; padding:16px 18px; border:1px solid var(--border); border-radius:18px; background:linear-gradient(135deg,var(--surface),rgba(0,82,255,0.045)); box-shadow:0 14px 34px rgba(0,0,0,0.04); }
 .billing-manage-card.open { display:flex; }
 .billing-manage-title { font-size:15px; font-weight:900; color:var(--text); letter-spacing:-0.02em; }
 .billing-manage-sub { font-size:12px; color:var(--text3); margin-top:4px; line-height:1.45; }
 .billing-manage-actions { display:flex; gap:10px; flex-shrink:0; }
 .billing-manage-btn { border:none; border-radius:12px; padding:11px 14px; font-family:var(--sans); font-size:13px; font-weight:900; cursor:pointer; background:var(--blue); color:#fff; box-shadow:0 6px 22px rgba(0,82,255,0.22); }
 .billing-manage-btn.secondary { background:var(--surface2); color:var(--text); box-shadow:none; }
-@media (max-width:980px) { .plans-page-grid { grid-template-columns:1fr; } .app-plan-card { min-height:auto; } }
+@media (max-width:980px) { .plans-page-grid { grid-template-columns:1fr; } }
 @media (max-width:640px) {
   .hdr .plan-badge { min-height:24px; padding:0 9px; font-size:9px; max-width:92px; overflow:hidden; text-overflow:ellipsis; }
   .plans-page-grid { gap:12px; }
@@ -439,7 +439,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
   .tabbar { display:none !important; }
   .pages { bottom:0 !important; }
   .hdr-hamburger { display:flex !important; }
-  .hdr-avatar-wrap { display:none !important; }
+  body.sidebar-open .hdr-avatar-wrap { display:none !important; }
 }
 @media (max-width:767px) { .sidebar { display:none !important; } .hdr-hamburger { display:none !important; } }
 .hdr-hamburger { display:none; }
@@ -773,10 +773,12 @@ body.auth-active .tabbar { display:none !important; }
       Zentra
     </div>
   </div>
-  <div class="hdr-right hdr-avatar-wrap" style="display:flex;align-items:center;gap:8px">
+  <div class="hdr-right" style="display:flex;align-items:center;gap:8px">
     <span id="planBadge" class="plan-badge free" style="display:none">FREE</span>
-    <div class="avatar-btn" id="avatarBtn" onclick="navigateToAccount()">
-      <span id="avatarInitial">?</span>
+    <div class="hdr-avatar-wrap" style="display:flex;align-items:center">
+      <div class="avatar-btn" id="avatarBtn" onclick="navigateToAccount()">
+        <span id="avatarInitial">?</span>
+      </div>
     </div>
   </div>
 </div>
@@ -1240,7 +1242,7 @@ body.auth-active .tabbar { display:none !important; }
     <div class="sb-scan-usage-bar"><div class="sb-scan-usage-fill" id="sbScanUsageFill"></div></div>
     <div class="sb-scan-usage-sub" id="sbScanUsageSub"></div>
   </div>
-  <div style="padding:0 8px;border-top:1px solid var(--border)">
+  <div style="padding:8px 8px 0;border-top:1px solid var(--border);margin-top:8px">
     <div id="sbSimRow" style="display:none;align-items:center;justify-content:space-between;padding:12px 8px">
       <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text2)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg>
@@ -2052,8 +2054,7 @@ body.auth-active .tabbar { display:none !important; }
         <div class="billing-manage-sub" id="billingManageSub">Gestisci metodo di pagamento, upgrade, downgrade o disdetta dal portale Stripe.</div>
       </div>
       <div class="billing-manage-actions">
-        <button class="billing-manage-btn" onclick="manageSubscriptionClick()">Gestisci su Stripe</button>
-        <button class="billing-manage-btn secondary" onclick="showTab('account',document.querySelector('.sb-user'))">Impostazioni</button>
+        <button class="billing-manage-btn" onclick="manageSubscriptionClick()">Gestisci</button>
       </div>
     </div>
 
@@ -2102,13 +2103,13 @@ body.auth-active .tabbar { display:none !important; }
         <ul class="app-plan-feats">
           <li>Tutto incluso in Pro</li>
           <li>Analisi Zentra AI illimitate</li>
-          <li class="agent-feature">Zentra Agent Beta:
+          <li class="agent-feature"><div>Zentra Agent Beta:
             <ul class="app-plan-subfeats">
               <li>Ingressi automatici dai segnali Zentra</li>
               <li>Regole automatiche di rischio e uscita</li>
               <li>Strategie Momentum + Breakout</li>
             </ul>
-          </li>
+          </div></li>
         </ul>
         <div class="app-plan-risk">Zentra Agent è una funzionalità beta. Il trading comporta rischi e può causare perdite. L'algoritmo è in continuo miglioramento e non garantisce profitti.</div>
         <button class="app-plan-btn founder" id="planFounderBtn" onclick="selectBillingPlan('founder')">Diventa Founder</button>
@@ -2127,20 +2128,22 @@ body.auth-active .tabbar { display:none !important; }
         <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
       </div>
       <div>
-        <div class="acc-name" id="accName">--</div>
-        <div class="acc-email" id="accEmail"></div>
-      </div>
-    </div>
-
-    <div class="acc-section">
-      <div class="acc-sec-title">Profilo</div>
-      <div class="acc-profile-edit">
-        <div class="acc-profile-field">
-          <div class="acc-profile-label">Username visibile</div>
-          <input class="acc-profile-input" id="displayNameInput" maxlength="40" autocomplete="nickname" placeholder="Il tuo nome su Zentra">
-          <div class="acc-profile-error" id="displayNameErr"></div>
+        <div id="accNameRow" style="display:block;text-align:center">
+          <span style="position:relative;display:inline-block">
+            <span class="acc-name" id="accName">--</span>
+            <button onclick="startEditName()" title="Modifica username" style="position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:5px;background:none;border:none;padding:3px;cursor:pointer;color:var(--text3);display:flex;align-items:center;border-radius:6px;line-height:1" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text3)'">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+          </span>
         </div>
-        <button class="acc-profile-save" id="displayNameSaveBtn" onclick="saveDisplayName()">Salva</button>
+        <div id="editNameRow" style="display:none;align-items:center;justify-content:center;gap:6px">
+          <input id="displayNameInput" maxlength="40" autocomplete="nickname" placeholder="Il tuo nome" onkeydown="if(event.key==='Enter')confirmEditName();if(event.key==='Escape')cancelEditName()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 9px;font-size:13px;font-family:var(--sans);color:var(--text);outline:none;width:130px">
+          <button id="displayNameSaveBtn" onclick="confirmEditName()" title="Salva" style="background:var(--blue);border:none;border-radius:8px;padding:5px 8px;cursor:pointer;display:flex;align-items:center;color:#fff">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+        </div>
+        <div id="displayNameErr" style="font-size:11px;color:var(--red);margin-top:2px;display:none"></div>
+        <div class="acc-email" id="accEmail"></div>
       </div>
     </div>
 
@@ -2704,6 +2707,7 @@ function initApp() {
   // Avatar: mostra iniziale subito, poi sovrascrive con foto dal server
   applyAvatar(null); // mostra iniziale username
   updateProfileMenu();
+  updatePlanUI();
   initSidebar();
   loadUserProfile();
   startupSession();
@@ -2768,6 +2772,7 @@ async function loadUserProfile() {
     renderExchangePage();
   } catch(e) {
     applyAvatar(localStorage.getItem('ca_avatar'));
+    updatePlanUI();
   }
 }
 
@@ -5458,10 +5463,8 @@ function renderAccountPage() {
   const initEl  = document.getElementById('accAvatarInitial');
   const avEl    = document.getElementById('accAvatar');
   const emailEl = document.getElementById('accEmail');
-  const nameInput = document.getElementById('displayNameInput');
   if (nameEl) nameEl.textContent = _username || '--';
   if (emailEl) emailEl.textContent = _email || '';
-  if (nameInput) nameInput.value = _username || '';
   if (initEl) initEl.textContent = (_username[0]||'?').toUpperCase();
   const cached = localStorage.getItem('ca_avatar');
   if (avEl && cached) avEl.innerHTML = '<img src="' + cached + '" style="width:100%;height:100%;object-fit:cover">';
@@ -5487,8 +5490,7 @@ function renderAccountPage() {
       <div class="acc-feat-row"><span>Trading manuale reale</span><span class="acc-feat-val">${isPro?'Incluso':'Non incluso'}</span></div>
       <div class="acc-feat-row"><span>Notifiche Telegram</span><span class="acc-feat-val">${isPro?'Incluse':'Non incluse'}</span></div>
       <div class="acc-feat-row"><span>Zentra Agent Beta</span><span class="acc-feat-val">${isFounder?'Incluso':'Non incluso'}</span></div>
-      ${!isFounder && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"showTab('plans',document.querySelector('.sb-item[data-tab=plans]'))\">Confronta i piani</button>" : ''}
-      ${isPro && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"manageSubscriptionClick()\">Gestisci abbonamento</button>" : ''}
+      ${isPaidPlan() && STRIPE_ENABLED ? "<button class=\"acc-upgrade-btn\" onclick=\"manageSubscriptionClick()\">Gestisci abbonamento</button>" : ''}
       ${!isPro && STRIPE_ENABLED ? '<div style="height:12px"></div>' : ''}
     `;
   }
@@ -5506,31 +5508,47 @@ function renderPlansPage() {
   const manageSub = document.getElementById('billingManageSub');
   if (manageCard) manageCard.classList.toggle('open', STRIPE_ENABLED && isPaidPlan());
   if (manageSub) manageSub.textContent = _plan === 'founder'
-    ? 'Sei Founder. Da qui puoi aggiornare metodo di pagamento, scaricare fatture o annullare il rinnovo.'
-    : 'Sei Pro. Da qui puoi passare a Founder, modificare metodo di pagamento o annullare il rinnovo.';
+    ? 'Da qui puoi aggiornare metodo di pagamento, scaricare fatture o annullare il rinnovo.'
+    : 'Da qui puoi passare a Founder, modificare metodo di pagamento o annullare il rinnovo.';
+  // free card
   if (freeBtn) {
-    freeBtn.textContent = _plan === 'free' ? 'Piano attuale' : 'Incluso nel tuo piano';
-    freeBtn.disabled = true;
+    if (_plan === 'free') {
+      freeBtn.textContent = 'Il tuo piano attuale';
+      freeBtn.className = 'app-plan-btn current-plan';
+      freeBtn.disabled = true;
+      freeBtn.style.display = '';
+    } else {
+      freeBtn.style.display = 'none'; // piani superiori non mostrano CTA per free
+    }
   }
+  // pro card
   if (proBtn) {
     if (_plan === 'pro') {
-      proBtn.textContent = 'Gestisci Pro';
-      proBtn.disabled = false;
-    } else if (_plan === 'founder') {
-      proBtn.textContent = 'Incluso in Founder';
+      proBtn.textContent = 'Il tuo piano attuale';
+      proBtn.className = 'app-plan-btn current-plan';
       proBtn.disabled = true;
+      proBtn.style.display = '';
+    } else if (_plan === 'founder') {
+      proBtn.style.display = 'none'; // founder è superiore, nessuna CTA su pro
     } else {
       proBtn.textContent = 'Passa a Pro';
+      proBtn.className = 'app-plan-btn primary';
       proBtn.disabled = false;
+      proBtn.style.display = '';
     }
   }
+  // founder card
   if (founderBtn) {
     if (_plan === 'founder') {
-      founderBtn.textContent = 'Gestisci Founder';
+      founderBtn.textContent = 'Il tuo piano attuale';
+      founderBtn.className = 'app-plan-btn current-plan';
+      founderBtn.disabled = true;
     } else {
       founderBtn.textContent = _plan === 'pro' ? 'Passa a Founder' : 'Diventa Founder';
+      founderBtn.className = 'app-plan-btn founder';
+      founderBtn.disabled = false;
     }
-    founderBtn.disabled = false;
+    founderBtn.style.display = '';
   }
 }
 
@@ -5550,7 +5568,7 @@ async function saveDisplayName() {
     input?.focus();
     return;
   }
-  if (btn) { btn.disabled = true; btn.textContent = 'Salvo...'; }
+  if (btn) btn.disabled = true;
   try {
     const r = await fetch(API + '/auth/profile', {
       method: 'PATCH',
@@ -5561,6 +5579,7 @@ async function saveDisplayName() {
     if (!r.ok || !d.ok) throw new Error(d.detail || d.error || 'Salvataggio fallito');
     _username = d.username || displayName;
     localStorage.setItem('ca_username', _username);
+    cancelEditName();
     renderAccountPage();
     syncSidebar();
     updateProfileMenu();
@@ -5569,8 +5588,29 @@ async function saveDisplayName() {
   } catch (e) {
     if (err) { err.textContent = e.message || 'Salvataggio fallito'; err.style.display = ''; }
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Salva'; }
+    if (btn) btn.disabled = false;
   }
+}
+
+function startEditName() {
+  document.getElementById('accNameRow').style.display = 'none';
+  const row = document.getElementById('editNameRow');
+  row.style.display = 'flex';
+  const inp = document.getElementById('displayNameInput');
+  inp.value = _username || '';
+  inp.focus();
+  inp.select();
+}
+
+function cancelEditName() {
+  document.getElementById('editNameRow').style.display = 'none';
+  document.getElementById('accNameRow').style.display = 'block';
+  const err = document.getElementById('displayNameErr');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+}
+
+async function confirmEditName() {
+  await saveDisplayName();
 }
 
 function renderExchangePage() {
@@ -6247,16 +6287,12 @@ function showScanLimitModal(msg) {
 
 async function selectBillingPlan(plan) {
   if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
-  if (isPaidPlan()) {
-    await manageSubscriptionClick();
-    return;
-  }
+  if (isPaidPlan()) { await manageSubscriptionClick(); return; }
   await checkoutPlan(plan);
 }
 
 async function checkoutPlan(plan) {
   if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
-  if (isPaidPlan()) { await manageSubscriptionClick(); return; }
   if (plan !== 'pro' && plan !== 'founder') { return; }
   try {
     const r = await fetch(API + '/billing/checkout', {
@@ -6273,7 +6309,7 @@ async function manageSubscriptionClick() {
   try {
     const r = await fetch(API + '/billing/portal', {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ return_url: location.href })
+      body: JSON.stringify({ return_url: location.href.split('?')[0] + '?portal_return=1' })
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
@@ -6286,8 +6322,8 @@ function updatePlanUI() {
   const badge = document.getElementById('planBadge');
   if (badge) {
     badge.textContent = planBadgeText();
-    badge.className = 'plan-badge ' + (_plan === 'founder' ? 'founder' : (_plan === 'pro' ? 'pro' : 'free'));
-    badge.style.display = '';
+    badge.className = 'plan-badge ' + (_plan === 'founder' ? 'founder' : 'pro');
+    badge.style.display = (_plan === 'free' || !_plan) ? 'none' : '';
   }
   const sesEl = document.getElementById('sessionsIndicator');
   if (sesEl) sesEl.style.display = 'none';
@@ -6341,69 +6377,106 @@ function applyPlanConfig() {
   });
 }
 
-// Check ?upgraded=1 param al ritorno da Stripe
+// Polling piano dopo ritorno da Stripe (checkout o portale)
+async function _pollPlanChange(prevPlan, onUpgrade) {
+  document.getElementById('upgradingOverlay').style.display = 'flex';
+  for (let i = 0; i < 8; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const r = await fetch(API + '/billing/status', { headers: authHeaders() });
+      if (r.ok) {
+        const d = await r.json();
+        STRIPE_ENABLED = d.stripe_enabled || STRIPE_ENABLED;
+        _plan = d.plan || _plan;
+        _sessionsToday = d.sessions_today ?? _sessionsToday;
+        _scansToday = d.scans_today ?? _scansToday;
+        _scansPerDay = d.scans_per_day ?? _scansPerDay;
+        updatePlanUI();
+        if (d.plan !== prevPlan) { _upgradedPlan = d.plan; break; }
+      }
+    } catch(e) {}
+  }
+  document.getElementById('upgradingOverlay').style.display = 'none';
+  onUpgrade(_upgradedPlan);
+}
+
+// Check ?upgraded=1 param al ritorno da Stripe checkout
 (function() {
   const p = new URLSearchParams(location.search);
   if (p.get('upgraded') === '1') {
     history.replaceState({}, '', location.pathname);
-    setTimeout(async () => {
-      // Mostra overlay di caricamento subito
-      document.getElementById('upgradingOverlay').style.display = 'flex';
-      // Polling: webhook Stripe è asincrono, aspetta max 14s
-      for (let i = 0; i < 7; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        try {
-          const r = await fetch(API + '/billing/status', { headers: authHeaders() });
-          if (r.ok) {
-            const d = await r.json();
-            STRIPE_ENABLED = d.stripe_enabled || STRIPE_ENABLED;
-            if (d.plan === 'pro' || d.plan === 'founder') {
-              _plan = d.plan;
-              _sessionsToday = d.sessions_today ?? _sessionsToday;
-              _scansToday = d.scans_today ?? _scansToday;
-              _scansPerDay = d.scans_per_day ?? _scansPerDay;
-              updatePlanUI();
-              break;
-            }
-          }
-        } catch(e) {}
+    setTimeout(() => _pollPlanChange('free', plan => {
+      if (plan === 'founder') showFounderWelcome(); else if (plan === 'pro') showProWelcome();
+    }), 400);
+  } else if (p.get('portal_return') === '1') {
+    const prevPlan = _plan;
+    history.replaceState({}, '', location.pathname);
+    setTimeout(() => _pollPlanChange(prevPlan, plan => {
+      if (plan && plan !== prevPlan) {
+        if (plan === 'founder') showFounderWelcome();
+        else if (plan === 'pro') showProWelcome();
       }
-      document.getElementById('upgradingOverlay').style.display = 'none';
-      showProWelcome();
-    }, 400);
+    }), 400);
   }
 })();
 
+let _upgradedPlan = '';
 function showProWelcome() {
   document.getElementById('proWelcomeModal').classList.add('open');
 }
 function closeProWelcome() {
   document.getElementById('proWelcomeModal').classList.remove('open');
   updatePlanUI();
+  showTab('home', document.querySelector('.sb-item[data-tab=home]'));
+}
+function showFounderWelcome() {
+  document.getElementById('founderWelcomeModal').classList.add('open');
+}
+function closeFounderWelcome() {
+  document.getElementById('founderWelcomeModal').classList.remove('open');
+  updatePlanUI();
+  showTab('home', document.querySelector('.sb-item[data-tab=home]'));
 }
 </script>
 
 <!-- UPGRADING OVERLAY -->
 <div id="upgradingOverlay" style="display:none;position:fixed;inset:0;z-index:500;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);background:rgba(0,0,0,0.5);flex-direction:column;align-items:center;justify-content:center;gap:20px">
-  <div style="width:48px;height:48px;border:3px solid rgba(245,158,11,0.3);border-top-color:#f59e0b;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+  <div style="width:48px;height:48px;border:3px solid rgba(59,130,246,0.3);border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite"></div>
   <div style="color:#fff;font-size:15px;font-weight:600;letter-spacing:-0.01em">Attivazione abbonamento…</div>
 </div>
 
 <!-- WELCOME PRO MODAL -->
 <div class="modal-overlay" id="proWelcomeModal">
   <div class="modal-card" style="max-width:380px;text-align:center;padding:36px 28px">
-    <div style="font-size:11px;font-weight:800;letter-spacing:0.12em;color:#f59e0b;margin-bottom:10px">ZENTRA PRO</div>
+    <div style="font-size:11px;font-weight:800;letter-spacing:0.12em;color:var(--blue);margin-bottom:10px">ZENTRA PRO</div>
     <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:-0.02em">Benvenuto nel piano Pro</div>
     <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Il tuo abbonamento è attivo. Hai ora accesso completo a tutte le funzionalità.</div>
-    <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:24px;text-align:left">
-      <div style="font-size:13px;color:var(--text2);line-height:2">
-        <div>Sessioni illimitate al giorno</div>
-        <div>Posizioni multiple contemporaneamente</div>
-        <div>Filtri personalizzabili (Trend 1h, BTC EMA, RSI, TP)</div>
-        <div>Allocazione per trade personalizzabile</div>
-      </div>
+    <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:24px;text-align:left;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Scansioni di mercato illimitate</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>50 analisi Zentra AI al giorno</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Trading manuale illimitato</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Collegamento exchange reali</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Gestione posizioni reali</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Notifiche Telegram</div>
     </div>
-    <button onclick="closeProWelcome()" style="width:100%;padding:14px;background:linear-gradient(135deg,#f59e0b,#ef4444);border:none;border-radius:var(--radius);color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:var(--sans);letter-spacing:-0.01em">Inizia ora →</button>
+    <button onclick="closeProWelcome()" style="width:100%;padding:14px;background:var(--blue);border:none;border-radius:var(--radius);color:#fff;font-size:16px;font-weight:800;cursor:pointer;font-family:var(--sans);letter-spacing:-0.01em;box-shadow:0 6px 24px rgba(0,82,255,0.3)">Inizia ora →</button>
+  </div>
+</div>
+
+<!-- WELCOME FOUNDER MODAL -->
+<div class="modal-overlay" id="founderWelcomeModal">
+  <div class="modal-card" style="max-width:380px;text-align:center;padding:36px 28px">
+    <div style="font-size:11px;font-weight:800;letter-spacing:0.12em;color:#ff6b2b;margin-bottom:10px">ZENTRA FOUNDER</div>
+    <div style="font-size:22px;font-weight:700;margin-bottom:8px;letter-spacing:-0.02em">Benvenuto nel piano Founder</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:24px;line-height:1.5">Hai accesso anticipato a Zentra Agent Beta e a tutte le funzionalità illimitate.</div>
+    <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:24px;text-align:left;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Tutto incluso in Pro</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Analisi Zentra AI illimitate</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Zentra Agent Beta — ingressi automatici</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Regole automatiche di rischio e uscita</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);font-weight:600"><span style="width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,0.15);color:var(--green);font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>Strategie Momentum + Breakout</div>
+    </div>
+    <button onclick="closeFounderWelcome()" style="width:100%;padding:14px;background:linear-gradient(135deg,#ffb020,#ff6b2b);border:none;border-radius:var(--radius);color:#15110a;font-size:16px;font-weight:800;cursor:pointer;font-family:var(--sans);letter-spacing:-0.01em;box-shadow:0 6px 24px rgba(255,176,32,0.35)">Inizia ora →</button>
   </div>
 </div>
 
