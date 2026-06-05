@@ -261,6 +261,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .app-plan-btn.primary { background:var(--blue); color:#fff; box-shadow:0 6px 24px rgba(0,82,255,0.25); }
 .app-plan-btn.founder { background:linear-gradient(135deg,#ffb020,#ff6b2b); color:#15110a; box-shadow:0 6px 24px rgba(255,176,32,0.22); }
 .app-plan-btn:disabled { opacity:0.6; cursor:default; box-shadow:none; }
+      .app-plan-btn.current-plan { background:none; color:var(--text3); font-size:12px; font-weight:700; cursor:default; box-shadow:none; padding:12px 0; text-align:center; opacity:1; }
 .billing-manage-card { display:none; align-items:center; justify-content:space-between; gap:16px; margin:0 0 16px; padding:16px 18px; border:1px solid var(--border); border-radius:18px; background:linear-gradient(135deg,var(--surface),rgba(0,82,255,0.045)); box-shadow:0 14px 34px rgba(0,0,0,0.04); }
 .billing-manage-card.open { display:flex; }
 .billing-manage-title { font-size:15px; font-weight:900; color:var(--text); letter-spacing:-0.02em; }
@@ -2052,8 +2053,7 @@ body.auth-active .tabbar { display:none !important; }
         <div class="billing-manage-sub" id="billingManageSub">Gestisci metodo di pagamento, upgrade, downgrade o disdetta dal portale Stripe.</div>
       </div>
       <div class="billing-manage-actions">
-        <button class="billing-manage-btn" onclick="manageSubscriptionClick()">Gestisci su Stripe</button>
-        <button class="billing-manage-btn secondary" onclick="showTab('account',document.querySelector('.sb-user'))">Impostazioni</button>
+        <button class="billing-manage-btn" onclick="manageSubscriptionClick()">Gestisci</button>
       </div>
     </div>
 
@@ -5508,29 +5508,45 @@ function renderPlansPage() {
   if (manageSub) manageSub.textContent = _plan === 'founder'
     ? 'Sei Founder. Da qui puoi aggiornare metodo di pagamento, scaricare fatture o annullare il rinnovo.'
     : 'Sei Pro. Da qui puoi passare a Founder, modificare metodo di pagamento o annullare il rinnovo.';
+  // free card
   if (freeBtn) {
-    freeBtn.textContent = _plan === 'free' ? 'Piano attuale' : 'Incluso nel tuo piano';
-    freeBtn.disabled = true;
+    if (_plan === 'free') {
+      freeBtn.textContent = 'Il tuo piano attuale';
+      freeBtn.className = 'app-plan-btn current-plan';
+      freeBtn.disabled = true;
+      freeBtn.style.display = '';
+    } else {
+      freeBtn.style.display = 'none'; // piani superiori non mostrano CTA per free
+    }
   }
+  // pro card
   if (proBtn) {
     if (_plan === 'pro') {
-      proBtn.textContent = 'Gestisci Pro';
-      proBtn.disabled = false;
-    } else if (_plan === 'founder') {
-      proBtn.textContent = 'Incluso in Founder';
+      proBtn.textContent = 'Il tuo piano attuale';
+      proBtn.className = 'app-plan-btn current-plan';
       proBtn.disabled = true;
+      proBtn.style.display = '';
+    } else if (_plan === 'founder') {
+      proBtn.style.display = 'none'; // founder è superiore, nessuna CTA su pro
     } else {
       proBtn.textContent = 'Passa a Pro';
+      proBtn.className = 'app-plan-btn primary';
       proBtn.disabled = false;
+      proBtn.style.display = '';
     }
   }
+  // founder card
   if (founderBtn) {
     if (_plan === 'founder') {
-      founderBtn.textContent = 'Gestisci Founder';
+      founderBtn.textContent = 'Il tuo piano attuale';
+      founderBtn.className = 'app-plan-btn current-plan';
+      founderBtn.disabled = true;
     } else {
       founderBtn.textContent = _plan === 'pro' ? 'Passa a Founder' : 'Diventa Founder';
+      founderBtn.className = 'app-plan-btn founder';
+      founderBtn.disabled = false;
     }
-    founderBtn.disabled = false;
+    founderBtn.style.display = '';
   }
 }
 
