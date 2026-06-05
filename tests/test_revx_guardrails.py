@@ -1393,6 +1393,9 @@ class RevxGuardrailTests(unittest.TestCase):
             def __init__(self):
                 self.execute_args = None
 
+            async def fetchrow(self, sql, *args):
+                return None  # no username conflict
+
             async def execute(self, sql, *args):
                 self.execute_args = args
                 return "UPDATE 1"
@@ -1412,7 +1415,7 @@ class RevxGuardrailTests(unittest.TestCase):
             main.check_rate_limit = original_rate_limit
             main.user_sessions = original_sessions
 
-        self.assertEqual(conn.execute_args, ("Savo Fats", 5))
+        self.assertEqual(conn.execute_args, ("Savo Fats", "savo_fats", 5))
         self.assertEqual(result, {"ok": True, "username": "Savo Fats"})
 
 
