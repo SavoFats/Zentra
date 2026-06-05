@@ -603,20 +603,25 @@ footer {
   nav { padding: 0 20px; }
   .nav-links { display: none; }
   section { padding: 80px 20px; }
-  .hero { padding: 100px 20px 60px; }
+  .hero { padding: 56px 20px 36px; min-height: auto; }
   .features-grid { grid-template-columns: 1fr; }
   .feature-card-wide { grid-column: span 1; }
   .plans-grid { grid-template-columns: 1fr; max-width: 460px; }
   .steps { flex-direction: column; gap: 32px; }
   .steps::before { display: none; }
-  .hero-stats { flex-direction: column; border-radius: 16px; }
-  .hero-stat { border-right: none; border-bottom: 1px solid var(--border); }
-  .hero-stat:last-child { border-bottom: none; }
+  .hero-stats { flex-direction: row; flex-wrap: wrap; border-radius: 16px; margin-top: 32px; }
+  .hero-stat { flex: 1 1 50%; padding: 12px 8px; border-right: none; border-bottom: 1px solid var(--border); }
+  .hero-stat:nth-child(odd) { border-right: 1px solid var(--border); }
+  .hero-stat:nth-last-child(-n+2) { border-bottom: none; }
+  .hero-stat-val { font-size: 20px; }
+  .hero-stat-lbl { font-size: 9px; }
   .tc1,.tc2,.tc3,.tc4,.tc5 { display: none; }
   footer { flex-direction: column; gap: 24px; text-align: center; }
   .footer-left { align-items: center; }
   .footer-right { align-items: center; }
   .footer-legal { justify-content: center; }
+  .reveal, .reveal-left, .reveal-right { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .delay-1, .delay-2, .delay-3, .delay-4 { transition-delay: 0s !important; }
 }
 
 /* ─── TICKER MARQUEE ────────────────────────── */
@@ -822,7 +827,7 @@ footer {
   </div>
 
   <div class="hero-content">
-    <div class="hero-badge"><div class="hero-badge-dot"></div><span data-i18n="hero_badge">AI-powered trading agent</span></div>
+    <div class="hero-badge" style="display:none"></div>
     <h1 class="hero-title">
       <span data-i18n="hero_title_1">Trade smarter.</span><br>
       <span class="gradient-text" data-i18n="hero_title_2">Trade with AI.</span>
@@ -966,7 +971,7 @@ footer {
     <div class="testi-track" id="testiTrack">
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t1_quote">"Finally an algo tool that doesn't need a PhD to configure. Set my risk parameters in 10 minutes and let it run. Up 14% in my first month of automated trading."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#3b82f6;">LK</div>
@@ -975,7 +980,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t2_quote">"The agent caught a SOL breakout at 3 AM while I was asleep. That single trade covered my Pro subscription for the entire year. Absolute game changer."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#10b981;">MR</div>
@@ -984,7 +989,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t3_quote">"I was skeptical about automation, but Zentra changed my mind. The breakout strategy is uncannily accurate during volatile sessions. My win rate went from 48% to 61%."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#8b5cf6;">AT</div>
@@ -993,7 +998,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t4_quote">"ATR-based trailing stops actually adapt to volatility instead of being static. That alone is worth the subscription — I stopped getting shaken out of winning trades."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#f59e0b;">DM</div>
@@ -1002,7 +1007,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t5_quote">"Telegram alerts mean I never miss an entry or exit, even with a full-time job. It's like having a professional trading assistant available 24/7 on my phone."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#ec4899;">SN</div>
@@ -1011,7 +1016,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t6_quote">"Scanning 50+ pairs manually is humanly impossible. My entry quality improved the moment I stopped guessing and let Zentra's scanner decide. Fewer trades, better results."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#06b6d4;">JO</div>
@@ -1020,7 +1025,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t7_quote">"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#ef4444;">GF</div>
@@ -1030,7 +1035,7 @@ footer {
 
       <!-- duplicated for seamless loop -->
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t1_quote">"Finally an algo tool that doesn't need a PhD to configure. Set my risk parameters in 10 minutes and let it run. Up 14% in my first month of automated trading."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#3b82f6;">LK</div>
@@ -1039,7 +1044,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t2_quote">"The agent caught a SOL breakout at 3 AM while I was asleep. That single trade covered my Pro subscription for the entire year. Absolute game changer."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#10b981;">MR</div>
@@ -1048,7 +1053,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t3_quote">"I was skeptical about automation, but Zentra changed my mind. The breakout strategy is uncannily accurate during volatile sessions. My win rate went from 48% to 61%."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#8b5cf6;">AT</div>
@@ -1057,7 +1062,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t4_quote">"ATR-based trailing stops actually adapt to volatility instead of being static. That alone is worth the subscription — I stopped getting shaken out of winning trades."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#f59e0b;">DM</div>
@@ -1066,7 +1071,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t5_quote">"Telegram alerts mean I never miss an entry or exit, even with a full-time job. It's like having a professional trading assistant available 24/7 on my phone."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#ec4899;">SN</div>
@@ -1075,7 +1080,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t6_quote">"Scanning 50+ pairs manually is humanly impossible. My entry quality improved the moment I stopped guessing and let Zentra's scanner decide. Fewer trades, better results."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#06b6d4;">JO</div>
@@ -1084,7 +1089,7 @@ footer {
       </div>
 
       <div class="testi-card">
-        <div class="testi-stars">5/5</div>
+        <div class="testi-stars">★★★★★</div>
         <p class="testi-text" data-i18n="t7_quote">"Ho provato altri bot ma erano tutti troppo complicati. Zentra è diverso: interfaccia pulita, configurazione in cinque minuti e funziona davvero. Non tornerei mai indietro."</p>
         <div class="testi-author">
           <div class="testi-avatar" style="background:#ef4444;">GF</div>
