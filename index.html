@@ -1817,7 +1817,7 @@ body.auth-active .tabbar { display:none !important; }
       .ai-send svg { width:18px; height:18px; }
       .ai-chart-wrap { margin:8px 0 4px; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:var(--surface2); }
       .ai-chart-label { font-size:11px; font-weight:800; color:var(--text3); padding:8px 12px 4px; letter-spacing:0.06em; text-transform:uppercase; }
-      .ai-chart-frame { width:100%; height:260px; border:none; display:block; }
+      .ai-chart-frame { width:100%; height:300px; border:none; display:block; }
       .ai-news-wrap { margin:8px 0 4px; border-radius:14px; border:1px solid var(--border); background:var(--surface2); padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
       .ai-news-label { font-size:11px; font-weight:800; color:var(--text3); letter-spacing:0.06em; text-transform:uppercase; }
       .ai-news-item { font-size:12.5px; line-height:1.45; color:var(--text2); font-weight:600; }
@@ -6706,7 +6706,7 @@ function _aiRenderChart(symbol) {
     const w = el.clientWidth || el.offsetWidth || 620;
     new TradingView.widget({
       width: w,
-      height: 260,
+      height: 300,
       autosize: false,
       symbol: `${safeSymbol}USDT`,
       interval: '60',
