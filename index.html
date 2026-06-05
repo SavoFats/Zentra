@@ -429,7 +429,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-btn { width:32px; height:32px; display:flex; align-items:center; justify-content:center; border:none; background:none; cursor:pointer; color:var(--text2); border-radius:8px; transition:background 0.15s; flex-shrink:0; }
 .sb-btn:hover { background:var(--surface2); }
 .sb-logo { display:flex; align-items:center; gap:8px; font-size:17px; font-weight:700; letter-spacing:-0.03em; color:var(--text); }
-.sb-nav { flex:1; padding:10px 8px; overflow-y:auto; }
+.sb-nav { flex:1; min-height:0; padding:10px 8px 0; display:flex; flex-direction:column; overflow:hidden; }
 .sb-item { display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; font-size:13px; font-weight:600; color:var(--text2); font-family:var(--sans); text-align:left; transition:background 0.15s,color 0.15s; margin-bottom:2px; }
 .sb-item:hover { background:var(--surface2); color:var(--text); }
 .sb-item.active { background:var(--surface2); color:var(--text); font-weight:700; }
@@ -440,7 +440,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-item.active svg, .sb-item:hover svg { opacity:1; }
 .sb-sep { height:1px; background:var(--border); margin:6px 12px; }
 .sb-history-head { display:flex; align-items:center; padding:14px 12px 6px; font-size:10px; font-weight:800; color:var(--text3); letter-spacing:.09em; text-transform:uppercase; }
-.sb-ai-history { display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
+.sb-ai-history { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding-bottom:8px; }
 .sb-ai-thread-wrap { position:relative; display:flex; align-items:center; border-radius:10px; transition:background .15s; }
 .sb-ai-thread-wrap:hover, .sb-ai-thread-wrap.active { background:var(--surface2); }
 .sb-ai-thread { flex:1; min-width:0; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:10px; padding:8px 4px 8px 12px; text-align:left; font-family:var(--sans); transition:color .15s; }
