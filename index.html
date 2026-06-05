@@ -6558,7 +6558,7 @@ function renderAIThread() {
     return;
   }
   (thread.messages || []).forEach(m => {
-    else if (m.role === 'chart') _aiRenderChart(m.symbol);
+    if (m.role === 'chart') _aiRenderChart(m.symbol);
     else _aiAppendMsg(m.role, m.content, false);
   });
   msgs.scrollTop = msgs.scrollHeight;
