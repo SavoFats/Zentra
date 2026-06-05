@@ -1379,9 +1379,6 @@ body.auth-active .tabbar { display:none !important; }
             Scrivi una domanda qui sotto o parti dalla barra in Home. Le tue analisi resteranno nella cronologia della sidebar.
           </div>
         </div>
-        <div class="ai-typing" id="aiTyping">
-          <svg class="ai-thinking-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        </div>
         <div class="ai-workspace-composer">
           <textarea class="ai-input" id="aiInput" rows="1" placeholder="Scrivi un messaggio a Zentra AI..." onkeydown="aiInputKeydown(event,'analysis')" oninput="aiInputResize(this,'analysis')"></textarea>
           <button class="ai-send" id="aiSend" onclick="sendAIMessage('analysis')" disabled aria-label="Invia a Zentra AI">
@@ -1804,10 +1801,9 @@ body.auth-active .tabbar { display:none !important; }
       .ai-msg-new.user { animation-duration:var(--ai-user-enter-dur); }
       .ai-token { animation:ai-token-in var(--ai-token-dur) ease-out both; }
       .ai-cursor { animation:ai-cursor-blink 1s ease-in-out infinite; user-select:none; }
-      .ai-typing { align-self:flex-start; display:none; padding:6px 0 18px; }
-      .ai-typing.visible { display:flex; align-items:center; }
-      @keyframes ai-logo-pulse { 0%,100%{opacity:0.25;transform:scale(0.92)} 50%{opacity:1;transform:scale(1)} }
-      .ai-thinking-logo { width:22px; height:22px; color:var(--blue); animation:ai-logo-pulse 1.6s ease-in-out infinite; }
+      @keyframes ai-logo-pulse { 0%,100%{opacity:0.2;transform:scale(0.88)} 50%{opacity:1;transform:scale(1)} }
+      .ai-thinking-logo { width:34px; height:26px; color:var(--blue); animation:ai-logo-pulse 1.6s ease-in-out infinite; display:block; }
+      .ai-thinking-bubble { padding:10px 14px; }
       .ai-welcome { text-align:center; padding:32px 16px; color:var(--text3); font-size:13px; line-height:1.6; }
       .ai-welcome strong { color:var(--text2); display:block; margin-bottom:6px; font-size:14px; }
       .ai-suggestions { display:flex; flex-wrap:wrap; gap:8px; padding:0 14px 12px; }
@@ -6483,11 +6479,18 @@ function _aiSetupAutoScroll() {
 }
 
 function _aiThinkingStart() {
-  document.getElementById('aiTyping')?.classList.add('visible');
+  const msgs = document.getElementById('aiMessages');
+  if (!msgs || document.getElementById('aiTypingBubble')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'aiTypingBubble';
+  wrap.className = 'ai-msg ai';
+  wrap.innerHTML = '<div class="ai-bubble ai-thinking-bubble"><svg class="ai-thinking-logo" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg"><polyline points="0,100 40,62 68,82 100,32 140,48" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="140" cy="48" r="11" fill="currentColor"/></svg></div>';
+  msgs.appendChild(wrap);
+  _aiScrollBottom();
 }
 
 function _aiThinkingStop() {
-  document.getElementById('aiTyping')?.classList.remove('visible');
+  document.getElementById('aiTypingBubble')?.remove();
 }
 
 function _aiTitleFromMessage(msg) {
@@ -6698,9 +6701,13 @@ function _aiRenderChart(symbol) {
   msgs.appendChild(wrap);
 
   function makeWidget() {
-    if (!document.getElementById(cid) || typeof TradingView === 'undefined') return;
+    const el = document.getElementById(cid);
+    if (!el || typeof TradingView === 'undefined') return;
+    const w = el.clientWidth || el.offsetWidth || 620;
     new TradingView.widget({
-      autosize: true,
+      width: w,
+      height: 360,
+      autosize: false,
       symbol: `${safeSymbol}USDT`,
       interval: '60',
       timezone: 'Etc/UTC',
@@ -6711,9 +6718,6 @@ function _aiRenderChart(symbol) {
       allow_symbol_change: true,
       container_id: cid,
     });
-    const ro = new ResizeObserver(() => _aiScrollBottom());
-    ro.observe(wrap);
-    setTimeout(() => ro.disconnect(), 8000);
   }
 
   requestAnimationFrame(() => requestAnimationFrame(() => {
