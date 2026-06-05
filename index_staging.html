@@ -6716,8 +6716,8 @@ function _aiRenderChart(symbol) {
   const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (!msgs || !safeSymbol) return;
   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const tvSym = encodeURIComponent(`BINANCE:${safeSymbol}USDT`);
-  const src = `https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&hide_top_toolbar=0&hide_side_toolbar=0&allow_symbol_change=1&save_image=0&hideideas=1`;
+  const tvSym = encodeURIComponent(`${safeSymbol}USDT`);
+  const src = `https://s.tradingview.com/widgetembed/?symbol=${tvSym}&interval=60&theme=${theme}&style=1&locale=it&allow_symbol_change=1`;
   const wrap = document.createElement('div');
   const label = document.createElement('div');
   const iframe = document.createElement('iframe');
