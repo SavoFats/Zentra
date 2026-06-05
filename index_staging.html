@@ -232,8 +232,7 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .hdr .plan-badge { display:inline-flex; align-items:center; min-height:24px; padding:0 14px; border-radius:0; font-size:11.5px; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; white-space:nowrap; clip-path:polygon(9px 0%,100% 0%,calc(100% - 9px) 100%,0% 100%); }
 .btn-primary { background:var(--blue); color:#fff; border:none; border-radius:var(--radius-sm); font-weight:700; font-family:var(--sans); box-shadow:0 4px 16px rgba(0,82,255,0.3); transition:opacity 0.15s; }
 .btn-primary:active { opacity:0.85; }
-.plan-badge.free { background:var(--surface3); color:var(--text3); }
-.plan-badge.pro  { background:linear-gradient(90deg,#f59e0b,#ef4444); color:#fff; }
+.plan-badge.pro  { background:var(--blue); color:#fff; }
 .plan-badge.founder { background:linear-gradient(90deg,#ffb020,#ff6b2b); color:#15110a; }
 .plans-page-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 .app-plan-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:18px; display:flex; flex-direction:column; min-height:430px; box-shadow:0 16px 40px rgba(0,0,0,0.04); }
@@ -6306,8 +6305,8 @@ function updatePlanUI() {
   const badge = document.getElementById('planBadge');
   if (badge) {
     badge.textContent = planBadgeText();
-    badge.className = 'plan-badge ' + (_plan === 'founder' ? 'founder' : (_plan === 'pro' ? 'pro' : 'free'));
-    badge.style.display = '';
+    badge.className = 'plan-badge ' + (_plan === 'founder' ? 'founder' : 'pro');
+    badge.style.display = (_plan === 'free' || !_plan) ? 'none' : '';
   }
   const sesEl = document.getElementById('sessionsIndicator');
   if (sesEl) sesEl.style.display = 'none';
