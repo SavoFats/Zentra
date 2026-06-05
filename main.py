@@ -6020,6 +6020,37 @@ async def billing_portal(body: dict, request: Request, user_id: int = Depends(ge
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e.user_message or e))
 
+@app.post("/billing/upgrade")
+async def billing_upgrade(body: dict, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="billing_upgrade")
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Pagamenti non configurati")
+    new_plan = body.get("plan", "")
+    price_id = stripe_price_for_plan(new_plan)
+    if not price_id:
+        raise HTTPException(status_code=400, detail="Piano non valido")
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT stripe_customer_id FROM users WHERE id = $1", user_id)
+    customer_id = row["stripe_customer_id"] if row else ""
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="Nessun abbonamento attivo")
+    try:
+        subs = stripe.Subscription.list(customer=customer_id, status="active", limit=1)
+        if not subs.data:
+            raise HTTPException(status_code=400, detail="Nessun abbonamento attivo trovato")
+        sub = subs.data[0]
+        item_id = sub["items"]["data"][0]["id"]
+        stripe.Subscription.modify(
+            sub["id"],
+            items=[{"id": item_id, "price": price_id}],
+            proration_behavior="create_prorations",
+        )
+        return {"success": True}
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e.user_message or e))
+
 @app.post("/stripe/webhook")
 async def stripe_webhook(request: Request):
     if not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:

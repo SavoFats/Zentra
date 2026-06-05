@@ -6266,16 +6266,40 @@ function showScanLimitModal(msg) {
 
 async function selectBillingPlan(plan) {
   if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
-  if (isPaidPlan()) {
-    await manageSubscriptionClick();
-    return;
-  }
+  if (_plan === 'pro' && plan === 'founder') { await upgradePlan(plan); return; }
+  if (isPaidPlan()) { await manageSubscriptionClick(); return; }
   await checkoutPlan(plan);
+}
+
+async function upgradePlan(plan) {
+  if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
+  document.getElementById('upgradingOverlay').style.display = 'flex';
+  try {
+    const r = await fetch(API + '/billing/upgrade', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ plan })
+    });
+    const d = await r.json();
+    if (!d.success) { document.getElementById('upgradingOverlay').style.display = 'none'; showToast(d.detail || 'Errore upgrade', true); return; }
+    for (let i = 0; i < 7; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const s = await fetch(API + '/billing/status', { headers: authHeaders() });
+        if (s.ok) {
+          const sd = await s.json();
+          if (sd.plan === plan) {
+            _plan = sd.plan; _upgradedPlan = sd.plan; updatePlanUI(); break;
+          }
+        }
+      } catch(e) {}
+    }
+    document.getElementById('upgradingOverlay').style.display = 'none';
+    if (_plan === 'founder') showFounderWelcome();
+  } catch(e) { document.getElementById('upgradingOverlay').style.display = 'none'; showToast('Errore: ' + e.message, true); }
 }
 
 async function checkoutPlan(plan) {
   if (!STRIPE_ENABLED) { showToast('Pagamenti non ancora configurati', true); return; }
-  if (isPaidPlan()) { await manageSubscriptionClick(); return; }
   if (plan !== 'pro' && plan !== 'founder') { return; }
   try {
     const r = await fetch(API + '/billing/checkout', {
