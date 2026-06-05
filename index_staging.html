@@ -3318,11 +3318,13 @@ function showToast(msg, isError = false) {
   if (!t) {
     t = document.createElement('div');
     t.id = '_toast';
-    t.style.cssText = 'position:fixed;bottom:calc(var(--tab-h) + env(safe-area-inset-bottom,0px) + 16px);left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);font-size:13px;font-weight:600;padding:10px 20px;border-radius:20px;z-index:999;white-space:nowrap;transition:opacity 0.3s;pointer-events:none';
+    const desktop = window.matchMedia('(min-width:768px)').matches;
+    const bot = desktop ? '28px' : 'calc(68px + env(safe-area-inset-bottom,0px) + 16px)';
+    t.style.cssText = 'position:fixed;bottom:' + bot + ';left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;padding:10px 20px;border-radius:20px;z-index:999;white-space:nowrap;transition:opacity 0.3s;pointer-events:none;color:#fff';
     document.body.appendChild(t);
   }
   t.textContent = msg;
-  t.style.background = isError ? 'var(--red)' : 'var(--text)';
+  t.style.background = isError ? 'var(--red)' : 'var(--blue)';
   t.style.opacity = '1';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
