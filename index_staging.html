@@ -6649,6 +6649,60 @@ function _aiSaveThreads() {
   if (_aiActiveThreadId) localStorage.setItem('zentra_ai_active_thread', _aiActiveThreadId);
 }
 
+async function _aiSyncThread(threadId) {
+  const token = localStorage.getItem('ca_token');
+  if (!token) return;
+  const thread = _aiThreads.find(t => t.id === threadId);
+  if (!thread) return;
+  try {
+    await fetch(API + '/ai/threads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        id: thread.id,
+        title: thread.title,
+        messages: thread.messages || [],
+        created_at: thread.createdAt,
+        updated_at: thread.updatedAt
+      })
+    });
+  } catch (_) {}
+}
+
+async function _aiDeleteThreadRemote(threadId) {
+  const token = localStorage.getItem('ca_token');
+  if (!token) return;
+  try {
+    await fetch(API + '/ai/threads/' + encodeURIComponent(threadId), {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+  } catch (_) {}
+}
+
+async function _aiSyncFromServer() {
+  const token = localStorage.getItem('ca_token');
+  if (!token) return;
+  try {
+    const res = await fetch(API + '/ai/threads', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const serverThreads = data.threads || [];
+    serverThreads.forEach(st => {
+      const local = _aiThreads.find(t => t.id === st.id);
+      if (!local || String(st.updatedAt) > String(local.updatedAt || '')) {
+        _aiThreads = [st, ..._aiThreads.filter(t => t.id !== st.id)];
+      }
+    });
+    _aiThreads.sort((a,b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+    _aiSaveThreads();
+    renderAIHistory();
+    if (_aiGetThread()) renderAIThread();
+  } catch (_) {}
+}
+
 function _aiGetThread(id = _aiActiveThreadId) {
   return _aiThreads.find(t => t.id === id) || null;
 }
@@ -6792,6 +6846,7 @@ function _aiPersistExtra(entry) {
   thread.messages.push({ ...entry, time: _aiNowIso() });
   thread.updatedAt = _aiNowIso();
   _aiSaveThreads();
+  _aiSyncThread(thread.id);
 }
 
 function _aiPersistMessage(role, content) {
@@ -6802,6 +6857,7 @@ function _aiPersistMessage(role, content) {
   thread.updatedAt = _aiNowIso();
   _aiThreads = [thread, ..._aiThreads.filter(t => t.id !== thread.id)];
   _aiSaveThreads();
+  _aiSyncThread(thread.id);
   renderAIHistory();
 }
 
@@ -7079,6 +7135,7 @@ function deleteAIThread(event, id) {
     _aiActiveThreadId = (_aiThreads[0] && _aiThreads[0].id) || '';
   }
   _aiSaveThreads();
+  _aiDeleteThreadRemote(id);
   renderAIHistory();
   if (_aiActiveThreadId) renderAIThread();
   else startNewAIThread();
@@ -7090,6 +7147,7 @@ function _aiInit() {
   renderAIThread();
   updateAIUsageUI();
   _aiSetupAutoScroll();
+  _aiSyncFromServer();
   if (!_aiInit._docListenerSet) {
     document.addEventListener('click', () => {
       document.querySelectorAll('.sb-ai-thread-dropdown.open').forEach(d => d.classList.remove('open'));

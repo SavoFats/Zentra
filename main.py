@@ -249,6 +249,13 @@ class ChatRequest(BaseModel):
     reset: bool = False
     history: list[dict[str, str]] = []
 
+class AIThreadRequest(BaseModel):
+    id: str
+    title: str
+    messages: list[dict]
+    created_at: str
+    updated_at: str
+
 BINANCE_BASE    = "https://api.binance.com"
 BINANCE_US_BASE = "https://api.binance.us"
 
@@ -3368,7 +3375,16 @@ async def startup():
                         update_id BIGINT PRIMARY KEY,
                         processed_at TIMESTAMP DEFAULT NOW()
                     );
-                    DELETE FROM tg_updates WHERE processed_at < NOW() - INTERVAL '7 days'
+                    DELETE FROM tg_updates WHERE processed_at < NOW() - INTERVAL '7 days';
+                    CREATE TABLE IF NOT EXISTS ai_threads (
+                        id TEXT NOT NULL,
+                        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                        title TEXT NOT NULL DEFAULT '',
+                        messages JSONB NOT NULL DEFAULT '[]',
+                        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                        PRIMARY KEY(id, user_id)
+                    )
                 """)
                 # Migrazione colonne fee (idempotente)
                 await conn.execute("""
@@ -5544,6 +5560,58 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 async def clear_chat_history(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=20, window=60)
     _ai_conversations.pop(user_id, None)
+    return {"ok": True}
+
+# ── AI THREADS SYNC ────────────────────────────────────────────────────────────
+
+@app.get("/ai/threads")
+async def get_ai_threads(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=60, window=60)
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, title, messages, created_at, updated_at FROM ai_threads WHERE user_id = $1 ORDER BY updated_at DESC",
+            user_id
+        )
+    threads = [
+        {
+            "id": r["id"],
+            "title": r["title"],
+            "messages": r["messages"],
+            "createdAt": r["created_at"].isoformat(),
+            "updatedAt": r["updated_at"].isoformat(),
+        }
+        for r in rows
+    ]
+    return {"threads": threads}
+
+@app.post("/ai/threads")
+async def upsert_ai_thread(request: Request, body: AIThreadRequest, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=120, window=60)
+    import json as _json
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO ai_threads (id, user_id, title, messages, created_at, updated_at)
+            VALUES ($1, $2, $3, $4::jsonb, $5::timestamp, $6::timestamp)
+            ON CONFLICT (id, user_id) DO UPDATE
+              SET title = EXCLUDED.title,
+                  messages = EXCLUDED.messages,
+                  updated_at = EXCLUDED.updated_at
+            """,
+            body.id, user_id, body.title,
+            _json.dumps(body.messages),
+            body.created_at, body.updated_at
+        )
+    return {"ok": True}
+
+@app.delete("/ai/threads/{thread_id}")
+async def delete_ai_thread(request: Request, thread_id: str, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=60, window=60)
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM ai_threads WHERE id = $1 AND user_id = $2",
+            thread_id, user_id
+        )
     return {"ok": True}
 
 # ── DEBUG / UTILITY ENDPOINTS ──────────────────────────────────────────────────
