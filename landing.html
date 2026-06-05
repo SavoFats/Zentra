@@ -212,16 +212,12 @@ nav {
 .hero-stats {
   position: relative; z-index: 3;
   display: flex; gap: 0; margin-top: 64px;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 20px; overflow: hidden;
   animation: fadeInUp 0.7s 0.5s ease both;
-  backdrop-filter: blur(20px);
 }
 .hero-stat {
-  padding: 20px 36px; text-align: center;
-  border-right: 1px solid var(--border);
+  padding: 0 32px 0 0; text-align: center;
 }
-.hero-stat:last-child { border-right: none; }
+.hero-stat:last-child { padding-right: 0; }
 .hero-stat-val {
   font-size: 28px; font-weight: 900; letter-spacing: -0.03em;
   color: var(--text);
@@ -613,10 +609,10 @@ footer {
   .plans-grid { grid-template-columns: 1fr; max-width: 460px; }
   .steps { flex-direction: column; gap: 32px; }
   .steps::before { display: none; }
-  .hero-stats { flex-direction: row; flex-wrap: nowrap; border-radius: 16px; margin-top: 28px; }
-  .hero-stat { flex: 1; padding: 10px 4px; border-right: 1px solid var(--border); border-bottom: none; }
-  .hero-stat:last-child { border-right: none; }
-  .hero-stat-val { font-size: 15px; }
+  .hero-stats { flex-direction: row; flex-wrap: nowrap; margin-top: 28px; }
+  .hero-stat { flex: 1; padding: 0 10px 0 0; }
+  .hero-stat:last-child { padding-right: 0; }
+  .hero-stat-val { font-size: 20px; }
   .hero-stat-lbl { font-size: 8px; }
   .tc1,.tc2,.tc3,.tc4,.tc5 { display: none; }
   footer { flex-direction: column; gap: 24px; text-align: center; }
