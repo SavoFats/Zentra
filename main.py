@@ -6097,6 +6097,29 @@ async def stripe_webhook(request: Request):
                 print(f"[BILLING] rinnovo {renewal_plan}: customer={customer_id}, scade={expires_at}")
             except Exception as e:
                 print(f"[BILLING] errore rinnovo: {e}")
+    elif etype == "customer.subscription.updated":
+        customer_id = data.get("customer", "")
+        status = data.get("status", "")
+        if customer_id and db_pool:
+            try:
+                if status in ("active", "trialing"):
+                    updated_plan = plan_from_stripe_subscription(data)
+                    expires_at = datetime.utcfromtimestamp(data["current_period_end"])
+                    async with db_pool.acquire() as conn:
+                        await conn.execute(
+                            "UPDATE users SET plan = $1, subscription_expires_at = $2 WHERE stripe_customer_id = $3",
+                            updated_plan, expires_at, customer_id
+                        )
+                    print(f"[BILLING] subscription updated → {updated_plan}: customer={customer_id}")
+                elif status in ("canceled", "unpaid", "paused"):
+                    async with db_pool.acquire() as conn:
+                        await conn.execute(
+                            "UPDATE users SET plan = 'free', subscription_expires_at = NULL WHERE stripe_customer_id = $1",
+                            customer_id
+                        )
+                    print(f"[BILLING] subscription updated → free (status={status}): customer={customer_id}")
+            except Exception as e:
+                print(f"[BILLING] errore subscription.updated: {e}")
     elif etype in ("customer.subscription.deleted", "customer.subscription.paused"):
         customer_id = data.get("customer", "")
         if customer_id and db_pool:
