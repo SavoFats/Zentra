@@ -6476,7 +6476,7 @@ function _aiSetupAutoScroll() {
   msgs._scrollSetup = true;
   msgs.addEventListener('scroll', () => {
     if (_aiScrollProg) return;
-    _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 80;
+    _aiAutoScrollEnabled = (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight) < 150;
   }, { passive: true });
   new MutationObserver(() => {
     if (_aiAutoScrollEnabled) requestAnimationFrame(() => requestAnimationFrame(() => _aiScrollBottom()));
@@ -6727,7 +6727,7 @@ function _aiRenderChart(symbol) {
   frame.id = containerId;
   wrap.append(label, frame);
   msgs.appendChild(wrap);
-  _aiScrollBottom();
+  requestAnimationFrame(() => requestAnimationFrame(() => { msgs.scrollTop = msgs.scrollHeight; }));
 
   function createWidget() {
     if (!document.getElementById(containerId) || typeof TradingView === 'undefined') return;
@@ -6855,6 +6855,7 @@ async function sendAIMessage(source = 'analysis') {
         incrementAIUsageOptimistic(aiUsageBefore);
       }
       await _aiStreamMsg(d.reply);
+      _aiAutoScrollEnabled = true;
       const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg);
       if (chartSymbol && Array.isArray(d.news) && d.news.length) {
         _aiRenderNews(d.news);
