@@ -609,12 +609,11 @@ footer {
   .plans-grid { grid-template-columns: 1fr; max-width: 460px; }
   .steps { flex-direction: column; gap: 32px; }
   .steps::before { display: none; }
-  .hero-stats { flex-direction: row; flex-wrap: wrap; border-radius: 16px; margin-top: 32px; }
-  .hero-stat { flex: 1 1 50%; padding: 12px 8px; border-right: none; border-bottom: 1px solid var(--border); }
-  .hero-stat:nth-child(odd) { border-right: 1px solid var(--border); }
-  .hero-stat:nth-last-child(-n+2) { border-bottom: none; }
-  .hero-stat-val { font-size: 20px; }
-  .hero-stat-lbl { font-size: 9px; }
+  .hero-stats { flex-direction: row; flex-wrap: nowrap; border-radius: 16px; margin-top: 28px; }
+  .hero-stat { flex: 1; padding: 10px 4px; border-right: 1px solid var(--border); border-bottom: none; }
+  .hero-stat:last-child { border-right: none; }
+  .hero-stat-val { font-size: 15px; }
+  .hero-stat-lbl { font-size: 8px; }
   .tc1,.tc2,.tc3,.tc4,.tc5 { display: none; }
   footer { flex-direction: column; gap: 24px; text-align: center; }
   .footer-left { align-items: center; }
