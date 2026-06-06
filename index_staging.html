@@ -4569,7 +4569,11 @@ function renderPositions() {
     const entryPrice   = p.entryPrice || 0;
     const currentPrice = p.currentPrice || entryPrice;
     const size         = p.size_remaining || p.size || 0;
-    const pnl  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * size : 0;
+    const grossPnl = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * size : 0;
+    const feePct   = p.fee_pct || 0.0009;
+    const buyFee   = (p.buy_fee_usd != null) ? p.buy_fee_usd : size * feePct;
+    const sellFee  = size * feePct;
+    const pnl  = grossPnl - buyFee - sellFee;
     const pct  = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * 100 : 0;
     const isPos = pnl > 0.005, isNeg = pnl < -0.005;
     const color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text2)';
