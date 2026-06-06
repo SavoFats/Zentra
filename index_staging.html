@@ -2597,7 +2597,7 @@ async function logout() {
   localStorage.removeItem('ca_email');
   localStorage.removeItem('ca_avatar');
   localStorage.removeItem('ca_active_tab');
-  location.reload();
+  location.href = '/';
 }
 
 function deleteAccount() {
