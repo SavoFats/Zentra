@@ -4805,7 +4805,7 @@ function renderTransazioni() {
     return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
   };
 
-  const fmtP = p => p >= 1000 ? p.toFixed(1) : p >= 1 ? p.toFixed(2) : p.toFixed(4);
+  const fmtP = p => p >= 1000 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toFixed(4);
   const reasonBadge = (r, pnl) => {
     if ((r||'').toLowerCase().includes('revolut')) return 'background:rgba(99,102,241,0.15);color:#818cf8';
     if (pnl >= 0) return 'background:rgba(5,193,104,0.15);color:var(--green)';
@@ -4951,7 +4951,7 @@ function setMktFilterDropdown(val) {
 
 function fmtVol(v) { if(v>=1e9) return (v/1e9).toFixed(1)+'B'; if(v>=1e6) return (v/1e6).toFixed(0)+'M'; return (v/1e3).toFixed(0)+'K'; }
 function fmtMoney(v) { const a = Math.abs(v); return a > 0 && a < 0.01 ? v.toFixed(3) : v.toFixed(2); }
-function fmtPrice(p, sym='$') { if(p>=1000) return sym+p.toLocaleString('en-US',{maximumFractionDigits:0}); if(p>=1) return sym+p.toFixed(2); if(p>=0.01) return sym+p.toFixed(4); return sym+p.toFixed(6); }
+function fmtPrice(p, sym='$') { if(p>=1000) return sym+p.toLocaleString('en-US',{maximumFractionDigits:0}); if(p>=1) return sym+p.toFixed(4); if(p>=0.01) return sym+p.toFixed(4); return sym+p.toFixed(6); }
 
 
 function renderSparkline(closes, color) {
