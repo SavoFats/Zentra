@@ -428,6 +428,17 @@ input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
 .scan-tooltip-body { font-size:12px; color:var(--text2); line-height:1.6; }
 .scan-row { display:flex; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
 .scan-row:last-child { border-bottom:none; }
+.scan-name-col { min-width:60px; max-width:80px; }
+.scan-signal-col { width:90px; flex-shrink:0; display:flex; justify-content:center; margin-right:10px; }
+.scan-signal-badge { font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; white-space:nowrap; }
+.scan-action-btn { width:34px; height:34px; border-radius:50%; background:var(--surface2); border:1px solid var(--border); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background 0.15s; }
+@media (max-width:480px) {
+  .scan-name-col { min-width:36px; max-width:56px; }
+  .scan-signal-col { width:68px; margin-right:4px; }
+  .scan-signal-badge { font-size:8.5px; padding:2px 5px; }
+  .scan-action-btn { width:28px; height:28px; }
+  .scan-action-btn + .scan-action-btn { margin-left:4px; }
+}
 /* ── SIDEBAR ─────────────────────────────────────────────────────────── */
 :root { --sb-w: 240px; }
 .sidebar { position:fixed; top:0; left:0; bottom:0; width:var(--sb-w); background:var(--bg); border-right:1px solid var(--border); z-index:200; display:flex; flex-direction:column; overflow:hidden; transform:translateX(-100%); transition:transform 0.28s cubic-bezier(0.4,0,0.2,1); }
@@ -5907,22 +5918,22 @@ function renderScanner() {
     const starred = _watchlist.has(sym);
     return `<div class="scan-row">
       <img src="${getLogo(sym)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;margin-right:12px;flex-shrink:0" onerror="coinImgErr(this,'${esc(base)}',38)">
-      <div style="min-width:60px;max-width:80px">
+      <div class="scan-name-col">
         <div style="font-size:14px;font-weight:700;color:var(--text)">${esc(base)}</div>
       </div>
-      <div style="flex:1;min-width:0;text-align:right;padding-right:12px">
+      <div style="flex:1;min-width:0;text-align:right;padding-right:8px">
         <div id="scan-price-${esc(sym)}" data-price="${c.price}" style="font-size:13px;font-weight:700;color:var(--text)">${fmtPrice(c.price)}</div>
       </div>
-      <div style="width:90px;flex-shrink:0;display:flex;justify-content:center;margin-right:10px">
-        <span style="font-size:10px;font-weight:700;background:${badgeColor};color:#fff;padding:4px 9px;border-radius:20px;white-space:nowrap">${esc(label)}</span>
+      <div class="scan-signal-col">
+        <span class="scan-signal-badge" style="background:${badgeColor};color:#fff">${esc(label)}</span>
       </div>
-      <button onclick="event.stopPropagation();scanToggleStar('${esc(sym)}')" title="${starred ? 'Rimuovi' : 'Aggiungi'} preferiti" class="star-btn ${starred ? 'starred' : ''}" style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-right:6px;transition:background 0.15s">
+      <button onclick="event.stopPropagation();scanToggleStar('${esc(sym)}')" title="${starred ? 'Rimuovi' : 'Aggiungi'} preferiti" class="star-btn scan-action-btn ${starred ? 'starred' : ''}" style="color:var(--text3);margin-right:6px">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="${starred ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
       </button>
-      <button onclick="openTVChart('${esc(sym)}')" title="Grafico" style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0;transition:background 0.15s;margin-right:6px" onmouseover="this.style.background='var(--blue)';this.style.color='#fff'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text3)'">
+      <button onclick="openTVChart('${esc(sym)}')" title="Grafico" class="scan-action-btn" style="color:var(--text3);margin-right:6px" onmouseover="this.style.background='var(--blue)';this.style.color='#fff'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text3)'">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       </button>
-      <button onclick="openTradeModal('${esc(sym)}',${c.price})" title="Trade" style="width:34px;height:34px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);flex-shrink:0;transition:background 0.15s" onmouseover="this.style.background='var(--green)';this.style.color='#fff'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text3)'">
+      <button onclick="openTradeModal('${esc(sym)}',${c.price})" title="Trade" class="scan-action-btn" style="color:var(--text3)" onmouseover="this.style.background='var(--green)';this.style.color='#fff'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text3)'">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
       </button>
     </div>`;
