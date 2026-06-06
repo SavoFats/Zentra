@@ -667,10 +667,11 @@ body.auth-active .tabbar { display:none !important; }
 .pos-pnl-new { text-align:right; }
 .pos-pnl-val-new { font-size:18px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
 .pos-pnl-pct-new { font-size:12px; font-weight:700; margin-top:2px; }
-.pos-grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:6px; margin-bottom:14px; }
+.pos-grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
 .pos-g4-cell { background:var(--surface3); border-radius:10px; padding:9px 10px; }
 .pos-g4-label { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:4px; }
 .pos-g4-val { font-size:13px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+@media (max-width:640px) { .pos-grid4 { grid-template-columns:1fr 1fr; gap:8px; } }
 .pos-sl-bar-wrap { margin-bottom:16px; }
 .pos-sl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:20px 0 18px; }
 .pos-sl-fill { position:absolute; top:0; left:0; height:100%; border-radius:2px; }
@@ -4624,8 +4625,8 @@ function renderPositions() {
       </div>
       <div class="pos-grid4">
         <div class="pos-g4-cell"><div class="pos-g4-label">Investito</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(size)}</div></div>
-        <div class="pos-g4-cell"><div class="pos-g4-label">Quantità</div><div class="pos-g4-val">${posQtyFmt} ${esc(p.symbol)}</div></div>
-        <div class="pos-g4-cell"><div class="pos-g4-label">Valore ora</div><div class="pos-g4-val" id="pos-curval-${esc(p.symbol)}">${getCurrSym()}${fmtMoney(curVal)}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Quantità</div><div class="pos-g4-val">${posQtyFmt}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Entry</div><div class="pos-g4-val">${fmtPrice(entryPrice)}</div></div>
         <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val">${durFmt}</div></div>
       </div>
       ${barHtml}
