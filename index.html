@@ -455,7 +455,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-btn:hover { background:var(--surface2); }
 .sb-logo { display:flex; align-items:center; gap:8px; font-size:17px; font-weight:700; letter-spacing:-0.03em; color:var(--text); }
 .sb-nav { flex:1; min-height:0; padding:10px 8px 0; display:flex; flex-direction:column; overflow:hidden; }
-.sb-item { display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; font-size:13px; font-weight:600; color:var(--text2); font-family:var(--sans); text-align:left; transition:background 0.15s,color 0.15s; margin-bottom:2px; }
+.sb-item { display:flex; align-items:center; gap:12px; width:100%; padding:10px 12px; border-radius:10px; border:none; background:none; cursor:pointer; font-size:13px; font-weight:600; color:var(--text2); font-family:var(--sans); text-align:left; transition:background 0.15s,color 0.15s; margin-bottom:2px; touch-action:manipulation; }
 .sb-item.active { background:var(--surface2); color:var(--text); font-weight:700; }
 [data-theme="dark"] .sb-item.active { background:rgba(255,255,255,0.08); }
 .sb-item.danger { color:var(--red); }
@@ -471,7 +471,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-ai-history { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding-bottom:8px; }
 .sb-ai-thread-wrap { position:relative; display:flex; align-items:center; border-radius:10px; transition:background .15s; }
 .sb-ai-thread-wrap.active { background:var(--surface2); }
-.sb-ai-thread { flex:1; min-width:0; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:10px; padding:8px 4px 8px 12px; text-align:left; font-family:var(--sans); transition:color .15s; }
+.sb-ai-thread { flex:1; min-width:0; border:none; background:none; color:var(--text2); cursor:pointer; border-radius:10px; padding:8px 4px 8px 12px; text-align:left; font-family:var(--sans); transition:color .15s; touch-action:manipulation; }
 .sb-ai-thread-wrap.active .sb-ai-thread { color:var(--text); background:none; }
 @media (hover: hover) {
   .sb-ai-thread-wrap:hover { background:var(--surface2); }
