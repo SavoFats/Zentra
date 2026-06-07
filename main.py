@@ -1989,7 +1989,10 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     if sym in _exiting:
         return
     _exiting.add(sym)
-    dur  = (datetime.utcnow() - datetime.fromisoformat(pos["entryTime"].replace("Z", ""))).total_seconds() / 60
+    try:
+        dur  = (datetime.utcnow() - datetime.fromisoformat(pos["entryTime"].replace("Z", ""))).total_seconds() / 60
+    except Exception:
+        dur = 0.0
 
     # Dimensione effettiva da chiudere
     close_size = pos["size_remaining"] * 0.5 if partial else pos["size_remaining"]
@@ -2002,7 +2005,9 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
             revx_priv   = state.get("revx_private_key", "")
             qty_purchased = pos.get("qty_purchased", 0.0)
             if qty_purchased <= 0:
-                add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} RevX — vendita annullata")
+                pos["_manual_action_required"] = True
+                add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} RevX — chiusura manuale richiesta")
+                await notify(state, f"ATTENZIONE: {sym} — qty non disponibile, impossibile chiudere automaticamente. Chiudi manualmente su RevX.")
                 _exiting.discard(sym); return
             try:
                 import uuid as _uuid
@@ -2120,7 +2125,9 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         if pos.get("exchange") == "coinbase" and not pos.get("_already_sold"):
             qty_purchased = pos.get("qty_purchased", 0.0)
             if qty_purchased <= 0:
-                add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} Coinbase — vendita annullata")
+                pos["_manual_action_required"] = True
+                add_log(state, "info", "ERRORE", f"qty_purchased non disponibile per {sym} Coinbase — chiusura manuale richiesta")
+                await notify(state, f"ATTENZIONE: {sym} — qty non disponibile, impossibile chiudere automaticamente. Chiudi manualmente su Coinbase.")
                 _exiting.discard(sym); return
             if not user_id:
                 add_log(state, "info", "ERRORE", f"user_id mancante per vendita Coinbase {sym}")
@@ -2419,8 +2426,24 @@ async def scan_and_trade(state: dict, user_id: int = None):
 
     # Gestione posizioni aperte: hard stop + trailing profit stop
     for pos in list(state["positions"]):
-        # Posizione in attesa di GTC limit fill: salta SL/TP
+        # Posizione in attesa di GTC limit fill: controlla solo SL catastrofico
         if pos.get("_sell_mode") == "retry_limit":
+            _gtc_cur = market_data.get(pos["symbol"], {}).get("price", 0.0)
+            if _gtc_cur > 0:
+                pos["currentPrice"] = _gtc_cur
+            if _gtc_cur > 0 and _gtc_cur <= pos.get("stopPrice", 0):
+                _gtc_order_id = pos.get("_sell_limit_order_id", "")
+                if _gtc_order_id:
+                    try:
+                        await revx_request("DELETE", f"/api/1.0/orders/{_gtc_order_id}",
+                                           key_id=state.get("revx_key_id", ""),
+                                           private_key=state.get("revx_private_key", ""))
+                    except Exception as _ce:
+                        add_log(state, "info", "WARN",
+                                f"{pos['symbol']}: errore cancellazione GTC prima di SL: {_ce}")
+                pos.pop("_sell_mode", None)
+                pos.pop("_sell_limit_order_id", None)
+                await exit_position(state, pos, "STOP LOSS", user_id=user_id)
             continue
         if pos.get("realMode") and pos.get("exchange") == "coinbase":
             try:
@@ -2439,6 +2462,9 @@ async def scan_and_trade(state: dict, user_id: int = None):
                 continue
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
+
+        if cur <= 0:
+            continue
 
         if pos.get("_manual_action_required") or pos.get("imported"):
             continue
