@@ -6814,7 +6814,7 @@ function renderAIHistory() {
     const isActive = onAnalysis && t.id === _aiActiveThreadId;
     const sid = t.id.replace(/[^a-z0-9_]/gi, '');
     return `<div class="sb-ai-thread-wrap${isActive ? ' active' : ''}">
-      <button class="sb-ai-thread" onclick="openAIThread('${sid}',true)">
+      <button class="sb-ai-thread" onclick="openAIThread('${sid}',true)" ontouchend="event.preventDefault();openAIThread('${sid}',true)">
         <div class="sb-ai-thread-title">${escapeHtml(t.title || 'Analisi')}</div>
         <div class="sb-ai-thread-meta">${_aiFormatThreadTime(t.updatedAt)} · ${(t.messages||[]).length} messaggi</div>
       </button>
