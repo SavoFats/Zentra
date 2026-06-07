@@ -1583,7 +1583,7 @@ async def get_revx_usd_balance(key_id: str, private_key: str) -> float:
     return 0.0
 
 
-async def enter_position(state: dict, sym_data: dict, tradable_capital: float):
+async def enter_position(state: dict, sym_data: dict, tradable_capital: float, user_id: int = None):
     cfg      = state["config"]
     price    = sym_data["price"]
     sym      = sym_data["symbol"]
@@ -2743,7 +2743,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
     for d in candidates:
         sym = d["symbol"]
         add_log(state, "info", "SEGNALE", f"{sym} | {d.get('ema_reason', '')}")
-        await enter_position(state, d, tradable_capital_net)
+        await enter_position(state, d, tradable_capital_net, user_id=user_id)
 
     _update_pnl(state)
 
