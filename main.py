@@ -2207,7 +2207,13 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     fee_pct = pos.get("fee_pct", 0.0009)
     exit_fee = close_size * fee_pct
     # Per real mode usa fee reali dagli exchange supportati, altrimenti stima
-    if pos.get("realMode") and pos.get("exchange") in ("revx", "coinbase"):
+    if pos.get("realMode") and pos.get("exchange") == "revx":
+        # RevX mostra importi netti: i fill price già incorporano la buy fee,
+        # quindi la deduciamo solo lato sell per non contarla due volte
+        sell_fee_real = pos.get("sell_fee_usd", exit_fee)
+        pnl = pnl - sell_fee_real
+        exit_fee = sell_fee_real
+    elif pos.get("realMode") and pos.get("exchange") == "coinbase":
         sell_fee_real = pos.get("sell_fee_usd", exit_fee)
         pnl = pnl - sell_fee_real - pos.get("buy_fee_usd", 0.0)
         exit_fee = sell_fee_real
