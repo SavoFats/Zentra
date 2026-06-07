@@ -5291,9 +5291,15 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
             continue
         tf_lines = []
         for sig in _SIGNALS:
-            coins = [sym for sym, d in tf_data.items() if d.get(sig)][:8]
-            if coins:
-                tf_lines.append(f"  {sig}: {', '.join(coins)}")
+            entries = []
+            for sym, d in tf_data.items():
+                if d.get(sig):
+                    price = market_data.get(sym, {}).get("price", 0)
+                    entries.append(f"{sym} ${price:,.4f}" if price else sym)
+                if len(entries) >= 8:
+                    break
+            if entries:
+                tf_lines.append(f"  {sig}: {', '.join(entries)}")
         if tf_lines:
             scanner_ctx += f"\n[Scanner {tf}]\n" + "\n".join(tf_lines) + "\n"
 
