@@ -6392,7 +6392,7 @@ function openTradeDetail(i) {
   const dateStr = exitDt.toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
   const exitT = exitDt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
   const entryT = entryDt ? entryDt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : '';
-  document.getElementById('tdMeta').textContent = `${dateStr} · ${entryT ? entryT + '-' + exitT : exitT} · Long`;
+  document.getElementById('tdMeta').textContent = `${dateStr} · ${entryT ? entryT + '-' + exitT : exitT}`;
   document.getElementById('tdLabel').textContent = isWin ? 'Profitto realizzato' : 'Perdita realizzata';
   const pnlEl = document.getElementById('tdPnl');
   pnlEl.textContent = (isWin ? '+' : '') + getCurrSym() + fmtMoney(t.pnl); pnlEl.style.color = color;
