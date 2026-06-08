@@ -6435,7 +6435,8 @@ async function _tdFetchChart(t, color, isWin, chartEl) {
     if (!resp.ok) { chartEl.style.display = 'none'; return; }
     const json = await resp.json();
     if (!Array.isArray(json.closes) || json.closes.length < 2) { chartEl.style.display = 'none'; return; }
-    chartEl.innerHTML = _tdRenderChart(json.closes, color, isWin);
+    const priceUp = json.closes[json.closes.length - 1] >= json.closes[0];
+    chartEl.innerHTML = _tdRenderChart(json.closes, priceUp ? 'var(--green)' : 'var(--red)', priceUp);
   } catch(e) {
     chartEl.style.display = 'none';
   }
