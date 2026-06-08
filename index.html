@@ -6282,11 +6282,14 @@ async function executeManualTrade() {
   const sl       = parseFloat(document.getElementById('tmSL').value) || 2.5;
   const tp       = parseFloat(document.getElementById('tmTP').value) || 8;
   const exchange = document.getElementById('tmExchange').value;
-  if (!amount || amount <= 0) {
-    errEl.textContent   = 'Importo non valido';
-    errEl.style.display = 'block';
-    return;
-  }
+
+  const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
+
+  if (!amount || amount <= 0)     return showErr('Inserisci un importo valido');
+  if (sl <= 0 || sl > 50)        return showErr('Stop Loss deve essere tra 0.1% e 50%');
+  if (tp <= 0 || tp > 200)       return showErr('Take Profit deve essere tra 0.1% e 200%');
+  if (sl >= tp)                  return showErr('Stop Loss deve essere inferiore al Take Profit');
+
   btn.disabled    = true;
   btn.textContent = 'Esecuzione...';
   errEl.style.display = 'none';
