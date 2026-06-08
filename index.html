@@ -6467,32 +6467,20 @@ function _tdRenderChart(closes, color, isWin) {
 }
 
 async function _tdFetchChart(t, color, isWin, chartEl) {
-  const dbg = msg => { chartEl.style.display=''; chartEl.innerHTML=`<div style="height:84px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--red);padding:0 12px;text-align:center">${msg}</div>`; };
   try {
     const entryMs = t.entryTime ? new Date(t.entryTime).getTime() : null;
     const exitMs  = t.time      ? new Date(t.time).getTime()      : null;
-    if (!entryMs || !exitMs || exitMs <= entryMs) { dbg(`no range: entry=${t.entryTime} exit=${t.time}`); return; }
+    if (!entryMs || !exitMs || exitMs <= entryMs) { chartEl.style.display = 'none'; return; }
     const durMin = (exitMs - entryMs) / 60000;
     const interval = durMin < 30 ? '1m' : durMin < 120 ? '5m' : durMin < 480 ? '15m' : durMin < 1440 ? '1h' : '4h';
-    const bases = ['https://api.binance.com', 'https://api.binance.us'];
-    let closes = null;
-    for (const base of bases) {
-      try {
-        const url = `${base}/api/v3/klines?symbol=${encodeURIComponent(t.symbol)}&interval=${interval}&startTime=${entryMs}&endTime=${exitMs}&limit=200`;
-        const r = await fetch(url);
-        if (r.ok) {
-          const data = await r.json();
-          if (Array.isArray(data) && data.length >= 2) { closes = data.map(c => parseFloat(c[4])); break; }
-          else dbg(`${base}: ok but data=${JSON.stringify(data).slice(0,80)}`);
-        } else {
-          dbg(`${base}: HTTP ${r.status}`);
-        }
-      } catch(e2) { dbg(`${base}: ${e2.message}`); }
-    }
-    if (!closes) return;
+    const resp = await fetch(`${API}/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`, { headers: authHeaders() });
+    if (!resp.ok) { chartEl.style.display = 'none'; return; }
+    const json = await resp.json();
+    const closes = json.closes;
+    if (!Array.isArray(closes) || closes.length < 2) { chartEl.style.display = 'none'; return; }
     chartEl.innerHTML = _tdRenderChart(closes, color, isWin);
   } catch(e) {
-    dbg('catch: ' + e.message);
+    chartEl.style.display = 'none';
   }
 }
 
