@@ -4094,15 +4094,34 @@ async def klines_history(request: Request, symbol: str, start: int, end: int, in
         return {"closes": []}
     params = {"symbol": symbol, "interval": interval, "startTime": start, "endTime": end, "limit": 200}
     async with httpx.AsyncClient(timeout=8) as client:
+        # Binance (best quality, but coins may be delisted)
         for base in (BINANCE_BASE, BINANCE_US_BASE):
             try:
                 r = await client.get(f"{base}/api/v3/klines", params=params)
                 if r.status_code == 200:
                     data = r.json()
-                    if isinstance(data, list):
+                    if isinstance(data, list) and len(data) >= 2:
                         return {"closes": [float(c[4]) for c in data]}
             except Exception:
                 continue
+        # CryptoCompare fallback (covers delisted coins too)
+        fsym = symbol[:-4] if symbol.endswith("USDT") else symbol[:-3] if symbol.endswith("BTC") else symbol
+        dur_min = (end - start) / 60000
+        ep  = "histominute" if dur_min <= 120 else "histohour" if dur_min <= 2880 else "histoday"
+        lim = min(200, int(dur_min) + 5) if ep == "histominute" else min(200, int(dur_min / 60) + 2) if ep == "histohour" else min(200, int(dur_min / 1440) + 2)
+        try:
+            r2 = await client.get("https://min-api.cryptocompare.com/data/v2/" + ep,
+                                   params={"fsym": fsym, "tsym": "USD", "limit": lim, "toTs": end // 1000})
+            if r2.status_code == 200:
+                d2 = r2.json()
+                if d2.get("Response") == "Success":
+                    entry_s = start // 1000
+                    closes = [float(c["close"]) for c in d2.get("Data", {}).get("Data", [])
+                              if c.get("time", 0) >= entry_s and c.get("close", 0) > 0]
+                    if len(closes) >= 2:
+                        return {"closes": closes}
+        except Exception:
+            pass
     return {"closes": []}
 
 # ── TRADING ENDPOINTS ──────────────────────────────────────────────────────────
