@@ -4092,15 +4092,9 @@ async def klines_history(request: Request, symbol: str, start: int, end: int, in
     symbol = symbol.upper().strip()
     if not symbol.isalnum():
         return {"closes": []}
-    # Symbols stored without quote suffix (e.g. "BTC") — append USDT for Binance
-    known_quotes = ("USDT", "BUSD", "USDC", "BTC", "ETH", "BNB")
-    binance_symbol = symbol if any(symbol.endswith(q) for q in known_quotes) else symbol + "USDT"
-    # Base currency for CryptoCompare
-    fsym = symbol
-    for q in known_quotes:
-        if binance_symbol.endswith(q):
-            fsym = binance_symbol[:-len(q)]
-            break
+    # Trades are stored as base only (e.g. "BTC"); Binance needs "BTCUSDT"
+    binance_symbol = symbol if symbol.endswith("USDT") else symbol + "USDT"
+    fsym = binance_symbol[:-4]  # strip "USDT" for CryptoCompare
     params = {"symbol": binance_symbol, "interval": interval, "startTime": start, "endTime": end, "limit": 200}
     async with httpx.AsyncClient(timeout=8) as client:
         # Binance (best quality, but coins may be delisted)
