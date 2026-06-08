@@ -4675,20 +4675,22 @@ function renderPositions() {
       ? `<img src="${logo}" class="pos-logo-new" onerror="coinImgErr(this,'${esc(p.symbol)}',44)">`
       : `<div class="pos-icon-new">${p.symbol[0]}</div>`;
     const stopPrice  = p.stopPrice || 0;
+    const tpPrice    = p.tp2Price || p.tp1Price || 0;
     const posQty     = p.qty_purchased > 0 ? p.qty_purchased : (entryPrice > 0 ? size / entryPrice : 0);
     const posQtyFmt  = posQty >= 1000 ? posQty.toFixed(0) : posQty >= 1 ? posQty.toFixed(3) : posQty.toFixed(6);
     const curVal     = currentPrice * posQty;
     const durMin     = Math.round((Date.now() - new Date(p.entryTime || Date.now()).getTime()) / 60000);
     const durFmt     = durMin < 60 ? `${durMin}m` : `${Math.floor(durMin/60)}h ${durMin%60}m`;
 
-    // SL bar: SL (sinistra) → prezzo corrente (dot) → ENTRY (destra)
+    // SL bar: SL (sinistra) → ENTRY → prezzo corrente (dot) → TP (destra)
     let barHtml = '';
     if (stopPrice > 0 && entryPrice > 0) {
-      const barMax  = entryPrice + (entryPrice - stopPrice) * 0.6;
+      const barMax  = tpPrice > entryPrice ? tpPrice : entryPrice + (entryPrice - stopPrice) * 0.6;
       const total   = barMax - stopPrice;
       if (total > 0) {
-        const entryPct = Math.max(10, Math.min(90, (entryPrice  - stopPrice) / total * 100));
+        const entryPct = Math.max(10, Math.min(90, (entryPrice   - stopPrice) / total * 100));
         const curPct   = Math.max(2,  Math.min(97, (currentPrice - stopPrice) / total * 100));
+        const tpPct    = tpPrice > 0 ? Math.max(10, Math.min(98, (tpPrice - stopPrice) / total * 100)) : 0;
         const barCol   = isPos ? 'var(--green)' : 'var(--red)';
         barHtml = `<div class="pos-sl-bar-wrap"><div class="pos-sl-bar">
           <div class="pos-sl-fill" style="width:${curPct}%;background:${barCol}"></div>
@@ -4696,6 +4698,7 @@ function renderPositions() {
           <span class="pos-sl-price" style="left:${curPct}%;color:${barCol}">${fmtPrice(currentPrice)}</span>
           <span class="pos-sl-lbl" style="left:0">SL ${fmtPrice(stopPrice)}</span>
           <span class="pos-sl-lbl" style="left:${entryPct}%;transform:translateX(-50%)">ENTRY</span>
+          ${tpPct > 0 ? `<span class="pos-sl-lbl" style="left:${tpPct}%;transform:translateX(-100%)">TP ${fmtPrice(tpPrice)}</span>` : ''}
         </div></div>`;
       }
     }
