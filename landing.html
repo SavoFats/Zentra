@@ -1488,6 +1488,7 @@ document.addEventListener('keydown', e => {
 });
 loadGoogleAuthStatus();
 handleLandingAuthReturn();
+if (localStorage.getItem('ca_token')) { window.location.replace('/app'); }
 
 /* ─── TRANSLATIONS ─────────────────────────── */
 const T = {
