@@ -1676,7 +1676,9 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                 buy_fee_currency = od.get("fee_currency", "USD")
                 buy_fee_usd = buy_fee * actual_price if buy_fee_currency != "USD" else buy_fee
                 print(f"[REVX BUY] qty={qty_purchased:.6f} @ ${actual_price:.4f} USD size=${size:.2f} fee={buy_fee} {buy_fee_currency}")
-                stop_price  = actual_price * (1 - R_pct)
+                # stop_price non viene ricalcolato sull'actual fill price (che può essere più alto
+                # del prezzo Binance usato dal monitor) per evitare trigger immediato dello SL.
+                # TP1/TP2 vengono invece aggiornati all'actual entry per target corretti.
                 tp1_price   = actual_price * (1 + R_pct * tp1_multiplier)
                 tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
                 add_log(state, "buy", "ACQUISTO REALE (RevX)",
@@ -1755,7 +1757,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                     add_log(state, "info", "ERRORE", f"Coinbase {sym} non fillato (state={state_txt})")
                     await notify(state, f"ERRORE Coinbase {sym}: ordine non fillato (state={state_txt})")
                     return
-                stop_price  = actual_price * (1 - R_pct)
+                # stop_price non viene ricalcolato sull'actual fill price (stesso motivo RevX)
                 tp1_price   = actual_price * (1 + R_pct * tp1_multiplier)
                 tp2_price   = actual_price * (1 + R_pct * tp2_multiplier)
                 add_log(state, "buy", "ACQUISTO REALE (Coinbase)",
