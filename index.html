@@ -6471,8 +6471,9 @@ function _tdRenderChart(closes, color, isWin) {
 
 async function _tdFetchChart(t, color, isWin, chartEl) {
   try {
-    const entryMs = t.entryTime ? new Date(t.entryTime).getTime() : null;
-    const exitMs  = t.time      ? new Date(t.time).getTime()      : null;
+    const parseTs = s => { if (!s) return null; const ms = new Date(s.replace(/(\.\d{3})\d+/, '$1')).getTime(); return isNaN(ms) ? null : ms; };
+    const entryMs = parseTs(t.entryTime);
+    const exitMs  = parseTs(t.time);
     if (!entryMs || !exitMs || exitMs <= entryMs) { chartEl.style.display = 'none'; return; }
     const durMin = (exitMs - entryMs) / 60000;
     const interval = durMin < 30 ? '1m' : durMin < 120 ? '5m' : durMin < 480 ? '15m' : durMin < 1440 ? '1h' : '4h';
