@@ -2312,9 +2312,9 @@ body.auth-active .tabbar { display:none !important; }
         <button onclick="tmSetAmount(500)" class="tm-amt-btn" data-amt="500" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s">$500</button>
         <button onclick="tmSetAmountMax()" class="tm-amt-btn" data-amt="max" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s">Max</button>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:14px;border:1.5px solid var(--border);background:var(--surface2)">
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:14px;border:1.5px solid var(--border)">
         <span style="font-size:15px;font-weight:600;color:var(--text3)">$</span>
-        <input id="tmAmountInput" type="number" min="1" max="99999" step="1" value="500" oninput="tmAmountChanged()" style="flex:1;background:none;border:none;outline:none;font-size:18px;font-weight:700;color:var(--text);padding:0;min-width:0">
+        <input id="tmAmountInput" type="number" min="1" max="99999" step="1" value="500" oninput="tmAmountChanged()" style="flex:1;background:transparent!important;border:none!important;outline:none;font-size:18px;font-weight:700;color:var(--text);padding:0;min-width:0;box-shadow:none!important">
       </div>
     </div>
     <!-- SL / TP cards -->
@@ -6195,38 +6195,33 @@ function closeTradeModal() {
   if (_tmPriceInterval) { clearInterval(_tmPriceInterval); _tmPriceInterval = null; }
 }
 
+function _tmHighlightBtn(activeAmt) {
+  document.querySelectorAll('.tm-amt-btn').forEach(btn => {
+    const active = String(btn.dataset.amt) === String(activeAmt);
+    btn.style.background  = active ? 'var(--blue-dim)' : 'transparent';
+    btn.style.color       = active ? 'var(--blue)'     : 'var(--text2)';
+    btn.style.borderColor = active ? 'var(--blue)'     : 'var(--border)';
+    btn.style.fontWeight  = active ? '700'             : '600';
+  });
+}
+
 function tmSetAmount(amount) {
   document.getElementById('tmAmountInput').value = amount;
-  document.querySelectorAll('.tm-amt-btn').forEach(btn => {
-    const active = String(btn.dataset.amt) === String(amount);
-    btn.style.background  = active ? 'var(--accent)' : 'var(--surface2)';
-    btn.style.color       = active ? '#fff' : 'var(--text2)';
-    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
-  });
+  _tmHighlightBtn(amount);
   tmUpdateSummary();
 }
 
 function tmSetAmountMax() {
   const max = _tmBalance > 0 ? Math.floor(_tmBalance) : 500;
   document.getElementById('tmAmountInput').value = max;
-  document.querySelectorAll('.tm-amt-btn').forEach(btn => {
-    const active = btn.dataset.amt === 'max';
-    btn.style.background  = active ? 'var(--accent)' : 'var(--surface2)';
-    btn.style.color       = active ? '#fff' : 'var(--text2)';
-    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
-  });
+  _tmHighlightBtn('max');
   tmUpdateSummary();
 }
 
 function tmAmountChanged() {
   const val = parseFloat(document.getElementById('tmAmountInput').value);
-  document.querySelectorAll('.tm-amt-btn').forEach(btn => {
-    const amt    = btn.dataset.amt;
-    const active = amt !== 'max' && parseFloat(amt) === val;
-    btn.style.background  = active ? 'var(--accent)' : 'var(--surface2)';
-    btn.style.color       = active ? '#fff' : 'var(--text2)';
-    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
-  });
+  const match = [100, 250, 500].includes(val) ? val : null;
+  _tmHighlightBtn(match);
   tmUpdateSummary();
 }
 
