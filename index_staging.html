@@ -6428,21 +6428,22 @@ function _tdRenderChart(closes, color, isWin) {
 }
 
 async function _tdFetchChart(t, color, isWin, chartEl) {
+  const show = msg => { chartEl.style.display=''; chartEl.innerHTML=`<div style="height:84px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--red);padding:0 8px;text-align:center;word-break:break-all">${msg}</div>`; };
   try {
     const parseTs = s => { if (!s) return null; const ms = new Date(s.replace(/(\.\d{3})\d+/, '$1')).getTime(); return isNaN(ms) ? null : ms; };
     const entryMs = parseTs(t.entryTime);
     const exitMs  = parseTs(t.time);
-    if (!entryMs || !exitMs || exitMs <= entryMs) { chartEl.style.display = 'none'; return; }
+    if (!entryMs || !exitMs || exitMs <= entryMs) { show(`ts fail: e=${t.entryTime} x=${t.time} em=${entryMs} xm=${exitMs}`); return; }
     const durMin = (exitMs - entryMs) / 60000;
     const interval = durMin < 30 ? '1m' : durMin < 120 ? '5m' : durMin < 480 ? '15m' : durMin < 1440 ? '1h' : '4h';
     const resp = await fetch(`${API}/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`, { headers: authHeaders() });
-    if (!resp.ok) { chartEl.style.display = 'none'; return; }
+    if (!resp.ok) { show(`HTTP ${resp.status}`); return; }
     const json = await resp.json();
-    if (!Array.isArray(json.closes) || json.closes.length < 2) { chartEl.style.display = 'none'; return; }
+    if (!Array.isArray(json.closes) || json.closes.length < 2) { show(`closes=${json.closes?.length} dur=${durMin.toFixed(0)}m iv=${interval}`); return; }
     const priceUp = json.closes[json.closes.length - 1] >= json.closes[0];
     chartEl.innerHTML = _tdRenderChart(json.closes, priceUp ? 'var(--green)' : 'var(--red)', priceUp);
   } catch(e) {
-    chartEl.style.display = 'none';
+    show('ex:' + e.message);
   }
 }
 
