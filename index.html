@@ -2807,6 +2807,7 @@ function applyIOSSafeAreaFix() {
 }
 
 function initApp() {
+  window._zentraAuthed = true;
   document.getElementById('homeUsername').textContent = _username;
   const t = localStorage.getItem('theme');
   if (t === 'dark') {
@@ -7696,6 +7697,7 @@ function _aiInit() {
 
 // Show AI fab after auth
 document.addEventListener('zentra:authed', _aiInit);
+if (window._zentraAuthed) _aiInit();
 </script>
 
 </body>
