@@ -6467,48 +6467,46 @@ function _tdRenderChart(closes, color, isWin) {
 }
 
 async function _tdFetchChart(t, color, isWin, chartEl) {
+  const dbg = msg => { chartEl.style.display=''; chartEl.innerHTML=`<div style="height:84px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--red);padding:0 8px;text-align:center;word-break:break-all">${msg}</div>`; };
   try {
     const entryMs = t.entryTime ? new Date(t.entryTime).getTime() : null;
     const exitMs  = t.time      ? new Date(t.time).getTime()      : null;
-    if (!entryMs || !exitMs || exitMs <= entryMs) { chartEl.style.display = 'none'; return; }
+    if (!entryMs || !exitMs || exitMs <= entryMs) { dbg(`no range entry=${t.entryTime} exit=${t.time} dur=${((exitMs||0)-(entryMs||0))/1000}s`); return; }
     const durMin = (exitMs - entryMs) / 60000;
     const interval = durMin < 30 ? '1m' : durMin < 120 ? '5m' : durMin < 480 ? '15m' : durMin < 1440 ? '1h' : '4h';
 
-    // 1) Backend proxy (server-side Binance fetch, no CORS issues)
+    // 1) Backend proxy
+    let step1err = '';
     try {
       const r = await fetch(`${API}/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`, { headers: authHeaders() });
       if (r.ok) {
         const d = await r.json();
-        if (Array.isArray(d.closes) && d.closes.length >= 2) {
-          chartEl.innerHTML = _tdRenderChart(d.closes, color, isWin);
-          return;
-        }
-      }
-    } catch(_) {}
+        if (Array.isArray(d.closes) && d.closes.length >= 2) { chartEl.innerHTML = _tdRenderChart(d.closes, color, isWin); return; }
+        step1err = `proxy ok closes=${d.closes?.length}`;
+      } else { step1err = `proxy HTTP${r.status}`; }
+    } catch(e1) { step1err = `proxy err:${e1.message}`; }
 
-    // 2) CryptoCompare fallback (CORS aperto, funziona su iOS Safari)
+    // 2) CryptoCompare
     const fsym = t.symbol.replace(/USDT?$/, '');
     const ep   = durMin <= 120 ? 'histominute' : durMin <= 2880 ? 'histohour' : 'histoday';
-    const lim  = ep === 'histominute' ? Math.min(200, Math.ceil(durMin) + 5)
-               : ep === 'histohour'   ? Math.min(200, Math.ceil(durMin / 60) + 2)
-               :                        Math.min(200, Math.ceil(durMin / 1440) + 2);
+    const lim  = ep === 'histominute' ? Math.min(200, Math.ceil(durMin) + 5) : ep === 'histohour' ? Math.min(200, Math.ceil(durMin/60)+2) : Math.min(200, Math.ceil(durMin/1440)+2);
     const toTs = Math.floor(exitMs / 1000);
-    const r2 = await fetch(`https://min-api.cryptocompare.com/data/v2/${ep}?fsym=${encodeURIComponent(fsym)}&tsym=USD&limit=${lim}&toTs=${toTs}`);
-    if (r2.ok) {
-      const d2 = await r2.json();
-      if (d2.Response === 'Success' && Array.isArray(d2.Data?.Data)) {
-        const entryS = Math.floor(entryMs / 1000);
-        const closes = d2.Data.Data.filter(c => c.time >= entryS && c.close > 0).map(c => c.close);
-        if (closes.length >= 2) {
-          chartEl.innerHTML = _tdRenderChart(closes, color, isWin);
-          return;
-        }
-      }
-    }
+    let step2err = '';
+    try {
+      const r2 = await fetch(`https://min-api.cryptocompare.com/data/v2/${ep}?fsym=${encodeURIComponent(fsym)}&tsym=USD&limit=${lim}&toTs=${toTs}`);
+      if (r2.ok) {
+        const d2 = await r2.json();
+        if (d2.Response === 'Success' && Array.isArray(d2.Data?.Data)) {
+          const closes = d2.Data.Data.filter(c => c.time >= Math.floor(entryMs/1000) && c.close > 0).map(c => c.close);
+          if (closes.length >= 2) { chartEl.innerHTML = _tdRenderChart(closes, color, isWin); return; }
+          step2err = `cc ok pts=${closes.length}/${d2.Data.Data.length} ep=${ep} lim=${lim}`;
+        } else { step2err = `cc resp=${d2.Response} msg=${d2.Message}`; }
+      } else { step2err = `cc HTTP${r2.status}`; }
+    } catch(e2) { step2err = `cc err:${e2.message}`; }
 
-    chartEl.style.display = 'none';
+    dbg(`${step1err} | ${step2err}`);
   } catch(e) {
-    chartEl.style.display = 'none';
+    dbg('outer:' + e.message);
   }
 }
 
