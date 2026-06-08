@@ -6431,7 +6431,7 @@ async function _tdFetchChart(t, color, isWin, chartEl) {
     if (!entryMs || !exitMs || exitMs <= entryMs) { chartEl.style.display = 'none'; return; }
     const durMin = (exitMs - entryMs) / 60000;
     const interval = durMin < 30 ? '1m' : durMin < 120 ? '5m' : durMin < 480 ? '15m' : durMin < 1440 ? '1h' : '4h';
-    const resp = await fetch(`/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`);
+    const resp = await fetch(`${API}/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`, { headers: authHeaders() });
     if (!resp.ok) throw new Error();
     const json = await resp.json();
     const closes = json.closes;
