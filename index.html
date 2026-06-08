@@ -6383,6 +6383,7 @@ async function executeManualTrade() {
 // ── TRADE DETAIL MODAL ───────────────────────────────────────────────────────
 let _tdList = [];
 let _tdTrade = null;
+let _tdCloses = null;
 
 function openTradeDetail(i) {
   const t = _tdList[i];
@@ -6417,6 +6418,7 @@ function openTradeDetail(i) {
   pctEl.textContent = (isWin ? '+' : '') + t.pct.toFixed(2) + '%';
   pctEl.style.color = color;
 
+  _tdCloses = null;
   const chartEl = document.getElementById('tdChart');
   chartEl.style.display = '';
   chartEl.innerHTML = '<div style="height:84px;display:flex;align-items:center;justify-content:center;opacity:0.25;font-size:11px;color:var(--text3)">caricamento grafico…</div>';
@@ -6470,22 +6472,22 @@ function _tdRenderChart(closes, color, isWin) {
 }
 
 async function _tdFetchChart(t, color, isWin, chartEl) {
-  const show = msg => { chartEl.style.display=''; chartEl.innerHTML=`<div style="height:84px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--red);padding:0 8px;text-align:center;word-break:break-all">${msg}</div>`; };
   try {
     const parseTs = s => { if (!s) return null; const ms = new Date(s.replace(/(\.\d{3})\d+/, '$1')).getTime(); return isNaN(ms) ? null : ms; };
     const entryMs = parseTs(t.entryTime);
     const exitMs  = parseTs(t.time);
-    if (!entryMs || !exitMs || exitMs <= entryMs) { show(`ts fail: e=${t.entryTime} x=${t.time} em=${entryMs} xm=${exitMs}`); return; }
+    if (!entryMs || !exitMs || exitMs <= entryMs) { chartEl.style.display = 'none'; return; }
     const durMin = (exitMs - entryMs) / 60000;
     const interval = durMin < 30 ? '1m' : durMin < 120 ? '5m' : durMin < 480 ? '15m' : durMin < 1440 ? '1h' : '4h';
     const resp = await fetch(`${API}/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`, { headers: authHeaders() });
-    if (!resp.ok) { show(`HTTP ${resp.status}`); return; }
+    if (!resp.ok) { chartEl.style.display = 'none'; return; }
     const json = await resp.json();
-    if (!Array.isArray(json.closes) || json.closes.length < 2) { show(`closes=${json.closes?.length} dur=${durMin.toFixed(0)}m iv=${interval}`); return; }
+    if (!Array.isArray(json.closes) || json.closes.length < 2) { chartEl.style.display = 'none'; return; }
+    _tdCloses = json.closes;
     const priceUp = json.closes[json.closes.length - 1] >= json.closes[0];
     chartEl.innerHTML = _tdRenderChart(json.closes, priceUp ? 'var(--green)' : 'var(--red)', priceUp);
   } catch(e) {
-    show('ex:' + e.message);
+    chartEl.style.display = 'none';
   }
 }
 
@@ -6497,21 +6499,150 @@ function closeTradeDetail() {
 async function shareTradeDetail() {
   if (!_tdTrade) return;
   const t = _tdTrade;
-  const isWin = t.pnl >= 0;
-  const base = t.symbol.replace('USDT', '');
-  const text = `${isWin ? '✅' : '❌'} ${base}  ${isWin ? '+' : ''}$${Math.abs(t.pnl).toFixed(2)} (${isWin ? '+' : ''}${t.pct.toFixed(2)}%) — Zentra`;
   const btn = document.getElementById('tdShareBtn');
+  btn.disabled = true;
+  const origHtml = btn.innerHTML;
+  btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Generando...';
   try {
-    if (navigator.share) {
-      await navigator.share({ title: `Trade ${base}`, text });
+    const blob = await _buildShareCard(t, _tdCloses);
+    const base = t.symbol.replace(/USDT$/, '');
+    const file = new File([blob], `zentra-${base}.png`, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: `Trade ${base} · Zentra` });
+    } else if (navigator.share) {
+      await navigator.share({ title: `Trade ${base} · Zentra`, text: `${t.pnl >= 0 ? '+' : ''}$${Math.abs(t.pnl).toFixed(2)} (${t.pnl >= 0 ? '+' : ''}${t.pct.toFixed(2)}%) su ${base}` });
     } else {
-      await navigator.clipboard.writeText(text);
-      btn.textContent = 'Copiato!';
-      setTimeout(() => {
-        btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Condividi';
-      }, 1800);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `zentra-${base}.png`; a.click();
+      URL.revokeObjectURL(url);
     }
-  } catch (_) {}
+  } catch(_) {}
+  btn.disabled = false;
+  btn.innerHTML = origHtml;
+}
+
+async function _buildShareCard(t, closes) {
+  const W = 360, H = 640, DPR = 2;
+  const cv = document.createElement('canvas');
+  cv.width = W * DPR; cv.height = H * DPR;
+  const g = cv.getContext('2d');
+  g.scale(DPR, DPR);
+
+  const isWin = t.pnl >= 0;
+  const base  = t.symbol.replace(/USDT$/, '');
+  const col   = isWin ? '#05c168' : '#f6465d';
+  const colDim= isWin ? 'rgba(5,193,104,0.18)' : 'rgba(246,70,93,0.18)';
+  const fmtP  = p => p >= 1000 ? '$' + p.toFixed(0) : p >= 1 ? '$' + p.toFixed(2) : '$' + p.toFixed(4);
+
+  // ── Background ──────────────────────────────────────────────────────────────
+  g.fillStyle = '#060918';
+  g.fillRect(0, 0, W, H);
+
+  // Subtle grid
+  g.strokeStyle = 'rgba(255,255,255,0.035)';
+  g.lineWidth = 0.5;
+  for (let x = 0; x <= W; x += 30) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  for (let y = 0; y <= H; y += 30) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+
+  // Top gradient overlay
+  const topGrad = g.createLinearGradient(0, 0, 0, 180);
+  topGrad.addColorStop(0, isWin ? 'rgba(5,193,104,0.12)' : 'rgba(246,70,93,0.10)');
+  topGrad.addColorStop(1, 'rgba(6,9,26,0)');
+  g.fillStyle = topGrad;
+  g.fillRect(0, 0, W, 180);
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  // Zentra logo (sparkline icon)
+  g.strokeStyle = '#ffffff'; g.lineWidth = 2.2; g.lineCap = 'round'; g.lineJoin = 'round';
+  const pts = [[24,58],[32,50],[38,54],[46,42],[54,46]];
+  g.beginPath(); pts.forEach(([x,y],i) => i===0 ? g.moveTo(x,y) : g.lineTo(x,y)); g.stroke();
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(54, 46, 3, 0, Math.PI*2); g.fill();
+  // Zentra wordmark
+  g.fillStyle = '#ffffff'; g.font = 'bold 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.fillText('Zentra', 62, 58);
+  // Date
+  const dt = new Date(t.time);
+  const dateStr = dt.toLocaleDateString('it-IT', { day:'numeric', month:'short', year:'numeric' });
+  g.fillStyle = 'rgba(255,255,255,0.45)'; g.font = '12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.textAlign = 'right'; g.fillText(dateStr, W - 24, 58); g.textAlign = 'left';
+
+  // ── Coin circle ─────────────────────────────────────────────────────────────
+  const cx = 44, cy = 148;
+  g.fillStyle = colDim;
+  g.beginPath(); g.arc(cx, cy, 30, 0, Math.PI*2); g.fill();
+  g.strokeStyle = col; g.lineWidth = 1.5;
+  g.beginPath(); g.arc(cx, cy, 30, 0, Math.PI*2); g.stroke();
+  g.fillStyle = col; g.font = 'bold 22px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(base[0], cx, cy);
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+
+  // Coin name + price movement
+  g.fillStyle = '#ffffff'; g.font = 'bold 28px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.fillText(base, 88, 140);
+  g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = '13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.fillText(`${fmtP(t.entryPrice)} → ${fmtP(t.exitPrice)}`, 88, 162);
+
+  // ── P&L ─────────────────────────────────────────────────────────────────────
+  const label = isWin ? 'Profitto realizzato' : 'Perdita realizzata';
+  g.fillStyle = 'rgba(255,255,255,0.4)'; g.font = '700 10px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.fillText(label.toUpperCase(), 24, 225);
+
+  g.fillStyle = col; g.font = `bold 56px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+  g.fillText(`${isWin ? '+' : ''}${getCurrSym()}${fmtMoney(Math.abs(t.pnl))}`, 24, 292);
+
+  g.fillStyle = col; g.font = `bold 22px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif`;
+  g.fillText(`${isWin ? '+' : ''}${t.pct.toFixed(2)}%`, 24, 324);
+
+  // ── Chart ───────────────────────────────────────────────────────────────────
+  if (closes && closes.length >= 2) {
+    const cX = 0, cY = 360, cW = W, cH = 100;
+    const mn = Math.min(...closes), mx = Math.max(...closes), rng = mx - mn || 1;
+    const pts2 = closes.map((v, i) => [cX + (i / (closes.length - 1)) * cW, cY + cH - 8 - ((v - mn) / rng) * (cH - 16)]);
+
+    // Area fill
+    const chartGrad = g.createLinearGradient(0, cY, 0, cY + cH);
+    const rgb = isWin ? '5,193,104' : '246,70,93';
+    chartGrad.addColorStop(0, `rgba(${rgb},0.25)`);
+    chartGrad.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = chartGrad;
+    g.beginPath(); g.moveTo(pts2[0][0], pts2[0][1]);
+    pts2.slice(1).forEach(([x,y]) => g.lineTo(x, y));
+    g.lineTo(cW, cY + cH); g.lineTo(0, cY + cH); g.closePath(); g.fill();
+
+    // Line
+    g.strokeStyle = col; g.lineWidth = 2.5; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(pts2[0][0], pts2[0][1]);
+    pts2.slice(1).forEach(([x,y]) => g.lineTo(x, y)); g.stroke();
+
+    // End dot
+    const [lx, ly] = pts2[pts2.length - 1];
+    g.fillStyle = col; g.beginPath(); g.arc(lx, ly, 5, 0, Math.PI * 2); g.fill();
+  }
+
+  // ── Footer ──────────────────────────────────────────────────────────────────
+  // Divider
+  g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(24, 492); g.lineTo(W - 24, 492); g.stroke();
+
+  // Duration
+  const dur = t.durationMin || 0;
+  const durStr = dur >= 60 ? `${Math.floor(dur/60)}h ${Math.round(dur%60)}m` : `${Math.round(dur)}m`;
+  g.fillStyle = 'rgba(255,255,255,0.35)'; g.font = '13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.textAlign = 'right'; g.fillText(durStr, W - 24, 524); g.textAlign = 'left';
+
+  // Footer Zentra logo
+  g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; g.lineCap = 'round'; g.lineJoin = 'round';
+  const fp = [[24,524],[32,516],[38,520],[46,508],[54,512]];
+  g.beginPath(); fp.forEach(([x,y],i) => i===0 ? g.moveTo(x,y) : g.lineTo(x,y)); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.arc(54, 512, 2.5, 0, Math.PI*2); g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.6)'; g.font = '13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.fillText('Zentra', 62, 524);
+
+  // Watermark
+  g.fillStyle = 'rgba(255,255,255,0.2)'; g.font = '11px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  g.textAlign = 'center'; g.fillText('zentra.trading', W / 2, 610); g.textAlign = 'left';
+
+  return new Promise(resolve => cv.toBlob(resolve, 'image/png'));
 }
 
 // ── EMA TOOLTIP ───────────────────────────────────────────────────────────────
