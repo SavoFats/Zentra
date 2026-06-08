@@ -187,6 +187,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:20px; h
 input[type=number] { width:100%; background:var(--surface2); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:13px 14px; color:var(--text); font-size:16px; font-weight:600; font-family:var(--sans); transition:border-color 0.15s; }
 input[type=number]:focus { outline:none; border-color:var(--blue); }
 input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
+#tmAmountInput { background:transparent !important; border:none !important; box-shadow:none !important; padding:0 !important; border-radius:0 !important; -webkit-appearance:none; outline:none !important; }
+#tmAmountInput:focus { border:none !important; box-shadow:none !important; }
 
 /* ── EMA TOGGLE ── */
 .ema-toggle-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
@@ -639,10 +641,6 @@ body { background:var(--bg); }
 /* ── LIQUID INPUT ── */
 input[type=number], input[type=text], input[type=password] { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); background:var(--surface2) !important; border-color:var(--border) !important; border-radius:var(--radius-sm) !important; }
 input[type=number]:focus, input[type=text]:focus, input[type=password]:focus { border-color:var(--blue) !important; box-shadow:0 0 0 3px rgba(0,82,255,0.12); }
-
-/* Trade modal amount input — override global input[type=number] rules */
-#tmAmountInput { background:transparent !important; border:none !important; box-shadow:none !important; padding:0 !important; border-radius:0 !important; -webkit-appearance:none; outline:none !important; }
-#tmAmountInput:focus { border:none !important; box-shadow:none !important; }
 
 /* Auth card */
 .auth-card { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border:1px solid var(--glass-border); box-shadow:0 20px 60px rgba(0,0,30,0.12); }
