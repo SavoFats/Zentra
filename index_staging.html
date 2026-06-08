@@ -2362,6 +2362,7 @@ body.auth-active .tabbar { display:none !important; }
 <div id="tradeDetailModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeTradeDetail()">
   <div style="background:rgba(255,255,255,0.97);border-radius:24px 24px 0 0;width:min(480px,100vw);max-height:92vh;overflow-y:auto;padding:20px 20px 36px;position:relative">
     <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
+    <!-- Header -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
       <img id="tdLogo" src="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">
       <div style="flex:1;min-width:0">
@@ -2372,12 +2373,15 @@ body.auth-active .tabbar { display:none !important; }
         <div id="tdMeta" style="font-size:11px;color:var(--text3);margin-top:3px"></div>
       </div>
     </div>
+    <!-- P&L centrale -->
     <div style="text-align:center;margin-bottom:18px">
       <div id="tdLabel" style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px"></div>
       <div id="tdPnl" style="font-size:38px;font-weight:800;letter-spacing:-0.5px;line-height:1"></div>
       <div id="tdPct" style="font-size:15px;font-weight:700;margin-top:6px"></div>
     </div>
+    <!-- Chart (full-width, bordi al padding del modal) -->
     <div id="tdChart" style="margin:0 -20px 20px;height:84px;overflow:hidden"></div>
+    <!-- Stats 4 colonne -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:18px">
       <div style="text-align:center;padding:10px 4px;background:var(--surface2);border-radius:12px">
         <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Entrata</div>
@@ -2396,10 +2400,13 @@ body.auth-active .tabbar { display:none !important; }
         <div id="tdDuration" style="font-size:13px;font-weight:700;color:var(--text)"></div>
       </div>
     </div>
+    <!-- Divider -->
     <div style="height:1px;background:var(--border);margin-bottom:16px"></div>
+    <!-- Footer: fee -->
     <div style="margin-bottom:20px">
       <div id="tdFee" style="font-size:12px;color:var(--text3)"></div>
     </div>
+    <!-- Buttons -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <button onclick="closeTradeDetail()" style="padding:14px;border-radius:14px;background:transparent;border:1.5px solid var(--border);color:var(--text2);font-size:15px;font-weight:600;cursor:pointer">Chiudi</button>
       <button id="tdShareBtn" onclick="shareTradeDetail()" style="padding:14px;border-radius:14px;background:var(--blue);border:none;color:#fff;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
@@ -4919,7 +4926,7 @@ function renderTransazioni() {
     const timeStr = dt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
     const totalFee = (t.buyFee || 0) + (t.sellFee || 0);
     const feeStr = totalFee > 0 ? `<span style="font-size:10px;color:var(--text3)">fee $${totalFee.toFixed(2)}</span>` : '';
-    return `<div style="background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid ${color};margin-bottom:8px;cursor:pointer" onclick="openTradeDetail(${i})">
+    return `<div style="background:var(--surface2);border-radius:var(--radius-sm);border-left:3px solid ${color};margin-bottom:8px;cursor:pointer;active:opacity:0.8" onclick="openTradeDetail(${i})">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px">
         <img src="${getLogo(t.symbol)}" style="width:38px;height:38px;border-radius:50%;flex-shrink:0" onerror="coinImgErr(this,'${esc(t.symbol)}',38)">
         <div style="flex:1;min-width:0">
@@ -6385,49 +6392,83 @@ function openTradeDetail(i) {
   const isWin = t.pnl >= 0;
   const color = isWin ? 'var(--green)' : 'var(--red)';
   const base  = t.symbol.replace('USDT', '');
-  const logo  = document.getElementById('tdLogo');
-  logo.style.display = ''; logo.src = getLogo(t.symbol);
+
+  const logo = document.getElementById('tdLogo');
+  logo.style.display = '';
+  logo.src = getLogo(t.symbol);
+
   document.getElementById('tdSymbol').textContent = base;
   const badge = document.getElementById('tdBadge');
-  badge.textContent = isWin ? 'WIN' : 'LOSS';
-  badge.style.background = isWin ? 'rgba(5,193,104,0.15)' : 'rgba(246,70,93,0.15)';
-  badge.style.color = color;
-  const exitDt = new Date(t.time), entryDt = t.entryTime ? new Date(t.entryTime) : null;
+  badge.textContent        = isWin ? 'WIN' : 'LOSS';
+  badge.style.background   = isWin ? 'rgba(5,193,104,0.15)' : 'rgba(246,70,93,0.15)';
+  badge.style.color        = color;
+
+  const exitDt  = new Date(t.time);
+  const entryDt = t.entryTime ? new Date(t.entryTime) : null;
   const dateStr = exitDt.toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
-  const exitT = exitDt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
-  const entryT = entryDt ? entryDt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : '';
+  const exitT   = exitDt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  const entryT  = entryDt ? entryDt.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}) : '';
   document.getElementById('tdMeta').textContent = `${dateStr} · ${entryT ? entryT + '-' + exitT : exitT}`;
+
   document.getElementById('tdLabel').textContent = isWin ? 'Profitto realizzato' : 'Perdita realizzata';
   const pnlEl = document.getElementById('tdPnl');
-  pnlEl.textContent = (isWin ? '+' : '') + getCurrSym() + fmtMoney(t.pnl); pnlEl.style.color = color;
+  pnlEl.textContent = (isWin ? '+' : '') + getCurrSym() + fmtMoney(t.pnl);
+  pnlEl.style.color = color;
   const pctEl = document.getElementById('tdPct');
-  pctEl.textContent = (isWin ? '+' : '') + t.pct.toFixed(2) + '%'; pctEl.style.color = color;
-  const chartEl = document.getElementById('tdChart');
+  pctEl.textContent = (isWin ? '+' : '') + t.pct.toFixed(2) + '%';
+  pctEl.style.color = color;
+
   _tdCloses = null;
+  const chartEl = document.getElementById('tdChart');
   chartEl.style.display = '';
   chartEl.innerHTML = '<div style="height:84px;display:flex;align-items:center;justify-content:center;opacity:0.25;font-size:11px;color:var(--text3)">caricamento grafico…</div>';
   _tdFetchChart(t, color, isWin, chartEl);
+
   const fmtP = p => p >= 1000 ? p.toFixed(0) : p >= 100 ? p.toFixed(2) : p >= 10 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toFixed(4);
   document.getElementById('tdEntry').textContent = '$' + fmtP(t.entryPrice);
-  const exitEl = document.getElementById('tdExit'); exitEl.textContent = '$' + fmtP(t.exitPrice); exitEl.style.color = color;
+  const exitEl = document.getElementById('tdExit');
+  exitEl.textContent = '$' + fmtP(t.exitPrice);
+  exitEl.style.color = color;
   document.getElementById('tdSize').textContent = '$' + (t.size || 0).toFixed(0);
   const dur = t.durationMin || 0;
-  document.getElementById('tdDuration').textContent = dur >= 60 ? `${Math.floor(dur/60)}h ${Math.round(dur%60)}m` : `${Math.round(dur)}m`;
-  const reason = (t.reason || '').toLowerCase();
+  document.getElementById('tdDuration').textContent = dur >= 60
+    ? `${Math.floor(dur/60)}h ${Math.round(dur % 60)}m`
+    : `${Math.round(dur)}m`;
+
   const totalFee = (t.buyFee || 0) + (t.sellFee || 0);
   document.getElementById('tdFee').textContent = totalFee > 0 ? `Fee $${totalFee.toFixed(2)}` : '';
+
   const shareBtn = document.getElementById('tdShareBtn');
   shareBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Condividi';
   shareBtn.disabled = false;
+
   document.getElementById('tradeDetailModal').style.display = 'flex';
 }
 
 function _tdRenderChart(closes, color, isWin) {
-  const W = 440, H = 84, min = Math.min(...closes), max = Math.max(...closes), range = max - min || 1;
-  const pts = closes.map((v, idx) => { const x = (idx/(closes.length-1))*W, y = H-4-((v-min)/range)*(H-12); return `${x.toFixed(1)},${y.toFixed(1)}`; });
-  const last = pts[pts.length-1].split(','), rgb = isWin ? '5,193,104' : '246,70,93';
-  const areaD = `M${pts[0]} `+pts.slice(1).map(p=>`L${p}`).join(' ')+` L${W},${H} L0,${H} Z`;
-  return `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block"><defs><linearGradient id="tdG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgb(${rgb})" stop-opacity="0.22"/><stop offset="100%" stop-color="rgb(${rgb})" stop-opacity="0.01"/></linearGradient></defs><path d="${areaD}" fill="url(#tdG)"/><polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${last[0]}" cy="${last[1]}" r="4" fill="${color}" opacity="0.9"/></svg>`;
+  const W = 440, H = 84;
+  const min = Math.min(...closes), max = Math.max(...closes);
+  const range = max - min || 1;
+  const pts = closes.map((v, idx) => {
+    const x = (idx / (closes.length - 1)) * W;
+    const y = H - 4 - ((v - min) / range) * (H - 12);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const polyPts = pts.join(' ');
+  const last = pts[pts.length - 1].split(',');
+  const rgb = isWin ? '5,193,104' : '246,70,93';
+  const areaD = `M${pts[0]} ` + pts.slice(1).map(p => `L${p}`).join(' ') + ` L${W},${H} L0,${H} Z`;
+  return `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block">
+    <defs>
+      <linearGradient id="tdG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgb(${rgb})" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="rgb(${rgb})" stop-opacity="0.01"/>
+      </linearGradient>
+    </defs>
+    <path d="${areaD}" fill="url(#tdG)"/>
+    <polyline points="${polyPts}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="${color}" opacity="0.9"/>
+  </svg>`;
 }
 
 async function _tdFetchChart(t, color, isWin, chartEl) {
@@ -6497,7 +6538,7 @@ async function _buildShareCard(t, closes) {
   const fmtP    = p => p >= 1000 ? '$' + p.toFixed(0) : p >= 1 ? '$' + p.toFixed(2) : '$' + p.toFixed(4);
   const font    = '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
 
-  // Background
+  // ── Background ──────────────────────────────────────────────────────────────
   g.fillStyle = '#060918';
   g.fillRect(0, 0, W, H);
 
@@ -6514,22 +6555,26 @@ async function _buildShareCard(t, closes) {
   g.fillStyle = glow;
   g.fillRect(0, 0, W, 280);
 
-  // Header
+  // ── Header ──────────────────────────────────────────────────────────────────
   const hY = 38;
+  // Zentra sparkline icon
   g.strokeStyle = '#fff'; g.lineWidth = 2; g.lineCap = 'round'; g.lineJoin = 'round';
   const ipts = [[pad,hY+8],[pad+8,hY],[pad+14,hY+4],[pad+22,hY-8],[pad+30,hY-4]];
   g.beginPath(); ipts.forEach(([x,y],i) => i===0?g.moveTo(x,y):g.lineTo(x,y)); g.stroke();
   g.fillStyle='#fff'; g.beginPath(); g.arc(pad+30,hY-4,2.5,0,Math.PI*2); g.fill();
+  // Zentra wordmark
   g.fillStyle='#fff'; g.font=`800 18px ${font}`;
   g.fillText('Zentra', pad+38, hY+8);
+  // "TRADING" subtitle
   g.fillStyle='rgba(255,255,255,0.55)'; g.font=`700 9px ${font}`;
   g.fillText('TRADING', pad+39, hY+20);
+  // Date right
   const dt = new Date(t.time);
   const dateStr = dt.toLocaleDateString('it-IT',{day:'numeric',month:'short',year:'numeric'});
   g.fillStyle='rgba(255,255,255,0.6)'; g.font=`700 11px ${font}`;
   g.textAlign='right'; g.fillText(dateStr, W-pad, hY+10); g.textAlign='left';
 
-  // Inner dark card
+  // ── Inner dark card ──────────────────────────────────────────────────────────
   const cardX=pad, cardY=72, cardW=W-pad*2, cardH=332, cardR=16;
   g.fillStyle='rgba(14,20,42,0.52)';
   g.beginPath();
@@ -6544,9 +6589,11 @@ async function _buildShareCard(t, closes) {
   g.arcTo(cardX, cardY, cardX+cardR, cardY, cardR);
   g.closePath(); g.fill();
 
-  // Coin row
+  // ── Coin row ─────────────────────────────────────────────────────────────────
   const ipad = 20;
   const coinX = cardX+ipad, coinY = cardY+ipad;
+
+  // Load coin logo image (cross-origin, falls back to letter on error)
   let logoOk = false;
   const logoUrl = getLogo(t.symbol);
   if (logoUrl) {
@@ -6569,17 +6616,25 @@ async function _buildShareCard(t, closes) {
     g.textAlign='center'; g.textBaseline='middle'; g.fillText(base[0],coinX+20,coinY+20);
     g.textAlign='left'; g.textBaseline='alphabetic';
   }
+
+  // Coin name + price movement
   g.fillStyle='#fff'; g.font=`800 17px ${font}`; g.textBaseline='alphabetic';
   g.fillText(base, coinX+52, coinY+18);
   g.fillStyle='rgba(255,255,255,0.55)'; g.font=`600 11px ${font}`;
   g.fillText(`${fmtP(t.entryPrice)} → ${fmtP(t.exitPrice)}`, coinX+52, coinY+33);
 
-  // P&L
+  // ── P&L ─────────────────────────────────────────────────────────────────────
   const pnlX = cardX+ipad, pnlLY = cardY+ipad+58;
+
+  // Label (uppercase, spaced)
   g.fillStyle='rgba(255,255,255,0.5)'; g.font=`700 10px ${font}`;
   g.fillText((isWin?'PROFITTO REALIZZATO':'PERDITA REALIZZATA'), pnlX, pnlLY);
+
+  // Amount
   g.fillStyle=col; g.font=`800 52px ${font}`;
   g.fillText(`${isWin?'+':''}${getCurrSym()}${fmtMoney(Math.abs(t.pnl))}`, pnlX, pnlLY+58);
+
+  // Percentage badge
   const pctText = `${isWin?'+':''}${t.pct.toFixed(2)}%`;
   g.font=`800 14px ${font}`;
   const pctTW = g.measureText(pctText).width;
@@ -6598,7 +6653,7 @@ async function _buildShareCard(t, closes) {
   g.fillStyle=colLight; g.textBaseline='middle'; g.fillText(pctText, pnlX+11, badgeY+badgeH/2);
   g.textBaseline='alphabetic';
 
-  // Chart
+  // ── Chart ───────────────────────────────────────────────────────────────────
   if (closes && closes.length >= 2) {
     const cX=cardX+ipad, cY=badgeY+badgeH+16, cW=cardW-ipad*2, cH=64;
     const mn=Math.min(...closes), mx=Math.max(...closes), rng=mx-mn||1;
@@ -6616,14 +6671,16 @@ async function _buildShareCard(t, closes) {
     g.fillStyle=col; g.beginPath(); g.arc(lx,ly,4,0,Math.PI*2); g.fill();
   }
 
-  // Footer: attribution row
+  // ── Footer: attribution row ──────────────────────────────────────────────────
   const footY = cardY+cardH+24;
+  // Zentra sparkline
   g.strokeStyle='rgba(255,255,255,0.6)'; g.lineWidth=1.8; g.lineCap='round'; g.lineJoin='round';
   const fpts=[[pad,footY+10],[pad+7,footY+3],[pad+13,footY+7],[pad+20,footY-3],[pad+27,footY+1]];
   g.beginPath(); fpts.forEach(([x,y],i)=>i===0?g.moveTo(x,y):g.lineTo(x,y)); g.stroke();
   g.fillStyle='rgba(255,255,255,0.6)'; g.beginPath(); g.arc(pad+27,footY+1,2,0,Math.PI*2); g.fill();
   g.fillStyle='rgba(255,255,255,0.6)'; g.font=`800 13px ${font}`;
   g.fillText('Zentra', pad+35, footY+11);
+  // Duration
   const dur=t.durationMin||0;
   const durStr=dur>=60?`${Math.floor(dur/60)}h ${Math.round(dur%60)}m`:`${Math.round(dur)}m`;
   g.fillStyle='rgba(255,255,255,0.55)'; g.font=`600 11px ${font}`;
