@@ -2402,9 +2402,8 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <!-- Divider -->
     <div style="height:1px;background:var(--border);margin-bottom:16px"></div>
-    <!-- Footer: strategia + fee -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div id="tdStrategy" style="font-size:12px;font-weight:600;color:var(--blue)"></div>
+    <!-- Footer: fee -->
+    <div style="margin-bottom:20px">
       <div id="tdFee" style="font-size:12px;color:var(--text3)"></div>
     </div>
     <!-- Buttons -->
@@ -6434,11 +6433,6 @@ function openTradeDetail(i) {
   document.getElementById('tdDuration').textContent = dur >= 60
     ? `${Math.floor(dur/60)}h ${Math.round(dur % 60)}m`
     : `${Math.round(dur)}m`;
-
-  const reason = (t.reason || '').toLowerCase();
-  let stratLabel = 'Strategia Momentum';
-  if (reason.includes('manual') || reason.includes('manuale')) stratLabel = 'Trade Manuale';
-  document.getElementById('tdStrategy').innerHTML = `<span>⚡</span> ${stratLabel}`;
 
   const totalFee = (t.buyFee || 0) + (t.sellFee || 0);
   document.getElementById('tdFee').textContent = totalFee > 0 ? `Fee $${totalFee.toFixed(2)}` : '';
