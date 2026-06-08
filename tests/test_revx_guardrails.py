@@ -824,6 +824,11 @@ class RevxGuardrailTests(unittest.TestCase):
             main._ORIGINS_ANY = original_any
             main._ORIGIN_SET = original_set
 
+    def test_default_cors_is_not_wildcard(self):
+        main = self.main
+        self.assertFalse(main._ORIGINS_ANY)
+        self.assertIn("https://zentra.trading", main._ORIGIN_SET)
+
     def test_with_query_param_preserves_existing_query(self):
         url = self.main.with_query_param("https://zentra.trading/account?tab=billing", "upgraded", "1")
         self.assertEqual(url, "https://zentra.trading/account?tab=billing&upgraded=1")
@@ -1471,6 +1476,56 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertNotIn("display_name", where_clause)
         self.assertIn("lower(email)", where_clause)
         self.assertEqual(conn.args, ("savo fats",))
+
+    def test_ai_thread_payload_rejects_unknown_role(self):
+        main = self.main
+        body = types.SimpleNamespace(
+            id="ai_abc123def",
+            title="Analisi",
+            messages=[{"role": "system", "content": "no"}],
+            created_at="2026-06-08T10:00:00",
+            updated_at="2026-06-08T10:00:01",
+        )
+        with self.assertRaises(main.HTTPException) as ctx:
+            main._validate_ai_thread_payload(body)
+        self.assertEqual(ctx.exception.status_code, 400)
+
+    def test_ai_thread_upsert_ignores_stale_payloads(self):
+        main = self.main
+
+        class Conn:
+            def __init__(self):
+                self.sql = ""
+                self.args = None
+
+            async def execute(self, sql, *args):
+                self.sql = sql
+                self.args = args
+                return "INSERT 0 1"
+
+        conn = Conn()
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        main.db_pool = FakePool(conn)
+        main.check_rate_limit = lambda *args, **kwargs: None
+        body = types.SimpleNamespace(
+            id="ai_abc123def",
+            title="Analisi XRP",
+            messages=[{"role": "user", "content": "analizza XRP"}],
+            created_at="2026-06-08T10:00:00",
+            updated_at="2026-06-08T10:00:01",
+        )
+        try:
+            result = asyncio.run(main.upsert_ai_thread(request=object(), body=body, user_id=7))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+
+        self.assertEqual(result, {"ok": True})
+        self.assertIn("where ai_threads.updated_at <= excluded.updated_at", conn.sql.lower())
+        self.assertEqual(conn.args[0], "ai_abc123def")
+        self.assertEqual(conn.args[1], 7)
+        self.assertEqual(conn.args[2], "Analisi XRP")
 
 
 if __name__ == "__main__":

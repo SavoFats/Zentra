@@ -25,13 +25,28 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 import sys
+_DEFAULT_ORIGINS = {
+    "https://zentra.trading",
+    "https://www.zentra.trading",
+    "https://savofats.github.io",
+    "https://crypto-agent-back-git-staging-savofats-projects.vercel.app",
+}
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
-if not _raw_origins or _raw_origins == "*":
-    print("WARNING: ALLOWED_ORIGINS non impostata o wildcard. Imposta il dominio Vercel in produzione.", file=sys.stderr)
+_env_name = " ".join(
+    os.environ.get(k, "").lower()
+    for k in ("APP_ENV", "ENVIRONMENT", "RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "VERCEL_ENV")
+)
+_IS_PRODUCTION = "prod" in _env_name or "production" in _env_name
+if _raw_origins == "*" and not _IS_PRODUCTION:
+    print("WARNING: ALLOWED_ORIGINS wildcard attivo. Usalo solo in sviluppo.", file=sys.stderr)
     _ORIGIN_SET: set[str] = set()
     _ORIGINS_ANY = True
 else:
-    _ORIGIN_SET = {o.strip().rstrip("/") for o in _raw_origins.split(",") if o.strip()}
+    if not _raw_origins or _raw_origins == "*":
+        print("[CORS] ALLOWED_ORIGINS non impostata o wildcard: uso allowlist Zentra di default.", file=sys.stderr)
+        _ORIGIN_SET = set(_DEFAULT_ORIGINS)
+    else:
+        _ORIGIN_SET = {o.strip().rstrip("/") for o in _raw_origins.split(",") if o.strip()}
     _ORIGINS_ANY = False
     print(f"[CORS] origini consentite: {_ORIGIN_SET}", file=sys.stderr)
 
@@ -257,6 +272,51 @@ class AIThreadRequest(BaseModel):
     messages: list[dict]
     created_at: str
     updated_at: str
+
+def _parse_client_dt(value: str, field: str) -> datetime:
+    try:
+        raw = str(value or "").strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(raw)
+        return dt.replace(tzinfo=None)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"{field} non valido")
+
+def _validate_ai_thread_payload(body: AIThreadRequest) -> tuple[list[dict], datetime, datetime]:
+    thread_id = str(body.id or "").strip()
+    if not re.match(r"^ai_[A-Za-z0-9_-]{6,80}$", thread_id):
+        raise HTTPException(status_code=400, detail="Thread AI non valido")
+
+    title = str(body.title or "").strip()
+    if len(title) > 120:
+        raise HTTPException(status_code=400, detail="Titolo thread troppo lungo")
+
+    messages = body.messages
+    if not isinstance(messages, list) or len(messages) > 200:
+        raise HTTPException(status_code=400, detail="Messaggi thread non validi")
+
+    cleaned: list[dict] = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            raise HTTPException(status_code=400, detail="Messaggio thread non valido")
+        role = str(msg.get("role") or "").strip()
+        if role not in {"user", "ai", "chart"}:
+            raise HTTPException(status_code=400, detail="Ruolo messaggio non valido")
+        item = {"role": role}
+        if role == "chart":
+            symbol = str(msg.get("symbol") or "").upper().strip()
+            if not re.match(r"^[A-Z0-9]{1,20}$", symbol):
+                raise HTTPException(status_code=400, detail="Simbolo chart non valido")
+            item["symbol"] = symbol
+        else:
+            content = str(msg.get("content") or "")
+            if len(content) > 20000:
+                raise HTTPException(status_code=400, detail="Messaggio thread troppo lungo")
+            item["content"] = content
+        if msg.get("time"):
+            item["time"] = str(msg.get("time"))[:40]
+        cleaned.append(item)
+
+    return cleaned, _parse_client_dt(body.created_at, "created_at"), _parse_client_dt(body.updated_at, "updated_at")
 
 BINANCE_BASE    = "https://api.binance.com"
 BINANCE_US_BASE = "https://api.binance.us"
@@ -1194,9 +1254,11 @@ def schedule_scanner_refresh(timeframe: str):
     if timeframe not in VALID_TF or timeframe in _scanner_refreshing:
         return
     try:
-        asyncio.create_task(fetch_all_scanner_candles(timeframe))
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        pass
+        print(f"[SCANNER] refresh {timeframe} saltato: event loop non attivo", file=sys.stderr)
+        return
+    loop.create_task(fetch_all_scanner_candles(timeframe))
 
 
 def get_momentum_signal(sym: str, current_price: float,
@@ -5676,6 +5738,8 @@ async def get_ai_threads(request: Request, user_id: int = Depends(get_current_us
 async def upsert_ai_thread(request: Request, body: AIThreadRequest, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=120, window=60)
     import json as _json
+    messages, created_at, updated_at = _validate_ai_thread_payload(body)
+    title = str(body.title or "").strip()[:120] or "Analisi"
     async with db_pool.acquire() as conn:
         await conn.execute(
             """
@@ -5685,10 +5749,11 @@ async def upsert_ai_thread(request: Request, body: AIThreadRequest, user_id: int
               SET title = EXCLUDED.title,
                   messages = EXCLUDED.messages,
                   updated_at = EXCLUDED.updated_at
+              WHERE ai_threads.updated_at <= EXCLUDED.updated_at
             """,
-            body.id, user_id, body.title,
-            _json.dumps(body.messages),
-            body.created_at, body.updated_at
+            body.id, user_id, title,
+            _json.dumps(messages),
+            created_at, updated_at
         )
     return {"ok": True}
 
