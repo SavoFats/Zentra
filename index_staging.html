@@ -731,8 +731,8 @@ body.auth-active .tabbar { display:none !important; }
     <div class="auth-title">Bentornato</div>
     <div class="auth-sub">Accedi al tuo account</div>
     <div class="auth-field">
-      <label>Email o username</label>
-      <div class="auth-field-wrap"><input type="text" id="loginUser" placeholder="email o username" autocomplete="username"></div>
+      <label>Email</label>
+      <div class="auth-field-wrap"><input type="email" id="loginUser" placeholder="la tua email" autocomplete="email"></div>
       <div class="auth-field-error" id="loginUserErr"></div>
     </div>
     <div class="auth-field">
@@ -1865,10 +1865,6 @@ body.auth-active .tabbar { display:none !important; }
       .ai-chart-wrap { margin:8px 0 4px; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:var(--surface2); }
       .ai-chart-label { font-size:11px; font-weight:800; color:var(--text3); padding:8px 12px 4px; letter-spacing:0.06em; text-transform:uppercase; }
       .ai-chart-frame { width:100%; height:300px; border:none; display:block; }
-      .ai-news-wrap { margin:8px 0 4px; border-radius:14px; border:1px solid var(--border); background:var(--surface2); padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
-      .ai-news-label { font-size:11px; font-weight:800; color:var(--text3); letter-spacing:0.06em; text-transform:uppercase; }
-      .ai-news-item { font-size:12.5px; line-height:1.45; color:var(--text2); font-weight:600; }
-      .ai-news-meta { color:var(--text3); font-size:11px; font-weight:700; margin-right:6px; }
       .ai-ctx-bar { padding:8px 14px; background:rgba(0,82,255,0.06); border-bottom:1px solid rgba(0,82,255,0.12); font-size:11px; color:var(--blue); font-weight:600; display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }
       .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
       .home-ai { width:min(900px,100%); margin:10px auto 28px; }
@@ -2453,10 +2449,13 @@ let _pendingAuthError = '';
   if (tokenFromUrl) {
     _authToken = tokenFromUrl;
     _username = authParams.get('username') || _username || 'Zentra user';
+    _email = authParams.get('email') || _email;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
+    if (_email) localStorage.setItem('ca_email', _email);
     authParams.delete('token');
     authParams.delete('username');
+    authParams.delete('email');
     authParams.delete('auth_error');
     const clean = window.location.pathname + (authParams.toString() ? '?' + authParams.toString() : '') + window.location.hash;
     window.history.replaceState({}, '', clean);
@@ -2643,16 +2642,17 @@ function showAuthError(id, msg) { const el=document.getElementById(id); el.textC
 
 async function doLogin() {
   clearFieldError('loginUser','loginUserErr'); clearFieldError('loginPass','loginPassErr');
-  const username = document.getElementById('loginUser').value.trim();
+  const email = document.getElementById('loginUser').value.trim().toLowerCase();
   const password = document.getElementById('loginPass').value;
-  if (!username) return showFieldError('loginUser','loginUserErr','Inserisci email o username');
+  if (!email) return showFieldError('loginUser','loginUserErr','Inserisci la tua email');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showFieldError('loginUser','loginUserErr','Inserisci una email valida');
   if (!password) return showFieldError('loginPass','loginPassErr','Inserisci la tua password');
   const btn = document.getElementById('loginBtn');
   btn.disabled = true; btn.textContent = 'Accesso in corso...';
   try {
-    const r = await fetch(API + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, password}) });
+    const r = await fetch(API + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email, password}) });
     const d = await r.json();
-    if (!r.ok) { showFieldError('loginPass','loginPassErr', d.detail || 'Username o password errati'); btn.disabled=false; btn.textContent='Accedi'; return; }
+    if (!r.ok) { showFieldError('loginPass','loginPassErr', d.detail || 'Email o password errati'); btn.disabled=false; btn.textContent='Accedi'; return; }
     _authToken = d.token; _username = d.username; _email = d.email || _email;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
@@ -7563,40 +7563,6 @@ function _aiDetectSymbolFromText(text) {
   return '';
 }
 
-function _aiDetectSymbolFromNews(news) {
-  if (!Array.isArray(news)) return '';
-  for (const item of news) {
-    if (Array.isArray(item.coins) && item.coins.length) return String(item.coins[0] || '').toUpperCase();
-    const fromTitle = _aiDetectSymbolFromText(item.title || '');
-    if (fromTitle) return fromTitle;
-  }
-  return '';
-}
-
-function _aiRenderNews(news) {
-  const msgs = document.getElementById('aiMessages');
-  if (!msgs || !Array.isArray(news) || !news.length) return;
-  const wrap = document.createElement('div');
-  const label = document.createElement('div');
-  wrap.className = 'ai-news-wrap';
-  label.className = 'ai-news-label';
-  label.textContent = 'Notizie recenti';
-  wrap.appendChild(label);
-  news.slice(0, 4).forEach(item => {
-    const row = document.createElement('div');
-    const meta = document.createElement('span');
-    row.className = 'ai-news-item';
-    meta.className = 'ai-news-meta';
-    const metaText = [item.date, item.source].filter(Boolean).join(' · ');
-    meta.textContent = metaText ? metaText + ' — ' : '';
-    row.appendChild(meta);
-    row.appendChild(document.createTextNode(item.title || 'Notizia crypto'));
-    wrap.appendChild(row);
-  });
-  msgs.appendChild(wrap);
-  _aiScrollBottom();
-}
-
 async function sendAIMessage(source = 'analysis') {
   const input = document.getElementById(source === 'home' ? 'aiHomeInput' : 'aiInput');
   if (!input) return;
@@ -7706,6 +7672,13 @@ function deleteAIThread(event, id) {
 }
 
 function _aiInit() {
+  const scope = _aiStorageScope();
+  if (_aiInit._loadedForScope === scope) {
+    renderAIHistory();
+    updateAIUsageUI();
+    return;
+  }
+  _aiInit._loadedForScope = scope;
   _aiLoadThreads();
   renderAIHistory();
   renderAIThread();
@@ -7723,7 +7696,6 @@ function _aiInit() {
 
 // Show AI fab after auth
 document.addEventListener('zentra:authed', _aiInit);
-if (localStorage.getItem('ca_token')) _aiInit();
 </script>
 
 </body>

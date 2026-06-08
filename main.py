@@ -3705,7 +3705,7 @@ def _looks_like_email(value: str) -> bool:
 
 def _validate_password_auth(identifier: str, password: str):
     if not identifier:
-        raise HTTPException(status_code=400, detail="Inserisci email o username")
+        raise HTTPException(status_code=400, detail="Inserisci email")
     if _looks_like_email(identifier):
         if len(identifier) > 254:
             raise HTTPException(status_code=400, detail="Email troppo lunga")
@@ -3954,6 +3954,7 @@ async def google_callback(request: Request, code: str = "", state: str = ""):
     token = create_token(user_id)
     target = with_query_param(redirect_to, "token", token)
     target = with_query_param(target, "username", name)
+    target = with_query_param(target, "email", email)
     return RedirectResponse(target, status_code=302)
 
 
