@@ -2275,52 +2275,83 @@ body.auth-active .tabbar { display:none !important; }
 </div>
 
 <!-- Manual Trade Modal -->
-<div id="tradeModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);align-items:center;justify-content:center">
-  <div style="background:var(--surface);border-radius:22px;width:min(400px,92vw);max-height:92vh;overflow-y:auto;padding:24px;position:relative;box-shadow:0 24px 64px rgba(0,0,0,0.4)">
-    <button onclick="closeTradeModal()" style="position:absolute;top:16px;right:16px;background:var(--surface2);border:none;cursor:pointer;color:var(--text3);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;padding-right:36px">
-      <img id="tmLogo" src="" style="width:46px;height:46px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">
-      <div>
-        <div id="tmSymbol" style="font-size:19px;font-weight:800;color:var(--text);letter-spacing:-0.3px"></div>
-        <div id="tmPrice" style="font-size:13px;color:var(--text3);margin-top:2px"></div>
+<div id="tradeModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeTradeModal()">
+  <div style="background:var(--surface);border-radius:24px 24px 0 0;width:min(480px,100vw);max-height:92vh;overflow-y:auto;padding:20px 20px 36px;position:relative">
+    <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
+    <!-- Header: logo + nome + prezzo + sparkline -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <img id="tmLogo" src="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <span id="tmSymbol" style="font-size:17px;font-weight:800;color:var(--text)"></span>
+          <span id="tmCoinName" style="font-size:12px;color:var(--text3);font-weight:500"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;margin-top:3px">
+          <span id="tmPriceLabel" style="font-size:14px;font-weight:700;color:var(--text)"></span>
+          <span id="tmChangeLabel" style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px"></span>
+        </div>
       </div>
+      <div id="tmSparkline" style="flex-shrink:0"></div>
     </div>
+    <!-- Exchange -->
     <div style="margin-bottom:16px">
-      <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.5px">Exchange</label>
-      <select id="tmExchange" onchange="tmExchangeChanged()" style="width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:500;outline:none">
+      <select id="tmExchange" onchange="tmExchangeChanged()" style="width:100%;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;font-weight:500;outline:none">
         <option value="revx">Revolut X</option>
         <option value="coinbase">Coinbase</option>
       </select>
     </div>
+    <!-- Importo -->
     <div style="margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
-        <label style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">Importo</label>
-        <span id="tmAmtLabel" style="font-size:14px;font-weight:700;color:var(--blue)">$50</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:13px;font-weight:600;color:var(--text2)">Importo per trade</span>
+        <span id="tmBalanceLabel" style="font-size:12px;color:var(--text3)"></span>
       </div>
-      <input id="tmAmount" type="range" min="10" max="500" value="50" step="5" oninput="tmSliderSync()" style="width:100%;accent-color:var(--blue);cursor:pointer">
-      <input id="tmAmountInput" type="number" min="1" max="9999" value="50" placeholder="USDT" oninput="tmInputSync()" style="width:100%;margin-top:10px;padding:10px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;outline:none;box-sizing:border-box">
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px">
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.5px">Stop Loss</label>
-        <div style="position:relative">
-          <input id="tmSL" type="number" min="0.1" max="50" step="0.1" value="2" oninput="tmUpdatePrices()" style="width:100%;padding:10px 26px 10px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;outline:none;box-sizing:border-box">
-          <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text3);pointer-events:none">%</span>
-        </div>
-        <div id="tmSLPrice" style="font-size:11px;font-weight:600;color:var(--red);margin-top:5px;min-height:16px"></div>
+      <div style="display:flex;gap:7px;margin-bottom:11px">
+        <button onclick="tmSetAmount(100)" class="tm-amt-btn" data-amt="100" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s">$100</button>
+        <button onclick="tmSetAmount(250)" class="tm-amt-btn" data-amt="250" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s">$250</button>
+        <button onclick="tmSetAmount(500)" class="tm-amt-btn" data-amt="500" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s">$500</button>
+        <button onclick="tmSetAmountMax()" class="tm-amt-btn" data-amt="max" style="flex:1;padding:9px 0;border-radius:10px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s">Max</button>
       </div>
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text3);display:block;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.5px">Take Profit</label>
-        <div style="position:relative">
-          <input id="tmTP" type="number" min="0.1" max="200" step="0.1" value="4" oninput="tmUpdatePrices()" style="width:100%;padding:10px 26px 10px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;outline:none;box-sizing:border-box">
-          <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text3);pointer-events:none">%</span>
-        </div>
-        <div id="tmTPPrice" style="font-size:11px;font-weight:600;color:var(--green);margin-top:5px;min-height:16px"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:14px;border:1.5px solid var(--border);background:var(--surface2)">
+        <span style="font-size:15px;font-weight:600;color:var(--text3)">$</span>
+        <input id="tmAmountInput" type="number" min="1" max="99999" step="1" value="500" oninput="tmAmountChanged()" style="flex:1;background:none;border:none;outline:none;font-size:18px;font-weight:700;color:var(--text);padding:0;min-width:0">
       </div>
     </div>
-    <button id="tmExecuteBtn" onclick="executeManualTrade()" style="width:100%;padding:15px;border-radius:14px;background:var(--blue);border:none;color:#fff;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.2px;transition:opacity 0.15s">Acquista</button>
+    <!-- SL / TP cards -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div onclick="tmToggleEdit('sl')" style="background:rgba(239,68,68,0.08);border-radius:16px;padding:13px 12px;cursor:pointer;border:1.5px solid rgba(239,68,68,0.12)">
+        <div style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:9px">Stop Loss</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+          <div id="tmSLPill" style="background:var(--red);color:#fff;border-radius:20px;padding:5px 10px;font-size:13px;font-weight:700;white-space:nowrap">−2.5%</div>
+          <div id="tmSLPrice" style="font-size:11px;color:var(--text3);font-weight:600;text-align:right"></div>
+        </div>
+        <input id="tmSL" type="number" min="0.1" max="50" step="0.1" value="2.5" oninput="tmUpdateSummary()" onclick="event.stopPropagation()" onblur="tmHideEdit('sl')" style="display:none;width:100%;margin-top:9px;padding:6px 10px;border-radius:8px;border:1.5px solid var(--red);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;outline:none;box-sizing:border-box">
+      </div>
+      <div onclick="tmToggleEdit('tp')" style="background:rgba(34,197,94,0.08);border-radius:16px;padding:13px 12px;cursor:pointer;border:1.5px solid rgba(34,197,94,0.12)">
+        <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:9px">Take Profit</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+          <div id="tmTPPill" style="background:var(--green);color:#fff;border-radius:20px;padding:5px 10px;font-size:13px;font-weight:700;white-space:nowrap">+8.0%</div>
+          <div id="tmTPPrice" style="font-size:11px;color:var(--text3);font-weight:600;text-align:right"></div>
+        </div>
+        <input id="tmTP" type="number" min="0.1" max="200" step="0.1" value="8" oninput="tmUpdateSummary()" onclick="event.stopPropagation()" onblur="tmHideEdit('tp')" style="display:none;width:100%;margin-top:9px;padding:6px 10px;border-radius:8px;border:1.5px solid var(--green);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;outline:none;box-sizing:border-box">
+      </div>
+    </div>
+    <!-- Summary -->
+    <div style="background:var(--surface2);border-radius:14px;padding:14px 16px;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:13px;color:var(--text3)">Quantità stimata</span>
+        <span id="tmQtyEst" style="font-size:13px;font-weight:600;color:var(--text)"></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text3)">Commissione</span>
+        <span id="tmFeeEst" style="font-size:13px;font-weight:600;color:var(--text3)"></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px">
+        <span style="font-size:14px;font-weight:700;color:var(--text)">Costo totale</span>
+        <span id="tmTotalEst" style="font-size:14px;font-weight:700;color:var(--text)"></span>
+      </div>
+    </div>
+    <button id="tmExecuteBtn" onclick="executeManualTrade()" style="width:100%;padding:16px;border-radius:16px;background:#22c55e;border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:0.2px;transition:opacity 0.15s">Conferma acquisto</button>
     <div id="tmError" style="margin-top:10px;font-size:12px;color:var(--red);text-align:center;display:none"></div>
   </div>
 </div>
@@ -6051,24 +6082,37 @@ async function scanToggleStar(sym) {
 }
 
 // ── MANUAL TRADE MODAL ────────────────────────────────────────────────────────
-let _tmSymbol = '';
-let _tmPrice  = 0;
+let _tmSymbol  = '';
+let _tmPrice   = 0;
+let _tmBalance = 0;
 
 function openTradeModal(sym, price) {
   _tmSymbol = sym;
   _tmPrice  = price;
-  renderTradeExchangeOptions();
   const base = sym.replace('USDT', '');
   const logoEl = document.getElementById('tmLogo');
   logoEl.style.display = '';
   logoEl.src = getLogo(sym);
-  document.getElementById('tmSymbol').textContent  = base + ' / USDT';
-  document.getElementById('tmPrice').textContent   = 'Prezzo: ' + fmtPrice(price);
+  document.getElementById('tmSymbol').textContent   = base;
+  document.getElementById('tmCoinName').textContent = getCoinName(sym);
+  document.getElementById('tmPriceLabel').textContent = fmtPrice(price);
+  const coin = mktData.find(c => c.symbol === sym);
+  const chg  = coin ? (coin.change24h || 0) : 0;
+  const chgEl = document.getElementById('tmChangeLabel');
+  chgEl.textContent       = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+  chgEl.style.background  = chg >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+  chgEl.style.color       = chg >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('tmSparkline').innerHTML = coin
+    ? renderSparkline(coin.sparkline || [], chg >= 0 ? 'var(--green)' : 'var(--red)') : '';
   document.getElementById('tmError').style.display = 'none';
   const btn = document.getElementById('tmExecuteBtn');
   btn.disabled    = false;
-  btn.textContent = 'Acquista';
-  tmUpdatePrices();
+  btn.textContent = 'Conferma acquisto';
+  document.getElementById('tmAmountInput').value = 500;
+  document.getElementById('tmSL').style.display  = 'none';
+  document.getElementById('tmTP').style.display  = 'none';
+  renderTradeExchangeOptions();
+  tmUpdateSummary();
   document.getElementById('tradeModal').style.display = 'flex';
   tmExchangeChanged();
   if (_tmPriceInterval) clearInterval(_tmPriceInterval);
@@ -6104,15 +6148,46 @@ async function tmFetchPrice() {
       _tmPrice = d.price;
       const srcLabel = { revx: 'RevX', coinbase: 'Coinbase', binance: 'Binance' };
       const src = d.source === 'binance_fallback' ? 'Binance' : (srcLabel[d.exchange] || d.exchange || '');
-      document.getElementById('tmPrice').textContent = 'Prezzo: ' + fmtPrice(_tmPrice) + (src ? ` · ${src}` : '');
-      tmUpdatePrices();
+      document.getElementById('tmPriceLabel').textContent = fmtPrice(_tmPrice) + (src ? ` · ${src}` : '');
+      tmUpdateSummary();
+    }
+  } catch (_) {}
+}
+
+async function tmFetchBalance() {
+  const exchange = document.getElementById('tmExchange')?.value;
+  const lbl = document.getElementById('tmBalanceLabel');
+  if (!lbl) return;
+  lbl.textContent = '';
+  _tmBalance = 0;
+  if (_plan === 'free') return;
+  try {
+    if (exchange === 'coinbase') {
+      const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
+      const d = await r.json();
+      if (d.ok) {
+        const qb = d.quote_balances || {};
+        _tmBalance = parseFloat(qb.USD || qb.USDC || qb.EUR || 0);
+        lbl.textContent = '$' + _tmBalance.toFixed(2) + ' disponibili';
+      }
+    } else {
+      const r = await fetch(API + '/test_revx', { headers: authHeaders() });
+      const d = await r.json();
+      if (d.ok) {
+        const usd = d.balances?.find(b => b.currency === 'USD' || b.currency === 'USDC');
+        const eur = d.balances?.find(b => b.currency === 'EUR');
+        const best = usd || eur;
+        _tmBalance = best ? parseFloat(best.available) : 0;
+        lbl.textContent = '$' + _tmBalance.toFixed(2) + ' disponibili';
+      }
     }
   } catch (_) {}
 }
 
 async function tmExchangeChanged() {
-  document.getElementById('tmPrice').textContent = 'Caricamento...';
-  await tmFetchPrice();
+  document.getElementById('tmPriceLabel').textContent = 'Caricamento...';
+  await Promise.all([tmFetchPrice(), tmFetchBalance()]);
+  tmUpdateSummary();
 }
 
 function closeTradeModal() {
@@ -6120,36 +6195,89 @@ function closeTradeModal() {
   if (_tmPriceInterval) { clearInterval(_tmPriceInterval); _tmPriceInterval = null; }
 }
 
-function tmSliderSync() {
-  const v = document.getElementById('tmAmount').value;
-  document.getElementById('tmAmountInput').value     = v;
-  document.getElementById('tmAmtLabel').textContent  = '$' + v;
+function tmSetAmount(amount) {
+  document.getElementById('tmAmountInput').value = amount;
+  document.querySelectorAll('.tm-amt-btn').forEach(btn => {
+    const active = String(btn.dataset.amt) === String(amount);
+    btn.style.background  = active ? 'var(--accent)' : 'var(--surface2)';
+    btn.style.color       = active ? '#fff' : 'var(--text2)';
+    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+  });
+  tmUpdateSummary();
 }
 
-function tmInputSync() {
-  const v = parseFloat(document.getElementById('tmAmountInput').value) || 50;
-  document.getElementById('tmAmount').value          = Math.min(v, 500);
-  document.getElementById('tmAmtLabel').textContent  = '$' + v;
+function tmSetAmountMax() {
+  const max = _tmBalance > 0 ? Math.floor(_tmBalance) : 500;
+  document.getElementById('tmAmountInput').value = max;
+  document.querySelectorAll('.tm-amt-btn').forEach(btn => {
+    const active = btn.dataset.amt === 'max';
+    btn.style.background  = active ? 'var(--accent)' : 'var(--surface2)';
+    btn.style.color       = active ? '#fff' : 'var(--text2)';
+    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+  });
+  tmUpdateSummary();
 }
 
-function tmUpdatePrices() {
-  const sl = parseFloat(document.getElementById('tmSL').value) || 2;
-  const tp = parseFloat(document.getElementById('tmTP').value) || 4;
-  document.getElementById('tmSLPrice').textContent = 'SL ' + fmtPrice(_tmPrice * (1 - sl / 100));
-  document.getElementById('tmTPPrice').textContent = 'TP ' + fmtPrice(_tmPrice * (1 + tp / 100));
+function tmAmountChanged() {
+  const val = parseFloat(document.getElementById('tmAmountInput').value);
+  document.querySelectorAll('.tm-amt-btn').forEach(btn => {
+    const amt    = btn.dataset.amt;
+    const active = amt !== 'max' && parseFloat(amt) === val;
+    btn.style.background  = active ? 'var(--accent)' : 'var(--surface2)';
+    btn.style.color       = active ? '#fff' : 'var(--text2)';
+    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+  });
+  tmUpdateSummary();
+}
+
+function tmToggleEdit(type) {
+  const input    = document.getElementById(type === 'sl' ? 'tmSL' : 'tmTP');
+  const isHidden = input.style.display === 'none' || !input.style.display;
+  if (isHidden) { input.style.display = 'block'; input.focus(); input.select(); }
+  else          { tmHideEdit(type); }
+}
+
+function tmHideEdit(type) {
+  document.getElementById(type === 'sl' ? 'tmSL' : 'tmTP').style.display = 'none';
+  tmUpdateSummary();
+}
+
+function tmUpdateSummary() {
+  const sl       = parseFloat(document.getElementById('tmSL').value) || 2.5;
+  const tp       = parseFloat(document.getElementById('tmTP').value) || 8;
+  const amount   = parseFloat(document.getElementById('tmAmountInput').value) || 0;
+  const exchange = document.getElementById('tmExchange')?.value || 'revx';
+  const base     = _tmSymbol.replace('USDT', '');
+
+  const slPill = document.getElementById('tmSLPill');
+  const tpPill = document.getElementById('tmTPPill');
+  if (slPill) slPill.textContent = '−' + sl.toFixed(1) + '%';
+  if (tpPill) tpPill.textContent = '+' + tp.toFixed(1) + '%';
+
+  const slPriceEl = document.getElementById('tmSLPrice');
+  const tpPriceEl = document.getElementById('tmTPPrice');
+  if (slPriceEl) slPriceEl.textContent = _tmPrice > 0 ? fmtPrice(_tmPrice * (1 - sl / 100)) : '';
+  if (tpPriceEl) tpPriceEl.textContent = _tmPrice > 0 ? fmtPrice(_tmPrice * (1 + tp / 100)) : '';
+
+  const feeRate = exchange === 'coinbase' ? 0.012 : exchange === 'revx' ? 0.0009 : 0.001;
+  const fee = amount * feeRate;
+  const qty = _tmPrice > 0 ? amount / _tmPrice : 0;
+  const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
+  document.getElementById('tmQtyEst').textContent   = qty > 0    ? qtyFmt + ' ' + base   : '—';
+  document.getElementById('tmFeeEst').textContent   = amount > 0 ? '$' + fee.toFixed(2)   : '—';
+  document.getElementById('tmTotalEst').textContent = amount > 0 ? '$' + (amount + fee).toFixed(2) : '—';
 }
 
 async function executeManualTrade() {
-  const btn    = document.getElementById('tmExecuteBtn');
-  const errEl  = document.getElementById('tmError');
-  const amount = parseFloat(document.getElementById('tmAmountInput').value)
-              || parseFloat(document.getElementById('tmAmount').value);
-  const sl       = parseFloat(document.getElementById('tmSL').value) || 2;
-  const tp       = parseFloat(document.getElementById('tmTP').value) || 4;
+  const btn      = document.getElementById('tmExecuteBtn');
+  const errEl    = document.getElementById('tmError');
+  const amount   = parseFloat(document.getElementById('tmAmountInput').value);
+  const sl       = parseFloat(document.getElementById('tmSL').value) || 2.5;
+  const tp       = parseFloat(document.getElementById('tmTP').value) || 8;
   const exchange = document.getElementById('tmExchange').value;
   if (!amount || amount <= 0) {
-    errEl.textContent    = 'Importo non valido';
-    errEl.style.display  = 'block';
+    errEl.textContent   = 'Importo non valido';
+    errEl.style.display = 'block';
     return;
   }
   btn.disabled    = true;
@@ -6163,25 +6291,22 @@ async function executeManualTrade() {
     });
     const data = await r.json();
     if (r.ok && data.ok) {
-      const _sl  = parseFloat(document.getElementById('tmSL').value) || 2;
-      const _tp  = parseFloat(document.getElementById('tmTP').value) || 4;
-      const _amt = parseFloat(document.getElementById('tmAmountInput').value) || amount;
       closeTradeModal();
       await poll();
       _newTradeCount++;
       updateStoricoBadge();
-      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, _sl, _tp, _amt, data.exchange || exchange);
+      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, sl, tp, amount, data.exchange || exchange);
     } else {
       errEl.textContent   = data.detail || data.error || 'Errore esecuzione ordine';
       errEl.style.display = 'block';
       btn.disabled        = false;
-      btn.textContent     = 'Acquista';
+      btn.textContent     = 'Conferma acquisto';
     }
   } catch (_) {
     errEl.textContent   = 'Errore di rete';
     errEl.style.display = 'block';
     btn.disabled        = false;
-    btn.textContent     = 'Acquista';
+    btn.textContent     = 'Conferma acquisto';
   }
 }
 
