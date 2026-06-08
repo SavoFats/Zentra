@@ -187,7 +187,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:20px; h
 input[type=number] { width:100%; background:var(--surface2); border:1.5px solid var(--border); border-radius:var(--radius-sm); padding:13px 14px; color:var(--text); font-size:16px; font-weight:600; font-family:var(--sans); transition:border-color 0.15s; }
 input[type=number]:focus { outline:none; border-color:var(--blue); }
 input[type=number]:disabled { opacity:0.5; cursor:not-allowed; }
-#tmAmountInput { background:transparent !important; border:none !important; box-shadow:none !important; padding:0 !important; border-radius:0 !important; -webkit-appearance:none; outline:none !important; }
+#tmAmountInput { background:transparent !important; border:none !important; box-shadow:none !important; padding:0 !important; border-radius:0 !important; -webkit-appearance:none; outline:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
 #tmAmountInput:focus { border:none !important; box-shadow:none !important; }
 
 /* ── EMA TOGGLE ── */
@@ -2278,7 +2278,7 @@ body.auth-active .tabbar { display:none !important; }
 
 <!-- Manual Trade Modal -->
 <div id="tradeModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeTradeModal()">
-  <div style="background:var(--surface);border-radius:24px 24px 0 0;width:min(480px,100vw);max-height:92vh;overflow-y:auto;padding:20px 20px 36px;position:relative">
+  <div style="background:rgba(255,255,255,0.97);border-radius:24px 24px 0 0;width:min(480px,100vw);max-height:92vh;overflow-y:auto;padding:20px 20px 36px;position:relative">
     <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
     <!-- Header: logo + nome + prezzo + sparkline -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
