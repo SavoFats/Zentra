@@ -2316,7 +2316,7 @@ body.auth-active .tabbar { display:none !important; }
       </div>
       <div style="display:flex;align-items:baseline;gap:6px;padding:4px 0 14px;border-bottom:1.5px solid var(--border)">
         <span style="font-size:22px;font-weight:500;color:var(--text3)">$</span>
-        <input id="tmAmountInput" type="number" min="1" max="99999" step="1" value="500" inputmode="decimal" oninput="tmAmountChanged()" style="width:100%;font-size:28px;font-weight:700;color:var(--text)">
+        <input id="tmAmountInput" type="text" inputmode="decimal" value="500" oninput="tmAmountChanged()" style="width:100%;font-size:28px;font-weight:700;color:var(--text)">
       </div>
     </div>
     <!-- SL / TP pill rows -->
@@ -2327,7 +2327,7 @@ body.auth-active .tabbar { display:none !important; }
           <span id="tmSLPill" style="font-size:15px;font-weight:700;color:var(--red)">−2.5%</span>
           <span id="tmSLPrice" style="font-size:12px;color:var(--text3);font-weight:500"></span>
         </div>
-        <input id="tmSL" type="number" min="0.1" max="50" step="0.1" value="2.5" inputmode="decimal" oninput="tmSanitizeNum(this);tmUpdateSummary()" onclick="event.stopPropagation()" onblur="tmHideEdit('sl')" style="display:none;width:100%;padding:9px 13px;border-radius:50px;border:1.5px solid var(--red) !important;background:rgba(239,68,68,0.06) !important;font-size:15px;font-weight:700;color:var(--red);outline:none;box-sizing:border-box;text-align:center">
+        <input id="tmSL" type="text" inputmode="decimal" value="2.5" oninput="tmSanitizeNum(this);tmUpdateSummary()" onclick="event.stopPropagation()" onblur="tmHideEdit('sl')" style="display:none;width:100%;padding:9px 13px;border-radius:50px;border:1.5px solid var(--red) !important;background:rgba(239,68,68,0.06) !important;font-size:15px;font-weight:700;color:var(--red);outline:none;box-sizing:border-box;text-align:center">
       </div>
       <div onclick="tmToggleEdit('tp')" style="cursor:pointer">
         <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:7px">Take Profit</div>
@@ -2335,7 +2335,7 @@ body.auth-active .tabbar { display:none !important; }
           <span id="tmTPPill" style="font-size:15px;font-weight:700;color:var(--green)">+8.0%</span>
           <span id="tmTPPrice" style="font-size:12px;color:var(--text3);font-weight:500"></span>
         </div>
-        <input id="tmTP" type="number" min="0.1" max="200" step="0.1" value="8" inputmode="decimal" oninput="tmSanitizeNum(this);tmUpdateSummary()" onclick="event.stopPropagation()" onblur="tmHideEdit('tp')" style="display:none;width:100%;padding:9px 13px;border-radius:50px;border:1.5px solid var(--green) !important;background:rgba(34,197,94,0.06) !important;font-size:15px;font-weight:700;color:var(--green);outline:none;box-sizing:border-box;text-align:center">
+        <input id="tmTP" type="text" inputmode="decimal" value="8" oninput="tmSanitizeNum(this);tmUpdateSummary()" onclick="event.stopPropagation()" onblur="tmHideEdit('tp')" style="display:none;width:100%;padding:9px 13px;border-radius:50px;border:1.5px solid var(--green) !important;background:rgba(34,197,94,0.06) !important;font-size:15px;font-weight:700;color:var(--green);outline:none;box-sizing:border-box;text-align:center">
       </div>
     </div>
     <!-- Summary -->
@@ -6221,15 +6221,19 @@ function tmSetAmountMax() {
 }
 
 function tmSanitizeNum(el) {
-  let v = el.value.replace(/[^0-9.]/g, '');
+  let v = el.value.replace(/,/g, '.').replace(/[^0-9.]/g, '');
   const dot = v.indexOf('.');
   if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '');
   el.value = v;
 }
 
+function tmParseNum(id) {
+  return parseFloat((document.getElementById(id).value || '').replace(',', '.')) || 0;
+}
+
 function tmAmountChanged() {
   tmSanitizeNum(document.getElementById('tmAmountInput'));
-  const val = parseFloat(document.getElementById('tmAmountInput').value);
+  const val = tmParseNum('tmAmountInput');
   const match = [100, 250, 500].includes(val) ? val : null;
   _tmHighlightBtn(match);
   tmUpdateSummary();
@@ -6258,9 +6262,9 @@ function tmHideEdit(type) {
 }
 
 function tmUpdateSummary() {
-  const sl       = parseFloat(document.getElementById('tmSL').value) || 2.5;
-  const tp       = parseFloat(document.getElementById('tmTP').value) || 8;
-  const amount   = parseFloat(document.getElementById('tmAmountInput').value) || 0;
+  const sl       = tmParseNum('tmSL')   || 2.5;
+  const tp       = tmParseNum('tmTP')   || 8;
+  const amount   = tmParseNum('tmAmountInput');
   const exchange = document.getElementById('tmExchange')?.value || 'revx';
   const base     = _tmSymbol.replace('USDT', '');
 
@@ -6286,9 +6290,9 @@ function tmUpdateSummary() {
 async function executeManualTrade() {
   const btn      = document.getElementById('tmExecuteBtn');
   const errEl    = document.getElementById('tmError');
-  const amount   = parseFloat(document.getElementById('tmAmountInput').value);
-  const sl       = parseFloat(document.getElementById('tmSL').value) || 2.5;
-  const tp       = parseFloat(document.getElementById('tmTP').value) || 8;
+  const amount   = tmParseNum('tmAmountInput');
+  const sl       = tmParseNum('tmSL') || 2.5;
+  const tp       = tmParseNum('tmTP') || 8;
   const exchange = document.getElementById('tmExchange').value;
 
   const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
