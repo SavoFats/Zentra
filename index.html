@@ -6473,12 +6473,11 @@ async function _tdFetchChart(t, color, isWin, chartEl) {
     if (!entryMs || !exitMs || exitMs <= entryMs) { chartEl.style.display = 'none'; return; }
     const durMin = (exitMs - entryMs) / 60000;
     const interval = durMin < 30 ? '1m' : durMin < 120 ? '5m' : durMin < 480 ? '15m' : durMin < 1440 ? '1h' : '4h';
-    const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(t.symbol)}&interval=${interval}&startTime=${entryMs}&endTime=${exitMs}&limit=200`;
-    const resp = await fetch(url);
+    const resp = await fetch(`/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`);
     if (!resp.ok) throw new Error();
-    const data = await resp.json();
-    if (!Array.isArray(data) || data.length < 2) { chartEl.style.display = 'none'; return; }
-    const closes = data.map(c => parseFloat(c[4]));
+    const json = await resp.json();
+    const closes = json.closes;
+    if (!Array.isArray(closes) || closes.length < 2) { chartEl.style.display = 'none'; return; }
     chartEl.innerHTML = _tdRenderChart(closes, color, isWin);
   } catch(e) {
     chartEl.style.display = 'none';

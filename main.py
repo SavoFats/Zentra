@@ -4080,6 +4080,31 @@ async def get_trades_history(request: Request, user_id: int = Depends(get_curren
         )
     return {"trades": [dict(r) for r in rows]}
 
+# ── KLINES HISTORY PROXY ───────────────────────────────────────────────────────
+
+@app.get("/klines_history")
+async def klines_history(request: Request, symbol: str, start: int, end: int, interval: str = "1m",
+                          user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=60, window=60, key_suffix="klines_history")
+    allowed_intervals = {"1m","3m","5m","15m","30m","1h","2h","4h","6h","12h","1d"}
+    if interval not in allowed_intervals:
+        interval = "1m"
+    symbol = symbol.upper().strip()
+    if not symbol.isalnum():
+        return {"closes": []}
+    params = {"symbol": symbol, "interval": interval, "startTime": start, "endTime": end, "limit": 200}
+    async with httpx.AsyncClient(timeout=8) as client:
+        for base in (BINANCE_BASE, BINANCE_US_BASE):
+            try:
+                r = await client.get(f"{base}/api/v3/klines", params=params)
+                if r.status_code == 200:
+                    data = r.json()
+                    if isinstance(data, list):
+                        return {"closes": [float(c[4]) for c in data]}
+            except Exception:
+                continue
+    return {"closes": []}
+
 # ── TRADING ENDPOINTS ──────────────────────────────────────────────────────────
 
 @app.get("/status")
