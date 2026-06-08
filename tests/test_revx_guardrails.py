@@ -1418,6 +1418,60 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(conn.execute_args, ("Savo Fats", "savo_fats", 5))
         self.assertEqual(result, {"ok": True, "username": "Savo Fats"})
 
+    def test_stripe_subscription_plan_prefers_price_id_over_metadata(self):
+        main = self.main
+        original_pro = main.STRIPE_PRO_PRICE_ID
+        original_founder = main.STRIPE_FOUNDER_PRICE_ID
+        main.STRIPE_PRO_PRICE_ID = "price_pro"
+        main.STRIPE_FOUNDER_PRICE_ID = "price_founder"
+        try:
+            sub = {
+                "metadata": {"plan": "pro"},
+                "items": {"data": [{"price": {"id": "price_founder"}}]},
+            }
+            self.assertEqual(main.plan_from_stripe_subscription(sub), "founder")
+
+            sub = {
+                "metadata": {"plan": "founder"},
+                "items": {"data": [{"price": {"id": "price_pro"}}]},
+            }
+            self.assertEqual(main.plan_from_stripe_subscription(sub), "pro")
+        finally:
+            main.STRIPE_PRO_PRICE_ID = original_pro
+            main.STRIPE_FOUNDER_PRICE_ID = original_founder
+
+    def test_login_uses_email_not_display_name(self):
+        main = self.main
+
+        class Conn:
+            def __init__(self):
+                self.sql = ""
+                self.args = None
+
+            async def fetchrow(self, sql, *args):
+                self.sql = sql
+                self.args = args
+                return None
+
+        conn = Conn()
+        original_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        main.db_pool = FakePool(conn)
+        main.check_rate_limit = lambda *args, **kwargs: None
+        body = types.SimpleNamespace(email="", username="Savo Fats", password="password123")
+        try:
+            with self.assertRaises(main.HTTPException) as ctx:
+                asyncio.run(main.login(body, request=object()))
+        finally:
+            main.db_pool = original_pool
+            main.check_rate_limit = original_rate_limit
+
+        self.assertEqual(ctx.exception.status_code, 401)
+        where_clause = conn.sql.lower().split(" where ", 1)[1]
+        self.assertNotIn("display_name", where_clause)
+        self.assertIn("lower(email)", where_clause)
+        self.assertEqual(conn.args, ("savo fats",))
+
 
 if __name__ == "__main__":
     unittest.main()

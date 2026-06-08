@@ -7079,6 +7079,23 @@ let _aiThreads = [];
 let _aiActiveThreadId = '';
 let _aiChartSeq = 0;
 const AI_THREADS_KEY = 'zentra_ai_threads_v1';
+const AI_ACTIVE_THREAD_KEY = 'zentra_ai_active_thread_v1';
+
+function _aiStorageScope() {
+  return (_email || localStorage.getItem('ca_email') || _username || localStorage.getItem('ca_username') || 'anon')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.@-]/g, '_');
+}
+
+function _aiThreadsKey() {
+  return AI_THREADS_KEY + ':' + _aiStorageScope();
+}
+
+function _aiActiveThreadKey() {
+  return AI_ACTIVE_THREAD_KEY + ':' + _aiStorageScope();
+}
 
 function updateAIUsageFromPayload(d) {
   if (!d) return;
@@ -7182,18 +7199,18 @@ function _aiNowIso() {
 
 function _aiLoadThreads() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(AI_THREADS_KEY) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(_aiThreadsKey()) || '[]');
     _aiThreads = Array.isArray(parsed) ? parsed.filter(t => t && t.id) : [];
   } catch (_) {
     _aiThreads = [];
   }
   _aiThreads.sort((a,b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-  _aiActiveThreadId = localStorage.getItem('zentra_ai_active_thread') || (_aiThreads[0] && _aiThreads[0].id) || '';
+  _aiActiveThreadId = localStorage.getItem(_aiActiveThreadKey()) || (_aiThreads[0] && _aiThreads[0].id) || '';
 }
 
 function _aiSaveThreads() {
-  localStorage.setItem(AI_THREADS_KEY, JSON.stringify(_aiThreads.slice(0, 30)));
-  if (_aiActiveThreadId) localStorage.setItem('zentra_ai_active_thread', _aiActiveThreadId);
+  localStorage.setItem(_aiThreadsKey(), JSON.stringify(_aiThreads.slice(0, 30)));
+  if (_aiActiveThreadId) localStorage.setItem(_aiActiveThreadKey(), _aiActiveThreadId);
 }
 
 async function _aiSyncThread(threadId) {
@@ -7379,7 +7396,7 @@ function openAIThread(id = '', focusInput = false) {
 
 function startNewAIThread() {
   _aiActiveThreadId = '';
-  localStorage.removeItem('zentra_ai_active_thread');
+  localStorage.removeItem(_aiActiveThreadKey());
   showTab('analysis');
   renderAIThread();
   renderAIHistory();

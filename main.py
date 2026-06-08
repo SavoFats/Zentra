@@ -129,15 +129,17 @@ def ai_daily_limit_for_plan(plan: str):
     return FREE_AI_ANALYSES_PER_DAY
 
 def plan_from_stripe_subscription(sub: dict, fallback: str = "pro") -> str:
-    plan = normalize_plan((sub.get("metadata") or {}).get("plan") or fallback)
-    if plan in PAID_PLANS:
-        return plan
     try:
         price_id = sub["items"]["data"][0]["price"]["id"]
     except Exception:
         price_id = ""
     if price_id and STRIPE_FOUNDER_PRICE_ID and price_id == STRIPE_FOUNDER_PRICE_ID:
         return "founder"
+    if price_id and STRIPE_PRO_PRICE_ID and price_id == STRIPE_PRO_PRICE_ID:
+        return "pro"
+    plan = normalize_plan((sub.get("metadata") or {}).get("plan") or fallback)
+    if plan in PAID_PLANS:
+        return plan
     return "pro"
 
 def restore_debug_log(msg: str):
@@ -3790,16 +3792,16 @@ async def login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=500, detail="Database non disponibile")
     identifier = _auth_identifier(req)
     if not identifier:
-        raise HTTPException(status_code=400, detail="Inserisci email o username")
+        raise HTTPException(status_code=400, detail="Inserisci email")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, password_hash, revx_key_id, display_name, username, email FROM users WHERE username = $1 OR email = $1 OR LOWER(display_name) = LOWER($1)",
+            "SELECT id, password_hash, revx_key_id, display_name, username, email FROM users WHERE LOWER(email) = LOWER($1)",
             identifier
         )
     if not row or not row["password_hash"]:
-        raise HTTPException(status_code=401, detail="Username o password errati")
+        raise HTTPException(status_code=401, detail="Email o password errati")
     if not bcrypt.checkpw(req.password.encode(), row["password_hash"].encode()):
-        raise HTTPException(status_code=401, detail="Username o password errati")
+        raise HTTPException(status_code=401, detail="Email o password errati")
     token = create_token(row["id"])
     has_keys = bool(row.get("revx_key_id"))
     dname = row["display_name"] or row["email"] or row["username"] or identifier
