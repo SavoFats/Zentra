@@ -4092,7 +4092,16 @@ async def klines_history(request: Request, symbol: str, start: int, end: int, in
     symbol = symbol.upper().strip()
     if not symbol.isalnum():
         return {"closes": []}
-    params = {"symbol": symbol, "interval": interval, "startTime": start, "endTime": end, "limit": 200}
+    # Symbols stored without quote suffix (e.g. "BTC") — append USDT for Binance
+    known_quotes = ("USDT", "BUSD", "USDC", "BTC", "ETH", "BNB")
+    binance_symbol = symbol if any(symbol.endswith(q) for q in known_quotes) else symbol + "USDT"
+    # Base currency for CryptoCompare
+    fsym = symbol
+    for q in known_quotes:
+        if binance_symbol.endswith(q):
+            fsym = binance_symbol[:-len(q)]
+            break
+    params = {"symbol": binance_symbol, "interval": interval, "startTime": start, "endTime": end, "limit": 200}
     async with httpx.AsyncClient(timeout=8) as client:
         # Binance (best quality, but coins may be delisted)
         for base in (BINANCE_BASE, BINANCE_US_BASE):
@@ -4105,7 +4114,6 @@ async def klines_history(request: Request, symbol: str, start: int, end: int, in
             except Exception:
                 continue
         # CryptoCompare fallback (covers delisted coins too)
-        fsym = symbol[:-4] if symbol.endswith("USDT") else symbol[:-3] if symbol.endswith("BTC") else symbol
         dur_min = (end - start) / 60000
         ep  = "histominute" if dur_min <= 120 else "histohour" if dur_min <= 2880 else "histoday"
         lim = min(200, int(dur_min) + 5) if ep == "histominute" else min(200, int(dur_min / 60) + 2) if ep == "histohour" else min(200, int(dur_min / 1440) + 2)
