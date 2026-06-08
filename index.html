@@ -2621,14 +2621,16 @@ function clearFieldError(inputId, errId) {
 function showLogin()    { document.getElementById('loginCard').style.display=''; document.getElementById('registerCard').style.display='none'; document.getElementById('apiKeysCard').style.display='none'; }
 function showRegister() { document.getElementById('loginCard').style.display='none'; document.getElementById('registerCard').style.display=''; document.getElementById('apiKeysCard').style.display='none'; }
 function showApiKeys()  { document.getElementById('loginCard').style.display='none'; document.getElementById('registerCard').style.display='none'; document.getElementById('apiKeysCard').style.display=''; }
+let _hideAuthTimer = null;
 function hideAuthScreen() {
   const s = document.getElementById('authScreen');
   s.style.opacity = '0';
   s.style.transition = 'opacity 0.2s';
-  setTimeout(() => { s.style.display = 'none'; s.style.opacity = ''; }, 200);
+  _hideAuthTimer = setTimeout(() => { s.style.display = 'none'; s.style.opacity = ''; _hideAuthTimer = null; }, 200);
   document.body.classList.remove('auth-active');
 }
 function showAuthScreen() {
+  if (_hideAuthTimer) { clearTimeout(_hideAuthTimer); _hideAuthTimer = null; }
   const s = document.getElementById('authScreen');
   if (s) { s.style.display = 'flex'; s.style.opacity = '1'; }
   document.body.classList.add('auth-active');
