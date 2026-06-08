@@ -6431,12 +6431,40 @@ async function _tdFetchChart(t, color, isWin, chartEl) {
     if (!entryMs || !exitMs || exitMs <= entryMs) { chartEl.style.display = 'none'; return; }
     const durMin = (exitMs - entryMs) / 60000;
     const interval = durMin < 30 ? '1m' : durMin < 120 ? '5m' : durMin < 480 ? '15m' : durMin < 1440 ? '1h' : '4h';
-    const resp = await fetch(`${API}/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`, { headers: authHeaders() });
-    if (!resp.ok) { chartEl.style.display = 'none'; return; }
-    const json = await resp.json();
-    const closes = json.closes;
-    if (!Array.isArray(closes) || closes.length < 2) { chartEl.style.display = 'none'; return; }
-    chartEl.innerHTML = _tdRenderChart(closes, color, isWin);
+
+    // 1) Backend proxy (server-side Binance fetch, no CORS issues)
+    try {
+      const r = await fetch(`${API}/klines_history?symbol=${encodeURIComponent(t.symbol)}&start=${entryMs}&end=${exitMs}&interval=${interval}`, { headers: authHeaders() });
+      if (r.ok) {
+        const d = await r.json();
+        if (Array.isArray(d.closes) && d.closes.length >= 2) {
+          chartEl.innerHTML = _tdRenderChart(d.closes, color, isWin);
+          return;
+        }
+      }
+    } catch(_) {}
+
+    // 2) CryptoCompare fallback (CORS aperto, funziona su iOS Safari)
+    const fsym = t.symbol.replace(/USDT?$/, '');
+    const ep   = durMin <= 120 ? 'histominute' : durMin <= 2880 ? 'histohour' : 'histoday';
+    const lim  = ep === 'histominute' ? Math.min(200, Math.ceil(durMin) + 5)
+               : ep === 'histohour'   ? Math.min(200, Math.ceil(durMin / 60) + 2)
+               :                        Math.min(200, Math.ceil(durMin / 1440) + 2);
+    const toTs = Math.floor(exitMs / 1000);
+    const r2 = await fetch(`https://min-api.cryptocompare.com/data/v2/${ep}?fsym=${encodeURIComponent(fsym)}&tsym=USD&limit=${lim}&toTs=${toTs}`);
+    if (r2.ok) {
+      const d2 = await r2.json();
+      if (d2.Response === 'Success' && Array.isArray(d2.Data?.Data)) {
+        const entryS = Math.floor(entryMs / 1000);
+        const closes = d2.Data.Data.filter(c => c.time >= entryS && c.close > 0).map(c => c.close);
+        if (closes.length >= 2) {
+          chartEl.innerHTML = _tdRenderChart(closes, color, isWin);
+          return;
+        }
+      }
+    }
+
+    chartEl.style.display = 'none';
   } catch(e) {
     chartEl.style.display = 'none';
   }
