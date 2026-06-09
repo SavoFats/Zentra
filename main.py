@@ -1610,8 +1610,8 @@ def add_log(state: dict, type_: str, label: str, desc: str):
         log.pop()
 
 def update_position_from_external_price(pos: dict, price: float):
-    """Aggiorna prezzi posizione da feed generici, ma non per posizioni reali exchange-specific."""
-    if pos.get("realMode") and pos.get("exchange") in ("coinbase", "revx"):
+    """Aggiorna prezzi posizione da feed generici, ma non per Coinbase real."""
+    if pos.get("realMode") and pos.get("exchange") == "coinbase":
         return
     pos["currentPrice"] = price
     if price > pos.get("highPrice", pos.get("entryPrice", price)):
