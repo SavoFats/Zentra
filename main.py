@@ -3422,33 +3422,16 @@ async def reconcile_coinbase_external_closures(
         for a in accounts
     }
 
+    # Sync qty dal saldo reale — nessuna chiusura automatica
     for pos in list(coinbase_positions):
         if pos not in state.get("positions", []):
             continue
         sym = str(pos.get("symbol") or "").upper()
-        qty = float(pos.get("qty_purchased") or 0.0)
-        if not sym or qty <= 0:
+        if not sym:
             continue
         real_qty = float(bal_map.get(sym, 0.0) or 0.0)
-        if real_qty >= qty * 0.05:
+        if real_qty > 0:
             pos["qty_purchased"] = real_qty
-            continue
-
-        try:
-            await refresh_coinbase_position_price(pos, api_key, api_secret)
-        except Exception:
-            pass
-
-        pos["_already_sold"] = True
-        pos["_sell_type"] = "Esterno Coinbase"
-        add_log(
-            state,
-            "sell",
-            "CHIUSO ESTERNAMENTE",
-            f"{sym} — posizione non trovata su Coinbase (saldo {real_qty:.8f})",
-        )
-        await notify(state, f"{sym} chiuso esternamente su Coinbase")
-        await exit_position(state, pos, "CHIUSO ESTERNAMENTE (Coinbase)", user_id=user_id)
 
 def is_external_imported_position(pos: dict) -> bool:
     """True for positions detected on an exchange but not opened by Zentra."""
@@ -3846,6 +3829,80 @@ async def fetch_coingecko_logos():
     except Exception as e:
         print(f"[CG] Errore fetch loghi: {e}")
 
+async def recover_coinbase_positions(state: dict, user_id: int) -> bool:
+    """Recupera posizioni Coinbase con saldo > 0 non tracciate nel DB dopo un restart."""
+    FIAT = {"USD", "EUR", "GBP", "CHF", "JPY", "USDC", "USDT"}
+    api_key = state.get("coinbase_api_key", "")
+    api_secret = state.get("coinbase_api_secret", "")
+    if not api_key or not api_secret:
+        try:
+            api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+            state["coinbase_api_key"]    = api_key
+            state["coinbase_api_secret"] = api_secret
+        except Exception:
+            return False
+    if not api_key or not api_secret:
+        return False
+    try:
+        accounts = await fetch_coinbase_accounts(api_key, api_secret)
+    except Exception as e:
+        print(f"[RECOVER-CB] User {user_id}: errore fetch accounts: {e}")
+        return False
+    tracked = {p["symbol"].upper() for p in state.get("positions", [])
+               if p.get("exchange") == "coinbase" and p.get("realMode")}
+    recovered = False
+    for acc in accounts:
+        if not isinstance(acc, dict):
+            continue
+        currency = str(acc.get("currency", "")).upper()
+        if not currency or currency in FIAT:
+            continue
+        total = float(acc.get("available", 0) or 0)
+        if total <= 0.001 or currency in tracked:
+            continue
+        entry_price = 0.0
+        product_id = ""
+        for pid in (f"{currency}-USD", f"{currency}-USDC"):
+            try:
+                entry_price = await get_coinbase_live_price(pid, api_key, api_secret)
+                product_id = pid
+                break
+            except Exception:
+                continue
+        if entry_price <= 0:
+            restore_debug_log(f"[RECOVER-CB] User {user_id}: prezzo {currency} non disponibile, skip")
+            continue
+        size_usd = total * entry_price
+        pos = {
+            "symbol": currency, "icon": "",
+            "entryPrice": entry_price, "currentPrice": entry_price,
+            "highPrice": entry_price, "peak_price": entry_price,
+            "size": size_usd, "size_remaining": size_usd, "tp1_hit": False,
+            "entryTime": datetime.utcnow().isoformat() + "Z",
+            "stopPrice": 0.0, "tp1Price": 0.0, "tp2Price": 0.0,
+            "R_pct": 0.0, "atr_5m": 0.0,
+            "realMode": True, "fee_pct": 0.0012,
+            "qty_purchased": total, "exchange": "coinbase", "symbol_pair": product_id,
+            "entry_usd": round(size_usd, 2), "buy_fee_usd": 0.0,
+            "manual": True, "_recovered": True, "_manual_action_required": True,
+        }
+        state["positions"].append(pos)
+        tracked.add(currency)
+        add_log(state, "buy", "POSIZIONE RECUPERATA",
+                f"{currency} — trovata {total:.6f} su Coinbase, non tracciata. Imposta SL/TP.")
+        tg_chat = state.get("telegram_chat_id", "")
+        msg = (f"<b>Posizione recuperata: {currency}</b>\n"
+               f"Trovata {total:.6f} {currency} su Coinbase non tracciata da Zentra.\n"
+               f"Prezzo attuale usato come entry: ${entry_price:.4f}\n"
+               f"<b>Imposta SL/TP dall'app.</b>")
+        if tg_chat:
+            await send_telegram_to(tg_chat, msg)
+        else:
+            await send_telegram(msg)
+        restore_debug_log(f"[RECOVER-CB] User {user_id}: recuperata {currency} {total:.6f} @ ${entry_price:.4f}")
+        recovered = True
+    return recovered
+
 async def recover_revx_positions(state: dict, user_id: int):
     """Recupera posizioni RevX con saldo > 0 non tracciate nel DB dopo un restart."""
     revx_key_id = state.get("revx_key_id", "")
@@ -3950,11 +4007,15 @@ async def restore_sessions_from_db(pool):
 
                 user_sessions[uid] = state
 
-                # Recupera posizioni RevX con saldo > 0 non trovate nel DB
+                # Recupera posizioni non trovate nel DB (RevX + Coinbase)
                 try:
                     await recover_revx_positions(state, uid)
                 except Exception as _rec_err:
-                    print(f"[RECOVER] User {uid}: {_rec_err}")
+                    print(f"[RECOVER-REVX] User {uid}: {_rec_err}")
+                try:
+                    await recover_coinbase_positions(state, uid)
+                except Exception as _rec_err:
+                    print(f"[RECOVER-CB] User {uid}: {_rec_err}")
 
                 n    = len(state.get("positions", []))
                 syms = ", ".join(p.get("symbol", "?") for p in state.get("positions", []))
@@ -3979,28 +4040,28 @@ async def restore_sessions_from_db(pool):
                 import traceback as _tb
                 print(f"[RESTORE] Errore user {uid}: {e}\n{_tb.format_exc()}")
 
-        # Controlla anche utenti con RevX configurato ma senza sessione attiva
+        # Controlla utenti con exchange configurato ma senza sessione attiva
         try:
             async with pool.acquire() as conn:
-                revx_users = await conn.fetch(
-                    "SELECT id, revx_key_id, revx_private_key FROM users "
-                    "WHERE revx_key_id IS NOT NULL AND revx_key_id != ''"
+                all_users = await conn.fetch(
+                    "SELECT id, revx_key_id, revx_private_key, coinbase_api_key, coinbase_api_secret "
+                    "FROM users WHERE (revx_key_id IS NOT NULL AND revx_key_id != '') "
+                    "OR (coinbase_api_key IS NOT NULL AND coinbase_api_key != '')"
                 )
-            for row in revx_users:
+            for row in all_users:
                 uid = row["id"]
                 if uid in user_sessions:
                     continue
-                key_id = decrypt_key(row["revx_key_id"] or "")
-                priv   = decrypt_key(row["revx_private_key"] or "")
-                if not key_id or not priv:
-                    continue
                 try:
                     state = make_session()
-                    state["revx_key_id"]      = key_id
-                    state["revx_private_key"] = priv
+                    state["revx_key_id"]         = decrypt_key(row["revx_key_id"] or "")
+                    state["revx_private_key"]     = decrypt_key(row["revx_private_key"] or "")
+                    state["coinbase_api_key"]     = decrypt_key(row["coinbase_api_key"] or "")
+                    state["coinbase_api_secret"]  = decrypt_key(row["coinbase_api_secret"] or "")
                     user_sessions[uid] = state
-                    found = await recover_revx_positions(state, uid)
-                    if found:
+                    found_revx = await recover_revx_positions(state, uid)
+                    found_cb   = await recover_coinbase_positions(state, uid)
+                    if found_revx or found_cb:
                         await persist_sessions()
                     else:
                         user_sessions.pop(uid, None)
