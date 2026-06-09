@@ -2444,26 +2444,20 @@ let _email     = localStorage.getItem('ca_email') || '';
 let _pendingAuthError = '';
 {
   const authParams = new URLSearchParams(window.location.search);
-  const tokenFromUrl = authParams.get('token');
-  const authError = authParams.get('auth_error');
+  const hashParams = new URLSearchParams(window.location.hash.slice(1));
+  const tokenFromUrl = hashParams.get('token') || authParams.get('token');
+  const authError = hashParams.get('auth_error') || authParams.get('auth_error');
   if (tokenFromUrl) {
     _authToken = tokenFromUrl;
-    _username = authParams.get('username') || _username || 'Zentra user';
-    _email = authParams.get('email') || _email;
+    _username = (hashParams.get('username') || authParams.get('username')) || _username || 'Zentra user';
+    _email = hashParams.get('email') || authParams.get('email') || _email;
     localStorage.setItem('ca_token', _authToken);
     localStorage.setItem('ca_username', _username);
     if (_email) localStorage.setItem('ca_email', _email);
-    authParams.delete('token');
-    authParams.delete('username');
-    authParams.delete('email');
-    authParams.delete('auth_error');
-    const clean = window.location.pathname + (authParams.toString() ? '?' + authParams.toString() : '') + window.location.hash;
-    window.history.replaceState({}, '', clean);
+    window.history.replaceState({}, '', window.location.pathname);
   } else if (authError) {
     _pendingAuthError = authError;
-    authParams.delete('auth_error');
-    const clean = window.location.pathname + (authParams.toString() ? '?' + authParams.toString() : '') + window.location.hash;
-    window.history.replaceState({}, '', clean);
+    window.history.replaceState({}, '', window.location.pathname);
   }
 }
 let _simMode = true;
@@ -4264,6 +4258,7 @@ function resetAgent() {
 }
 
 // ── POLLING ──────────────────────────────────────────────────────────────────
+let _pollFailCount = 0;
 function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
   poll();
@@ -4330,9 +4325,14 @@ async function poll() {
       document.getElementById('stopBtn').disabled = true;
       unlockConfig();
     }
+    _pollFailCount = 0;
     render();
     if (typeof updateAIUsageUI === 'function') updateAIUsageUI();
-  } catch(e) { console.error(e); }
+  } catch(e) {
+    _pollFailCount++;
+    if (_pollFailCount === 3) showToast('Connessione al server persa. Ricontrolla la rete.');
+    console.error(e);
+  }
 }
 
 async function startupSession() {

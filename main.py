@@ -20,7 +20,7 @@ import uvicorn
 import asyncpg
 import bcrypt
 from cryptography.fernet import Fernet
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, quote as _url_quote
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -1687,6 +1687,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
 
     # Determina exchange da usare
     use_revx = state.get("use_revx", False)
+    qty_purchased = 0.0  # real paths set it before returning; sim uses 0.0
 
     if is_real:
         if use_revx:
@@ -3350,7 +3351,9 @@ async def persist_sessions():
     sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
         try:
-            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_exiting", "_stopping")}
+            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_stopping")}
+            if "_exiting" in state_to_save:
+                state_to_save["_exiting"] = list(state_to_save["_exiting"] or [])
             state_json = json.dumps(state_to_save, default=str)
             has_open_positions = bool(state.get("positions"))
             async with db_pool.acquire() as conn:
@@ -3482,7 +3485,12 @@ async def startup():
                         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
                         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
                         PRIMARY KEY(id, user_id)
-                    )
+                    );
+                    CREATE TABLE IF NOT EXISTS revoked_tokens (
+                        token TEXT PRIMARY KEY,
+                        expires_at TIMESTAMP NOT NULL
+                    );
+                    DELETE FROM revoked_tokens WHERE expires_at < NOW()
                 """)
                 # Migrazione colonne fee (idempotente)
                 await conn.execute("""
@@ -3494,6 +3502,10 @@ async def startup():
 
             # Ripristina sessioni attive dopo riavvio
             await restore_sessions_from_db(db_pool)
+            # Ricarica token revocati ancora validi
+            async with db_pool.acquire() as conn:
+                for r in await conn.fetch("SELECT token FROM revoked_tokens WHERE expires_at > NOW()"):
+                    _revoked_tokens.add(r["token"])
 
         except Exception as e:
             print(f"Database error: {e}")
@@ -3610,6 +3622,8 @@ async def restore_sessions_from_db(pool):
             try:
                 state = make_session()
                 state.update(json.loads(row["state_json"]))
+                exiting_raw = state.get("_exiting", [])
+                state["_exiting"] = set(exiting_raw) if isinstance(exiting_raw, list) else set()
                 positions = state.get("positions", [])
 
                 if not positions:
@@ -3815,7 +3829,20 @@ async def register(req: RegisterRequest, request: Request):
 async def logout_user(request: Request):
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
-        _revoked_tokens.add(auth[7:])
+        token = auth[7:]
+        _revoked_tokens.add(token)
+        if db_pool:
+            try:
+                decoded = base64.urlsafe_b64decode(token.encode()).decode()
+                expires_ts = int(decoded.split(":")[1])
+                expires_dt = datetime.utcfromtimestamp(expires_ts)
+                async with db_pool.acquire() as conn:
+                    await conn.execute(
+                        "INSERT INTO revoked_tokens (token, expires_at) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                        token, expires_dt
+                    )
+            except Exception:
+                pass
     return {"ok": True}
 
 @app.delete("/auth/account")
@@ -3952,9 +3979,9 @@ async def google_callback(request: Request, code: str = "", state: str = ""):
             )
             user_id = row["id"]
     token = create_token(user_id)
-    target = with_query_param(redirect_to, "token", token)
-    target = with_query_param(target, "username", name)
-    target = with_query_param(target, "email", email)
+    # Fragment hash: not sent to servers, not logged, not in Referer headers
+    frag = f"token={_url_quote(token)}&username={_url_quote(name)}&email={_url_quote(email)}"
+    target = f"{redirect_to}#{frag}"
     return RedirectResponse(target, status_code=302)
 
 
@@ -4667,6 +4694,18 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         f"Stop: -{max_stop_pct_s:.1f}% | BTC: {btc_filt_s} | MaxHold: {mxh}h | MaxLoss: {mcl}"
     )
     _sessions_starting.discard(user_id)
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    """UPDATE users SET
+                        sessions_today = CASE WHEN last_session_date = CURRENT_DATE THEN sessions_today + 1 ELSE 1 END,
+                        last_session_date = CURRENT_DATE
+                       WHERE id = $1""",
+                    user_id
+                )
+        except Exception:
+            pass
     return {"ok": True}
 
 @app.post("/stop")
