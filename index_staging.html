@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Zentra">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E">
-<link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Zentra&quot;,&quot;short_name&quot;:&quot;Zentra&quot;,&quot;start_url&quot;:&quot;/&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%230052ff&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230052ff'/%3E%3Cpolyline points='24,130 60,95 88,115 120,65 156,80' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='156' cy='80' r='10' fill='white'/%3E%3C/svg%3E&quot;,&quot;sizes&quot;:&quot;192x192&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;}]}">
+<link rel="manifest" href="manifest.webmanifest">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://s.tradingview.com https://www.tradingview.com https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api-staging.zentra.trading https://api.zentra.trading https://api.anthropic.com https://api.binance.com https://*.tradingview.com wss://*.tradingview.com; img-src 'self' data: https://assets.coingecko.com https://coin-images.coingecko.com https://bin.bnbstatic.com https://*.tradingview.com; frame-src https://s.tradingview.com https://www.tradingview.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
@@ -846,11 +846,22 @@ body.auth-active .tabbar { display:none !important; }
 <!-- Modal conferma reale -->
 <div class="modal-overlay" id="confirmModal">
   <div class="modal-card">
-    <div class="modal-title">&#9888;&#65039; Sessione Reale</div>
+    <div class="modal-title">Sessione Reale</div>
     <div class="modal-body" id="confirmModalBody">Stai per avviare una sessione con denaro reale. Gli ordini verranno eseguiti immediatamente sul tuo account. Confermi?</div>
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="closeModal()">Annulla</button>
       <button class="modal-btn confirm-real" onclick="confirmRealStart()">Conferma</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="actionConfirmModal">
+  <div class="modal-card">
+    <div class="modal-title" id="actionConfirmTitle">Conferma azione</div>
+    <div class="modal-body" id="actionConfirmBody">Vuoi procedere?</div>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" onclick="resolveActionConfirm(false)">Annulla</button>
+      <button class="modal-btn confirm-real" id="actionConfirmBtn" onclick="resolveActionConfirm(true)">Conferma</button>
     </div>
   </div>
 </div>
@@ -2587,6 +2598,23 @@ async function confirmRealStart() {
   _pendingStartCfg = null;
 }
 
+let _actionConfirmResolve = null;
+function showActionConfirm({ title = 'Conferma azione', body = 'Vuoi procedere?', confirmText = 'Conferma', danger = true } = {}) {
+  const modal = document.getElementById('actionConfirmModal');
+  document.getElementById('actionConfirmTitle').textContent = title;
+  document.getElementById('actionConfirmBody').innerHTML = body;
+  const btn = document.getElementById('actionConfirmBtn');
+  btn.textContent = confirmText;
+  btn.className = 'modal-btn ' + (danger ? 'confirm-real' : 'confirm');
+  modal.classList.add('open');
+  return new Promise(resolve => { _actionConfirmResolve = resolve; });
+}
+function resolveActionConfirm(ok) {
+  document.getElementById('actionConfirmModal')?.classList.remove('open');
+  if (_actionConfirmResolve) _actionConfirmResolve(!!ok);
+  _actionConfirmResolve = null;
+}
+
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 function togglePwd(inputId, eye) {
   const inp = document.getElementById(inputId);
@@ -3107,7 +3135,12 @@ async function microBuyCoinbase() {
   const box = document.getElementById('externalExchangeTestResult');
   const btn = document.getElementById('externalExchangeMicroBuyBtn');
   if (_activeExternalExchange !== 'coinbase') return;
-  if (!confirm('Confermi micro-buy REALE Coinbase da 1 USDC/USD su BTC?')) return;
+  const confirmed = await showActionConfirm({
+    title: 'Micro-buy Coinbase',
+    body: 'Confermi un micro-buy reale Coinbase da 1 USDC/USD su BTC?',
+    confirmText: 'Compra BTC $1',
+  });
+  if (!confirmed) return;
   if (box) {
     box.style.display = '';
     box.style.color = 'var(--text2)';
@@ -3148,7 +3181,13 @@ async function syncCoinbasePositions() {
   const box = document.getElementById('externalExchangeTestResult');
   const btn = document.getElementById('externalExchangeSyncBtn');
   if (_activeExternalExchange !== 'coinbase') return;
-  if (!confirm('Importare in Zentra le posizioni Coinbase aperte non ancora tracciate?')) return;
+  const confirmed = await showActionConfirm({
+    title: 'Importa posizioni Coinbase',
+    body: 'Importare in Zentra le posizioni Coinbase aperte non ancora tracciate? Le posizioni aperte fuori da Zentra verranno solo monitorate e non chiuse automaticamente.',
+    confirmText: 'Importa',
+    danger: false,
+  });
+  if (!confirmed) return;
   if (box) {
     box.style.display = '';
     box.style.color = 'var(--text2)';
@@ -3193,7 +3232,12 @@ async function microSellCoinbase() {
   const btn = document.getElementById('externalExchangeMicroSellBtn');
   if (_activeExternalExchange !== 'coinbase') return;
   const qty = 0.00001455;
-  if (!confirm(`Confermi micro-sell REALE Coinbase di ${qty} BTC?`)) return;
+  const confirmed = await showActionConfirm({
+    title: 'Micro-sell Coinbase',
+    body: `Confermi un micro-sell reale Coinbase di ${qty} BTC?`,
+    confirmText: 'Vendi BTC',
+  });
+  if (!confirmed) return;
   if (box) {
     box.style.display = '';
     box.style.color = 'var(--text2)';
@@ -3675,14 +3719,20 @@ function coinImgErr(el, sym, size) {
 // ── TABS ──────────────────────────────────────────────────────────────────────
 function showTab(name, el) {
   if (window.innerWidth < 768 && _sidebarOpen) toggleSidebar();
+  // Normalizza nomi vecchi per retrocompatibilità (link salvati in localStorage)
+  name = name || 'home';
+  if (name === 'monitor' || name === 'transazioni') name = 'posizioni';
+  if (name === 'market') name = 'scanner';
+  let page = document.getElementById('page-' + name);
+  if (!page) {
+    name = 'home';
+    page = document.getElementById('page-home');
+    el = document.getElementById('tabHome');
+  }
+  if (!page) return;
   const wasOnAnalysis = document.getElementById('page-analysis')?.classList.contains('active');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  // Normalizza nomi vecchi per retrocompatibilità (link salvati in localStorage)
-  if (name === 'monitor' || name === 'transazioni') name = 'posizioni';
-  if (name === 'market') name = 'scanner';
-  const page = document.getElementById('page-' + name);
-  if (!page) return;
   page.classList.add('active');
   if (name !== 'analysis' || !wasOnAnalysis) page.scrollTop = 0;
   if (el) el.classList.add('active');
@@ -3707,16 +3757,24 @@ function showTab(name, el) {
 }
 
 function restoreActiveTab() {
-  const saved = localStorage.getItem('ca_active_tab') || 'home';
+  let saved = localStorage.getItem('ca_active_tab') || 'home';
+  if (saved === 'monitor' || saved === 'transazioni') saved = 'posizioni';
+  if (saved === 'market') saved = 'scanner';
+  if (!document.getElementById('page-' + saved)) saved = 'home';
   const tabs = document.querySelectorAll('.tab');
-  const tabMap = { home: 0, scanner: 1, posizioni: 2, monitor: 2, transazioni: 2, market: 1 };
+  const tabMap = { home: 0, scanner: 1, posizioni: 2, plans: 3 };
   const idx = tabMap[saved];
   const el = (idx !== undefined) ? tabs[idx] : document.querySelector(`.sb-item[data-tab="${saved}"]`);
-  showTab(saved, el || tabs[0]);
+  showTab(saved, el);
 }
 
 async function clearTrades() {
-  if (!confirm('Cancellare tutte le transazioni? L\'operazione è irreversibile.')) return;
+  const confirmed = await showActionConfirm({
+    title: 'Cancella transazioni',
+    body: 'Cancellare tutte le transazioni? L’operazione è irreversibile.',
+    confirmText: 'Cancella',
+  });
+  if (!confirmed) return;
   try {
     await fetch(API + '/trades', { method: 'DELETE', headers: authHeaders() });
     trades = [];
@@ -7208,24 +7266,59 @@ function _aiNowIso() {
   return new Date().toISOString();
 }
 
+const AI_LOCAL_THREAD_LIMIT = 20;
+const AI_LOCAL_MESSAGE_LIMIT = 200;
+
+function _aiNormalizeMessages(messages, limit = AI_LOCAL_MESSAGE_LIMIT) {
+  if (typeof messages === 'string') {
+    try { messages = JSON.parse(messages); } catch (_) { messages = []; }
+  }
+  return Array.isArray(messages) ? messages.slice(-limit) : [];
+}
+
+function _aiCompactThreads(threads, threadLimit = AI_LOCAL_THREAD_LIMIT, messageLimit = AI_LOCAL_MESSAGE_LIMIT) {
+  return (Array.isArray(threads) ? threads : [])
+    .filter(t => t && t.id)
+    .slice(0, threadLimit)
+    .map(t => ({ ...t, messages: _aiNormalizeMessages(t.messages, messageLimit) }));
+}
+
 function _aiLoadThreads() {
   try {
     const parsed = JSON.parse(localStorage.getItem(_aiThreadsKey()) || '[]');
-    _aiThreads = Array.isArray(parsed) ? parsed.filter(t => t && t.id).map(t => {
-      if (typeof t.messages === 'string') { try { t.messages = JSON.parse(t.messages); } catch(_) { t.messages = []; } }
-      if (!Array.isArray(t.messages)) t.messages = [];
-      return t;
-    }) : [];
+    _aiThreads = _aiCompactThreads(parsed);
   } catch (_) {
     _aiThreads = [];
   }
   _aiThreads.sort((a,b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   _aiActiveThreadId = localStorage.getItem(_aiActiveThreadKey()) || (_aiThreads[0] && _aiThreads[0].id) || '';
+  if (_aiActiveThreadId && !_aiThreads.some(t => t.id === _aiActiveThreadId)) {
+    _aiActiveThreadId = (_aiThreads[0] && _aiThreads[0].id) || '';
+  }
 }
 
 function _aiSaveThreads() {
-  localStorage.setItem(_aiThreadsKey(), JSON.stringify(_aiThreads.slice(0, 30)));
-  if (_aiActiveThreadId) localStorage.setItem(_aiActiveThreadKey(), _aiActiveThreadId);
+  const compact = _aiCompactThreads(_aiThreads);
+  if (_aiActiveThreadId && !compact.some(t => t.id === _aiActiveThreadId)) {
+    _aiActiveThreadId = (compact[0] && compact[0].id) || '';
+  }
+  try {
+    localStorage.setItem(_aiThreadsKey(), JSON.stringify(compact));
+    if (_aiActiveThreadId) localStorage.setItem(_aiActiveThreadKey(), _aiActiveThreadId);
+    else localStorage.removeItem(_aiActiveThreadKey());
+    _aiThreads = compact;
+  } catch (_) {
+    try {
+      const fallback = _aiCompactThreads(_aiThreads, 8, 60);
+      if (_aiActiveThreadId && !fallback.some(t => t.id === _aiActiveThreadId)) {
+        _aiActiveThreadId = (fallback[0] && fallback[0].id) || '';
+      }
+      localStorage.setItem(_aiThreadsKey(), JSON.stringify(fallback));
+      if (_aiActiveThreadId) localStorage.setItem(_aiActiveThreadKey(), _aiActiveThreadId);
+      else localStorage.removeItem(_aiActiveThreadKey());
+      _aiThreads = fallback;
+    } catch (_) {}
+  }
 }
 
 async function _aiSyncThread(threadId) {
@@ -7270,8 +7363,7 @@ async function _aiSyncFromServer() {
     const data = await res.json();
     const serverThreads = data.threads || [];
     serverThreads.forEach(st => {
-      if (typeof st.messages === 'string') { try { st.messages = JSON.parse(st.messages); } catch(_) { st.messages = []; } }
-      if (!Array.isArray(st.messages)) st.messages = [];
+      st.messages = _aiNormalizeMessages(st.messages);
       const local = _aiThreads.find(t => t.id === st.id);
       if (!local || String(st.updatedAt) > String(local.updatedAt || '')) {
         _aiThreads = [st, ..._aiThreads.filter(t => t.id !== st.id)];
@@ -7425,6 +7517,7 @@ function _aiPersistExtra(entry) {
   if (!thread) return;
   thread.messages = thread.messages || [];
   thread.messages.push({ ...entry, time: _aiNowIso() });
+  thread.messages = _aiNormalizeMessages(thread.messages);
   thread.updatedAt = _aiNowIso();
   _aiSaveThreads();
   _aiSyncThread(thread.id);
@@ -7435,7 +7528,7 @@ function _aiPersistMessage(role, content) {
   if (!(thread.messages || []).length && role === 'user') thread.title = _aiTitleFromMessage(content);
   thread.messages = thread.messages || [];
   thread.messages.push({ role, content, time: _aiNowIso() });
-  if (thread.messages.length > 1000) thread.messages = thread.messages.slice(-1000);
+  thread.messages = _aiNormalizeMessages(thread.messages);
   thread.updatedAt = _aiNowIso();
   _aiThreads = [thread, ..._aiThreads.filter(t => t.id !== thread.id)];
   _aiSaveThreads();

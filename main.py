@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import binascii
 import os
 import re
@@ -3882,7 +3883,19 @@ async def delete_account(request: Request, user_id: int = Depends(get_current_us
 
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
-        _revoked_tokens.add(auth[7:])
+        token = auth[7:]
+        _revoked_tokens.add(token)
+        try:
+            decoded = base64.urlsafe_b64decode(token.encode()).decode()
+            expires_ts = int(decoded.split(":")[1])
+            expires_dt = datetime.utcfromtimestamp(expires_ts)
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO revoked_tokens (token, expires_at) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    token, expires_dt
+                )
+        except Exception:
+            pass
     return {"ok": True}
 
 @app.post("/auth/login")
@@ -4909,6 +4922,7 @@ async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 
             "buy_fee_usd": 0.0,
             "manual": True,
             "imported": True,
+            "_manual_action_required": True,
         }
         state.setdefault("positions", []).append(pos)
         state["currentCapital"] = max(0.0, float(state.get("currentCapital") or 0.0) - pos["size"])
