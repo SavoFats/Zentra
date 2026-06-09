@@ -357,6 +357,20 @@ section { padding: 120px 40px; min-height: 100svh; display: flex; flex-direction
 @keyframes fb-float-b { 0%,100%{transform:translateY(0px) rotate(0deg);} 50%{transform:translateY(-6px) rotate(-1.5deg);} }
 @keyframes fb-float-c { 0%,100%{transform:translateY(0px) rotate(0deg);} 50%{transform:translateY(-10px) rotate(1.2deg);} }
 @keyframes fb-float-d { 0%,100%{transform:translateY(0px) rotate(0deg);} 50%{transform:translateY(-7px) rotate(-1deg);} }
+.fb-lock-wrap { display:flex; align-items:center; justify-content:center; flex:1; margin-top:20px; }
+.fb-lock { filter:drop-shadow(0 0 22px rgba(99,102,241,0.4)); }
+@keyframes lock-close {
+  0%   { transform:translateY(-16px); }
+  65%  { transform:translateY(3px); }
+  82%  { transform:translateY(-3px); }
+  100% { transform:translateY(0); }
+}
+@keyframes lock-glow {
+  0%,100% { filter:drop-shadow(0 0 22px rgba(99,102,241,0.4)); }
+  50%     { filter:drop-shadow(0 0 36px rgba(99,102,241,0.65)); }
+}
+.fb-lock-shackle { animation:lock-close 1s 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
+.fb-lock { animation:lock-glow 3s 1.5s ease-in-out infinite; }
 .fb-strats-inner { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .fb-sb { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:20px 22px; transition:border-color .2s; }
 .fb-sb:hover { border-color:var(--border2); }
@@ -965,10 +979,15 @@ footer {
       <div class="fb-eyebrow">Security</div>
       <div class="fb-h" data-i18n="f3_title">Non-Custodial &amp; Secure</div>
       <div class="fb-p" data-i18n="f3_desc">Your funds never leave your exchange. Zentra executes orders via API — we never hold or access your capital.</div>
-      <div class="fb-checklist">
-        <div class="fb-ci"><div class="fb-ck"><svg width="8" height="7" viewBox="0 0 8 7" fill="none"><path d="M1 3.5L3 5.5L7 1.5" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span data-i18n="f3_p1">Funds always stay on your exchange</span></div>
-        <div class="fb-ci"><div class="fb-ck"><svg width="8" height="7" viewBox="0 0 8 7" fill="none"><path d="M1 3.5L3 5.5L7 1.5" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span data-i18n="f3_p2">AES-256 encrypted API credentials</span></div>
-        <div class="fb-ci"><div class="fb-ck"><svg width="8" height="7" viewBox="0 0 8 7" fill="none"><path d="M1 3.5L3 5.5L7 1.5" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><span>Zero custodia — mai accesso al capitale</span></div>
+      <div class="fb-lock-wrap">
+        <svg class="fb-lock" width="80" height="96" viewBox="0 0 80 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <g class="fb-lock-shackle">
+            <path d="M22 44V30C22 17.85 58 17.85 58 30V44" stroke="#6366f1" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+          <rect x="10" y="42" width="60" height="48" rx="12" fill="rgba(99,102,241,0.08)" stroke="#6366f1" stroke-width="1.5"/>
+          <circle cx="40" cy="62" r="7" fill="#6366f1" opacity="0.9"/>
+          <rect x="37" y="66" width="6" height="11" rx="3" fill="#6366f1" opacity="0.9"/>
+        </svg>
       </div>
     </div>
 
@@ -1040,7 +1059,7 @@ footer {
   <span class="orb orb-purple orb-tr"></span>
   <span class="orb orb-teal orb-bl"></span>
   <div class="testimonials-header reveal">
-    <div class="section-tag" data-i18n="testi_tag">Testimonials</div>
+    <div class="section-tag" data-i18n="testi_tag">Reviews</div>
     <h2 class="section-title" data-i18n="testi_title">Loved by traders worldwide</h2>
     <p class="section-sub" data-i18n="testi_sub">Real results from traders who made Zentra part of their daily workflow.</p>
   </div>
@@ -1573,22 +1592,22 @@ const T = {
     nav_features:'Method', nav_how:'Setup', nav_plans:'Plans', nav_open_app:'Sign In',
     hero_badge:'AI-powered trading agent',
     hero_title_1:'Trade smarter.', hero_title_2:'Trade with AI.',
-    hero_sub:'Automated entry signals, real-time market scanner, and smart risk management — all connected to your exchange account.',
+    hero_sub:'Automated entry signals, real-time market scanner, and smart risk management. All connected to your exchange account.',
     hero_cta_1:'Sign In', hero_cta_2:'Explore features',
     stat_1:'Coins monitored', stat_2:'Encrypted', stat_3:'Exchanges supported', stat_4:'Automated monitoring', stat_4_val:'24/7',
     feat_tag:'Method', feat_title_1:'Everything you need', feat_title_2:'to trade like a pro',
     feat_sub:'Zentra combines momentum analysis, breakout detection, and real-time risk management in a single platform.',
     f1_title:'Autonomous Agent', f1_desc:'The AI agent monitors 200+ coins 24/7, scans for high-probability momentum and breakout setups, and executes entries automatically on your exchange.',
-    f2_title:'Real-time Scanner', f2_desc:'Live market scanner with RSI, MACD, Keltner, EMA stack, volume spikes, golden cross and more — all visualized in one dashboard.',
+    f2_title:'Real-time Scanner', f2_desc:'Live market scanner with RSI, MACD, Keltner, EMA stack, volume spikes, golden cross and more. All in one dashboard.',
     f3_title:'Non-Custodial &amp; Secure', f3_desc:'Your funds never leave your exchange. Zentra executes orders via API — we never hold, move, or access your capital. API keys are never stored in plaintext.',
     f3_p1:'Funds always stay on your exchange', f3_p2:'AES-256 encrypted API credentials',
     f4_title:'Multi-Exchange Support', f4_desc:'Connect your exchange via API keys. Real buy/sell orders with market execution, automatic fill confirmation, and end-to-end encrypted credentials.',
     f5_title:'Two Strategies, One Platform', f5_desc:'Switch between <strong>Momentum</strong> (EMA breakout + volume + TSI + MACD) and <strong>Consolidation Breakout</strong> (CHOP + ATR compression + range break) from the config panel.',
     how_tag:'Setup', how_title:'Up and running in minutes', how_sub:'Connect your account, configure your strategy, and let Zentra handle the rest.',
     step1_title:'Connect', step1_desc:'Link your exchange API keys. Zentra never stores them in plaintext — end-to-end encrypted.',
-    step2_title:'Configure', step2_desc:'Choose your strategy, set risk parameters (SL%, TP%, max positions), and pick your session duration.',
+    step2_title:'Configure', step2_desc:'Choose your strategy, set your Stop Loss and Take Profit, and pick your session duration.',
     step3_title:'Trade', step3_desc:'Start the agent and get Telegram notifications for every entry, exit, and alert — in real time.',
-    testi_tag:'Testimonials', testi_title:'Loved by traders worldwide', testi_sub:'Real results from traders who made Zentra part of their daily workflow.',
+    testi_tag:'Reviews', testi_title:'Loved by traders worldwide', testi_sub:'Real results from traders who made Zentra part of their daily workflow.',
     t1_quote:'"Finally an algo tool that doesn\'t need a PhD to configure. Set my risk parameters in 10 minutes and let it run. Up 14% in my first month of automated trading."',
     t2_quote:'"The agent caught a SOL breakout at 3 AM while I was asleep. That single trade covered my Pro subscription for the entire year. Absolute game changer."',
     t3_quote:'"I was skeptical about automation, but Zentra changed my mind. The breakout strategy is uncannily accurate during volatile sessions. My win rate went from 48% to 61%."',
@@ -1611,22 +1630,22 @@ const T = {
     nav_features:'Metodo', nav_how:'Configurazione', nav_plans:'Piani', nav_open_app:'Accedi',
     hero_badge:'Agente di trading AI',
     hero_title_1:'Trading intelligente.', hero_title_2:'Trading con AI.',
-    hero_sub:'Segnali d\'ingresso automatici, scanner di mercato in tempo reale e gestione del rischio smart — tutto collegato al tuo exchange.',
+    hero_sub:'Segnali d\'ingresso automatici, scanner di mercato in tempo reale e gestione del rischio. Tutto collegato al tuo exchange.',
     hero_cta_1:'Accedi', hero_cta_2:'Esplora le funzioni',
     stat_1:'Coin monitorate', stat_2:'Cifrato', stat_3:'Exchange supportati', stat_4:'Monitoraggio automatico', stat_4_val:'24/7',
     feat_tag:'Metodo', feat_title_1:'Tutto quello che serve', feat_title_2:'per tradare da pro',
     feat_sub:'Zentra combina analisi momentum, rilevamento breakout e gestione del rischio in tempo reale in un\'unica piattaforma.',
     f1_title:'Agente Autonomo', f1_desc:'L\'agente AI monitora 200+ coin 24/7, cerca setup ad alta probabilità e apre posizioni automaticamente sul tuo exchange.',
-    f2_title:'Scanner in Tempo Reale', f2_desc:'Scanner di mercato live con RSI, MACD, Keltner, EMA stack, picchi di volume, golden cross e molto altro — tutto in un unico dashboard.',
+    f2_title:'Scanner in Tempo Reale', f2_desc:'Scanner di mercato live con RSI, MACD, Keltner, EMA stack, picchi di volume, golden cross e molto altro. Tutto in un\'unica dashboard.',
     f3_title:'Non-Custodiale &amp; Sicuro', f3_desc:'I tuoi fondi non lasciano mai il tuo exchange. Zentra esegue ordini via API — non deteniamo, spostiamo o accediamo al tuo capitale. Le chiavi API non vengono mai salvate in chiaro.',
     f3_p1:'I fondi restano sempre sul tuo exchange', f3_p2:'Credenziali API cifrate con AES-256',
     f4_title:'Multi-Exchange', f4_desc:'Connetti il tuo exchange tramite chiavi API. Ordini reali con esecuzione market, conferma automatica del fill e credenziali cifrate end-to-end.',
     f5_title:'Due Strategie, Una Piattaforma', f5_desc:'Scegli tra <strong>Momentum</strong> (breakout EMA + volume + TSI + MACD) e <strong>Breakout da Consolidamento</strong> (CHOP + compressione ATR + rottura di range) dal pannello config.',
     how_tag:'Configurazione', how_title:'Operativo in pochi minuti', how_sub:'Collega il tuo account, configura la strategia e lascia fare a Zentra.',
     step1_title:'Connetti', step1_desc:'Collega le tue chiavi API del tuo exchange. Zentra non le salva mai in chiaro — cifratura end-to-end.',
-    step2_title:'Configura', step2_desc:'Scegli la strategia, imposta i parametri di rischio (SL%, TP%, max posizioni) e la durata della sessione.',
+    step2_title:'Configura', step2_desc:'Scegli la strategia, imposta Stop Loss e Take Profit e la durata della sessione.',
     step3_title:'Trada', step3_desc:'Avvia l\'agente e ricevi notifiche Telegram per ogni ingresso, uscita e avviso — in tempo reale.',
-    testi_tag:'Testimonianze', testi_title:'Amato dai trader di tutto il mondo', testi_sub:'Risultati reali da trader che hanno fatto di Zentra parte del loro workflow quotidiano.',
+    testi_tag:'Recensioni', testi_title:'Amato dai trader di tutto il mondo', testi_sub:'Risultati reali da trader che hanno fatto di Zentra parte del loro workflow quotidiano.',
     t1_quote:'"Finalmente uno strumento algoritmico che non richiede un dottorato per configurarlo. Ho impostato i parametri in 10 minuti e l\'ho lasciato girare. +14% nel primo mese di trading automatico."',
     t2_quote:'"L\'agente ha preso un breakout su SOL alle 3 di notte mentre dormivo. Quel singolo trade ha coperto l\'abbonamento Pro per tutto l\'anno. Un vero game changer."',
     t3_quote:'"Ero scettico sull\'automazione, ma Zentra mi ha fatto cambiare idea. La strategia breakout è sorprendentemente precisa nelle sessioni volatili. Il mio win rate è passato dal 48% al 61%."',
