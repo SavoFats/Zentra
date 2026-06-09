@@ -7657,7 +7657,7 @@ function _aiRenderChart(symbol) {
   iframe.setAttribute('allowfullscreen', '');
   wrap.append(label, iframe);
   msgs.appendChild(wrap);
-  requestAnimationFrame(_aiScrollBottom);
+  setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 200);
 }
 
 function _aiDetectSymbolFromText(text) {
