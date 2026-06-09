@@ -1644,13 +1644,19 @@ def update_position_from_external_price(pos: dict, price: float):
 def drop_imported_exchange_positions(state: dict) -> int:
     """Le posizioni aperte fuori da Zentra non vengono monitorate o gestite."""
     positions = state.get("positions") or []
+    removed_positions = [
+        p for p in positions
+        if p.get("realMode") and p.get("imported")
+    ]
     kept = [
         p for p in positions
-        if not (p.get("realMode") and is_external_imported_position(p))
+        if not (p.get("realMode") and p.get("imported"))
     ]
     removed = len(positions) - len(kept)
     if removed:
         state["positions"] = kept
+        restored = sum(float(p.get("size_remaining", p.get("size", 0.0)) or 0.0) for p in removed_positions)
+        state["currentCapital"] = float(state.get("currentCapital") or 0.0) + restored
     return removed
 
 def unrealized_pnl(state: dict) -> float:
@@ -1711,7 +1717,7 @@ async def load_revx_keys_for_user(user_id: int) -> tuple[str, str]:
             "SELECT revx_key_id, revx_private_key, sim_mode FROM users WHERE id = $1",
             user_id,
         )
-    if not row or row["sim_mode"] or not row["revx_key_id"]:
+    if not row or not row["revx_key_id"]:
         raise HTTPException(status_code=400, detail="Chiavi RevX non configurate")
     return decrypt_key(row["revx_key_id"]), decrypt_key(row["revx_private_key"])
 
@@ -1744,7 +1750,7 @@ async def refresh_exchange_position_price(state: dict, pos: dict, user_id: int) 
     if pos.get("realMode") and pos.get("exchange") == "revx":
         key_id = state.get("revx_key_id", "")
         private_key = state.get("revx_private_key", "")
-        if not key_id:
+        if not key_id or not private_key:
             key_id, private_key = await load_revx_keys_for_user(user_id)
         return await refresh_revx_position_price(pos, key_id, private_key)
 
@@ -2575,14 +2581,14 @@ async def scan_and_trade(state: dict, user_id: int = None):
     revx_key_id  = state.get("revx_key_id", "")
     revx_priv    = state.get("revx_private_key", "")
     revx_positions = [p for p in state["positions"] if p.get("exchange") == "revx" and p.get("realMode") and not p.get("manual")]
-    if use_revx and revx_positions and (not revx_key_id or not revx_priv):
+    if revx_positions and (not revx_key_id or not revx_priv):
         try:
             revx_key_id, revx_priv = await load_revx_keys_for_user(user_id)
             state["revx_key_id"] = revx_key_id
             state["revx_private_key"] = revx_priv
         except Exception:
             pass
-    if use_revx and revx_key_id and revx_priv and revx_positions:
+    if revx_key_id and revx_priv and revx_positions:
         now_ts = time.time()
         if now_ts - state.get("_revx_agent_sync_last", 0) >= 30:
             state["_revx_agent_sync_last"] = now_ts
@@ -2623,9 +2629,10 @@ async def scan_and_trade(state: dict, user_id: int = None):
     for pos in list(state["positions"]):
         # Posizione in attesa di GTC limit fill: controlla solo SL catastrofico
         if pos.get("_sell_mode") == "retry_limit":
-            _gtc_cur = market_data.get(pos["symbol"], {}).get("price", 0.0)
-            if _gtc_cur > 0:
-                pos["currentPrice"] = _gtc_cur
+            try:
+                _gtc_cur, _ = await refresh_exchange_position_price(state, pos, user_id)
+            except Exception:
+                _gtc_cur = float(pos.get("currentPrice") or 0.0)
             if _gtc_cur > 0 and _gtc_cur <= pos.get("stopPrice", 0):
                 _gtc_order_id = pos.get("_sell_limit_order_id", "")
                 if _gtc_order_id:
@@ -3290,7 +3297,11 @@ async def monitor_manual_positions(state: dict, user_id: int):
     revx_key_id  = state.get("revx_key_id", "")
     revx_priv    = state.get("revx_private_key", "")
     use_revx     = state.get("use_revx", False)
-    if use_revx and (not revx_key_id or not revx_priv):
+    has_revx_positions = any(
+        p.get("realMode") and p.get("exchange") == "revx"
+        for p in state.get("positions", [])
+    )
+    if has_revx_positions and (not revx_key_id or not revx_priv):
         try:
             revx_key_id, revx_priv = await load_revx_keys_for_user(user_id)
             state["revx_key_id"] = revx_key_id
@@ -3299,7 +3310,7 @@ async def monitor_manual_positions(state: dict, user_id: int):
             pass
 
     # Sync RevX: rimuovi posizioni chiuse esternamente controllando i saldi
-    if use_revx and revx_key_id and revx_priv:
+    if has_revx_positions and revx_key_id and revx_priv:
         try:
             result = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
             balances = parse_revx_balances(result)
@@ -3427,9 +3438,7 @@ async def reconcile_coinbase_external_closures(
         try:
             await refresh_coinbase_position_price(pos, api_key, api_secret)
         except Exception:
-            fallback = market_data.get(sym, {}).get("price", 0.0)
-            if fallback > 0:
-                pos["currentPrice"] = fallback
+            pass
 
         pos["_already_sold"] = True
         pos["_sell_type"] = "Esterno Coinbase"
@@ -3444,7 +3453,7 @@ async def reconcile_coinbase_external_closures(
 
 def is_external_imported_position(pos: dict) -> bool:
     """True for positions detected on an exchange but not opened by Zentra."""
-    return bool(pos.get("_manual_action_required") or pos.get("imported"))
+    return bool(pos.get("imported"))
 
 # ── binance websocket stream ──────────────────────────────────────────────────
 
