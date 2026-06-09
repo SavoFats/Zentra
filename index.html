@@ -4397,7 +4397,7 @@ async function poll() {
       updateWatchlistPricesInPlace();
     }
     if (document.getElementById('page-posizioni').classList.contains('active')) {
-      updatePositionPricesInPlace();
+      renderPositions();
     }
     const newTrades = td.trades || [];
 

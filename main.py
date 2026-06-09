@@ -455,7 +455,7 @@ async def revx_request(method: str, path: str, body: dict = None,
 
 COINBASE_BASE = "https://api.coinbase.com"
 COINBASE_HOST = "api.coinbase.com"
-COINBASE_POSITION_PRICE_TTL = 10
+COINBASE_POSITION_PRICE_TTL = 3
 COINBASE_PRICE_WARN_TTL = 60
 
 def normalize_coinbase_api_secret(api_secret: str) -> str:
