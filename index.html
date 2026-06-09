@@ -617,7 +617,7 @@ body { background:var(--bg); }
 .trade-modal-sheet { background:#ffffff; border-radius:24px; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
 [data-theme="dark"] .trade-modal-sheet { background:#0f1429; }
 @media (max-width:600px) {
-  #tradeModal { align-items:flex-end !important; }
+  #tradeModal, #tradeDetailModal { align-items:flex-end !important; }
   .trade-modal-sheet { border-radius:24px 24px 0 0; }
 }
 .drawer { backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); border-top:1px solid var(--glass-border); box-shadow:0 -20px 60px rgba(0,0,30,0.1); }
@@ -2382,8 +2382,8 @@ body.auth-active .tabbar { display:none !important; }
 </div>
 
 <!-- ── TRADE DETAIL MODAL ──────────────────────────────────────────────── -->
-<div id="tradeDetailModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeTradeDetail()">
-  <div style="background:rgba(255,255,255,0.97);border-radius:24px 24px 0 0;width:min(480px,100vw);max-height:92vh;overflow-y:auto;padding:20px 20px 36px;position:relative">
+<div id="tradeDetailModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);backdrop-filter:blur(8px);align-items:center;justify-content:center" onclick="if(event.target===this)closeTradeDetail()">
+  <div class="trade-modal-sheet" style="width:min(480px,100vw);max-height:92vh;overflow-y:auto;padding:20px 20px 36px;position:relative">
     <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
     <!-- Header -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
