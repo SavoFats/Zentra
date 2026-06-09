@@ -6455,7 +6455,6 @@ async function executeManualTrade() {
       await poll();
       _newTradeCount++;
       updateStoricoBadge();
-      openTradeConfirmModal(_tmSymbol, data.price || _tmPrice, data.qty || 0, sl, tp, amount, data.exchange || exchange);
     } else {
       errEl.textContent   = data.detail || data.error || 'Errore esecuzione ordine';
       errEl.style.display = 'block';
