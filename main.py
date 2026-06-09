@@ -6381,6 +6381,38 @@ async def debug_revx_orders(request: Request, user_id: int = Depends(get_current
     except Exception as e:
         return {"ok": False, "error": public_error(e, key_id, private_key)}
 
+@app.get("/debug/revx_orders_filled")
+async def debug_revx_orders_filled(request: Request, symbol: str = "", user_id: int = Depends(get_current_user)):
+    """Testa GET /api/1.0/orders?state=filled (opzionale: filtra per symbol es. NEAR-USD)."""
+    if not ENABLE_DEBUG_REVX:
+        raise HTTPException(status_code=404, detail="Not found")
+    check_rate_limit(request, max_attempts=15, window=60, key_suffix="debug_revx_orders_filled")
+    if not db_pool:
+        return {"ok": False, "error": "DB non disponibile"}
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", user_id)
+    if not row or not row["revx_key_id"]:
+        return {"ok": False, "error": "Chiavi Revolut X non configurate"}
+    key_id = decrypt_key(row["revx_key_id"])
+    private_key = decrypt_key(row["revx_private_key"])
+    results = {}
+    # Prova vari endpoint per capire cosa supporta RevX
+    endpoints = {
+        "filled":       "/api/1.0/orders?state=filled",
+        "all_orders":   "/api/1.0/orders",
+        "balances_raw": "/api/1.0/balances",
+    }
+    if symbol:
+        sym_clean = symbol.upper().replace("/", "-")
+        endpoints[f"filled_{sym_clean}"] = f"/api/1.0/orders?state=filled&symbol={sym_clean}"
+        endpoints[f"open_{sym_clean}"]   = f"/api/1.0/orders?state=open&symbol={sym_clean}"
+    for label, path in endpoints.items():
+        try:
+            results[label] = await revx_request("GET", path, key_id=key_id, private_key=private_key)
+        except Exception as e:
+            results[label] = {"error": public_error(e, key_id, private_key)}
+    return {"ok": True, "results": results}
+
 @app.get("/debug/revx_order")
 async def debug_revx_order(request: Request, order_id: str, user_id: int = Depends(get_current_user)):
     if not ENABLE_DEBUG_REVX:
