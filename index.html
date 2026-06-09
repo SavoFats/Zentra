@@ -7228,7 +7228,7 @@ async function _aiSyncThread(threadId) {
       body: JSON.stringify({
         id: thread.id,
         title: thread.title,
-        messages: thread.messages || [],
+        messages: (thread.messages || []).slice(-200),
         created_at: thread.createdAt,
         updated_at: thread.updatedAt
       })
@@ -7421,6 +7421,7 @@ function _aiPersistMessage(role, content) {
   if (!(thread.messages || []).length && role === 'user') thread.title = _aiTitleFromMessage(content);
   thread.messages = thread.messages || [];
   thread.messages.push({ role, content, time: _aiNowIso() });
+  if (thread.messages.length > 1000) thread.messages = thread.messages.slice(-1000);
   thread.updatedAt = _aiNowIso();
   _aiThreads = [thread, ..._aiThreads.filter(t => t.id !== thread.id)];
   _aiSaveThreads();
