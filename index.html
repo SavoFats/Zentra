@@ -7203,7 +7203,11 @@ function _aiNowIso() {
 function _aiLoadThreads() {
   try {
     const parsed = JSON.parse(localStorage.getItem(_aiThreadsKey()) || '[]');
-    _aiThreads = Array.isArray(parsed) ? parsed.filter(t => t && t.id) : [];
+    _aiThreads = Array.isArray(parsed) ? parsed.filter(t => t && t.id).map(t => {
+      if (typeof t.messages === 'string') { try { t.messages = JSON.parse(t.messages); } catch(_) { t.messages = []; } }
+      if (!Array.isArray(t.messages)) t.messages = [];
+      return t;
+    }) : [];
   } catch (_) {
     _aiThreads = [];
   }
