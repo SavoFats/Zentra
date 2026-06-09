@@ -4259,8 +4259,11 @@ function resetAgent() {
 
 // ── POLLING ──────────────────────────────────────────────────────────────────
 let _pollFailCount = 0;
+let _pollTradeCounter = 0;
+let _cachedTrades = [];
 function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
+  _pollTradeCounter = 0;
   poll();
   pollInterval = setInterval(poll, 3000);
 }
@@ -4268,9 +4271,13 @@ function startPolling() {
 async function poll() {
   try {
     const noCache = { cache: 'no-store' };
+    _pollTradeCounter = (_pollTradeCounter + 1) % 10;
+    const fetchTrades = _pollTradeCounter === 1
+      ? fetch(API + '/trades', { headers:authHeaders(), ...noCache })
+      : Promise.resolve({ ok: true, json: async () => ({ trades: _cachedTrades }) });
     const [sRes, tRes, mRes] = await Promise.all([
       fetch(API + '/status', { headers:authHeaders(), ...noCache }),
-      fetch(API + '/trades', { headers:authHeaders(), ...noCache }),
+      fetchTrades,
       fetch(API + '/market?timeframe=' + _scanTimeframe, { headers:authHeaders(), ...noCache }),
     ]);
     if (sRes.status === 401) {
@@ -4283,6 +4290,7 @@ async function poll() {
     }
     S = await sRes.json(); window._lastStatus = S;
     const td = await tRes.json();
+    if (_pollTradeCounter === 1) _cachedTrades = td.trades || [];
     const md = await mRes.json();
     mktData = md.market || [];
     // Aggiorna prezzi in-place se i tab sono già renderizzati

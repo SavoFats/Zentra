@@ -1902,6 +1902,45 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
         add_log(state, "info", "ERRORE", f"{sym}: qty_to_sell={qty_to_sell} non valida — GTC annullato")
         return
 
+    # Iterativo con sleep tra tentativi per evitare burst su RevX API
+    while attempt < len(REVX_LIMIT_DROPS):
+        if attempt > 0:
+            await asyncio.sleep(1)
+        drop = REVX_LIMIT_DROPS[attempt]
+        orig_price = pos.get("_sell_original_price", pos["currentPrice"])
+        calc_price = round(orig_price * (1 - drop), 8)
+        limit_price = max(calc_price, round(pos["currentPrice"], 8))
+        order_body = {
+            "client_order_id": str(_uuid.uuid4()),
+            "symbol": symbol_pair,
+            "side": "SELL",
+            "order_configuration": {"limit": {"base_size": str(qty_to_sell), "price": str(limit_price)}}
+        }
+        try:
+            result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
+            print(f"[GTC PLACE] {sym} #{attempt+1} raw result: {result}")
+            data = result.get("data") or result
+            order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
+            if order_id and data.get("state", "") not in ("cancelled", "rejected"):
+                pos["_sell_mode"] = "retry_limit"
+                pos["_sell_attempt"] = attempt
+                pos["_sell_limit_order_id"] = order_id
+                pos["_sell_limit_placed_at"] = time.time()
+                pos["_sell_limit_price"] = limit_price
+                print(f"[GTC PLACE] {sym}: tentativo #{attempt+1} OK — order_id={order_id} price=${limit_price:.4f}")
+                add_log(state, "info", "LIMIT GTC", f"{sym}: tentativo #{attempt+1} — limite a ${limit_price:.4f} (-{drop*100:.0f}%)")
+                await notify(state, f"LIMIT GTC {sym}: #{attempt+1} a ${limit_price:.4f} (-{int(drop*100)}% dal prezzo originale)")
+                return
+            else:
+                err = result.get("message") or result.get("error") or str(result)
+                print(f"[GTC PLACE] {sym}: tentativo #{attempt+1} FALLITO — {str(err)[:120]}")
+                add_log(state, "info", "ERRORE", f"{sym}: GTC limit #{attempt+1} fallito: {str(err)[:80]}")
+                attempt += 1
+        except Exception as e:
+            print(f"[GTC PLACE] {sym}: eccezione #{attempt+1}: {e}")
+            add_log(state, "info", "ERRORE", f"{sym}: eccezione piazzamento GTC limit: {e}")
+            attempt += 1
+
     if attempt >= len(REVX_LIMIT_DROPS):
         add_log(state, "info", "WARN", f"{sym}: 10 tentativi GTC limit esauriti — market sell emergenza")
         await notify(state, f"ATTENZIONE: {sym}: 10 GTC falliti. Tentativo market sell emergenza...")
@@ -1942,44 +1981,6 @@ async def _place_revx_gtc_limit(state: dict, pos: dict, attempt: int, user_id: i
             await notify(state, f"ALLARME: {sym}: errore market sell ({_em_e}). Vendi manualmente su RevX!")
         return
 
-    drop = REVX_LIMIT_DROPS[attempt]
-    orig_price = pos.get("_sell_original_price", pos["currentPrice"])
-    calc_price = round(orig_price * (1 - drop), 8)
-    limit_price = max(calc_price, round(pos["currentPrice"], 8))
-
-    order_body = {
-        "client_order_id": str(_uuid.uuid4()),
-        "symbol": symbol_pair,
-        "side": "SELL",
-        "order_configuration": {
-            "limit": {
-                "base_size": str(qty_to_sell),
-                "price": str(limit_price)
-            }
-        }
-    }
-    try:
-        result = await revx_request("POST", "/api/1.0/orders", order_body, key_id=revx_key_id, private_key=revx_priv)
-        print(f"[GTC PLACE] {sym} #{attempt+1} raw result: {result}")
-        data = result.get("data") or result
-        order_id = data.get("venue_order_id") or data.get("order_id") or data.get("id", "")
-        if order_id and data.get("state", "") not in ("cancelled", "rejected"):
-            pos["_sell_mode"] = "retry_limit"
-            pos["_sell_attempt"] = attempt
-            pos["_sell_limit_order_id"] = order_id
-            pos["_sell_limit_placed_at"] = time.time()
-            pos["_sell_limit_price"] = limit_price
-            print(f"[GTC PLACE] {sym}: tentativo #{attempt+1} OK — order_id={order_id} price=${limit_price:.4f}")
-            add_log(state, "info", "LIMIT GTC", f"{sym}: tentativo #{attempt+1} — limite a ${limit_price:.4f} (-{drop*100:.0f}%)")
-            await notify(state, f"LIMIT GTC {sym}: #{attempt+1} a ${limit_price:.4f} (-{int(drop*100)}% dal prezzo originale)")
-        else:
-            err = result.get("message") or result.get("error") or str(result)
-            print(f"[GTC PLACE] {sym}: tentativo #{attempt+1} FALLITO — {str(err)[:120]}")
-            add_log(state, "info", "ERRORE", f"{sym}: GTC limit #{attempt+1} fallito: {str(err)[:80]}")
-            await _place_revx_gtc_limit(state, pos, attempt + 1, user_id)
-    except Exception as e:
-        print(f"[GTC PLACE] {sym}: eccezione #{attempt+1}: {e}")
-        add_log(state, "info", "ERRORE", f"{sym}: eccezione piazzamento GTC limit: {e}")
 
 
 async def _poll_revx_gtc_limit(state: dict, pos: dict, user_id: int = None):
@@ -2533,7 +2534,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if cur <= 0:
             continue
 
-        if pos.get("_manual_action_required") or pos.get("imported"):
+        if pos.get("_manual_action_required") or (pos.get("imported") and pos.get("stopPrice", 0.0) <= 0):
             continue
 
         max_hold_hours = cfg.get("maxHoldHours", 4)
@@ -3181,8 +3182,9 @@ async def monitor_manual_positions(state: dict, user_id: int):
                     add_log(state, "sell", "CHIUSO ESTERNAMENTE",
                             f"{sym} — posizione non trovata su Revolut X (saldo {coin_bal:.6f})")
                     await notify(state, f"{sym} chiuso esternamente su Revolut X")
-                    state["positions"].remove(pos)
-                    state["currentCapital"] += pos.get("size_remaining", pos["size"])
+                    pos["_already_sold"] = True
+                    pos["_sell_type"] = "Esterno"
+                    await exit_position(state, pos, "CHIUSO ESTERNAMENTE (RevX)", user_id=user_id)
         except Exception as e:
             print(f"[revx_sync] user {user_id}: {e}")
 
@@ -3209,7 +3211,7 @@ async def monitor_manual_positions(state: dict, user_id: int):
         if cur > pos.get("peak_price", pos["entryPrice"]):
             pos["peak_price"] = cur
 
-        if pos.get("_manual_action_required") or pos.get("imported"):
+        if pos.get("_manual_action_required") or (pos.get("imported") and pos.get("stopPrice", 0.0) <= 0):
             continue
 
         if cur <= pos["stopPrice"]:
@@ -3528,41 +3530,50 @@ async def startup():
     _t.add_done_callback(_on_task_done)
 
 async def load_global_revx_keys():
-    """Carica le chiavi RevX e le coppie USD disponibili all'avvio."""
+    """Carica le chiavi RevX all'avvio e le ricarica ogni ora con fallback multi-utente."""
     global _global_revx_key_id, _global_revx_private_key, _revx_pairs, _universe_last_update
     if not db_pool:
         return
-    try:
-        await asyncio.sleep(3)  # Aspetta che il DB sia pronto
-        async with db_pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT revx_key_id, revx_private_key FROM users WHERE revx_key_id != '' AND sim_mode = FALSE ORDER BY id LIMIT 1"
-            )
-        if row and row["revx_key_id"]:
-            _global_revx_key_id = decrypt_key(row["revx_key_id"])
-            _global_revx_private_key = decrypt_key(row["revx_private_key"])
-            print(f"[REVX] Chiavi globali caricate per market data")
-            # Carica coppie EUR disponibili su Revolut X
-            try:
-                data = await revx_request("GET", "/api/1.0/tickers",
-                                          key_id=_global_revx_key_id,
-                                          private_key=_global_revx_private_key)
-                tickers = data.get("data", []) if isinstance(data, dict) else data
-                pairs = set()
-                for t in (tickers if isinstance(tickers, list) else []):
-                    symbol = t.get("symbol", "")
-                    if symbol.endswith("/USD"):
-                        pairs.add(symbol[:-4])  # "BTC/USD" -> "BTC"
-                if pairs:
-                    _revx_pairs = pairs
-                    _universe_last_update = 0  # forza re-fetch universo con coppie RevX
-                    print(f"[REVX] {len(pairs)} coppie USD caricate: {sorted(pairs)[:8]}...")
-                else:
-                    print(f"[REVX] Nessuna coppia USD trovata nel ticker")
-            except Exception as e2:
-                print(f"[REVX] Errore caricamento coppie: {e2}")
-    except Exception as e:
-        print(f"[REVX] Errore caricamento chiavi globali: {e}")
+    await asyncio.sleep(3)  # Aspetta che il DB sia pronto
+    while True:
+        try:
+            async with db_pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT revx_key_id, revx_private_key FROM users WHERE revx_key_id != '' AND sim_mode = FALSE ORDER BY id LIMIT 5"
+                )
+            loaded = False
+            for row in rows:
+                if not row["revx_key_id"]:
+                    continue
+                try:
+                    key_id = decrypt_key(row["revx_key_id"])
+                    private_key = decrypt_key(row["revx_private_key"])
+                    data = await revx_request("GET", "/api/1.0/tickers",
+                                              key_id=key_id, private_key=private_key)
+                    tickers = data.get("data", []) if isinstance(data, dict) else data
+                    pairs = set()
+                    for t in (tickers if isinstance(tickers, list) else []):
+                        symbol = t.get("symbol", "")
+                        if symbol.endswith("/USD"):
+                            pairs.add(symbol[:-4])
+                    _global_revx_key_id = key_id
+                    _global_revx_private_key = private_key
+                    if pairs:
+                        _revx_pairs = pairs
+                        _universe_last_update = 0
+                        print(f"[REVX] Chiavi caricate, {len(pairs)} coppie USD: {sorted(pairs)[:8]}...")
+                    else:
+                        print(f"[REVX] Chiavi caricate, nessuna coppia USD trovata")
+                    loaded = True
+                    break
+                except Exception as e2:
+                    print(f"[REVX] Tentativo chiavi fallito: {e2}")
+                    continue
+            if not loaded:
+                print(f"[REVX] Nessuna chiave valida trovata")
+        except Exception as e:
+            print(f"[REVX] Errore caricamento chiavi globali: {e}")
+        await asyncio.sleep(3600)
 
 async def load_telegram_bot_info():
     """Recupera lo username del bot Telegram via getMe e lo salva in cache."""
@@ -3963,7 +3974,7 @@ async def google_callback(request: Request, code: str = "", state: str = ""):
         return RedirectResponse(with_query_param(redirect_to, "auth_error", "google_profile"), status_code=302)
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, display_name FROM users WHERE google_sub = $1 OR email = $2 OR username = $2",
+            "SELECT id, display_name FROM users WHERE google_sub = $1 OR (email = $2 AND email != '')",
             google_sub, email
         )
         if row:
@@ -4844,6 +4855,7 @@ async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 
     api_key, api_secret = await load_coinbase_keys_for_user(user_id)
     accounts = await fetch_coinbase_accounts(api_key, api_secret)
     state = get_session(user_id)
+    cfg = state.get("config", {})
     existing = {
         p.get("symbol")
         for p in state.get("positions", [])
@@ -4883,7 +4895,7 @@ async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 
             "size_remaining": round(value_usd, 2),
             "tp1_hit": False,
             "entryTime": datetime.utcnow().isoformat() + "Z",
-            "stopPrice": 0.0,
+            "stopPrice": round(price * (1 - cfg.get("maxStopPct", 0.05)), 8),
             "tp1Price": price * 10,
             "tp2Price": price * 10,
             "R_pct": 0.0,
@@ -4897,7 +4909,6 @@ async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 
             "buy_fee_usd": 0.0,
             "manual": True,
             "imported": True,
-            "_manual_action_required": True,
         }
         state.setdefault("positions", []).append(pos)
         state["currentCapital"] = max(0.0, float(state.get("currentCapital") or 0.0) - pos["size"])
