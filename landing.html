@@ -278,15 +278,41 @@ section { padding: 120px 40px; min-height: 100svh; display: flex; flex-direction
 /* ─── FEATURES ──────────────────────────────── */
 /* ─── FEATURES BENTO ────────────────────────── */
 .features { background: var(--bg2); position: relative; overflow: hidden; }
+/* Orb backgrounds */
+.orb {
+  position: absolute; border-radius: 50%;
+  pointer-events: none; z-index: 0;
+  filter: blur(80px);
+}
+.orb-purple { background: radial-gradient(circle, rgba(99,102,241,0.22) 0%, transparent 70%); }
+.orb-blue   { background: radial-gradient(circle, rgba(59,130,246,0.18) 0%, transparent 70%); }
+.orb-teal   { background: radial-gradient(circle, rgba(20,184,166,0.14) 0%, transparent 70%); }
+.orb-amber  { background: radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 70%); }
+.orb-tl { width:600px; height:600px; top:-150px; left:-150px;  animation: orb-a 14s ease-in-out infinite; }
+.orb-tr { width:500px; height:500px; top:-100px; right:-120px; animation: orb-b 16s ease-in-out infinite; }
+.orb-br { width:450px; height:450px; bottom:-100px; right:-100px; animation: orb-b 17s ease-in-out infinite; }
+.orb-bl { width:400px; height:400px; bottom:-80px; left:-100px; animation: orb-a 18s ease-in-out infinite; }
+.orb-tc { width:600px; height:600px; top:-150px; left:25%;     animation: orb-a 15s ease-in-out infinite; }
+@keyframes orb-a {
+  0%,100% { transform: translate(0,0); }
+  33%     { transform: translate(25px,-20px); }
+  66%     { transform: translate(-15px,25px); }
+}
+@keyframes orb-b {
+  0%,100% { transform: translate(0,0); }
+  33%     { transform: translate(-25px,20px); }
+  66%     { transform: translate(20px,-25px); }
+}
 .features::before {
   content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
   width:800px; height:1px; background:linear-gradient(90deg, transparent, var(--border2), transparent);
 }
-.features-header { text-align: center; margin-bottom: 72px; width: 100%; }
+.features-header { text-align: center; margin-bottom: 72px; width: 100%; position: relative; z-index: 1; }
 .features-header .section-sub { max-width: 600px; margin: 0 auto; }
 .features-bento {
   display:grid; grid-template-columns:1.15fr 1fr 1fr;
   grid-template-rows:auto auto auto; gap:14px; max-width:1040px; margin:0 auto;
+  position: relative; z-index: 1;
 }
 .fb { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:26px 28px; position:relative; overflow:hidden; transition:border-color .3s,transform .3s,box-shadow .3s; }
 .fb::after { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,rgba(0,82,255,.5),transparent); opacity:0; transition:opacity .3s; }
@@ -348,7 +374,7 @@ section { padding: 120px 40px; min-height: 100svh; display: flex; flex-direction
   content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
   width:800px; height:1px; background:linear-gradient(90deg, transparent, var(--border2), transparent);
 }
-.how-inner { max-width: 900px; margin: 0 auto; width: 100%; }
+.how-inner { max-width: 900px; margin: 0 auto; width: 100%; position: relative; z-index: 1; }
 .how-header { text-align: center; margin-bottom: 80px; }
 .steps { display: flex; gap: 0; position: relative; }
 .steps::before {
@@ -371,11 +397,11 @@ section { padding: 120px 40px; min-height: 100svh; display: flex; flex-direction
 .step p { font-size: 14px; color: var(--text2); line-height: 1.6; font-weight: 500; }
 
 /* ─── PLANS ─────────────────────────────────── */
-.plans { background: var(--bg2); }
-.plans-header { text-align: center; margin-bottom: 60px; width: 100%; }
+.plans { background: var(--bg2); position: relative; overflow: hidden; }
+.plans-header { text-align: center; margin-bottom: 60px; width: 100%; position: relative; z-index: 1; }
 .plans-grid {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 1120px; margin: 0 auto;
-  align-items: stretch;
+  align-items: stretch; position: relative; z-index: 1;
 }
 .plan-card {
   background: var(--surface); border: 1px solid var(--border);
@@ -495,13 +521,13 @@ section { padding: 120px 40px; min-height: 100svh; display: flex; flex-direction
 
 /* ─── TESTIMONIALS ──────────────────────────── */
 .testimonials {
-  padding: 120px 0; overflow: hidden;
+  padding: 120px 0; overflow: hidden; position: relative;
   background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(0,82,255,0.12) 0%, transparent 70%),
               linear-gradient(180deg, var(--bg2) 0%, var(--bg) 100%);
   border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
 }
-.testimonials-header { text-align: center; margin-bottom: 60px; padding: 0 40px; }
-.testi-track-wrap { overflow: hidden; width: 100%; position: relative; }
+.testimonials-header { text-align: center; margin-bottom: 60px; padding: 0 40px; position: relative; z-index: 1; }
+.testi-track-wrap { overflow: hidden; width: 100%; position: relative; z-index: 1; }
 .testi-track-wrap::before,
 .testi-track-wrap::after {
   content:''; position:absolute; top:0; bottom:0; width:120px; z-index:2; pointer-events:none;
@@ -883,6 +909,8 @@ footer {
 
 <!-- FEATURES -->
 <section class="features" id="features">
+  <span class="orb orb-purple orb-tl"></span>
+  <span class="orb orb-blue orb-br"></span>
   <div class="features-header reveal">
     <div class="section-tag" data-i18n="feat_tag">Metodo</div>
     <h2 class="section-title"><span data-i18n="feat_title_1">Everything you need</span><br><span class="accent" data-i18n="feat_title_2">to trade like a pro</span></h2>
@@ -979,6 +1007,8 @@ footer {
 
 <!-- HOW IT WORKS -->
 <section class="how" id="how">
+  <span class="orb orb-blue orb-tr"></span>
+  <span class="orb orb-purple orb-bl"></span>
   <div class="how-inner">
     <div class="how-header reveal">
       <div class="section-tag" data-i18n="how_tag">Configurazione</div>
@@ -1007,6 +1037,8 @@ footer {
 
 <!-- TESTIMONIALS -->
 <section class="testimonials">
+  <span class="orb orb-purple orb-tr"></span>
+  <span class="orb orb-teal orb-bl"></span>
   <div class="testimonials-header reveal">
     <div class="section-tag" data-i18n="testi_tag">Testimonials</div>
     <h2 class="section-title" data-i18n="testi_title">Loved by traders worldwide</h2>
@@ -1148,6 +1180,8 @@ footer {
 
 <!-- PLANS -->
 <section class="plans" id="plans">
+  <span class="orb orb-purple orb-tc"></span>
+  <span class="orb orb-amber orb-br"></span>
   <div class="plans-header reveal">
     <div class="section-tag" data-i18n="plans_tag">Plans</div>
     <h2 class="section-title" data-i18n="plans_title">Choose your level of control</h2>
