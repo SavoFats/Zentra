@@ -455,7 +455,7 @@ async def revx_request(method: str, path: str, body: dict = None,
 
 COINBASE_BASE = "https://api.coinbase.com"
 COINBASE_HOST = "api.coinbase.com"
-COINBASE_POSITION_PRICE_TTL = 3
+EXCHANGE_POSITION_PRICE_TTL = 3
 COINBASE_PRICE_WARN_TTL = 60
 
 def normalize_coinbase_api_secret(api_secret: str) -> str:
@@ -624,7 +624,7 @@ async def refresh_coinbase_position_price(pos: dict, api_key: str, api_secret: s
     now = time.time()
     current = float(pos.get("currentPrice") or 0.0)
     last_fetch = float(pos.get("_coinbase_price_last_fetch") or 0.0)
-    if current > 0 and now - last_fetch < COINBASE_POSITION_PRICE_TTL:
+    if current > 0 and now - last_fetch < EXCHANGE_POSITION_PRICE_TTL:
         return current, False
     try:
         price = await get_coinbase_live_price(pos.get("symbol_pair", f"{pos['symbol']}-USDC"), api_key, api_secret)
@@ -1634,12 +1634,24 @@ def add_log(state: dict, type_: str, label: str, desc: str):
         log.pop()
 
 def update_position_from_external_price(pos: dict, price: float):
-    """Aggiorna prezzi posizione da feed generici, ma non per Coinbase real."""
-    if pos.get("realMode") and pos.get("exchange") == "coinbase":
+    """Aggiorna prezzi posizione da feed generici solo per simulazione."""
+    if pos.get("realMode"):
         return
     pos["currentPrice"] = price
     if price > pos.get("highPrice", pos.get("entryPrice", price)):
         pos["highPrice"] = price
+
+def drop_imported_exchange_positions(state: dict) -> int:
+    """Le posizioni aperte fuori da Zentra non vengono monitorate o gestite."""
+    positions = state.get("positions") or []
+    kept = [
+        p for p in positions
+        if not (p.get("realMode") and is_external_imported_position(p))
+    ]
+    removed = len(positions) - len(kept)
+    if removed:
+        state["positions"] = kept
+    return removed
 
 def unrealized_pnl(state: dict) -> float:
     total = 0.0
@@ -1670,6 +1682,77 @@ async def get_revx_usd_balance(key_id: str, private_key: str) -> float:
         if b.get("currency") == "USD":
             return float(b.get("available", 0) or 0)
     return 0.0
+
+async def get_revx_live_price(symbol_pair: str, key_id: str, private_key: str) -> float:
+    """Legge il prezzo corrente RevX per una coppia tipo BTC-USD."""
+    wanted = symbol_pair.replace("-", "/")
+    data = await revx_request("GET", "/api/1.0/tickers", key_id=key_id, private_key=private_key, params={})
+    tickers = data.get("data", []) if isinstance(data, dict) else data
+    for t in (tickers if isinstance(tickers, list) else []):
+        if t.get("symbol", "") == wanted:
+            price = float(t.get("last_price") or t.get("mid") or t.get("ask") or 0)
+            if price > 0:
+                return price
+    raise ValueError(f"Prezzo RevX non disponibile per {symbol_pair}")
+
+async def get_revx_base_balance(symbol: str, key_id: str, private_key: str) -> float:
+    result = await revx_request("GET", "/api/1.0/balances", key_id=key_id, private_key=private_key)
+    balances = parse_revx_balances(result)
+    for b in balances:
+        if str(b.get("currency") or "").upper() == symbol.upper():
+            return float(b.get("available", 0) or 0)
+    return 0.0
+
+async def load_revx_keys_for_user(user_id: int) -> tuple[str, str]:
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="DB non disponibile")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT revx_key_id, revx_private_key, sim_mode FROM users WHERE id = $1",
+            user_id,
+        )
+    if not row or row["sim_mode"] or not row["revx_key_id"]:
+        raise HTTPException(status_code=400, detail="Chiavi RevX non configurate")
+    return decrypt_key(row["revx_key_id"]), decrypt_key(row["revx_private_key"])
+
+async def refresh_revx_position_price(pos: dict, key_id: str, private_key: str) -> tuple[float, bool]:
+    now = time.time()
+    current = float(pos.get("currentPrice") or 0.0)
+    last_fetch = float(pos.get("_revx_price_last_fetch") or 0.0)
+    if current > 0 and now - last_fetch < EXCHANGE_POSITION_PRICE_TTL:
+        return current, False
+    try:
+        price = await get_revx_live_price(pos.get("symbol_pair", f"{pos['symbol']}-USD"), key_id, private_key)
+        pos["currentPrice"] = price
+        pos["_revx_price_last_fetch"] = now
+        pos.pop("_revx_price_error", None)
+        return price, True
+    except Exception as e:
+        pos["_revx_price_error"] = public_error(e, max_len=100)
+        if current > 0:
+            return current, False
+        raise
+
+async def refresh_exchange_position_price(state: dict, pos: dict, user_id: int) -> tuple[float, bool]:
+    """Fonte prezzo per posizioni aperte: exchange reale della posizione o market data per sim."""
+    if pos.get("realMode") and pos.get("exchange") == "coinbase":
+        api_key = state.get("coinbase_api_key_agent", "")
+        api_secret = state.get("coinbase_api_secret_agent", "")
+        if not api_key:
+            api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+        return await refresh_coinbase_position_price(pos, api_key, api_secret)
+    if pos.get("realMode") and pos.get("exchange") == "revx":
+        key_id = state.get("revx_key_id", "")
+        private_key = state.get("revx_private_key", "")
+        if not key_id:
+            key_id, private_key = await load_revx_keys_for_user(user_id)
+        return await refresh_revx_position_price(pos, key_id, private_key)
+
+    price = market_data.get(pos.get("symbol"), {}).get("price", 0.0)
+    if price > 0:
+        pos["currentPrice"] = price
+        return price, True
+    return float(pos.get("currentPrice") or 0.0), False
 
 
 async def enter_position(state: dict, sym_data: dict, tradable_capital: float, user_id: int = None):
@@ -2492,6 +2575,13 @@ async def scan_and_trade(state: dict, user_id: int = None):
     revx_key_id  = state.get("revx_key_id", "")
     revx_priv    = state.get("revx_private_key", "")
     revx_positions = [p for p in state["positions"] if p.get("exchange") == "revx" and p.get("realMode") and not p.get("manual")]
+    if use_revx and revx_positions and (not revx_key_id or not revx_priv):
+        try:
+            revx_key_id, revx_priv = await load_revx_keys_for_user(user_id)
+            state["revx_key_id"] = revx_key_id
+            state["revx_private_key"] = revx_priv
+        except Exception:
+            pass
     if use_revx and revx_key_id and revx_priv and revx_positions:
         now_ts = time.time()
         if now_ts - state.get("_revx_agent_sync_last", 0) >= 30:
@@ -2505,8 +2595,10 @@ async def scan_and_trade(state: dict, user_id: int = None):
                     qty      = pos.get("qty_purchased", 0.0)
                     coin_bal = bal_map.get(sym, 0.0)
                     if qty > 0 and coin_bal < qty * 0.05:
-                        cur = market_data.get(sym, {}).get("price", pos["currentPrice"])
-                        pos["currentPrice"]  = cur
+                        try:
+                            await refresh_revx_position_price(pos, revx_key_id, revx_priv)
+                        except Exception:
+                            pass
                         pos["_already_sold"] = True
                         await exit_position(state, pos, "CHIUSO SU REVOLUT X", user_id=user_id)
             except Exception as e:
@@ -2548,20 +2640,17 @@ async def scan_and_trade(state: dict, user_id: int = None):
                 pos.pop("_sell_limit_order_id", None)
                 await exit_position(state, pos, "STOP LOSS", user_id=user_id)
             continue
-        if pos.get("realMode") and pos.get("exchange") == "coinbase":
+        if pos.get("realMode"):
             try:
-                cb_key = state.get("coinbase_api_key_agent", "")
-                cb_sec = state.get("coinbase_api_secret_agent", "")
-                if not cb_key:
-                    cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
-                _, fresh = await refresh_coinbase_position_price(pos, cb_key, cb_sec)
-                if not fresh and pos.get("_coinbase_price_error"):
+                _, fresh = await refresh_exchange_position_price(state, pos, user_id)
+                price_error = pos.get("_coinbase_price_error") or pos.get("_revx_price_error")
+                if not fresh and price_error:
                     now_warn = time.time()
                     if now_warn - float(pos.get("_coinbase_price_warn_ts") or 0.0) > COINBASE_PRICE_WARN_TTL:
                         pos["_coinbase_price_warn_ts"] = now_warn
-                        add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo Coinbase non aggiornato — uso ultimo prezzo noto")
+                        add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo {pos.get('exchange','exchange')} non aggiornato — uso ultimo prezzo noto")
             except Exception as e:
-                add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo Coinbase non disponibile — SL/TP saltato: {public_error(e, max_len=100)}")
+                add_log(state, "info", "WARN", f"{pos['symbol']}: prezzo {pos.get('exchange','exchange')} non disponibile — SL/TP saltato: {public_error(e, max_len=100)}")
                 continue
         cur   = pos["currentPrice"]
         entry = pos["entryPrice"]
@@ -3201,6 +3290,13 @@ async def monitor_manual_positions(state: dict, user_id: int):
     revx_key_id  = state.get("revx_key_id", "")
     revx_priv    = state.get("revx_private_key", "")
     use_revx     = state.get("use_revx", False)
+    if use_revx and (not revx_key_id or not revx_priv):
+        try:
+            revx_key_id, revx_priv = await load_revx_keys_for_user(user_id)
+            state["revx_key_id"] = revx_key_id
+            state["revx_private_key"] = revx_priv
+        except Exception:
+            pass
 
     # Sync RevX: rimuovi posizioni chiuse esternamente controllando i saldi
     if use_revx and revx_key_id and revx_priv:
@@ -3215,8 +3311,10 @@ async def monitor_manual_positions(state: dict, user_id: int):
                 coin_bal = bal_map.get(sym, 0.0)
                 qty = pos.get("qty_purchased", 0.0)
                 if qty > 0 and coin_bal < qty * 0.05:
-                    cur = market_data.get(sym, {}).get("price", pos["entryPrice"])
-                    pos["currentPrice"] = cur
+                    try:
+                        await refresh_revx_position_price(pos, revx_key_id, revx_priv)
+                    except Exception:
+                        pass
                     add_log(state, "sell", "CHIUSO ESTERNAMENTE",
                             f"{sym} — posizione non trovata su Revolut X (saldo {coin_bal:.6f})")
                     await notify(state, f"{sym} chiuso esternamente su Revolut X")
@@ -3236,17 +3334,17 @@ async def monitor_manual_positions(state: dict, user_id: int):
     # SL / TP per tutte le posizioni (manuali e agente)
     for pos in list(state["positions"]):
         sym = pos["symbol"]
-        if pos.get("exchange") == "coinbase" and pos.get("realMode"):
+        if pos.get("realMode"):
             try:
-                api_key, api_secret = await load_coinbase_keys_for_user(user_id)
-                cur, fresh = await refresh_coinbase_position_price(pos, api_key, api_secret)
-                if not fresh and pos.get("_coinbase_price_error"):
+                cur, fresh = await refresh_exchange_position_price(state, pos, user_id)
+                price_error = pos.get("_coinbase_price_error") or pos.get("_revx_price_error")
+                if not fresh and price_error:
                     now_warn = time.time()
                     if now_warn - float(pos.get("_coinbase_price_warn_ts") or 0.0) > COINBASE_PRICE_WARN_TTL:
                         pos["_coinbase_price_warn_ts"] = now_warn
-                        add_log(state, "info", "WARN", f"{sym}: prezzo Coinbase non aggiornato — uso ultimo prezzo noto")
+                        add_log(state, "info", "WARN", f"{sym}: prezzo {pos.get('exchange','exchange')} non aggiornato — uso ultimo prezzo noto")
             except Exception as e:
-                add_log(state, "info", "WARN", f"{sym}: prezzo Coinbase non disponibile — monitor SL/TP saltato: {public_error(e, max_len=100)}")
+                add_log(state, "info", "WARN", f"{sym}: prezzo {pos.get('exchange','exchange')} non disponibile — monitor SL/TP saltato: {public_error(e, max_len=100)}")
                 continue
         else:
             cur = market_data.get(sym, {}).get("price", 0.0)
@@ -3276,22 +3374,12 @@ async def refresh_status_position_prices(state: dict, user_id: int):
     if not positions:
         return
 
-    coinbase_positions = [
-        p for p in positions
-        if p.get("realMode") and p.get("exchange") == "coinbase"
-    ]
-    if coinbase_positions:
+    real_positions = [p for p in positions if p.get("realMode")]
+    for pos in real_positions:
         try:
-            api_key, api_secret = await load_coinbase_keys_for_user(user_id)
-            for pos in coinbase_positions:
-                try:
-                    await refresh_coinbase_position_price(pos, api_key, api_secret)
-                except Exception as e:
-                    pos["_coinbase_price_error"] = public_error(e, max_len=100)
+            await refresh_exchange_position_price(state, pos, user_id)
         except Exception as e:
-            err = public_error(e, max_len=100)
-            for pos in coinbase_positions:
-                pos["_coinbase_price_error"] = err
+            pos[f"_{pos.get('exchange', 'exchange')}_price_error"] = public_error(e, max_len=100)
 
 async def reconcile_coinbase_external_closures(
     state: dict,
@@ -3447,6 +3535,8 @@ async def background_loop():
 
             sessions_snapshot = list(user_sessions.items())
             for uid, state in sessions_snapshot:
+                if drop_imported_exchange_positions(state):
+                    await persist_sessions()
                 if state["running"]:
                     try:
                         await scan_and_trade(state, user_id=uid)
@@ -4380,6 +4470,8 @@ async def klines_history(request: Request, symbol: str, start: int, end: int, in
 async def get_status(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=120, window=60, key_suffix="status")
     state = get_session(user_id)
+    if drop_imported_exchange_positions(state):
+        await persist_sessions()
     if not state.get("telegram_chat_id") and db_pool:
         try:
             async with db_pool.acquire() as conn:
@@ -5004,6 +5096,14 @@ async def load_coinbase_keys_for_user(user_id: int) -> tuple[str, str]:
     return decrypt_key(row["coinbase_api_key"]), decrypt_key(row["coinbase_api_secret"])
 
 async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 0.50) -> dict:
+    return {
+        "ok": True,
+        "imported": [],
+        "skipped": [],
+        "message": "Le posizioni aperte direttamente su Coinbase non vengono importate né gestite da Zentra.",
+    }
+
+async def inspect_coinbase_external_holdings_for_user(user_id: int, min_value_usd: float = 0.50) -> dict:
     api_key, api_secret = await load_coinbase_keys_for_user(user_id)
     accounts = await fetch_coinbase_accounts(api_key, api_secret)
     state = get_session(user_id)
@@ -5300,8 +5400,10 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
             )
         is_real = False
     price = market_data.get(sym, {}).get("price", 0.0)
-    if not price:
+    if not price and (user_plan == "free" or exchange not in ("coinbase", "revx")):
         raise HTTPException(status_code=400, detail="Prezzo non disponibile per questa coin")
+    if not price:
+        price = 1.0
     R_pct      = sl_pct / 100
     stop_price = price * (1 - R_pct)
     tp_price   = price * (1 + tp_pct / 100)
@@ -6214,7 +6316,6 @@ async def exchange_price(exchange: str, symbol: str, request: Request, user_id: 
         raise HTTPException(status_code=400, detail="Simbolo non valido")
     exchange = exchange.lower()
     if exchange == "revx":
-        # Prova a prendere il prezzo live da RevX, fallback a Binance
         state = get_session(user_id)
         key_id = state.get("revx_key_id", "")
         priv   = state.get("revx_private_key", "")
@@ -6229,24 +6330,16 @@ async def exchange_price(exchange: str, symbol: str, request: Request, user_id: 
                 pass
         if key_id and priv:
             try:
-                data = await revx_request("GET", "/api/1.0/tickers", key_id=key_id, private_key=priv, params={})
-                tickers = data.get("data", []) if isinstance(data, dict) else data
-                for t in (tickers if isinstance(tickers, list) else []):
-                    if t.get("symbol", "") == f"{sym}/USD":
-                        price = float(t.get("last_price") or t.get("mid") or t.get("ask") or 0)
-                        if price > 0:
-                            return {"price": price, "exchange": "revx", "symbol": sym}
-            except Exception:
-                pass
-        # Fallback Binance
-        price = market_data.get(sym, {}).get("price", 0.0)
-        if not price:
-            raise HTTPException(status_code=404, detail=f"Prezzo non disponibile per {sym} su RevX")
-        return {"price": price, "exchange": "revx", "symbol": sym, "source": "binance_fallback"}
+                price = await get_revx_live_price(f"{sym}-USD", key_id, priv)
+                return {"price": price, "exchange": "revx", "symbol": sym, "product_id": f"{sym}-USD"}
+            except Exception as e:
+                raise HTTPException(status_code=404, detail=public_error(e, key_id, priv))
+        raise HTTPException(status_code=400, detail="Chiavi RevX non configurate")
     elif exchange == "coinbase":
         api_key, api_secret = await load_coinbase_keys_for_user(user_id)
         try:
-            product_id, price = await resolve_coinbase_product(sym, api_key, api_secret)
+            product_id, _ = await resolve_coinbase_product(sym, api_key, api_secret)
+            price = await get_coinbase_live_price(product_id, api_key, api_secret)
             return {"price": price, "exchange": "coinbase", "symbol": sym, "product_id": product_id}
         except Exception as e:
             raise HTTPException(status_code=404, detail=public_error(e, api_key, api_secret))
