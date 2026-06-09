@@ -2535,7 +2535,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if cur <= 0:
             continue
 
-        if pos.get("_manual_action_required") or (pos.get("imported") and pos.get("stopPrice", 0.0) <= 0):
+        if pos.get("_manual_action_required") or pos.get("imported"):
             continue
 
         max_hold_hours = cfg.get("maxHoldHours", 4)
@@ -3212,7 +3212,7 @@ async def monitor_manual_positions(state: dict, user_id: int):
         if cur > pos.get("peak_price", pos["entryPrice"]):
             pos["peak_price"] = cur
 
-        if pos.get("_manual_action_required") or (pos.get("imported") and pos.get("stopPrice", 0.0) <= 0):
+        if pos.get("_manual_action_required") or pos.get("imported"):
             continue
 
         if cur <= pos["stopPrice"]:
@@ -4868,7 +4868,6 @@ async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 
     api_key, api_secret = await load_coinbase_keys_for_user(user_id)
     accounts = await fetch_coinbase_accounts(api_key, api_secret)
     state = get_session(user_id)
-    cfg = state.get("config", {})
     existing = {
         p.get("symbol")
         for p in state.get("positions", [])
@@ -4908,7 +4907,7 @@ async def sync_coinbase_positions_for_user(user_id: int, min_value_usd: float = 
             "size_remaining": round(value_usd, 2),
             "tp1_hit": False,
             "entryTime": datetime.utcnow().isoformat() + "Z",
-            "stopPrice": round(price * (1 - cfg.get("maxStopPct", 0.05)), 8),
+            "stopPrice": 0.0,
             "tp1Price": price * 10,
             "tp2Price": price * 10,
             "R_pct": 0.0,
