@@ -575,6 +575,30 @@ async def get_coinbase_product_price(product_id: str, api_key: str, api_secret: 
             return price
     raise ValueError(f"Prezzo Coinbase non disponibile per {product_id}")
 
+async def get_coinbase_live_price(product_id: str, api_key: str, api_secret: str) -> float:
+    """Legge un prezzo più reattivo da best bid/ask, con fallback al product price."""
+    try:
+        book = await coinbase_request(
+            "GET", f"/api/v3/brokerage/best_bid_ask?product_ids={product_id}",
+            api_key=api_key, api_secret=api_secret
+        )
+        pricebooks = book.get("pricebooks") if isinstance(book, dict) else None
+        if isinstance(pricebooks, list) and pricebooks:
+            pb = next((p for p in pricebooks if p.get("product_id") == product_id), pricebooks[0])
+            bids = pb.get("bids") or []
+            asks = pb.get("asks") or []
+            bid = float((bids[0] or {}).get("price") or 0) if bids else 0.0
+            ask = float((asks[0] or {}).get("price") or 0) if asks else 0.0
+            if bid > 0 and ask > 0:
+                return (bid + ask) / 2
+            if bid > 0:
+                return bid
+            if ask > 0:
+                return ask
+    except Exception:
+        pass
+    return await get_coinbase_product_price(product_id, api_key, api_secret)
+
 async def get_coinbase_quote_balance(api_key: str, api_secret: str) -> float:
     accounts = await fetch_coinbase_accounts(api_key, api_secret)
     return sum(
@@ -603,7 +627,7 @@ async def refresh_coinbase_position_price(pos: dict, api_key: str, api_secret: s
     if current > 0 and now - last_fetch < COINBASE_POSITION_PRICE_TTL:
         return current, False
     try:
-        price = await get_coinbase_product_price(pos.get("symbol_pair", f"{pos['symbol']}-USDC"), api_key, api_secret)
+        price = await get_coinbase_live_price(pos.get("symbol_pair", f"{pos['symbol']}-USDC"), api_key, api_secret)
         pos["currentPrice"] = price
         pos["_coinbase_price_last_fetch"] = now
         pos.pop("_coinbase_price_error", None)
@@ -2488,6 +2512,16 @@ async def scan_and_trade(state: dict, user_id: int = None):
             except Exception as e:
                 print(f"[revx_agent_sync] user {user_id}: {e}")
 
+    if any(p.get("realMode") and p.get("exchange") == "coinbase" for p in state.get("positions", [])):
+        try:
+            cb_key = state.get("coinbase_api_key_agent", "")
+            cb_sec = state.get("coinbase_api_secret_agent", "")
+            if not cb_key:
+                cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
+            await reconcile_coinbase_external_closures(state, user_id, cb_key, cb_sec)
+        except Exception as e:
+            print(f"[coinbase_agent_sync] user {user_id}: {public_error(e, max_len=100)}")
+
     # Poll ordini GTC limit in attesa di fill
     for pos in list(state["positions"]):
         if pos.get("_sell_mode") == "retry_limit" and pos.get("realMode") and pos.get("exchange") == "revx":
@@ -3192,6 +3226,13 @@ async def monitor_manual_positions(state: dict, user_id: int):
         except Exception as e:
             print(f"[revx_sync] user {user_id}: {e}")
 
+    if any(p.get("realMode") and p.get("exchange") == "coinbase" for p in state.get("positions", [])):
+        try:
+            api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+            await reconcile_coinbase_external_closures(state, user_id, api_key, api_secret)
+        except Exception as e:
+            print(f"[coinbase_sync] user {user_id}: {public_error(e, max_len=100)}")
+
     # SL / TP per tutte le posizioni (manuali e agente)
     for pos in list(state["positions"]):
         sym = pos["symbol"]
@@ -3251,6 +3292,67 @@ async def refresh_status_position_prices(state: dict, user_id: int):
             err = public_error(e, max_len=100)
             for pos in coinbase_positions:
                 pos["_coinbase_price_error"] = err
+
+async def reconcile_coinbase_external_closures(
+    state: dict,
+    user_id: int,
+    api_key: str = "",
+    api_secret: str = "",
+    *,
+    interval: float = 20.0,
+):
+    """Rimuove da Zentra posizioni Coinbase aperte da Zentra ma già chiuse sull'exchange."""
+    coinbase_positions = [
+        p for p in list(state.get("positions") or [])
+        if p.get("realMode")
+        and p.get("exchange") == "coinbase"
+        and not p.get("imported")
+    ]
+    if not coinbase_positions:
+        return
+
+    now = time.time()
+    if now - float(state.get("_coinbase_external_sync_last") or 0.0) < interval:
+        return
+    state["_coinbase_external_sync_last"] = now
+
+    if not api_key:
+        api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+    accounts = await fetch_coinbase_accounts(api_key, api_secret)
+    bal_map = {
+        str(a.get("currency") or "").upper(): float(a.get("available") or 0.0)
+        for a in accounts
+    }
+
+    for pos in list(coinbase_positions):
+        if pos not in state.get("positions", []):
+            continue
+        sym = str(pos.get("symbol") or "").upper()
+        qty = float(pos.get("qty_purchased") or 0.0)
+        if not sym or qty <= 0:
+            continue
+        real_qty = float(bal_map.get(sym, 0.0) or 0.0)
+        if real_qty >= qty * 0.05:
+            pos["qty_purchased"] = real_qty
+            continue
+
+        try:
+            await refresh_coinbase_position_price(pos, api_key, api_secret)
+        except Exception:
+            fallback = market_data.get(sym, {}).get("price", 0.0)
+            if fallback > 0:
+                pos["currentPrice"] = fallback
+
+        pos["_already_sold"] = True
+        pos["_sell_type"] = "Esterno Coinbase"
+        add_log(
+            state,
+            "sell",
+            "CHIUSO ESTERNAMENTE",
+            f"{sym} — posizione non trovata su Coinbase (saldo {real_qty:.8f})",
+        )
+        await notify(state, f"{sym} chiuso esternamente su Coinbase")
+        await exit_position(state, pos, "CHIUSO ESTERNAMENTE (Coinbase)", user_id=user_id)
 
 def is_external_imported_position(pos: dict) -> bool:
     """True for positions detected on an exchange but not opened by Zentra."""
