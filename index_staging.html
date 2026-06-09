@@ -4795,7 +4795,16 @@ function renderPositions() {
 
     // SL bar: SL (sinistra) → ENTRY → prezzo corrente (dot) → TP (destra)
     let barHtml = '';
-    if (stopPrice > 0 && entryPrice > 0) {
+    if (stopPrice === 0 && entryPrice > 0) {
+      barHtml = `<div style="margin:12px 0 8px;padding:12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:12px">
+        <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:8px">⚠ Posizione recuperata — imposta SL/TP per attivare il monitoraggio</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="sl-input-${esc(p.symbol)}" type="number" step="any" placeholder="Stop Loss $" style="flex:1;min-width:110px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text1);font-size:13px">
+          <input id="tp-input-${esc(p.symbol)}" type="number" step="any" placeholder="Take Profit $ (opz.)" style="flex:1;min-width:130px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text1);font-size:13px">
+          <button onclick="saveSLTP('${esc(p.symbol)}')" style="padding:7px 16px;border-radius:8px;background:var(--blue);color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer">Salva</button>
+        </div>
+      </div>`;
+    } else if (stopPrice > 0 && entryPrice > 0) {
       const barMax  = tpPrice > entryPrice ? tpPrice : entryPrice + (entryPrice - stopPrice) * 0.6;
       const total   = barMax - stopPrice;
       if (total > 0) {
@@ -4886,6 +4895,21 @@ function updatePositionPricesInPlace() {
       curValEl.textContent = getCurrSym() + fmtMoney(curVal);
     }
   });
+}
+
+async function saveSLTP(symbol) {
+  const sl = parseFloat(document.getElementById(`sl-input-${symbol}`)?.value);
+  const tp = parseFloat(document.getElementById(`tp-input-${symbol}`)?.value) || 0;
+  if (!sl || sl <= 0) { alert('Inserisci uno Stop Loss valido'); return; }
+  try {
+    const r = await apiFetch(`/position/${symbol}/sltp`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stop_price: sl, tp_price: tp })
+    });
+    if (r.ok) { await pollStatus(); }
+    else { alert((await r.json()).detail || 'Errore salvataggio SL/TP'); }
+  } catch(e) { alert('Errore: ' + e.message); }
 }
 
 async function closePosition(symbol) {

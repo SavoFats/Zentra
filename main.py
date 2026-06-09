@@ -5159,6 +5159,32 @@ async def pause_agent(request: Request, user_id: int = Depends(get_current_user)
     await persist_sessions()
     return {"ok": True, "paused": state["paused"], "status": status}
 
+class SLTPUpdateReq(BaseModel):
+    stop_price: float
+    tp_price: float = 0.0
+
+@app.patch("/position/{symbol}/sltp")
+async def update_position_sltp(symbol: str, body: SLTPUpdateReq, request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=20, window=60, key_suffix="sltp")
+    sym = symbol.upper()
+    state = get_session(user_id)
+    pos = next((p for p in state["positions"] if p["symbol"] == sym), None)
+    if not pos:
+        raise HTTPException(status_code=404, detail=f"Posizione {sym} non trovata")
+    if body.stop_price <= 0:
+        raise HTTPException(status_code=400, detail="Stop price deve essere > 0")
+    if body.stop_price >= pos.get("currentPrice", body.stop_price):
+        raise HTTPException(status_code=400, detail="Stop price deve essere sotto il prezzo corrente")
+    pos["stopPrice"]  = body.stop_price
+    pos["tp1Price"]   = body.tp_price if body.tp_price > 0 else pos.get("tp1Price", 0.0)
+    pos["tp2Price"]   = body.tp_price if body.tp_price > 0 else pos.get("tp2Price", 0.0)
+    pos.pop("_manual_action_required", None)
+    pos.pop("_recovered", None)
+    add_log(state, "info", "SL/TP AGGIORNATO",
+            f"{sym} — SL: ${body.stop_price:.4f}" + (f" | TP: ${body.tp_price:.4f}" if body.tp_price > 0 else ""))
+    await persist_sessions()
+    return {"ok": True, "stopPrice": pos["stopPrice"], "tp1Price": pos["tp1Price"]}
+
 @app.post("/close_position/{symbol}")
 async def close_symbol(symbol: str, request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=20, window=60, key_suffix="close")
