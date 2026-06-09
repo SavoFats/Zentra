@@ -474,6 +474,60 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertIn(pos, state["positions"])
         self.assertEqual(pos["currentPrice"], 0.1324)
 
+    def test_status_refreshes_coinbase_position_price(self):
+        main = self.main
+        state = main.make_session()
+        state["capital"] = 100.0
+        state["currentCapital"] = 98.0
+        pos = {
+            "symbol": "FORT",
+            "entryPrice": 0.0123,
+            "currentPrice": 0.0123,
+            "highPrice": 0.0123,
+            "peak_price": 0.0123,
+            "size": 2.0,
+            "size_remaining": 2.0,
+            "entryTime": "2026-06-09T14:35:00Z",
+            "stopPrice": 0.0120,
+            "tp1Price": 0.0133,
+            "realMode": True,
+            "exchange": "coinbase",
+            "symbol_pair": "FORT-USD",
+            "qty_purchased": 160.63,
+            "manual": True,
+        }
+        state["positions"].append(pos)
+
+        async def fake_load_keys(user_id):
+            self.assertEqual(user_id, 123)
+            return "api-key", "api-secret"
+
+        async def fake_coinbase_price(product_id, api_key, api_secret):
+            self.assertEqual(product_id, "FORT-USD")
+            return 0.0128
+
+        original_sessions = main.user_sessions
+        original_db_pool = main.db_pool
+        original_rate_limit = main.check_rate_limit
+        original_load = main.load_coinbase_keys_for_user
+        original_price = main.get_coinbase_product_price
+        main.user_sessions = {123: state}
+        main.db_pool = None
+        main.check_rate_limit = lambda *args, **kwargs: None
+        main.load_coinbase_keys_for_user = fake_load_keys
+        main.get_coinbase_product_price = fake_coinbase_price
+        try:
+            result = asyncio.run(main.get_status(request=object(), user_id=123))
+        finally:
+            main.user_sessions = original_sessions
+            main.db_pool = original_db_pool
+            main.check_rate_limit = original_rate_limit
+            main.load_coinbase_keys_for_user = original_load
+            main.get_coinbase_product_price = original_price
+
+        self.assertEqual(result["positions"][0]["currentPrice"], 0.0128)
+        self.assertGreater(result["pnl"], 0)
+
     def test_external_market_price_does_not_overwrite_real_coinbase_position(self):
         pos = {
             "symbol": "OCEAN",

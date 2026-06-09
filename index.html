@@ -4762,7 +4762,7 @@ function renderPositions() {
   if (!pos.length) { wrap.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div>'; return; }
   pos.forEach(p => {
     const md = mktData.find(c => c.symbol === p.symbol);
-    if (md && md.price > 0) p.currentPrice = md.price;
+    if (!p.realMode && md && md.price > 0) p.currentPrice = md.price;
   });
   wrap.innerHTML = pos.map(p => {
     const entryPrice   = p.entryPrice || 0;
@@ -4853,9 +4853,9 @@ function updatePositionPricesInPlace() {
     const size       = p.size_remaining || p.size || 0;
     const posQty     = p.qty_purchased > 0 ? p.qty_purchased : (entryPrice > 0 ? size / entryPrice : 0);
 
-    // Prezzo più aggiornato: mktData prima, poi quello del server
+    // Prezzo più aggiornato: per posizioni reali usa quello del backend/exchange.
     const md           = mktData.find(c => c.symbol === sym);
-    const currentPrice = (md && md.price > 0) ? md.price : (p.currentPrice || entryPrice);
+    const currentPrice = (!p.realMode && md && md.price > 0) ? md.price : (p.currentPrice || entryPrice);
     if (!currentPrice || currentPrice <= 0) return;
 
     const pnl   = entryPrice > 0 ? (currentPrice - entryPrice) / entryPrice * size : 0;

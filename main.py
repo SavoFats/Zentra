@@ -1610,8 +1610,8 @@ def add_log(state: dict, type_: str, label: str, desc: str):
         log.pop()
 
 def update_position_from_external_price(pos: dict, price: float):
-    """Aggiorna prezzi posizione da feed generici, ma non per Coinbase real."""
-    if pos.get("realMode") and pos.get("exchange") == "coinbase":
+    """Aggiorna prezzi posizione da feed generici, ma non per posizioni reali exchange-specific."""
+    if pos.get("realMode") and pos.get("exchange") in ("coinbase", "revx"):
         return
     pos["currentPrice"] = price
     if price > pos.get("highPrice", pos.get("entryPrice", price)):
@@ -3229,6 +3229,29 @@ async def monitor_manual_positions(state: dict, user_id: int):
 
     _update_pnl(state)
 
+async def refresh_status_position_prices(state: dict, user_id: int):
+    """Aggiorna i prezzi reali prima di restituire /status, senza eseguire chiusure."""
+    positions = list(state.get("positions") or [])
+    if not positions:
+        return
+
+    coinbase_positions = [
+        p for p in positions
+        if p.get("realMode") and p.get("exchange") == "coinbase"
+    ]
+    if coinbase_positions:
+        try:
+            api_key, api_secret = await load_coinbase_keys_for_user(user_id)
+            for pos in coinbase_positions:
+                try:
+                    await refresh_coinbase_position_price(pos, api_key, api_secret)
+                except Exception as e:
+                    pos["_coinbase_price_error"] = public_error(e, max_len=100)
+        except Exception as e:
+            err = public_error(e, max_len=100)
+            for pos in coinbase_positions:
+                pos["_coinbase_price_error"] = err
+
 def is_external_imported_position(pos: dict) -> bool:
     """True for positions detected on an exchange but not opened by Zentra."""
     return bool(pos.get("_manual_action_required") or pos.get("imported"))
@@ -4264,6 +4287,7 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
                 state["telegram_chat_id"] = row["telegram_chat_id"]
         except Exception:
             pass
+    await refresh_status_position_prices(state, user_id)
     unr     = unrealized_pnl(state)
     pos_val = sum(p.get("size_remaining", p["size"]) for p in state["positions"])
     total   = state["currentCapital"] + pos_val + unr
