@@ -3978,6 +3978,39 @@ async def restore_sessions_from_db(pool):
             except Exception as e:
                 import traceback as _tb
                 print(f"[RESTORE] Errore user {uid}: {e}\n{_tb.format_exc()}")
+
+        # Controlla anche utenti con RevX configurato ma senza sessione attiva
+        try:
+            async with pool.acquire() as conn:
+                revx_users = await conn.fetch(
+                    "SELECT id, revx_key_id, revx_private_key FROM users "
+                    "WHERE revx_key_id IS NOT NULL AND revx_key_id != ''"
+                )
+            for row in revx_users:
+                uid = row["id"]
+                if uid in user_sessions:
+                    continue
+                key_id = decrypt_key(row["revx_key_id"] or "")
+                priv   = decrypt_key(row["revx_private_key"] or "")
+                if not key_id or not priv:
+                    continue
+                try:
+                    state = make_session()
+                    state["revx_key_id"]      = key_id
+                    state["revx_private_key"] = priv
+                    user_sessions[uid] = state
+                    found = await recover_revx_positions(state, uid)
+                    if found:
+                        await persist_sessions()
+                    else:
+                        user_sessions.pop(uid, None)
+                except Exception as _rec_err:
+                    user_sessions.pop(uid, None)
+                    print(f"[RECOVER-SCAN] User {uid}: {_rec_err}")
+        except Exception as e:
+            import traceback as _tb
+            print(f"[RECOVER-SCAN] Errore: {e}\n{_tb.format_exc()}")
+
     except Exception as e:
         import traceback as _tb
         print(f"[RESTORE] Errore fatale: {e}\n{_tb.format_exc()}")
