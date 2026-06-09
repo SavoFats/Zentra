@@ -1887,6 +1887,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                 "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
                 "realMode": True, "fee_pct": 0.0009,
                 "qty_purchased": qty_purchased, "exchange": "revx", "symbol_pair": symbol_revx,
+                "revx_order_id": order_id,
                 "entry_usd": round(size, 2),
                 "buy_fee_usd": round(buy_fee_usd, 4),
             }
@@ -3317,29 +3318,19 @@ async def monitor_manual_positions(state: dict, user_id: int):
         except Exception:
             pass
 
-    # Sync RevX: rimuovi posizioni chiuse esternamente controllando i saldi
+    # Sync RevX: aggiorna qty_purchased dal saldo reale (total, case-insensitive)
     if has_revx_positions and revx_key_id and revx_priv:
         try:
             result = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
             balances = parse_revx_balances(result)
-            bal_map = {b["currency"]: float(b.get("available", 0) or 0) for b in balances if isinstance(b, dict)}
+            bal_map = {str(b.get("currency", "")).upper(): float(b.get("total", 0) or 0)
+                       for b in balances if isinstance(b, dict)}
             for pos in list(state["positions"]):
                 if pos.get("exchange") != "revx":
                     continue
-                sym = pos["symbol"]
-                coin_bal = bal_map.get(sym, 0.0)
-                qty = pos.get("qty_purchased", 0.0)
-                if qty > 0 and coin_bal < qty * 0.05:
-                    try:
-                        await refresh_revx_position_price(pos, revx_key_id, revx_priv)
-                    except Exception:
-                        pass
-                    add_log(state, "sell", "CHIUSO ESTERNAMENTE",
-                            f"{sym} — posizione non trovata su Revolut X (saldo {coin_bal:.6f})")
-                    await notify(state, f"{sym} chiuso esternamente su Revolut X")
-                    pos["_already_sold"] = True
-                    pos["_sell_type"] = "Esterno"
-                    await exit_position(state, pos, "CHIUSO ESTERNAMENTE (RevX)", user_id=user_id)
+                coin_bal = bal_map.get(pos["symbol"].upper(), 0.0)
+                if coin_bal > 0:
+                    pos["qty_purchased"] = coin_bal
         except Exception as e:
             print(f"[revx_sync] user {user_id}: {e}")
 
@@ -3855,6 +3846,71 @@ async def fetch_coingecko_logos():
     except Exception as e:
         print(f"[CG] Errore fetch loghi: {e}")
 
+async def recover_revx_positions(state: dict, user_id: int):
+    """Recupera posizioni RevX con saldo > 0 non tracciate nel DB dopo un restart."""
+    revx_key_id = state.get("revx_key_id", "")
+    revx_priv   = state.get("revx_private_key", "")
+    if not revx_key_id or not revx_priv:
+        return False
+    FIAT = {"USD", "EUR", "GBP", "CHF", "JPY"}
+    try:
+        result   = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
+        balances = parse_revx_balances(result)
+    except Exception as e:
+        print(f"[RECOVER] User {user_id}: errore fetch balances: {e}")
+        return False
+    tracked = {p["symbol"].upper() for p in state.get("positions", [])
+               if p.get("exchange") == "revx" and p.get("realMode")}
+    recovered = False
+    for b in balances:
+        if not isinstance(b, dict):
+            continue
+        currency = str(b.get("currency", "")).upper()
+        if not currency or currency in FIAT:
+            continue
+        total = float(b.get("total", 0) or 0)
+        if total <= 0.001 or currency in tracked:
+            continue
+        symbol_pair = f"{currency}-USD"
+        entry_price = 0.0
+        try:
+            entry_price = await get_revx_live_price(symbol_pair, revx_key_id, revx_priv)
+        except Exception:
+            pass
+        if entry_price <= 0:
+            restore_debug_log(f"[RECOVER] User {user_id}: prezzo {currency} non disponibile, skip")
+            continue
+        size_usd = total * entry_price
+        pos = {
+            "symbol": currency, "icon": "",
+            "entryPrice": entry_price, "currentPrice": entry_price,
+            "highPrice": entry_price, "peak_price": entry_price,
+            "size": size_usd, "size_remaining": size_usd, "tp1_hit": False,
+            "entryTime": datetime.utcnow().isoformat() + "Z",
+            "stopPrice": 0.0, "tp1Price": 0.0, "tp2Price": 0.0,
+            "R_pct": 0.0, "atr_5m": 0.0,
+            "realMode": True, "fee_pct": 0.0009,
+            "qty_purchased": total, "exchange": "revx", "symbol_pair": symbol_pair,
+            "entry_usd": round(size_usd, 2), "buy_fee_usd": 0.0,
+            "manual": True, "_recovered": True, "_manual_action_required": True,
+        }
+        state["positions"].append(pos)
+        tracked.add(currency)
+        add_log(state, "buy", "POSIZIONE RECUPERATA",
+                f"{currency} — trovata {total:.6f} su RevX, non tracciata. Imposta SL/TP.")
+        tg_chat = state.get("telegram_chat_id", "")
+        msg = (f"<b>Posizione recuperata: {currency}</b>\n"
+               f"Trovata {total:.6f} {currency} su RevX non tracciata da Zentra.\n"
+               f"Prezzo attuale usato come entry: ${entry_price:.4f}\n"
+               f"<b>Imposta SL/TP dall'app.</b>")
+        if tg_chat:
+            await send_telegram_to(tg_chat, msg)
+        else:
+            await send_telegram(msg)
+        restore_debug_log(f"[RECOVER] User {user_id}: recuperata {currency} {total:.6f} @ ${entry_price:.4f}")
+        recovered = True
+    return recovered
+
 async def restore_sessions_from_db(pool):
     """Ripristina sessioni dal DB dopo un riavvio.
     Sessioni con posizioni aperte sopravvivono al deploy con SL/TP attivi:
@@ -3894,8 +3950,14 @@ async def restore_sessions_from_db(pool):
 
                 user_sessions[uid] = state
 
-                n    = len(positions)
-                syms = ", ".join(p.get("symbol", "?") for p in positions)
+                # Recupera posizioni RevX con saldo > 0 non trovate nel DB
+                try:
+                    await recover_revx_positions(state, uid)
+                except Exception as _rec_err:
+                    print(f"[RECOVER] User {uid}: {_rec_err}")
+
+                n    = len(state.get("positions", []))
+                syms = ", ".join(p.get("symbol", "?") for p in state.get("positions", []))
                 mode = "paused" if was_running else "monitor"
                 restore_debug_log(f"[RESTORE] User {uid}: RIPRISTINATO {n} posizioni ({syms}) — modalità {mode}")
 
@@ -5550,6 +5612,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
                 "realMode": True, "fee_pct": 0.0009,
                 "qty_purchased": qty, "exchange": "revx", "symbol_pair": symbol_revx,
+                "revx_order_id": order_id,
                 "entry_usd": amount, "buy_fee_usd": round(fee_usd, 4), "manual": True,
             }
             state["positions"].append(pos)
