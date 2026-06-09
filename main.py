@@ -5754,7 +5754,12 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
             res = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                json={"model": "claude-sonnet-4-6", "max_tokens": 2048, "system": system_prompt, "messages": messages_to_send}
+                json={
+                    "model": os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+                    "max_tokens": 2048,
+                    "system": system_prompt,
+                    "messages": messages_to_send,
+                }
             )
         try:
             data = res.json()
@@ -5773,12 +5778,9 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         return {"error": public_error(Exception(str(data.get("error", data))), api_key)}
 
     reply = data["content"][0]["text"]
-    if not chart_coin:
-        chart_coin = detect_coin_in_message(reply)
     return {
         "reply": reply,
         "chart_symbol": chart_coin,
-        "news": news_items,
         "plan": raw_plan,
         "ai_analyses_today": ai_today,
         "ai_analyses_per_day": ai_limit,

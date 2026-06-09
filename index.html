@@ -7168,8 +7168,10 @@ let _aiUnread = 0;
 let _aiThreads = [];
 let _aiActiveThreadId = '';
 let _aiChartSeq = 0;
+let _aiRemoteThreadIds = new Set();
 const AI_THREADS_KEY = 'zentra_ai_threads_v1';
 const AI_ACTIVE_THREAD_KEY = 'zentra_ai_active_thread_v1';
+const AI_REMOTE_THREAD_IDS_KEY = 'zentra_ai_remote_thread_ids_v1';
 
 function _aiStorageScope() {
   return (_email || localStorage.getItem('ca_email') || _username || localStorage.getItem('ca_username') || 'anon')
@@ -7185,6 +7187,10 @@ function _aiThreadsKey() {
 
 function _aiActiveThreadKey() {
   return AI_ACTIVE_THREAD_KEY + ':' + _aiStorageScope();
+}
+
+function _aiRemoteThreadIdsKey() {
+  return AI_REMOTE_THREAD_IDS_KEY + ':' + _aiStorageScope();
 }
 
 function updateAIUsageFromPayload(d) {
@@ -7311,11 +7317,31 @@ function _aiLoadThreads() {
   } catch (_) {
     _aiThreads = [];
   }
+  try {
+    const remoteIds = JSON.parse(localStorage.getItem(_aiRemoteThreadIdsKey()) || '[]');
+    _aiRemoteThreadIds = new Set(Array.isArray(remoteIds) ? remoteIds.filter(Boolean) : []);
+  } catch (_) {
+    _aiRemoteThreadIds = new Set();
+  }
   _aiThreads.sort((a,b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   _aiActiveThreadId = localStorage.getItem(_aiActiveThreadKey()) || (_aiThreads[0] && _aiThreads[0].id) || '';
   if (_aiActiveThreadId && !_aiThreads.some(t => t.id === _aiActiveThreadId)) {
     _aiActiveThreadId = (_aiThreads[0] && _aiThreads[0].id) || '';
   }
+}
+
+function _aiSaveRemoteThreadIds() {
+  try {
+    localStorage.setItem(_aiRemoteThreadIdsKey(), JSON.stringify([..._aiRemoteThreadIds].slice(-AI_LOCAL_THREAD_LIMIT * 2)));
+  } catch (_) {}
+}
+
+function _aiMarkThreadSynced(threadId) {
+  if (!threadId) return;
+  _aiRemoteThreadIds.add(threadId);
+  const thread = _aiThreads.find(t => t.id === threadId);
+  if (thread) thread.syncedFromServer = true;
+  _aiSaveRemoteThreadIds();
 }
 
 function _aiSaveThreads() {
@@ -7348,7 +7374,7 @@ async function _aiSyncThread(threadId) {
   const thread = _aiThreads.find(t => t.id === threadId);
   if (!thread) return;
   try {
-    await fetch(API + '/ai/threads', {
+    const res = await fetch(API + '/ai/threads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({
@@ -7359,6 +7385,7 @@ async function _aiSyncThread(threadId) {
         updated_at: thread.updatedAt
       })
     });
+    if (res.ok) _aiMarkThreadSynced(thread.id);
   } catch (_) {}
 }
 
@@ -7384,15 +7411,19 @@ async function _aiSyncFromServer() {
     const data = await res.json();
     const serverThreads = data.threads || [];
     const serverIds = new Set(serverThreads.map(t => t.id));
-    // Remove local threads deleted on another device
-    _aiThreads = _aiThreads.filter(t => serverIds.has(t.id));
+    // Remove only threads this client already knows were on the server.
+    // Local unsynced threads are preserved even if the server returns an empty list.
+    _aiThreads = _aiThreads.filter(t => serverIds.has(t.id) || !(t.syncedFromServer || _aiRemoteThreadIds.has(t.id)));
     serverThreads.forEach(st => {
       st.messages = _aiNormalizeMessages(st.messages);
+      st.syncedFromServer = true;
+      _aiRemoteThreadIds.add(st.id);
       const local = _aiThreads.find(t => t.id === st.id);
       if (!local || String(st.updatedAt) > String(local.updatedAt || '')) {
         _aiThreads = [st, ..._aiThreads.filter(t => t.id !== st.id)];
       }
     });
+    _aiSaveRemoteThreadIds();
     _aiThreads.sort((a,b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
     _aiSaveThreads();
     renderAIHistory();
@@ -7645,15 +7676,48 @@ function _aiRenderChart(symbol) {
   const wrap = document.createElement('div');
   const label = document.createElement('div');
   const iframe = document.createElement('iframe');
+  const candidates = [
+    ['TradingView', `${safeSymbol}USDT`, `${safeSymbol}USDT`],
+    ['BINANCE', `${safeSymbol}USDT`],
+    ['COINBASE', `${safeSymbol}USD`],
+    ['COINBASE', `${safeSymbol}USDC`],
+    ['KRAKEN', `${safeSymbol}USD`],
+    ['OKX', `${safeSymbol}USDT`]
+  ];
+  let candidateIndex = 0;
+  let fallbackTimer = null;
+
+  function setChartCandidate(index) {
+    const candidate = candidates[index] || candidates[0];
+    const tvSymbol = candidate[2] || `${candidate[0]}:${candidate[1]}`;
+    label.textContent = `${safeSymbol} · 1H · ${candidate[0]}`;
+    iframe.src = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol)}&interval=60&theme=${theme}&style=1&locale=it&timezone=Etc%2FUTC&hide_top_toolbar=0&save_image=0`;
+  }
+
   label.className = 'ai-chart-label';
-  label.textContent = `${safeSymbol} · 1H`;
-  const sym = encodeURIComponent(`BINANCE:${safeSymbol}USDT`);
-  iframe.src = `https://s.tradingview.com/widgetembed/?symbol=${sym}&interval=60&theme=${theme}&style=1&locale=it&timezone=Etc%2FUTC&hide_top_toolbar=0&save_image=0`;
   iframe.setAttribute('frameborder', '0');
   iframe.setAttribute('scrolling', 'no');
   iframe.setAttribute('allowtransparency', 'true');
   iframe.setAttribute('allowfullscreen', '');
   iframe.style.cssText = 'display:block;width:100%;height:480px;border:none;';
+  iframe.addEventListener('error', () => {
+    if (candidateIndex >= candidates.length - 1) return;
+    candidateIndex += 1;
+    setChartCandidate(candidateIndex);
+  });
+  iframe.addEventListener('load', () => {
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer);
+      fallbackTimer = null;
+    }
+  });
+  fallbackTimer = setTimeout(() => {
+    if (!iframe.contentWindow && candidateIndex < candidates.length - 1) {
+      candidateIndex += 1;
+      setChartCandidate(candidateIndex);
+    }
+  }, 3500);
+  setChartCandidate(candidateIndex);
   wrap.style.cssText = 'width:min(380px,100%);border-radius:16px;overflow:hidden;border:1px solid var(--border);background:var(--surface2);margin:8px 0 12px;flex-shrink:0;';
   wrap.append(label, iframe);
   msgs.appendChild(wrap);
@@ -7727,7 +7791,7 @@ async function sendAIMessage(source = 'analysis') {
       }
       await _aiStreamMsg(d.reply);
       _aiAutoScrollEnabled = true;
-      const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg + ' ' + (d.reply || ''));
+      const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg);
       if (chartSymbol) {
         _aiRenderChart(chartSymbol);
         _aiPersistExtra({ role: 'chart', symbol: chartSymbol });
