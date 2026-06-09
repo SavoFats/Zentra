@@ -255,7 +255,7 @@ nav {
 .delay-4 { transition-delay: 0.4s !important; }
 
 /* ─── SECTION BASE ──────────────────────────── */
-section { padding: 120px 40px; }
+section { padding: 120px 40px; min-height: 100svh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .section-tag {
   display: inline-block;
   font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
@@ -282,7 +282,7 @@ section { padding: 120px 40px; }
   content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
   width:800px; height:1px; background:linear-gradient(90deg, transparent, var(--border2), transparent);
 }
-.features-header { text-align: center; margin-bottom: 72px; }
+.features-header { text-align: center; margin-bottom: 72px; width: 100%; }
 .features-header .section-sub { max-width: 600px; margin: 0 auto; }
 .features-bento {
   display:grid; grid-template-columns:1.15fr 1fr 1fr;
@@ -348,7 +348,7 @@ section { padding: 120px 40px; }
   content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
   width:800px; height:1px; background:linear-gradient(90deg, transparent, var(--border2), transparent);
 }
-.how-inner { max-width: 900px; margin: 0 auto; }
+.how-inner { max-width: 900px; margin: 0 auto; width: 100%; }
 .how-header { text-align: center; margin-bottom: 80px; }
 .steps { display: flex; gap: 0; position: relative; }
 .steps::before {
@@ -372,7 +372,7 @@ section { padding: 120px 40px; }
 
 /* ─── PLANS ─────────────────────────────────── */
 .plans { background: var(--bg2); }
-.plans-header { text-align: center; margin-bottom: 60px; }
+.plans-header { text-align: center; margin-bottom: 60px; width: 100%; }
 .plans-grid {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 1120px; margin: 0 auto;
   align-items: stretch;
@@ -613,7 +613,7 @@ footer {
 @media (max-width: 768px) {
   nav { padding: 0 20px; }
   .nav-links { display: none; }
-  section { padding: 80px 20px; }
+  section { padding: 80px 20px; min-height: 100svh; }
   .hero { padding: 52px 20px 40px; min-height: 100svh; justify-content: flex-start; align-items: center; }
   .hero-content { text-align: center; max-width: 100%; }
   .hero-sub { margin: 0 0 32px; }
