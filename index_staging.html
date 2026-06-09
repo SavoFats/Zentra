@@ -1884,7 +1884,7 @@ body.auth-active .tabbar { display:none !important; }
       .ai-send svg { width:18px; height:18px; }
       .ai-chart-wrap { margin:8px 0 4px; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:var(--surface2); }
       .ai-chart-label { font-size:11px; font-weight:800; color:var(--text3); padding:8px 12px 4px; letter-spacing:0.06em; text-transform:uppercase; }
-      .ai-chart-frame { width:100%; height:300px; min-height:300px; flex-shrink:0; overflow:hidden; border:none; display:block; }
+      .ai-chart-frame { width:100%; height:300px; min-height:300px; flex-shrink:0; border:none; display:block; }
       .ai-ctx-bar { padding:8px 14px; background:rgba(0,82,255,0.06); border-bottom:1px solid rgba(0,82,255,0.12); font-size:11px; color:var(--blue); font-weight:600; display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; }
       .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
       .home-ai { width:min(900px,100%); margin:10px auto 28px; }
@@ -7490,7 +7490,7 @@ function renderAIHistory() {
     return `<div class="sb-ai-thread-wrap${isActive ? ' active' : ''}">
       <button class="sb-ai-thread" onclick="openAIThread('${sid}',true)" ontouchend="event.preventDefault();openAIThread('${sid}',true)">
         <div class="sb-ai-thread-title">${escapeHtml(t.title || 'Analisi')}</div>
-        <div class="sb-ai-thread-meta">${_aiFormatThreadTime(t.updatedAt)} · ${(t.messages||[]).length} messaggi</div>
+        <div class="sb-ai-thread-meta">${_aiFormatThreadTime(t.updatedAt)} · ${(t.messages||[]).filter(m=>m.role!=='chart').length} messaggi</div>
       </button>
       <button class="sb-ai-thread-dots" onclick="_aiThreadMenuToggle(event,'${sid}')" title="Opzioni">···</button>
       <div class="sb-ai-thread-dropdown">
@@ -7642,51 +7642,22 @@ function _aiRenderChart(symbol) {
   const safeSymbol = String(symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   if (!msgs || !safeSymbol) return;
   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-  const cid = `tv_ai_${Date.now()}_${++_aiChartSeq}`;
   const wrap = document.createElement('div');
   const label = document.createElement('div');
-  const frame = document.createElement('div');
-  const tvBox = document.createElement('div');
+  const iframe = document.createElement('iframe');
   wrap.className = 'ai-chart-wrap';
   label.className = 'ai-chart-label';
   label.textContent = `${safeSymbol} · 1H`;
-  frame.className = 'ai-chart-frame';
-  tvBox.id = cid;
-  tvBox.style.cssText = 'width:100%;height:100%;';
-  frame.appendChild(tvBox);
-  wrap.append(label, frame);
+  const sym = encodeURIComponent(`BINANCE:${safeSymbol}USDT`);
+  iframe.className = 'ai-chart-frame';
+  iframe.src = `https://s.tradingview.com/widgetembed/?symbol=${sym}&interval=60&theme=${theme}&style=1&locale=it&timezone=Etc%2FUTC&hide_top_toolbar=0&save_image=0`;
+  iframe.setAttribute('frameborder', '0');
+  iframe.setAttribute('scrolling', 'no');
+  iframe.setAttribute('allowtransparency', 'true');
+  iframe.setAttribute('allowfullscreen', '');
+  wrap.append(label, iframe);
   msgs.appendChild(wrap);
-
-  function makeWidget() {
-    const el = document.getElementById(cid);
-    if (!el || typeof TradingView === 'undefined') return;
-    const w = frame.offsetWidth || 460;
-    new TradingView.widget({
-      width: w,
-      height: 300,
-      symbol: `BINANCE:${safeSymbol}USDT`,
-      interval: '60',
-      timezone: 'Etc/UTC',
-      theme,
-      style: '1',
-      locale: 'it',
-      enable_publishing: false,
-      allow_symbol_change: true,
-      container_id: cid,
-    });
-  }
-
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    if (typeof TradingView !== 'undefined') {
-      makeWidget();
-    } else {
-      const s = document.createElement('script');
-      s.src = 'https://s3.tradingview.com/tv.js';
-      s.onload = () => { makeWidget(); requestAnimationFrame(_aiScrollBottom); };
-      document.head.appendChild(s);
-    }
-    requestAnimationFrame(_aiScrollBottom);
-  }));
+  requestAnimationFrame(_aiScrollBottom);
 }
 
 function _aiDetectSymbolFromText(text) {
