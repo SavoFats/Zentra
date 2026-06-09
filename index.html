@@ -1381,19 +1381,11 @@ body.auth-active .tabbar { display:none !important; }
       </div>
     </div>
 
-    <!-- 3 KPI -->
+    <!-- KPI saldo -->
     <div class="home-kpi-row">
       <div class="home-kpi-sm">
         <div class="home-kpi-sm-label" id="homeKpiSaldoLabel">Saldo simulato</div>
         <div class="home-kpi-sm-val" id="homeKpiSaldo">--</div>
-      </div>
-      <div class="home-kpi-sm">
-        <div class="home-kpi-sm-label">P&amp;L sessione</div>
-        <div class="home-kpi-sm-val" id="homeKpiPnl">--</div>
-      </div>
-      <div class="home-kpi-sm">
-        <div class="home-kpi-sm-label">Win rate</div>
-        <div class="home-kpi-sm-val" id="homeKpiWr" style="color:var(--blue)">--%</div>
       </div>
     </div>
 
@@ -4563,15 +4555,7 @@ function render() {
   if (document.getElementById('page-posizioni').classList.contains('active') && _posChiuse?.style.display !== 'none') renderTransazioni();
   renderHomeSession();
   // Aggiorna KPI home in tempo reale
-  const kpiPnl = document.getElementById('homeKpiPnl');
-  const kpiWr  = document.getElementById('homeKpiWr');
   const kpiSaldo = document.getElementById('homeKpiSaldo');
-  if (kpiPnl) {
-    const pnl = S.pnl || 0;
-    kpiPnl.textContent = S.tradeCount > 0 ? (pnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(Math.abs(pnl)) : '--';
-    kpiPnl.style.color = S.tradeCount > 0 ? (pnl >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
-  }
-  if (kpiWr) kpiWr.textContent = S.tradeCount > 0 ? Math.round(S.winRate) + '%' : '--%';
   if (kpiSaldo && !(_plan !== 'free' && _hasRevxKeys && !_simMode)) {
     const pnl = S.pnl || 0;
     const base = S.capital || 1000;
@@ -5248,22 +5232,10 @@ function renderMarket() {
 async function loadHomeBalance() {
   const kpiSaldo = document.getElementById('homeKpiSaldo');
   const kpiLabel = document.getElementById('homeKpiSaldoLabel');
-  const kpiPnl   = document.getElementById('homeKpiPnl');
-  const kpiWr    = document.getElementById('homeKpiWr');
   const isReal = _plan !== 'free' && _hasRevxKeys && !_simMode;
 
   // Label saldo
   if (kpiLabel) kpiLabel.textContent = isReal ? 'Saldo reale' : 'Saldo simulato';
-
-  // P&L sessione e win rate
-  if (kpiPnl) {
-    const pnl = S.pnl || 0;
-    kpiPnl.textContent = S.tradeCount > 0 ? (pnl >= 0 ? '+' : '') + getCurrSym() + fmtMoney(Math.abs(pnl)) : '--';
-    kpiPnl.style.color = S.tradeCount > 0 ? (pnl >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text2)';
-  }
-  if (kpiWr) {
-    kpiWr.textContent = S.tradeCount > 0 ? Math.round(S.winRate) + '%' : '--%';
-  }
 
   if (isReal) {
     if (kpiSaldo) kpiSaldo.textContent = '...';
