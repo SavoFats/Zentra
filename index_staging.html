@@ -7258,6 +7258,8 @@ async function _aiSyncFromServer() {
     const data = await res.json();
     const serverThreads = data.threads || [];
     serverThreads.forEach(st => {
+      if (typeof st.messages === 'string') { try { st.messages = JSON.parse(st.messages); } catch(_) { st.messages = []; } }
+      if (!Array.isArray(st.messages)) st.messages = [];
       const local = _aiThreads.find(t => t.id === st.id);
       if (!local || String(st.updatedAt) > String(local.updatedAt || '')) {
         _aiThreads = [st, ..._aiThreads.filter(t => t.id !== st.id)];

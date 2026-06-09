@@ -5723,11 +5723,12 @@ async def get_ai_threads(request: Request, user_id: int = Depends(get_current_us
             "SELECT id, title, messages, created_at, updated_at FROM ai_threads WHERE user_id = $1 ORDER BY updated_at DESC",
             user_id
         )
+    import json as _json
     threads = [
         {
             "id": r["id"],
             "title": r["title"],
-            "messages": r["messages"],
+            "messages": _json.loads(r["messages"]) if isinstance(r["messages"], str) else (r["messages"] or []),
             "createdAt": r["created_at"].isoformat(),
             "updatedAt": r["updated_at"].isoformat(),
         }
