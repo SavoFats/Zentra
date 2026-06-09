@@ -6309,6 +6309,7 @@ let _tmPriceInterval = null;
 
 async function tmFetchPrice() {
   const exchange = document.getElementById('tmExchange')?.value;
+  const lbl = document.getElementById('tmPriceLabel');
   if (!exchange || !_tmSymbol) return;
   try {
     const r = await fetch(API + `/exchange_price/${exchange}/${_tmSymbol}`, { headers: authHeaders() });
@@ -6317,10 +6318,22 @@ async function tmFetchPrice() {
       _tmPrice = d.price;
       const srcLabel = { revx: 'RevX', coinbase: 'Coinbase', binance: 'Binance' };
       const src = d.source === 'binance_fallback' ? 'Binance' : (srcLabel[d.exchange] || d.exchange || '');
-      document.getElementById('tmPriceLabel').textContent = fmtPrice(_tmPrice) + (src ? ` · ${src}` : '');
+      lbl.textContent = fmtPrice(_tmPrice) + (src ? ` · ${src}` : '');
+      lbl.style.color = '';
+      tmUpdateSummary();
+    } else {
+      _tmPrice = 0;
+      const detail = d.detail || d.error || '';
+      const notListed = r.status === 404 || detail.toLowerCase().includes('not_found') || detail.toLowerCase().includes('not found');
+      lbl.textContent = notListed ? 'Coin non presente nell\'exchange selezionato' : 'Prezzo non disponibile';
+      lbl.style.color = 'var(--red)';
       tmUpdateSummary();
     }
-  } catch (_) {}
+  } catch (_) {
+    _tmPrice = 0;
+    if (lbl) { lbl.textContent = 'Prezzo non disponibile'; lbl.style.color = 'var(--red)'; }
+    tmUpdateSummary();
+  }
 }
 
 async function tmFetchBalance() {
@@ -6461,6 +6474,11 @@ async function executeManualTrade() {
   const sl       = tmParseNum('tmSL') || 2.5;
   const tp       = tmParseNum('tmTP') || 8;
   const exchange = document.getElementById('tmExchange').value;
+
+  if (!_tmPrice || _tmPrice <= 0) {
+    if (errEl) errEl.textContent = 'Coin non presente nell\'exchange selezionato';
+    return;
+  }
 
   const tradeModalErrorMessage = (raw, status = 0) => {
     const msg = String(raw || '').trim();
