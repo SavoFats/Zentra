@@ -6460,11 +6460,12 @@ function tmUpdateSummary() {
 
   const feeRate = exchange === 'coinbase' ? 0.012 : exchange === 'revx' ? 0.0009 : 0.001;
   const fee = amount * feeRate;
-  const qty = _tmPrice > 0 ? amount / _tmPrice : 0;
+  const netAmount = amount - fee;
+  const qty = _tmPrice > 0 ? netAmount / _tmPrice : 0;
   const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
   document.getElementById('tmQtyEst').textContent   = qty > 0    ? qtyFmt + ' ' + base   : '—';
   document.getElementById('tmFeeEst').textContent   = amount > 0 ? '$' + (fee < 0.01 ? fee.toFixed(4) : fee.toFixed(2)) : '—';
-  document.getElementById('tmTotalEst').textContent = amount > 0 ? '$' + (amount + fee).toFixed(2) : '—';
+  document.getElementById('tmTotalEst').textContent = amount > 0 ? '$' + amount.toFixed(2) : '—';
 }
 
 async function executeManualTrade() {
