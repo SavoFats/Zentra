@@ -487,7 +487,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
 .sb-ai-thread-dots { flex-shrink:0; width:24px; height:24px; margin-right:4px; border:none; background:none; border-radius:6px; cursor:pointer; color:var(--text3); font-size:14px; font-weight:900; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .12s,background .12s,color .12s; padding:0; line-height:1; letter-spacing:-.5px; }
 .sb-ai-thread-wrap:hover .sb-ai-thread-dots, .sb-ai-thread-dots.open { opacity:1; }
 .sb-ai-thread-dots:hover, .sb-ai-thread-dots.open { background:var(--border); color:var(--text); }
-.sb-ai-thread-dropdown { position:absolute; right:0; bottom:calc(100% + 2px); z-index:300; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.15); padding:4px; min-width:130px; display:none; }
+.sb-ai-thread-dropdown { position:fixed; z-index:1000; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.25); padding:4px; min-width:130px; display:none; }
 .sb-ai-thread-dropdown.open { display:block; }
 .sb-ai-dd-delete { width:100%; border:none; background:none; padding:8px 10px; border-radius:8px; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--red); text-align:left; font-family:var(--sans); transition:background .1s; display:block; }
 .sb-ai-dd-delete:hover { background:var(--red-dim); }
@@ -1433,6 +1433,12 @@ body.auth-active .tabbar { display:none !important; }
           </div>
         </div>
         <div class="ai-workspace-composer">
+          <div class="ai-composer-opts-wrap">
+            <button class="ai-composer-opts-btn" onclick="_aiComposerMenuToggle(event)" title="Opzioni conversazione">···</button>
+            <div class="ai-composer-opts-drop" id="aiComposerOptsDrop">
+              <button class="sb-ai-dd-delete" onclick="_aiDeleteCurrentThread()">Elimina conversazione</button>
+            </div>
+          </div>
           <textarea class="ai-input" id="aiInput" rows="1" placeholder="Scrivi un messaggio a Zentra AI..." onkeydown="aiInputKeydown(event,'analysis')" oninput="aiInputResize(this,'analysis')"></textarea>
           <button class="ai-send" id="aiSend" onclick="sendAIMessage('analysis')" disabled aria-label="Invia a Zentra AI">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -1905,6 +1911,14 @@ body.auth-active .tabbar { display:none !important; }
       [data-theme="dark"] .ai-workspace-composer { background:rgba(5,8,22,.46); }
       .ai-workspace-composer .ai-input { min-height:46px; max-height:150px; border-radius:16px; padding:13px 14px; font-size:14px; }
       .ai-workspace-composer .ai-send { width:46px; height:46px; border-radius:16px; }
+      .ai-composer-opts-wrap { position:relative; display:none; flex-shrink:0; align-self:flex-end; }
+      .ai-composer-opts-btn { width:40px; height:40px; border:none; background:var(--surface2); border-radius:12px; cursor:pointer; color:var(--text2); font-size:16px; font-weight:900; display:flex; align-items:center; justify-content:center; letter-spacing:-.5px; transition:background .12s,color .12s; }
+      .ai-composer-opts-btn:hover { background:var(--border); color:var(--text); }
+      .ai-composer-opts-drop { position:fixed; z-index:1000; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.25); padding:4px; min-width:180px; display:none; }
+      .ai-composer-opts-drop.open { display:block; }
+      @media (max-width:767px) {
+        .ai-composer-opts-wrap { display:flex; }
+      }
       @media (max-width:640px) {
         .home-ai { margin:8px auto 22px; }
         .home-ai-bar { min-height:58px; padding:9px 11px; gap:9px; }
@@ -7742,9 +7756,35 @@ function _aiThreadMenuToggle(event, id) {
   document.querySelectorAll('.sb-ai-thread-dropdown.open').forEach(d => d.classList.remove('open'));
   document.querySelectorAll('.sb-ai-thread-dots.open').forEach(d => d.classList.remove('open'));
   if (!isOpen) {
-    dropdown.classList.add('open');
     btn.classList.add('open');
+    dropdown.classList.add('open');
+    const r = btn.getBoundingClientRect();
+    dropdown.style.top  = (r.bottom + 4) + 'px';
+    dropdown.style.left = (r.right - 130) + 'px';
   }
+}
+
+function _aiComposerMenuToggle(event) {
+  event.stopPropagation();
+  const btn = event.currentTarget;
+  const drop = document.getElementById('aiComposerOptsDrop');
+  const isOpen = drop.classList.contains('open');
+  document.querySelectorAll('.sb-ai-thread-dropdown.open').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.sb-ai-thread-dots.open').forEach(d => d.classList.remove('open'));
+  drop.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    const r = btn.getBoundingClientRect();
+    drop.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+    drop.style.left   = r.left + 'px';
+    drop.style.top    = 'auto';
+  }
+}
+
+function _aiDeleteCurrentThread() {
+  const drop = document.getElementById('aiComposerOptsDrop');
+  if (drop) drop.classList.remove('open');
+  if (!_aiActiveThreadId) return;
+  deleteAIThread({ stopPropagation: () => {} }, _aiActiveThreadId);
 }
 
 function deleteAIThread(event, id) {
@@ -7778,6 +7818,8 @@ function _aiInit() {
     document.addEventListener('click', () => {
       document.querySelectorAll('.sb-ai-thread-dropdown.open').forEach(d => d.classList.remove('open'));
       document.querySelectorAll('.sb-ai-thread-dots.open').forEach(d => d.classList.remove('open'));
+      const compDrop = document.getElementById('aiComposerOptsDrop');
+      if (compDrop) compDrop.classList.remove('open');
     });
     _aiInit._docListenerSet = true;
   }
