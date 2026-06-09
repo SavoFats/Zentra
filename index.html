@@ -7657,9 +7657,11 @@ function _aiRenderChart(symbol) {
   function makeWidget() {
     const el = document.getElementById(cid);
     if (!el || typeof TradingView === 'undefined') return;
+    const w = el.offsetWidth || 460;
     new TradingView.widget({
-      autosize: true,
-      symbol: `${safeSymbol}USDT`,
+      width: w,
+      height: 300,
+      symbol: `BINANCE:${safeSymbol}USDT`,
       interval: '60',
       timezone: 'Etc/UTC',
       theme,
@@ -7751,7 +7753,7 @@ async function sendAIMessage(source = 'analysis') {
       }
       await _aiStreamMsg(d.reply);
       _aiAutoScrollEnabled = true;
-      const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg);
+      const chartSymbol = d.chart_symbol || _aiDetectSymbolFromText(msg + ' ' + (d.reply || ''));
       if (chartSymbol) {
         _aiRenderChart(chartSymbol);
         _aiPersistExtra({ role: 'chart', symbol: chartSymbol });

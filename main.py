@@ -5773,6 +5773,8 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         return {"error": public_error(Exception(str(data.get("error", data))), api_key)}
 
     reply = data["content"][0]["text"]
+    if not chart_coin:
+        chart_coin = detect_coin_in_message(reply)
     return {
         "reply": reply,
         "chart_symbol": chart_coin,
