@@ -3145,6 +3145,9 @@ async def poll_telegram():
                         if state:
                             pos = next((p for p in state["positions"] if p["symbol"] == sym), None)
                             if pos:
+                                if is_external_imported_position(pos):
+                                    await send_telegram_to(chat_id, f"{sym} è una posizione importata dall'exchange. Zentra la monitora ma non la chiude automaticamente.")
+                                    continue
                                 await exit_position(state, pos, "TELEGRAM", user_id=uid)
                                 if pos in state.get("positions", []):
                                     await send_telegram_to(chat_id, f"Chiusura {sym} non confermata. Posizione ancora aperta, verifica su Zentra/Revolut X.")
@@ -3225,6 +3228,10 @@ async def monitor_manual_positions(state: dict, user_id: int):
             continue
 
     _update_pnl(state)
+
+def is_external_imported_position(pos: dict) -> bool:
+    """True for positions detected on an exchange but not opened by Zentra."""
+    return bool(pos.get("_manual_action_required") or pos.get("imported"))
 
 # ── binance websocket stream ──────────────────────────────────────────────────
 
@@ -4832,6 +4839,12 @@ async def close_symbol(symbol: str, request: Request, user_id: int = Depends(get
     pos = next((p for p in state["positions"] if p["symbol"] == sym), None)
     if not pos:
         return {"error": f"No position on {symbol}"}
+    if is_external_imported_position(pos):
+        return {
+            "error": f"{sym} è una posizione importata dall'exchange. Zentra la monitora ma non la chiude automaticamente.",
+            "manual_action_required": True,
+            "imported": bool(pos.get("imported")),
+        }
     await exit_position(state, pos, "CHIUSURA MANUALE", user_id=user_id)
     if pos in state.get("positions", []):
         return {
