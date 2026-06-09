@@ -7674,15 +7674,15 @@ function _aiRenderChart(symbol) {
   }
 
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    _aiScrollBottom();
     if (typeof TradingView !== 'undefined') {
       makeWidget();
     } else {
       const s = document.createElement('script');
       s.src = 'https://s3.tradingview.com/tv.js';
-      s.onload = makeWidget;
+      s.onload = () => { makeWidget(); requestAnimationFrame(_aiScrollBottom); };
       document.head.appendChild(s);
     }
+    requestAnimationFrame(_aiScrollBottom);
   }));
 }
 
