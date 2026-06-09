@@ -6433,12 +6433,38 @@ async function executeManualTrade() {
   const tp       = tmParseNum('tmTP') || 8;
   const exchange = document.getElementById('tmExchange').value;
 
+  const tradeModalErrorMessage = (raw, status = 0) => {
+    const msg = String(raw || '').trim();
+    const low = msg.toLowerCase();
+    if (status === 401 || low.includes('unauthorized') || low.includes('non autorizz')) {
+      return 'Sessione scaduta. Accedi di nuovo e riprova.';
+    }
+    if (status === 403 || low.includes('solo trade manuali in simulazione')) {
+      return 'Il tuo piano consente solo acquisti in demo. Passa a Pro o Founder per usare capitale reale.';
+    }
+    if (low.includes('chiavi') || low.includes('api key') || low.includes('api_key')) {
+      return 'Credenziali exchange non configurate o non valide. Controlla le chiavi nella sezione Exchange.';
+    }
+    if (low.includes('insufficient') || low.includes('saldo') || low.includes('balance')) {
+      return 'Saldo insufficiente sull’exchange. Aggiungi fondi o riduci l’importo dell’ordine.';
+    }
+    if (low.includes('minimum') || low.includes('minimo') || low.includes('min ordine')) {
+      return 'Importo sotto il minimo richiesto dall’exchange. Aumenta l’importo e riprova.';
+    }
+    if (low.includes('non fillato') || low.includes('not filled') || low.includes('state=')) {
+      return 'Ordine inviato ma non eseguito. Verifica lo stato direttamente sull’exchange prima di riprovare.';
+    }
+    if (low.includes('prezzo') || low.includes('price')) {
+      return 'Prezzo non disponibile in questo momento. Attendi qualche secondo e riprova.';
+    }
+    return msg || 'Non siamo riusciti a eseguire l’ordine. Riprova tra poco o controlla l’exchange.';
+  };
   const showErr = msg => { errEl.textContent = msg; errEl.style.display = 'block'; };
 
-  if (!amount || amount <= 0)     return showErr('Inserisci un importo valido');
-  if (sl <= 0 || sl > 50)        return showErr('Stop Loss deve essere tra 0.1% e 50%');
-  if (tp <= 0 || tp > 200)       return showErr('Take Profit deve essere tra 0.1% e 200%');
-  if (sl >= tp)                  return showErr('Stop Loss deve essere inferiore al Take Profit');
+  if (!amount || amount <= 0)     return showErr('Inserisci quanto vuoi investire prima di confermare.');
+  if (sl <= 0 || sl > 50)        return showErr('Stop loss non valido: usa un valore tra 0.1% e 50%.');
+  if (tp <= 0 || tp > 200)       return showErr('Take profit non valido: usa un valore tra 0.1% e 200%.');
+  if (sl >= tp)                  return showErr('Il take profit deve essere maggiore dello stop loss.');
 
   btn.disabled    = true;
   btn.textContent = 'Esecuzione...';
@@ -6456,13 +6482,13 @@ async function executeManualTrade() {
       _newTradeCount++;
       updateStoricoBadge();
     } else {
-      errEl.textContent   = data.detail || data.error || 'Errore esecuzione ordine';
+      errEl.textContent   = tradeModalErrorMessage(data.detail || data.error, r.status);
       errEl.style.display = 'block';
       btn.disabled        = false;
       btn.textContent     = 'Conferma acquisto';
     }
   } catch (_) {
-    errEl.textContent   = 'Errore di rete';
+    errEl.textContent   = 'Connessione non riuscita. Controlla la rete e riprova.';
     errEl.style.display = 'block';
     btn.disabled        = false;
     btn.textContent     = 'Conferma acquisto';
