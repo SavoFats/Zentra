@@ -630,6 +630,8 @@ async def refresh_coinbase_position_price(pos: dict, api_key: str, api_secret: s
         price = await get_coinbase_live_price(pos.get("symbol_pair", f"{pos['symbol']}-USDC"), api_key, api_secret)
         pos["currentPrice"] = price
         pos["_coinbase_price_last_fetch"] = now
+        pos["_price_last_fetch"] = now
+        pos["_price_source"] = "Coinbase"
         pos.pop("_coinbase_price_error", None)
         return price, True
     except Exception as e:
@@ -1696,7 +1698,11 @@ async def get_revx_live_price(symbol_pair: str, key_id: str, private_key: str) -
     tickers = data.get("data", []) if isinstance(data, dict) else data
     for t in (tickers if isinstance(tickers, list) else []):
         if t.get("symbol", "") == wanted:
-            price = float(t.get("last_price") or t.get("mid") or t.get("ask") or 0)
+            bid = float(t.get("bid") or t.get("best_bid") or t.get("bid_price") or 0)
+            ask = float(t.get("ask") or t.get("best_ask") or t.get("ask_price") or 0)
+            if bid > 0 and ask > 0:
+                return (bid + ask) / 2
+            price = float(t.get("mid") or t.get("mark_price") or t.get("last_price") or ask or bid or 0)
             if price > 0:
                 return price
     raise ValueError(f"Prezzo RevX non disponibile per {symbol_pair}")
@@ -1731,6 +1737,8 @@ async def refresh_revx_position_price(pos: dict, key_id: str, private_key: str) 
         price = await get_revx_live_price(pos.get("symbol_pair", f"{pos['symbol']}-USD"), key_id, private_key)
         pos["currentPrice"] = price
         pos["_revx_price_last_fetch"] = now
+        pos["_price_last_fetch"] = now
+        pos["_price_source"] = "RevX"
         pos.pop("_revx_price_error", None)
         return price, True
     except Exception as e:
