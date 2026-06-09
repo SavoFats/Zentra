@@ -6463,7 +6463,7 @@ function tmUpdateSummary() {
   const qty = _tmPrice > 0 ? amount / _tmPrice : 0;
   const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
   document.getElementById('tmQtyEst').textContent   = qty > 0    ? qtyFmt + ' ' + base   : '—';
-  document.getElementById('tmFeeEst').textContent   = amount > 0 ? '$' + fee.toFixed(2)   : '—';
+  document.getElementById('tmFeeEst').textContent   = amount > 0 ? '$' + (fee < 0.01 ? fee.toFixed(4) : fee.toFixed(2)) : '—';
   document.getElementById('tmTotalEst').textContent = amount > 0 ? '$' + (amount + fee).toFixed(2) : '—';
 }
 
