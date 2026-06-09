@@ -7376,6 +7376,9 @@ async function _aiSyncFromServer() {
     if (!res.ok) return;
     const data = await res.json();
     const serverThreads = data.threads || [];
+    const serverIds = new Set(serverThreads.map(t => t.id));
+    // Remove local threads deleted on another device
+    _aiThreads = _aiThreads.filter(t => serverIds.has(t.id));
     serverThreads.forEach(st => {
       st.messages = _aiNormalizeMessages(st.messages);
       const local = _aiThreads.find(t => t.id === st.id);
