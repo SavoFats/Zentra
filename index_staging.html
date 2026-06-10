@@ -4798,9 +4798,12 @@ function renderPositions() {
     // SL bar: SL (sinistra) → ENTRY → prezzo corrente (dot) → TP (destra)
     let barHtml = '';
     if (stopPrice === 0 && entryPrice > 0) {
+      const _rv = _recoveryValues[p.symbol] || {};
+      const slVal = _rv.sl !== undefined ? _rv.sl : '2.5';
+      const tpVal = _rv.tp !== undefined ? _rv.tp : '8';
       const _p = (v) => '$' + v.toFixed(v < 0.01 ? 6 : v < 1 ? 4 : 2);
-      const defSL = _p(entryPrice * 0.975);
-      const defTP = _p(entryPrice * 1.08);
+      const defSL = _p(entryPrice * (1 - (parseFloat(slVal) || 2.5) / 100));
+      const defTP = _p(entryPrice * (1 + (parseFloat(tpVal) || 8)   / 100));
       barHtml = `<div style="margin:12px 0 8px">
         <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:12px">⚠ Posizione recuperata — imposta SL/TP per attivare il monitoraggio</div>
         <div style="display:flex;gap:10px;align-items:flex-end">
@@ -4809,7 +4812,7 @@ function renderPositions() {
             <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(239,68,68,0.1);border-radius:50px;padding:9px 13px">
               <span style="display:flex;align-items:center;gap:2px">
                 <span style="font-size:15px;font-weight:700;color:var(--red)">−</span>
-                <input id="sl-pct-${esc(p.symbol)}" type="text" inputmode="decimal" value="2.5"
+                <input id="sl-pct-${esc(p.symbol)}" type="text" inputmode="decimal" value="${slVal}"
                   oninput="updateRecoveryPrice('${esc(p.symbol)}','sl',${entryPrice})"
                   onclick="event.stopPropagation()"
                   style="width:38px;border:none;background:transparent;color:var(--red);font-size:15px;font-weight:700;outline:none;text-align:center">
@@ -4823,7 +4826,7 @@ function renderPositions() {
             <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(34,197,94,0.1);border-radius:50px;padding:9px 13px">
               <span style="display:flex;align-items:center;gap:2px">
                 <span style="font-size:15px;font-weight:700;color:var(--green)">+</span>
-                <input id="tp-pct-${esc(p.symbol)}" type="text" inputmode="decimal" value="8"
+                <input id="tp-pct-${esc(p.symbol)}" type="text" inputmode="decimal" value="${tpVal}"
                   oninput="updateRecoveryPrice('${esc(p.symbol)}','tp',${entryPrice})"
                   onclick="event.stopPropagation()"
                   style="width:38px;border:none;background:transparent;color:var(--green);font-size:15px;font-weight:700;outline:none;text-align:center">
@@ -4929,8 +4932,13 @@ function updatePositionPricesInPlace() {
   });
 }
 
+const _recoveryValues = {};
+
 function updateRecoveryPrice(symbol, type, entryPrice) {
-  const pct = parseFloat(document.getElementById(`${type}-pct-${symbol}`)?.value) || 0;
+  const raw = document.getElementById(`${type}-pct-${symbol}`)?.value || '';
+  if (!_recoveryValues[symbol]) _recoveryValues[symbol] = {};
+  _recoveryValues[symbol][type] = raw;
+  const pct = parseFloat(raw) || 0;
   const price = type === 'sl' ? entryPrice * (1 - pct / 100) : entryPrice * (1 + pct / 100);
   const el = document.getElementById(`${type}-price-${symbol}`);
   if (el) el.textContent = '$' + price.toFixed(price < 0.01 ? 6 : price < 1 ? 4 : 2);
