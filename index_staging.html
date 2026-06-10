@@ -4502,6 +4502,8 @@ async function startupSession() {
 checkAuth();
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
+const _recoveryValues = {};
+
 function render() {
   const dot = document.getElementById('logoDot');
 
@@ -4567,7 +4569,11 @@ function render() {
   // Sparkline
   drawHeroSparkline();
 
-  renderPositions();
+  if (Object.keys(_recoveryValues).length > 0) {
+    updatePositionPricesInPlace();
+  } else {
+    renderPositions();
+  }
 
   // Attività log
   const actList = document.getElementById('agentActivityList');
@@ -4935,8 +4941,6 @@ function updatePositionPricesInPlace() {
     }
   });
 }
-
-const _recoveryValues = {};
 
 function onFocusRecovery(symbol, sl, tp) {
   if (!_recoveryValues[symbol]) _recoveryValues[symbol] = { sl, tp };
