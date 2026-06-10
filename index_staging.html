@@ -2957,6 +2957,10 @@ async function loadUserProfile() {
 }
 
 function showRevxConfig() {
+  if (_plan === 'free') {
+    showPaywall('Il collegamento agli exchange reali è disponibile dal piano Pro.', 'plans');
+    return;
+  }
   if (S.running) {
     document.getElementById('profileMenu').classList.remove('open');
     document.getElementById('sessionActiveModal').classList.add('open');
@@ -2989,6 +2993,10 @@ async function disconnectRevx() {
 const EXTERNAL_EXCHANGE_LABELS = { binance: 'Binance', coinbase: 'Coinbase' };
 
 function showExternalExchangeConfig(exchange) {
+  if (_plan === 'free') {
+    showPaywall('Il collegamento agli exchange reali è disponibile dal piano Pro.', 'plans');
+    return;
+  }
   if (S.running) {
     document.getElementById('profileMenu').classList.remove('open');
     document.getElementById('sessionActiveModal').classList.add('open');
