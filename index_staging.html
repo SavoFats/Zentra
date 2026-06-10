@@ -693,11 +693,6 @@ body.auth-active .tabbar { display:none !important; }
 .pos-g4-val { font-size:13px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
 @media (max-width:640px) { .pos-grid4 { grid-template-columns:1fr 1fr; gap:8px; } }
 @media (max-width:767px) {
-  #balanceHeroCard { grid-template-columns:1fr 1fr !important; }
-  #balHeroSparklineSection { display:flex !important; padding:0 12px !important; border-left:1px solid var(--border); }
-  #balHeroSparklineLabel { display:none !important; }
-  #balHeroNoData { inset:0 10px 0 10px !important; }
-  #balHeroRightStats { display:none !important; }
   .home-hero-btn-text { display:none; }
   .home-hero-btn { padding:12px 14px; }
 }
@@ -1339,15 +1334,9 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <!-- Balance inline (senza widget) -->
-    <div id="balanceHeroCard" style="padding:24px 0 52px;display:flex;flex-direction:column;align-items:center;overflow:hidden;position:relative">
-      <!-- sparkline fantasma in background -->
-      <div id="balHeroSparklineSection" style="display:flex;position:absolute;inset:0;flex-direction:column;justify-content:flex-end;opacity:0.13;pointer-events:none;z-index:0">
-        <canvas id="balHeroSparkline" style="display:block;width:100%;flex:1"></canvas>
-        <div id="balHeroNoData" style="display:none"></div>
-        <div id="balHeroSparklineLabel" style="display:none"></div>
-      </div>
-      <!-- saldo: sopra la sparkline -->
-      <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+    <div id="balanceHeroCard" style="padding:24px 0 52px;display:flex;flex-direction:column;align-items:center;overflow:visible">
+      <!-- saldo centrato -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
         <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;display:flex;align-items:center;gap:6px">
           Saldo reale
           <svg id="balHeroEye" onclick="toggleBalanceVisibility()" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#9aa0b8;cursor:pointer;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1355,16 +1344,16 @@ body.auth-active .tabbar { display:none !important; }
         <div id="balHeroTotal" style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-1.08px;line-height:1;font-variant-numeric:tabular-nums">--</div>
         <div id="balHeroChange" style="font-size:12px;font-weight:600;color:#9aa0b8;display:flex;align-items:center;gap:4px;margin-top:8px">+$0 · +0% oggi</div>
       </div>
-      <!-- right: stats -->
-      <div id="balHeroRightStats" style="display:none;padding-left:28px;gap:28px;align-items:center;flex-shrink:0">
-        <div>
-          <div class="bal-stat-label" style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-bottom:8px;white-space:nowrap">Disponibile</div>
-          <div id="balHeroAvail" style="font-size:24px;font-weight:800;color:var(--text);letter-spacing:-0.48px;font-variant-numeric:tabular-nums">--</div>
-        </div>
-        <div>
-          <div class="bal-stat-label" style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-bottom:8px;white-space:nowrap">In posizioni</div>
-          <div id="balHeroInPos" style="font-size:24px;font-weight:800;color:#0052ff;letter-spacing:-0.48px;font-variant-numeric:tabular-nums">--</div>
-        </div>
+      <!-- sparkline animata edge-to-edge -->
+      <div id="balHeroSparklineSection" style="margin:20px -16px 0;width:calc(100% + 32px);height:72px;position:relative">
+        <canvas id="balHeroSparkline" style="display:block;width:100%;height:100%"></canvas>
+        <div id="balHeroNoData" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:11px;color:#9aa0b8"></div>
+        <div id="balHeroSparklineLabel" style="display:none"></div>
+      </div>
+      <!-- stats nascosti (riservati) -->
+      <div id="balHeroRightStats" style="display:none">
+        <div id="balHeroAvail"></div>
+        <div id="balHeroInPos"></div>
       </div>
     </div>
 
@@ -4867,25 +4856,31 @@ function updateBalanceHero() {
     }
   }
 
-  requestAnimationFrame(drawBalanceSparkline);
+  animateBalanceSparkline();
 }
 
-function drawBalanceSparkline() {
+function animateBalanceSparkline() {
+  const start = performance.now();
+  const dur = 900;
+  function frame(now) {
+    const t = Math.min(1, (now - start) / dur);
+    const ease = 1 - Math.pow(1 - t, 3);
+    drawBalanceSparkline(ease);
+    if (t < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function drawBalanceSparkline(progress = 1) {
   const canvas = document.getElementById('balHeroSparkline');
-  const noDataEl = document.getElementById('balHeroNoData');
   if (!canvas) return;
   const history = (_portfolioData && _portfolioData.history) || [];
-  if (history.length < 2) {
-    canvas.style.display = 'none';
-    if (noDataEl) noDataEl.style.display = 'flex';
-    return;
-  }
+  if (history.length < 2) { canvas.style.display = 'none'; return; }
   canvas.style.display = 'block';
-  if (noDataEl) noDataEl.style.display = 'none';
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
-  const w = rect.width || canvas.parentElement?.getBoundingClientRect().width || 200;
-  const h = 56;
+  const w = rect.width || 300;
+  const h = rect.height || 72;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
@@ -4894,20 +4889,35 @@ function drawBalanceSparkline() {
   const vals = history.map(p => p.total);
   const min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || 1;
-  const pad = 4;
-  const pts = vals.map((v, i) => ({
-    x: pad + (i / (vals.length - 1)) * (w - pad * 2),
-    y: h - pad - ((v - min) / range) * (h - pad * 2)
+  const padY = 6;
+  const allPts = vals.map((v, i) => ({
+    x: (i / (vals.length - 1)) * w,
+    y: h - padY - ((v - min) / range) * (h - padY * 2)
   }));
-  // fill gradient
+  // Interpola fino a progress
+  const rawIdx = progress * (allPts.length - 1);
+  const fullIdx = Math.floor(rawIdx);
+  const frac = rawIdx - fullIdx;
+  const pts = allPts.slice(0, fullIdx + 1);
+  if (fullIdx < allPts.length - 1) {
+    const p0 = allPts[fullIdx], p1 = allPts[fullIdx + 1];
+    pts.push({ x: p0.x + (p1.x - p0.x) * frac, y: p0.y + (p1.y - p0.y) * frac });
+  }
+  if (pts.length < 2) return;
+  const isUp = vals[vals.length - 1] >= vals[0];
+  const lineColor = isUp ? '#22c55e' : '#f6465d';
+  const fillA = isUp ? 'rgba(34,197,94,0.18)' : 'rgba(246,70,93,0.18)';
+  const fillB = isUp ? 'rgba(34,197,94,0)' : 'rgba(246,70,93,0)';
+  const last = pts[pts.length - 1];
+  // fill
   const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, 'rgba(34,197,94,0.25)');
-  grad.addColorStop(1, 'rgba(34,197,94,0)');
+  grad.addColorStop(0, fillA);
+  grad.addColorStop(1, fillB);
   ctx.beginPath();
   ctx.moveTo(pts[0].x, h);
   ctx.lineTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.lineTo(pts[pts.length - 1].x, h);
+  ctx.lineTo(last.x, h);
   ctx.closePath();
   ctx.fillStyle = grad;
   ctx.fill();
@@ -4915,16 +4925,15 @@ function drawBalanceSparkline() {
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.strokeStyle = '#22c55e';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1.5;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.stroke();
-  // dot at last point
-  const last = pts[pts.length - 1];
+  // dot animato alla punta
   ctx.beginPath();
-  ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2);
-  ctx.fillStyle = '#22c55e';
+  ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+  ctx.fillStyle = lineColor;
   ctx.fill();
 }
 
