@@ -692,6 +692,10 @@ body.auth-active .tabbar { display:none !important; }
 .pos-g4-label { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:4px; }
 .pos-g4-val { font-size:13px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
 @media (max-width:640px) { .pos-grid4 { grid-template-columns:1fr 1fr; gap:8px; } }
+@media (max-width:767px) {
+  #balanceHeroCard { grid-template-columns:1fr auto !important; }
+  #balHeroSparklineSection { display:none !important; }
+}
 .pos-sl-bar-wrap { margin-bottom:16px; }
 .pos-sl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:20px 0 18px; }
 .pos-sl-fill { position:absolute; top:0; left:0; height:100%; border-radius:2px; }
@@ -1401,7 +1405,7 @@ body.auth-active .tabbar { display:none !important; }
         <div id="balHeroChange" style="font-size:12px;font-weight:600;color:#9aa0b8;display:flex;align-items:center;gap:4px">+$0 · +0% oggi</div>
       </div>
       <!-- center: sparkline -->
-      <div style="padding:0 20px;display:flex;flex-direction:column;justify-content:flex-end;position:relative">
+      <div id="balHeroSparklineSection" style="padding:0 20px;display:flex;flex-direction:column;justify-content:flex-end;position:relative">
         <canvas id="balHeroSparkline" style="display:block;width:100%;flex:1;min-height:52px"></canvas>
         <div id="balHeroNoData" style="display:none;position:absolute;inset:0 20px 28px 20px;align-items:center;justify-content:center;font-size:11px;color:#9aa0b8">Nessun dato storico</div>
         <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-top:8px">ANDAMENTO · 7 GIORNI</div>
