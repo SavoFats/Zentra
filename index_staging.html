@@ -694,9 +694,9 @@ body.auth-active .tabbar { display:none !important; }
 @media (max-width:640px) { .pos-grid4 { grid-template-columns:1fr 1fr; gap:8px; } }
 @media (max-width:767px) {
   #balanceHeroCard { grid-template-columns:1fr auto !important; }
-  #balHeroSparklineSection { display:none !important; }
-  #balHeroRightStats { align-items:flex-start !important; gap:16px !important; }
-  #balHeroRightStats .bal-stat-label { white-space:nowrap; }
+  #balHeroSparklineSection { display:flex !important; width:130px; padding:0 12px !important; border-left:1px solid var(--border); }
+  #balHeroNoData { inset:0 12px 28px 12px !important; }
+  #balHeroRightStats { display:none !important; }
   .home-hero-btn-text { display:none; }
   .home-hero-btn { padding:12px 14px; }
 }
