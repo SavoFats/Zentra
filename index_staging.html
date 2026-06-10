@@ -4815,6 +4815,7 @@ function renderPositions() {
               <span style="display:flex;align-items:center;gap:2px">
                 <span style="font-size:15px;font-weight:700;color:var(--red)">−</span>
                 <input id="sl-pct-${esc(p.symbol)}" type="text" inputmode="decimal" value="${slVal}"
+                  onfocus="onFocusRecovery('${esc(p.symbol)}','${slVal}','${tpVal}')"
                   oninput="updateRecoveryPrice('${esc(p.symbol)}','sl',${entryPrice})"
                   onclick="event.stopPropagation()"
                   style="width:38px;border:none;background:transparent;color:var(--red);font-size:15px;font-weight:700;outline:none;text-align:center">
@@ -4829,6 +4830,7 @@ function renderPositions() {
               <span style="display:flex;align-items:center;gap:2px">
                 <span style="font-size:15px;font-weight:700;color:var(--green)">+</span>
                 <input id="tp-pct-${esc(p.symbol)}" type="text" inputmode="decimal" value="${tpVal}"
+                  onfocus="onFocusRecovery('${esc(p.symbol)}','${slVal}','${tpVal}')"
                   oninput="updateRecoveryPrice('${esc(p.symbol)}','tp',${entryPrice})"
                   onclick="event.stopPropagation()"
                   style="width:38px;border:none;background:transparent;color:var(--green);font-size:15px;font-weight:700;outline:none;text-align:center">
@@ -4935,6 +4937,10 @@ function updatePositionPricesInPlace() {
 }
 
 const _recoveryValues = {};
+
+function onFocusRecovery(symbol, sl, tp) {
+  if (!_recoveryValues[symbol]) _recoveryValues[symbol] = { sl, tp };
+}
 
 function updateRecoveryPrice(symbol, type, entryPrice) {
   const raw = document.getElementById(`${type}-pct-${symbol}`)?.value || '';
