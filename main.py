@@ -3848,8 +3848,7 @@ async def recover_coinbase_positions(state: dict, user_id: int) -> bool:
     except Exception as e:
         print(f"[RECOVER-CB] User {user_id}: errore fetch accounts: {e}")
         return False
-    tracked = {p["symbol"].upper() for p in state.get("positions", [])
-               if p.get("exchange") == "coinbase" and p.get("realMode")}
+    tracked = {p["symbol"].upper() for p in state.get("positions", [])}
     recovered = False
     for acc in accounts:
         if not isinstance(acc, dict):
@@ -3916,8 +3915,7 @@ async def recover_revx_positions(state: dict, user_id: int):
     except Exception as e:
         print(f"[RECOVER] User {user_id}: errore fetch balances: {e}")
         return False
-    tracked = {p["symbol"].upper() for p in state.get("positions", [])
-               if p.get("exchange") == "revx" and p.get("realMode")}
+    tracked = {p["symbol"].upper() for p in state.get("positions", [])}
     recovered = False
     for b in balances:
         if not isinstance(b, dict):
