@@ -4796,12 +4796,32 @@ function renderPositions() {
     // SL bar: SL (sinistra) → ENTRY → prezzo corrente (dot) → TP (destra)
     let barHtml = '';
     if (stopPrice === 0 && entryPrice > 0) {
+      const defSL = (entryPrice * 0.975).toFixed(6);
+      const defTP = (entryPrice * 1.08).toFixed(6);
       barHtml = `<div style="margin:12px 0 8px;padding:12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:12px">
-        <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:8px">⚠ Posizione recuperata — imposta SL/TP per attivare il monitoraggio</div>
+        <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:10px">⚠ Posizione recuperata — imposta SL/TP per attivare il monitoraggio</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input id="sl-input-${esc(p.symbol)}" type="number" step="any" placeholder="Stop Loss $" style="flex:1;min-width:110px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text1);font-size:13px">
-          <input id="tp-input-${esc(p.symbol)}" type="number" step="any" placeholder="Take Profit $ (opz.)" style="flex:1;min-width:130px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text1);font-size:13px">
-          <button onclick="saveSLTP('${esc(p.symbol)}')" style="padding:7px 16px;border-radius:8px;background:var(--blue);color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer">Salva</button>
+          <div style="flex:1;min-width:120px">
+            <div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:4px">STOP LOSS</div>
+            <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.05)">
+              <input id="sl-pct-${esc(p.symbol)}" type="number" step="0.1" min="0.1" max="50" value="2.5"
+                oninput="updateRecoveryPrice('${esc(p.symbol)}','sl',${entryPrice})"
+                style="width:50px;border:none;background:transparent;color:var(--red);font-size:13px;font-weight:700;outline:none;text-align:right">
+              <span style="color:var(--red);font-size:13px;font-weight:700">%</span>
+              <span id="sl-price-${esc(p.symbol)}" style="color:var(--text2);font-size:11px;margin-left:4px">$${defSL}</span>
+            </div>
+          </div>
+          <div style="flex:1;min-width:120px">
+            <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px">TAKE PROFIT</div>
+            <div style="display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:8px;border:1px solid rgba(34,197,94,0.3);background:rgba(34,197,94,0.05)">
+              <input id="tp-pct-${esc(p.symbol)}" type="number" step="0.1" min="0" max="500" value="8"
+                oninput="updateRecoveryPrice('${esc(p.symbol)}','tp',${entryPrice})"
+                style="width:50px;border:none;background:transparent;color:var(--green);font-size:13px;font-weight:700;outline:none;text-align:right">
+              <span style="color:var(--green);font-size:13px;font-weight:700">%</span>
+              <span id="tp-price-${esc(p.symbol)}" style="color:var(--text2);font-size:11px;margin-left:4px">$${defTP}</span>
+            </div>
+          </div>
+          <button onclick="saveSLTP('${esc(p.symbol)}',${entryPrice})" style="padding:9px 18px;border-radius:8px;background:var(--blue);color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer;align-self:flex-end;margin-bottom:1px">Salva</button>
         </div>
       </div>`;
     } else if (stopPrice > 0 && entryPrice > 0) {
@@ -4898,15 +4918,24 @@ function updatePositionPricesInPlace() {
   });
 }
 
-async function saveSLTP(symbol) {
-  const sl = parseFloat(document.getElementById(`sl-input-${symbol}`)?.value);
-  const tp = parseFloat(document.getElementById(`tp-input-${symbol}`)?.value) || 0;
-  if (!sl || sl <= 0) { alert('Inserisci uno Stop Loss valido'); return; }
+function updateRecoveryPrice(symbol, type, entryPrice) {
+  const pct = parseFloat(document.getElementById(`${type}-pct-${symbol}`)?.value) || 0;
+  const price = type === 'sl' ? entryPrice * (1 - pct / 100) : entryPrice * (1 + pct / 100);
+  const el = document.getElementById(`${type}-price-${symbol}`);
+  if (el) el.textContent = '$' + price.toFixed(price < 0.01 ? 6 : price < 1 ? 4 : 2);
+}
+
+async function saveSLTP(symbol, entryPrice) {
+  const slPct = parseFloat(document.getElementById(`sl-pct-${symbol}`)?.value);
+  const tpPct = parseFloat(document.getElementById(`tp-pct-${symbol}`)?.value) || 0;
+  if (!slPct || slPct <= 0 || !entryPrice) { alert('Inserisci uno Stop Loss valido'); return; }
+  const slPrice = entryPrice * (1 - slPct / 100);
+  const tpPrice = tpPct > 0 ? entryPrice * (1 + tpPct / 100) : 0;
   try {
     const r = await apiFetch(`/position/${symbol}/sltp`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stop_price: sl, tp_price: tp })
+      body: JSON.stringify({ stop_price: slPrice, tp_price: tpPrice })
     });
     if (r.ok) { await pollStatus(); }
     else { alert((await r.json()).detail || 'Errore salvataggio SL/TP'); }
