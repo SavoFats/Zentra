@@ -7032,30 +7032,6 @@ async def stripe_webhook(request: Request):
             print(f"[BILLING] downgrade a free: customer={customer_id}")
     return {"ok": True}
 
-@app.post("/admin/seed_portfolio_test")
-async def seed_portfolio_test(user_id: int = Depends(get_current_user)):
-    """Inserisce 7 giorni di snapshot di test. Da rimuovere dopo il test."""
-    if not db_pool:
-        raise HTTPException(status_code=503, detail="DB non disponibile")
-    import random
-    today = datetime.utcnow().date()
-    base = 1037.0
-    inserted = []
-    async with db_pool.acquire() as conn:
-        for i in range(7, 0, -1):
-            day = today - timedelta(days=i)
-            variation = random.uniform(-30, 30)
-            total = round(base + variation, 4)
-            base = total
-            await conn.execute(
-                "INSERT INTO portfolio_snapshots (user_id, snapshot_date, total_usd) "
-                "VALUES ($1, $2, $3) ON CONFLICT (user_id, snapshot_date) DO UPDATE SET total_usd=$3",
-                user_id, day, total
-            )
-            inserted.append({"date": str(day), "total": total})
-    return {"ok": True, "inserted": inserted}
-
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
