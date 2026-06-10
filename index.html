@@ -2050,13 +2050,11 @@ body.auth-active .tabbar { display:none !important; }
             <div style="font-size:16px;font-weight:800;color:var(--text)">Coinbase</div>
             <span id="exchangeCoinbaseStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
           </div>
-          <div id="exchangeCoinbaseSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+          <div id="exchangeCoinbaseSub" style="font-size:13px;color:var(--text3);margin-top:4px"></div>
         </div>
         <button id="exchangeCoinbaseBtn" onclick="showExternalExchangeConfig('coinbase')" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
       </div>
-      <div id="exchangeCoinbaseNote" style="padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45">
-        Collegamento credenziali disponibile. L'esecuzione ordini Coinbase verrà abilitata in uno step dedicato.
-      </div>
+      <div id="exchangeCoinbaseNote" style="display:none;padding:14px 18px;font-size:12px;color:var(--text3);line-height:1.45"></div>
     </div>
 
     <div style="font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);margin:22px 0 10px">In arrivo</div>
