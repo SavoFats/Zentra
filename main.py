@@ -4677,6 +4677,51 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
         "paused": state.get("paused", False),
     }
 
+_portfolio_cache: dict = {}
+PORTFOLIO_CACHE_TTL = 30
+
+@app.get("/portfolio_summary")
+async def get_portfolio_summary(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="portfolio")
+    cached = _portfolio_cache.get(user_id)
+    if cached and time.time() - cached["ts"] < PORTFOLIO_CACHE_TTL:
+        return cached["data"]
+
+    state = get_session(user_id)
+    await refresh_status_position_prices(state, user_id)
+
+    # Market value of real positions
+    positions_value = 0.0
+    for p in state.get("positions", []):
+        if not p.get("realMode"):
+            continue
+        qty = float(p.get("qty_purchased") or 0)
+        price = float(p.get("currentPrice") or p.get("entryPrice") or 0)
+        if qty > 0 and price > 0:
+            positions_value += qty * price
+
+    available_usd = 0.0
+    # RevX USD cash
+    try:
+        key_id, priv = await load_revx_keys_for_user(user_id)
+        available_usd += await get_revx_usd_balance(key_id, priv)
+    except Exception:
+        pass
+    # Coinbase USD cash
+    try:
+        cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
+        available_usd += await get_coinbase_quote_balance(cb_key, cb_sec)
+    except Exception:
+        pass
+
+    data = {
+        "total":     round(available_usd + positions_value, 2),
+        "available": round(available_usd, 2),
+        "positions": round(positions_value, 2),
+    }
+    _portfolio_cache[user_id] = {"ts": time.time(), "data": data}
+    return data
+
 @app.get("/market")
 async def get_market(
     request: Request,

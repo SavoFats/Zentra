@@ -1406,14 +1406,14 @@ body.auth-active .tabbar { display:none !important; }
         <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:5px">ANDAMENTO · 7 GIORNI</div>
       </div>
       <!-- right: stats -->
-      <div style="padding-left:20px;border-left:1px solid var(--border);display:flex;gap:24px;flex-shrink:0">
+      <div style="padding-left:24px;border-left:1px solid var(--border);display:flex;gap:32px;flex-shrink:0;min-width:260px">
         <div>
-          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">DISPONIBILE</div>
-          <div id="balHeroAvail" style="font-size:17px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">--</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">DISPONIBILE</div>
+          <div id="balHeroAvail" style="font-size:20px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">--</div>
         </div>
         <div>
-          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">IN POSIZIONI</div>
-          <div id="balHeroInPos" style="font-size:17px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums">--</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">IN POSIZIONI</div>
+          <div id="balHeroInPos" style="font-size:20px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums">--</div>
         </div>
       </div>
     </div>
@@ -4421,6 +4421,7 @@ async function poll() {
     }
     if (document.getElementById('page-home').classList.contains('active')) {
       updateWatchlistPricesInPlace();
+      fetchPortfolioSummary();
     }
     if (positionsActive) {
       if (Object.keys(_recoveryValues).length > 0) {
@@ -4793,30 +4794,40 @@ function drawHeroSparkline() {
   ctx.stroke();
 }
 
+let _portfolioData = null;
+
+async function fetchPortfolioSummary() {
+  try {
+    const r = await fetch(API + '/portfolio_summary', { headers: authHeaders(), cache: 'no-store' });
+    if (r.ok) {
+      _portfolioData = await r.json();
+      updateBalanceHero();
+    }
+  } catch(e) {}
+}
+
 function updateBalanceHero() {
-  const positions = S.positions || [];
-  const inPos = positions.reduce((s, p) => s + (p.size_remaining || p.size || 0), 0);
-  const avail = S.currentCapital || 0;
-  const total = avail + inPos;
+  const sym = getCurrSym();
   const pnl = S.pnl || 0;
   const pct = S.pct || 0;
   const isPos = pnl >= 0.005, isNeg = pnl < -0.005;
-  const sym = getCurrSym();
 
   const totalEl  = document.getElementById('balHeroTotal');
   const changeEl = document.getElementById('balHeroChange');
   const availEl  = document.getElementById('balHeroAvail');
   const inPosEl  = document.getElementById('balHeroInPos');
 
-  if (totalEl)  totalEl.textContent  = sym + fmtMoney(total);
-  if (availEl)  availEl.textContent  = sym + fmtMoney(avail);
-  if (inPosEl)  inPosEl.textContent  = sym + fmtMoney(inPos);
+  if (_portfolioData) {
+    if (totalEl)  totalEl.textContent = sym + fmtMoney(_portfolioData.total);
+    if (availEl)  availEl.textContent = sym + fmtMoney(_portfolioData.available);
+    if (inPosEl)  inPosEl.textContent = sym + fmtMoney(_portfolioData.positions);
+  }
   if (changeEl) {
     const sign = isPos ? '+' : '';
     changeEl.textContent = sign + sym + fmtMoney(Math.abs(pnl)) + ' · ' + sign + pct.toFixed(1) + '% oggi';
     changeEl.style.color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text3)';
   }
-  drawBalanceSparkline();
+  requestAnimationFrame(drawBalanceSparkline);
 }
 
 function drawBalanceSparkline() {
@@ -4824,8 +4835,9 @@ function drawBalanceSparkline() {
   if (!canvas) return;
   const data = (S.pnlHistory || []).slice(-100);
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.offsetWidth || 200;
-  const h = canvas.offsetHeight || 56;
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width || canvas.parentElement?.getBoundingClientRect().width || 200;
+  const h = 56;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
@@ -5526,7 +5538,7 @@ function renderHome() {
   if (modeText) modeText.textContent = isReal ? 'REALE' : 'SIMULAZIONE';
   // Pills config nella hero card
   renderHomeHeroPills();
-  loadHomeBalance();
+  fetchPortfolioSummary();
   if (mktData.length === 0) {
     refreshMarket().then(() => renderHomeWatchlist());
   } else {
