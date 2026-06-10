@@ -4822,7 +4822,6 @@ function updateBalanceHero(animate = false) {
 
   if (isDemo) {
     const simBalance = S.sim_balance != null ? S.sim_balance : (S.capital || 1000);
-    const sessionPnl = S.pnl || 0;
     const sym = getCurrSym();
     const labelText = document.getElementById('balHeroLabelText');
     if (labelText) labelText.textContent = 'Saldo Demo';
@@ -4830,23 +4829,22 @@ function updateBalanceHero(animate = false) {
     if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(simBalance); delete totalEl.dataset.real; }
     const changeEl = document.getElementById('balHeroChange');
     if (changeEl) {
-      if (sessionPnl === 0) {
-        changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% sessione</span>';
+      const chg = S.sim_today_change || 0;
+      const pct = S.sim_today_change_pct || 0;
+      if (chg === 0 && pct === 0) {
+        changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
       } else {
-        const isPos = sessionPnl >= 0;
+        const isPos = chg >= 0;
         const color = isPos ? '#05c168' : '#f6465d';
         const arrow = isPos ? '↑' : '↓';
         const sign  = isPos ? '+' : '';
-        const baseBeforeSession = simBalance - sessionPnl;
-        const pct = baseBeforeSession > 0 ? Math.abs(sessionPnl / baseBeforeSession * 100) : 0;
-        changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(sessionPnl))} · ${sign}${pct.toFixed(1)}% sessione</span>`;
+        changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
       }
     }
-    const rawHistory = S.pnlHistory || [];
-    if (rawHistory.length >= 2) {
-      const baseBeforeSession = simBalance - sessionPnl;
+    const simHistory = S.sim_history || [];
+    if (simHistory.length >= 2) {
       if (!_portfolioData) _portfolioData = {};
-      _portfolioData.history = rawHistory.map(p => ({ total: baseBeforeSession + p.v }));
+      _portfolioData.history = simHistory;
     }
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);

@@ -3741,6 +3741,15 @@ async def startup():
                         UNIQUE(user_id, snapshot_date)
                     )
                 """)
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS sim_snapshots (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        snapshot_date DATE NOT NULL,
+                        sim_total_usd NUMERIC(18,4) NOT NULL,
+                        UNIQUE(user_id, snapshot_date)
+                    )
+                """)
             print("Database connesso e schema creato")
 
             # Ripristina sessioni attive dopo riavvio
@@ -4690,6 +4699,27 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
             state["sim_pnl_loaded"] = True
         except Exception:
             state["sim_pnl_loaded"] = True
+    sim_balance = round(1000 + state.get("sim_pnl_total", 0.0), 2)
+    sim_history = []
+    sim_today_change = 0.0
+    sim_today_change_pct = 0.0
+    if db_pool:
+        try:
+            today = datetime.utcnow().date()
+            async with db_pool.acquire() as conn:
+                snap_rows = await conn.fetch(
+                    "SELECT snapshot_date, sim_total_usd FROM sim_snapshots "
+                    "WHERE user_id = $1 ORDER BY snapshot_date DESC LIMIT 8",
+                    user_id
+                )
+            snapshots = [{"date": str(r["snapshot_date"]), "total": float(r["sim_total_usd"])} for r in reversed(snap_rows)]
+            sim_history = snapshots[-6:] + [{"date": str(today), "total": sim_balance}]
+            yesterday_snap = next((s for s in reversed(snapshots) if s["date"] != str(today)), None)
+            if yesterday_snap and yesterday_snap["total"] > 0:
+                sim_today_change = round(sim_balance - yesterday_snap["total"], 2)
+                sim_today_change_pct = round(sim_today_change / yesterday_snap["total"] * 100, 2)
+        except Exception:
+            pass
     await refresh_status_position_prices(state, user_id)
     unr     = unrealized_pnl(state)
     pos_val = sum(p.get("size_remaining", p["size"]) for p in state["positions"])
@@ -4713,7 +4743,10 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
         "pnlHistory": state["pnlHistory"][-100:],
         "log": state.get("log", [])[:40],
         "paused": state.get("paused", False),
-        "sim_balance": round(1000 + state.get("sim_pnl_total", 0.0), 2),
+        "sim_balance": sim_balance,
+        "sim_history": sim_history,
+        "sim_today_change": sim_today_change,
+        "sim_today_change_pct": sim_today_change_pct,
     }
 
 _portfolio_cache: dict = {}
@@ -4761,22 +4794,24 @@ async def _save_portfolio_snapshot(user_id: int, total_usd: float) -> None:
 async def portfolio_snapshot_loop():
     """Every 5 min, in the midnight window (00:00-01:00 UTC), saves daily snapshots."""
     _snapped_today: set = set()
+    _sim_snapped_today: set = set()
     while True:
         await asyncio.sleep(300)
         try:
             now = datetime.utcnow()
             today = now.date()
             if now.hour != 0:
-                _snapped_today.discard(today)  # reset for next midnight
+                _snapped_today.discard(today)
+                _sim_snapped_today.discard(today)
                 continue
             if not db_pool:
                 continue
-            # Get all users with exchange keys
+            # Real snapshots for users with exchange keys
             async with db_pool.acquire() as conn:
-                rows = await conn.fetch(
+                real_rows = await conn.fetch(
                     "SELECT id FROM users WHERE revx_key_id IS NOT NULL OR coinbase_api_key IS NOT NULL"
                 )
-            for row in rows:
+            for row in real_rows:
                 uid = row["id"]
                 if uid in _snapped_today:
                     continue
@@ -4787,6 +4822,24 @@ async def portfolio_snapshot_loop():
                         _snapped_today.add(uid)
                 except Exception as e:
                     print(f"[snapshot] loop error user {uid}: {e}")
+            # Sim snapshots for all users
+            async with db_pool.acquire() as conn:
+                all_rows = await conn.fetch("SELECT id, sim_pnl_total FROM users")
+            for row in all_rows:
+                uid = row["id"]
+                if uid in _sim_snapped_today:
+                    continue
+                try:
+                    sim_total = round(1000 + float(row["sim_pnl_total"] or 0), 2)
+                    async with db_pool.acquire() as conn:
+                        await conn.execute(
+                            "INSERT INTO sim_snapshots (user_id, snapshot_date, sim_total_usd) "
+                            "VALUES ($1, $2, $3) ON CONFLICT (user_id, snapshot_date) DO NOTHING",
+                            uid, today, sim_total
+                        )
+                    _sim_snapped_today.add(uid)
+                except Exception as e:
+                    print(f"[sim_snapshot] loop error user {uid}: {e}")
         except Exception as e:
             print(f"[snapshot] loop error: {e}")
 
