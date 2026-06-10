@@ -6102,9 +6102,7 @@ function renderExchangePage() {
     status.style.color = connected ? 'var(--green)' : 'var(--text3)';
   }
   const sub = document.getElementById('exchangeRevxSub');
-  if (sub) sub.textContent = connected
-    ? 'API key configurate. Disponibile per il trading reale.'
-    : 'Collega le API key Revolut X per abilitare gli ordini reali.';
+  if (sub) sub.textContent = connected ? 'API key configurate. Disponibile per il trading reale.' : '';
   const btn = document.getElementById('exchangeRevxBtn');
   if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
   renderExternalExchangeStatus('coinbase');
