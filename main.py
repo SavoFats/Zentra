@@ -5955,7 +5955,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
             raise HTTPException(status_code=500, detail=err)
     else:
         qty       = amount / price if price else 0.0
-        entry_fee = amount * 0.001
+        entry_fee = 0
         add_log(state, "buy", "ACQUISTO MANUALE SIM",
                 f"{sym} @ ${price:.4f} | Size: ${amount:.0f} | SL: ${stop_price:.4f}")
         await notify(state, f"ACQUISTO MANUALE SIM\n{sym} @ ${price:.4f}\nSize: ${amount:.2f}")
