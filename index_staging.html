@@ -4802,7 +4802,7 @@ async function fetchPortfolioSummary() {
     const r = await fetch(API + '/portfolio_summary', { headers: authHeaders(), cache: 'no-store' });
     if (r.ok) {
       _portfolioData = await r.json();
-      updateBalanceHero();
+      updateBalanceHero(true);
     }
   } catch(e) {}
 }
@@ -4826,7 +4826,7 @@ function toggleBalanceVisibility() {
   if (eye) eye.style.opacity = _balHidden ? '0.4' : '1';
 }
 
-function updateBalanceHero() {
+function updateBalanceHero(animate = false) {
   if (!_portfolioData) return;
   const sym = getCurrSym();
   const d = _portfolioData;
@@ -4856,7 +4856,8 @@ function updateBalanceHero() {
     }
   }
 
-  animateBalanceSparkline();
+  if (animate) animateBalanceSparkline();
+  else drawBalanceSparkline(1);
 }
 
 function animateBalanceSparkline() {
