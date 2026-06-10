@@ -1389,11 +1389,32 @@ body.auth-active .tabbar { display:none !important; }
       </div>
     </div>
 
-    <!-- KPI saldo -->
-    <div class="home-kpi-row">
-      <div class="home-kpi-sm">
-        <div class="home-kpi-sm-label" id="homeKpiSaldoLabel">Saldo simulato</div>
-        <div class="home-kpi-sm-val" id="homeKpiSaldo">--</div>
+    <!-- Balance Hero -->
+    <div id="balanceHeroCard" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:12px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:0;overflow:hidden">
+      <!-- left: saldo -->
+      <div style="padding-right:20px;border-right:1px solid var(--border);min-width:130px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;display:flex;align-items:center;gap:5px">
+          SALDO REALE
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text3)"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div id="balHeroTotal" style="font-size:26px;font-weight:800;color:var(--text);letter-spacing:-0.03em;font-variant-numeric:tabular-nums;line-height:1.1">--</div>
+        <div id="balHeroChange" style="font-size:11px;font-weight:600;color:var(--text3);margin-top:5px">-- oggi</div>
+      </div>
+      <!-- center: sparkline -->
+      <div style="padding:0 16px;position:relative">
+        <canvas id="balHeroSparkline" style="display:block;width:100%;height:56px"></canvas>
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-top:5px">ANDAMENTO · 7 GIORNI</div>
+      </div>
+      <!-- right: stats -->
+      <div style="padding-left:20px;border-left:1px solid var(--border);display:flex;gap:24px;flex-shrink:0">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">DISPONIBILE</div>
+          <div id="balHeroAvail" style="font-size:17px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">--</div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">IN POSIZIONI</div>
+          <div id="balHeroInPos" style="font-size:17px;font-weight:700;color:var(--blue);font-variant-numeric:tabular-nums">--</div>
+        </div>
       </div>
     </div>
 
@@ -4568,6 +4589,7 @@ function render() {
 
   // Sparkline
   drawHeroSparkline();
+  updateBalanceHero();
 
   if (Object.keys(_recoveryValues).length > 0) {
     updatePositionPricesInPlace();
@@ -4769,6 +4791,82 @@ function drawHeroSparkline() {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.stroke();
+}
+
+function updateBalanceHero() {
+  const positions = S.positions || [];
+  const inPos = positions.reduce((s, p) => s + (p.size_remaining || p.size || 0), 0);
+  const avail = S.currentCapital || 0;
+  const total = avail + inPos;
+  const pnl = S.pnl || 0;
+  const pct = S.pct || 0;
+  const isPos = pnl >= 0.005, isNeg = pnl < -0.005;
+  const sym = getCurrSym();
+
+  const totalEl  = document.getElementById('balHeroTotal');
+  const changeEl = document.getElementById('balHeroChange');
+  const availEl  = document.getElementById('balHeroAvail');
+  const inPosEl  = document.getElementById('balHeroInPos');
+
+  if (totalEl)  totalEl.textContent  = sym + fmtMoney(total);
+  if (availEl)  availEl.textContent  = sym + fmtMoney(avail);
+  if (inPosEl)  inPosEl.textContent  = sym + fmtMoney(inPos);
+  if (changeEl) {
+    const sign = isPos ? '+' : '';
+    changeEl.textContent = sign + sym + fmtMoney(Math.abs(pnl)) + ' · ' + sign + pct.toFixed(1) + '% oggi';
+    changeEl.style.color = isPos ? 'var(--green)' : isNeg ? 'var(--red)' : 'var(--text3)';
+  }
+  drawBalanceSparkline();
+}
+
+function drawBalanceSparkline() {
+  const canvas = document.getElementById('balHeroSparkline');
+  if (!canvas) return;
+  const data = (S.pnlHistory || []).slice(-100);
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 200;
+  const h = canvas.offsetHeight || 56;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  if (data.length < 2) return;
+  const vals = data.map(p => p.v);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 1;
+  const pad = 4;
+  const pts = vals.map((v, i) => ({
+    x: pad + (i / (vals.length - 1)) * (w - pad * 2),
+    y: h - pad - ((v - min) / range) * (h - pad * 2)
+  }));
+  // fill gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(34,197,94,0.25)');
+  grad.addColorStop(1, 'rgba(34,197,94,0)');
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, h);
+  ctx.lineTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.lineTo(pts[pts.length - 1].x, h);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  // line
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.strokeStyle = '#22c55e';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  // dot at last point
+  const last = pts[pts.length - 1];
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#22c55e';
+  ctx.fill();
 }
 
 function renderPositions() {
@@ -5495,6 +5593,7 @@ function renderHomeWatchlist() {
 }
 
 function updateWatchlistPricesInPlace() {
+  updateBalanceHero();
   for (const sym of _watchlist) {
     const d = mktData.find(c => c.symbol === sym);
     if (!d) continue;
