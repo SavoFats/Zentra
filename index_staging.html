@@ -2030,10 +2030,7 @@ body.auth-active .tabbar { display:none !important; }
           <img src="assets/exchanges/revolut.svg" alt="Revolut" style="width:24px;height:24px;display:block">
         </div>
         <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div style="font-size:16px;font-weight:800;color:var(--text)">Revolut X</div>
-            <span id="exchangeRevxStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
-          </div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">Revolut X</div>
           <div id="exchangeRevxSub" style="font-size:13px;color:var(--text3);margin-top:4px">Configura le API key</div>
         </div>
         <button id="exchangeRevxBtn" onclick="showRevxConfig()" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
@@ -2046,10 +2043,7 @@ body.auth-active .tabbar { display:none !important; }
           <img src="assets/exchanges/coinbase.ico" alt="Coinbase" style="width:27px;height:27px;display:block">
         </div>
         <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div style="font-size:16px;font-weight:800;color:var(--text)">Coinbase</div>
-            <span id="exchangeCoinbaseStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
-          </div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">Coinbase</div>
           <div id="exchangeCoinbaseSub" style="font-size:13px;color:var(--text3);margin-top:4px"></div>
         </div>
         <button id="exchangeCoinbaseBtn" onclick="showExternalExchangeConfig('coinbase')" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
@@ -6082,12 +6076,6 @@ async function confirmEditName() {
 
 function renderExchangePage() {
   const connected = !!_hasRevxKeys;
-  const status = document.getElementById('exchangeRevxStatus');
-  if (status) {
-    status.textContent = connected ? 'Collegato' : 'Non collegato';
-    status.style.background = connected ? 'rgba(34,197,94,0.14)' : 'var(--surface2)';
-    status.style.color = connected ? 'var(--green)' : 'var(--text3)';
-  }
   const sub = document.getElementById('exchangeRevxSub');
   if (sub) sub.textContent = connected ? 'API key configurate. Disponibile per il trading reale.' : '';
   const btn = document.getElementById('exchangeRevxBtn');
@@ -6100,12 +6088,6 @@ function renderExternalExchangeStatus(exchange) {
   if (!label) return;
   const connected = !!_exchangeKeys[exchange];
   const cap = exchange.charAt(0).toUpperCase() + exchange.slice(1);
-  const status = document.getElementById('exchange' + cap + 'Status');
-  if (status) {
-    status.textContent = connected ? 'Collegato' : 'Non collegato';
-    status.style.background = connected ? 'rgba(34,197,94,0.14)' : 'var(--surface2)';
-    status.style.color = connected ? 'var(--green)' : 'var(--text3)';
-  }
   const sub = document.getElementById('exchange' + cap + 'Sub');
   if (sub) sub.textContent = connected ? 'API key configurate. Disponibile per il trading reale.' : '';
   const note = document.getElementById('exchange' + cap + 'Note');
