@@ -4402,12 +4402,10 @@ async function poll() {
       updateWatchlistPricesInPlace();
     }
     if (positionsActive) {
-      const fa = document.activeElement;
-      const prevId = fa?.id || '';
-      renderPositions();
-      if (prevId.startsWith('sl-pct-') || prevId.startsWith('tp-pct-')) {
-        const el = document.getElementById(prevId);
-        if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+      if (Object.keys(_recoveryValues).length > 0) {
+        updatePositionPricesInPlace();
+      } else {
+        renderPositions();
       }
     }
     const newTrades = td.trades || [];
