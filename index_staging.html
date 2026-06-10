@@ -4403,8 +4403,12 @@ async function poll() {
     }
     if (positionsActive) {
       const fa = document.activeElement;
-      const recoveryFocused = fa && (fa.id.startsWith('sl-pct-') || fa.id.startsWith('tp-pct-'));
-      if (!recoveryFocused) renderPositions();
+      const prevId = fa?.id || '';
+      renderPositions();
+      if (prevId.startsWith('sl-pct-') || prevId.startsWith('tp-pct-')) {
+        const el = document.getElementById(prevId);
+        if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+      }
     }
     const newTrades = td.trades || [];
 
@@ -4951,12 +4955,12 @@ async function saveSLTP(symbol, entryPrice) {
   const slPrice = entryPrice * (1 - slPct / 100);
   const tpPrice = tpPct > 0 ? entryPrice * (1 + tpPct / 100) : 0;
   try {
-    const r = await apiFetch(`/position/${symbol}/sltp`, {
+    const r = await fetch(API + `/position/${symbol}/sltp`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ stop_price: slPrice, tp_price: tpPrice })
     });
-    if (r.ok) { await pollStatus(); }
+    if (r.ok) { delete _recoveryValues[symbol]; await poll(); }
     else { alert((await r.json()).detail || 'Errore salvataggio SL/TP'); }
   } catch(e) { alert('Errore: ' + e.message); }
 }
