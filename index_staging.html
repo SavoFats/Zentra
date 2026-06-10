@@ -1398,13 +1398,13 @@ body.auth-active .tabbar { display:none !important; }
           <svg id="balHeroEye" onclick="toggleBalanceVisibility()" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#9aa0b8;cursor:pointer;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </div>
         <div id="balHeroTotal" style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-1.08px;line-height:1;font-variant-numeric:tabular-nums">--</div>
-        <div id="balHeroChange" style="font-size:12px;font-weight:600;color:#9aa0b8;display:flex;align-items:center;gap:4px">+$--.-- · +-.-% oggi</div>
+        <div id="balHeroChange" style="font-size:12px;font-weight:600;color:#9aa0b8;display:flex;align-items:center;gap:4px">+$0 · +0% oggi</div>
       </div>
       <!-- center: sparkline -->
       <div style="padding:0 20px;display:flex;flex-direction:column;justify-content:flex-end;position:relative">
         <canvas id="balHeroSparkline" style="display:block;width:100%;flex:1;min-height:52px"></canvas>
-        <div id="balHeroNoData" style="display:none;flex:1;min-height:52px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#9aa0b8">Nessun dato storico</div>
-        <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.5px;margin-top:8px">andamento · 7 giorni</div>
+        <div id="balHeroNoData" style="display:none;position:absolute;inset:0 20px 28px 20px;align-items:center;justify-content:center;font-size:11px;color:#9aa0b8">Nessun dato storico</div>
+        <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-top:8px">ANDAMENTO · 7 GIORNI</div>
       </div>
       <!-- right: stats -->
       <div style="padding-left:20px;border-left:1px solid var(--border);display:flex;gap:28px;align-items:center;flex-shrink:0">
@@ -4846,7 +4846,7 @@ function updateBalanceHero() {
     const chg = d.today_change || 0;
     const pct = d.today_change_pct || 0;
     if (chg === 0 && pct === 0) {
-      changeEl.innerHTML = '<span style="color:#9aa0b8">+$--.-- · +-.-% oggi</span>';
+      changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
     } else {
       const isPos = chg >= 0;
       const color = isPos ? '#05c168' : '#f6465d';
@@ -4866,7 +4866,7 @@ function drawBalanceSparkline() {
   const history = (_portfolioData && _portfolioData.history) || [];
   if (history.length < 2) {
     canvas.style.display = 'none';
-    if (noDataEl) noDataEl.style.display = '';
+    if (noDataEl) noDataEl.style.display = 'flex';
     return;
   }
   canvas.style.display = 'block';
