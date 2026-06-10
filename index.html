@@ -2041,7 +2041,7 @@ body.auth-active .tabbar { display:none !important; }
     </div>
 
     <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;">
         <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
           <img src="assets/exchanges/coinbase.ico" alt="Coinbase" style="width:27px;height:27px;display:block">
         </div>
@@ -6104,16 +6104,14 @@ function renderExternalExchangeStatus(exchange) {
     status.style.color = connected ? 'var(--green)' : 'var(--text3)';
   }
   const sub = document.getElementById('exchange' + cap + 'Sub');
-  if (sub) sub.textContent = connected
-    ? 'API key configurate. Disponibile per il trading reale.'
-    : 'Salva API key e secret';
+  if (sub) sub.textContent = connected ? 'API key configurate. Disponibile per il trading reale.' : '';
   const note = document.getElementById('exchange' + cap + 'Note');
-  if (note) note.style.display = connected ? 'none' : '';
+  if (note) note.style.display = 'none';
   const btn = document.getElementById('exchange' + cap + 'Btn');
   if (btn) {
     btn.textContent = connected ? 'Gestisci' : 'Collega';
-    btn.style.background = connected ? 'var(--blue)' : 'var(--surface2)';
-    btn.style.color = connected ? '#fff' : 'var(--text)';
+    btn.style.background = 'var(--blue)';
+    btn.style.color = '#fff';
   }
 }
 
