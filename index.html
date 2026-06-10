@@ -6661,7 +6661,9 @@ function tmSetAmount(amount) {
 }
 
 function tmSetAmountMax() {
-  const max = _plan === 'free' ? Math.max(0, Math.floor(S.currentCapital > 0 ? S.currentCapital : (S.sim_balance || 1000))) : (_tmBalance > 0 ? Math.floor(_tmBalance) : 500);
+  const openInvested = (S.positions || []).filter(p => !p.realMode).reduce((s, p) => s + (p.size_remaining || p.size || 0), 0);
+  const simAvail = Math.max(0, Math.floor((S.sim_balance || 1000) - openInvested));
+  const max = _plan === 'free' ? simAvail : (_tmBalance > 0 ? Math.floor(_tmBalance) : 500);
   document.getElementById('tmAmountInput').value = max;
   _tmHighlightBtn('max');
   tmUpdateSummary();
