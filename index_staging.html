@@ -6823,9 +6823,7 @@ function openTradeDetail(i) {
 
   document.getElementById('tdSymbol').textContent = base;
   const badge = document.getElementById('tdBadge');
-  badge.textContent        = isWin ? 'WIN' : 'LOSS';
-  badge.style.background   = isWin ? 'rgba(5,193,104,0.15)' : 'rgba(246,70,93,0.15)';
-  badge.style.color        = color;
+  badge.style.display = 'none';
 
   const exitDt  = new Date(t.time);
   const entryDt = t.entryTime ? new Date(t.entryTime) : null;
@@ -6860,7 +6858,7 @@ function openTradeDetail(i) {
     : `${Math.round(dur)}m`;
 
   const totalFee = (t.buyFee || 0) + (t.sellFee || 0);
-  document.getElementById('tdFee').textContent = totalFee > 0 ? `Commissione $${totalFee.toFixed(2)}` : '';
+  document.getElementById('tdFee').textContent = (!t.realMode || totalFee <= 0) ? '' : `Commissione $${totalFee.toFixed(2)}`;
 
   const shareBtn = document.getElementById('tdShareBtn');
   shareBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Condividi';
