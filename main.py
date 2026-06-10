@@ -3714,6 +3714,16 @@ async def startup():
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_fee FLOAT DEFAULT 0;
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_type TEXT DEFAULT 'Market';
                 """)
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        snapshot_date DATE NOT NULL,
+                        total_usd NUMERIC(18,4) NOT NULL,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        UNIQUE(user_id, snapshot_date)
+                    )
+                """)
             print("Database connesso e schema creato")
 
             # Ripristina sessioni attive dopo riavvio
@@ -3742,6 +3752,8 @@ async def startup():
     await _skip_old_telegram_updates()
     _t = asyncio.create_task(telegram_loop(), name="telegram_loop")
     _t.add_done_callback(_on_task_done)
+    _t2 = asyncio.create_task(portfolio_snapshot_loop(), name="portfolio_snapshot_loop")
+    _t2.add_done_callback(_on_task_done)
 
 async def load_global_revx_keys():
     """Carica le chiavi RevX all'avvio e le ricarica ogni ora con fallback multi-utente."""
@@ -4680,17 +4692,10 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
 _portfolio_cache: dict = {}
 PORTFOLIO_CACHE_TTL = 30
 
-@app.get("/portfolio_summary")
-async def get_portfolio_summary(request: Request, user_id: int = Depends(get_current_user)):
-    check_rate_limit(request, max_attempts=30, window=60, key_suffix="portfolio")
-    cached = _portfolio_cache.get(user_id)
-    if cached and time.time() - cached["ts"] < PORTFOLIO_CACHE_TTL:
-        return cached["data"]
-
+async def _compute_portfolio_total(user_id: int) -> tuple[float, float]:
+    """Returns (total_usd, available_usd). Refreshes position prices first."""
     state = get_session(user_id)
     await refresh_status_position_prices(state, user_id)
-
-    # Market value of real positions
     positions_value = 0.0
     for p in state.get("positions", []):
         if not p.get("realMode"):
@@ -4699,25 +4704,106 @@ async def get_portfolio_summary(request: Request, user_id: int = Depends(get_cur
         price = float(p.get("currentPrice") or p.get("entryPrice") or 0)
         if qty > 0 and price > 0:
             positions_value += qty * price
-
     available_usd = 0.0
-    # RevX USD cash
     try:
         key_id, priv = await load_revx_keys_for_user(user_id)
         available_usd += await get_revx_usd_balance(key_id, priv)
     except Exception:
         pass
-    # Coinbase USD cash
     try:
         cb_key, cb_sec = await load_coinbase_keys_for_user(user_id)
         available_usd += await get_coinbase_quote_balance(cb_key, cb_sec)
     except Exception:
         pass
+    return round(available_usd + positions_value, 4), round(available_usd, 4)
+
+async def _save_portfolio_snapshot(user_id: int, total_usd: float) -> None:
+    if not db_pool:
+        return
+    today = datetime.utcnow().date()
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO portfolio_snapshots (user_id, snapshot_date, total_usd) "
+                "VALUES ($1, $2, $3) ON CONFLICT (user_id, snapshot_date) DO NOTHING",
+                user_id, today, total_usd
+            )
+    except Exception as e:
+        print(f"[snapshot] error saving for user {user_id}: {e}")
+
+async def portfolio_snapshot_loop():
+    """Every 5 min, in the midnight window (00:00-01:00 UTC), saves daily snapshots."""
+    _snapped_today: set = set()
+    while True:
+        await asyncio.sleep(300)
+        try:
+            now = datetime.utcnow()
+            today = now.date()
+            if now.hour != 0:
+                _snapped_today.discard(today)  # reset for next midnight
+                continue
+            if not db_pool:
+                continue
+            # Get all users with exchange keys
+            async with db_pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT id FROM users WHERE revx_key_id IS NOT NULL OR coinbase_api_key IS NOT NULL"
+                )
+            for row in rows:
+                uid = row["id"]
+                if uid in _snapped_today:
+                    continue
+                try:
+                    total, _ = await _compute_portfolio_total(uid)
+                    if total > 0:
+                        await _save_portfolio_snapshot(uid, total)
+                        _snapped_today.add(uid)
+                except Exception as e:
+                    print(f"[snapshot] loop error user {uid}: {e}")
+        except Exception as e:
+            print(f"[snapshot] loop error: {e}")
+
+@app.get("/portfolio_summary")
+async def get_portfolio_summary(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="portfolio")
+    cached = _portfolio_cache.get(user_id)
+    if cached and time.time() - cached["ts"] < PORTFOLIO_CACHE_TTL:
+        return cached["data"]
+
+    total, available_usd = await _compute_portfolio_total(user_id)
+    positions_value = round(total - available_usd, 4)
+
+    # History & daily change from DB
+    today_change = 0.0
+    today_change_pct = 0.0
+    history = []
+    if db_pool:
+        try:
+            today = datetime.utcnow().date()
+            async with db_pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT snapshot_date, total_usd FROM portfolio_snapshots "
+                    "WHERE user_id = $1 ORDER BY snapshot_date DESC LIMIT 8",
+                    user_id
+                )
+            snapshots = [{"date": str(r["snapshot_date"]), "total": float(r["total_usd"])} for r in reversed(rows)]
+            # Build 7-day history: snapshots + today's live value
+            history = snapshots[-6:] + [{"date": str(today), "total": round(total, 2)}]
+            # Today's change vs yesterday's snapshot
+            yesterday_snap = next((s for s in reversed(snapshots) if s["date"] != str(today)), None)
+            if yesterday_snap and yesterday_snap["total"] > 0:
+                today_change = round(total - yesterday_snap["total"], 2)
+                today_change_pct = round(today_change / yesterday_snap["total"] * 100, 2)
+        except Exception as e:
+            print(f"[portfolio] history error: {e}")
 
     data = {
-        "total":     round(available_usd + positions_value, 2),
-        "available": round(available_usd, 2),
-        "positions": round(positions_value, 2),
+        "total":              round(total, 2),
+        "available":          round(available_usd, 2),
+        "positions":          round(positions_value, 2),
+        "today_change":       today_change,
+        "today_change_pct":   today_change_pct,
+        "history":            history,
     }
     _portfolio_cache[user_id] = {"ts": time.time(), "data": data}
     return data

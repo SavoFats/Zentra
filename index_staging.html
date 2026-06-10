@@ -4829,15 +4829,31 @@ function toggleBalanceVisibility() {
 function updateBalanceHero() {
   if (!_portfolioData) return;
   const sym = getCurrSym();
+  const d = _portfolioData;
 
-  const totalEl = document.getElementById('balHeroTotal');
-  const availEl = document.getElementById('balHeroAvail');
-  const inPosEl = document.getElementById('balHeroInPos');
+  const totalEl  = document.getElementById('balHeroTotal');
+  const availEl  = document.getElementById('balHeroAvail');
+  const inPosEl  = document.getElementById('balHeroInPos');
+  const changeEl = document.getElementById('balHeroChange');
 
   if (!_balHidden) {
-    if (totalEl) { totalEl.textContent = sym + fmtMoney(_portfolioData.total); delete totalEl.dataset.real; }
-    if (availEl) { availEl.textContent = sym + fmtMoney(_portfolioData.available); delete availEl.dataset.real; }
-    if (inPosEl) { inPosEl.textContent = sym + fmtMoney(_portfolioData.positions); delete inPosEl.dataset.real; }
+    if (totalEl) { totalEl.textContent = sym + fmtMoney(d.total); delete totalEl.dataset.real; }
+    if (availEl) { availEl.textContent = sym + fmtMoney(d.available); delete availEl.dataset.real; }
+    if (inPosEl) { inPosEl.textContent = sym + fmtMoney(d.positions); delete inPosEl.dataset.real; }
+  }
+
+  if (changeEl) {
+    const chg = d.today_change || 0;
+    const pct = d.today_change_pct || 0;
+    if (chg === 0 && pct === 0) {
+      changeEl.innerHTML = '<span style="color:#9aa0b8">+$--.-- · +-.-% oggi</span>';
+    } else {
+      const isPos = chg >= 0;
+      const color = isPos ? '#05c168' : '#f6465d';
+      const arrow = isPos ? '↑' : '↓';
+      const sign  = isPos ? '+' : '';
+      changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
+    }
   }
 
   requestAnimationFrame(drawBalanceSparkline);
@@ -4847,8 +4863,8 @@ function drawBalanceSparkline() {
   const canvas = document.getElementById('balHeroSparkline');
   const noDataEl = document.getElementById('balHeroNoData');
   if (!canvas) return;
-  const data = (S.pnlHistory || []).slice(-100);
-  if (data.length < 2) {
+  const history = (_portfolioData && _portfolioData.history) || [];
+  if (history.length < 2) {
     canvas.style.display = 'none';
     if (noDataEl) noDataEl.style.display = '';
     return;
@@ -4864,7 +4880,7 @@ function drawBalanceSparkline() {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
-  const vals = data.map(p => p.v);
+  const vals = history.map(p => p.total);
   const min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || 1;
   const pad = 4;
