@@ -697,6 +697,8 @@ body.auth-active .tabbar { display:none !important; }
   #balHeroSparklineSection { display:none !important; }
   #balHeroRightStats { align-items:flex-start !important; gap:16px !important; }
   #balHeroRightStats .bal-stat-label { white-space:nowrap; }
+  .home-hero-btn-text { display:none; }
+  .home-hero-btn { padding:12px 14px; }
 }
 .pos-sl-bar-wrap { margin-bottom:16px; }
 .pos-sl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:20px 0 18px; }
@@ -1357,16 +1359,13 @@ body.auth-active .tabbar { display:none !important; }
         <circle cx="168" cy="80" r="4" fill="white" opacity="0.4"/>
       </svg>
 
-      <div class="home-hero-title">Avvia<br>Zentra Agent Beta</div>
-      <div class="home-hero-pills">
-        <span class="home-hero-pill" id="heroPillDuration">Durata --</span>
-        <span class="home-hero-pill" id="heroPillStrategy">Stop Loss --</span>
-        <span class="home-hero-pill" id="heroPillCapital">Capitale --</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div class="home-hero-title" style="margin-bottom:0">Avvia<br>Zentra Agent Beta</div>
+        <button class="home-hero-btn" id="homeStartBtn" onclick="openDrawer()" style="flex-shrink:0">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span class="home-hero-btn-text">Avvia sessione</span>
+        </button>
       </div>
-      <button class="home-hero-btn" id="homeStartBtn" onclick="openDrawer()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Avvia sessione
-      </button>
       <div id="sessionsIndicator" style="display:none;font-size:11px;color:rgba(255,255,255,0.65);margin-top:10px"></div>
     </div>
   <!-- Hero P&L card — visibile quando l'agente è in esecuzione (stessa posizione di homeHeroCard) -->
@@ -7262,7 +7261,7 @@ function updatePlanUI() {
   const homeStartBtn = document.getElementById('homeStartBtn');
   if (homeStartBtn) {
     homeStartBtn.innerHTML = _plan === 'founder'
-      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Avvia sessione'
+      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg><span class="home-hero-btn-text"> Avvia sessione</span>'
       : 'Diventa Founder';
   }
   // CTA upgrade nel menu — visibile per free sempre, nascosto per Pro
@@ -7808,7 +7807,7 @@ function renderAIHistory() {
     return `<div class="sb-ai-thread-wrap${isActive ? ' active' : ''}">
       <button class="sb-ai-thread" onclick="openAIThread('${sid}',true)" ontouchend="event.preventDefault();openAIThread('${sid}',true)">
         <div class="sb-ai-thread-title">${escapeHtml(t.title || 'Analisi')}</div>
-        <div class="sb-ai-thread-meta">${_aiFormatThreadTime(t.updatedAt)} · ${(t.messages||[]).filter(m=>m.role!=='chart').length} messaggi</div>
+        <div class="sb-ai-thread-meta">${_aiFormatThreadTime(t.updatedAt)}</div>
       </button>
       <button class="sb-ai-thread-dots" onclick="_aiThreadMenuToggle(event,'${sid}')" title="Opzioni">···</button>
       <div class="sb-ai-thread-dropdown">
