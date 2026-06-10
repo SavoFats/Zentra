@@ -695,6 +695,8 @@ body.auth-active .tabbar { display:none !important; }
 @media (max-width:767px) {
   #balanceHeroCard { grid-template-columns:1fr auto !important; }
   #balHeroSparklineSection { display:none !important; }
+  #balHeroRightStats { align-items:flex-start !important; gap:16px !important; }
+  #balHeroRightStats .bal-stat-label { white-space:nowrap; }
 }
 .pos-sl-bar-wrap { margin-bottom:16px; }
 .pos-sl-bar { position:relative; height:4px; background:var(--surface3); border-radius:2px; margin:20px 0 18px; }
@@ -1402,7 +1404,7 @@ body.auth-active .tabbar { display:none !important; }
           <svg id="balHeroEye" onclick="toggleBalanceVisibility()" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#9aa0b8;cursor:pointer;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </div>
         <div id="balHeroTotal" style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-1.08px;line-height:1;font-variant-numeric:tabular-nums">--</div>
-        <div id="balHeroChange" style="font-size:12px;font-weight:600;color:#9aa0b8;display:flex;align-items:center;gap:4px">+$0 · +0% oggi</div>
+        <div id="balHeroChange" style="font-size:12px;font-weight:600;color:#9aa0b8;display:flex;align-items:center;gap:4px;margin-top:8px">+$0 · +0% oggi</div>
       </div>
       <!-- center: sparkline -->
       <div id="balHeroSparklineSection" style="padding:0 20px;display:flex;flex-direction:column;justify-content:flex-end;position:relative">
@@ -1411,13 +1413,13 @@ body.auth-active .tabbar { display:none !important; }
         <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-top:8px">ANDAMENTO · 7 GIORNI</div>
       </div>
       <!-- right: stats -->
-      <div style="padding-left:20px;border-left:1px solid var(--border);display:flex;gap:28px;align-items:center;flex-shrink:0">
+      <div id="balHeroRightStats" style="padding-left:20px;border-left:1px solid var(--border);display:flex;gap:28px;align-items:center;flex-shrink:0">
         <div>
-          <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-bottom:8px">Disponibile</div>
+          <div class="bal-stat-label" style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-bottom:8px;white-space:nowrap">Disponibile</div>
           <div id="balHeroAvail" style="font-size:24px;font-weight:800;color:var(--text);letter-spacing:-0.48px;font-variant-numeric:tabular-nums">--</div>
         </div>
         <div>
-          <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-bottom:8px">In posizioni</div>
+          <div class="bal-stat-label" style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;margin-bottom:8px;white-space:nowrap">In posizioni</div>
           <div id="balHeroInPos" style="font-size:24px;font-weight:800;color:#0052ff;letter-spacing:-0.48px;font-variant-numeric:tabular-nums">--</div>
         </div>
       </div>
