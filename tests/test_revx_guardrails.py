@@ -543,7 +543,7 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertEqual(pos["currentPrice"], 0.1324)
         self.assertEqual(pos["highPrice"], 0.1324)
 
-    def test_sync_coinbase_positions_imports_missing_base_balance(self):
+    def test_inspect_coinbase_external_holdings_imports_missing_base_balance(self):
         main = self.main
         state = main.make_session()
         state["capital"] = 10.0
@@ -587,7 +587,7 @@ class RevxGuardrailTests(unittest.TestCase):
         main.persist_sessions = fake_persist
         main.market_data = {"OCEAN": {"icon": "O"}}
         try:
-            result = asyncio.run(main.sync_coinbase_positions_for_user(123, min_value_usd=0.50))
+            result = asyncio.run(main.inspect_coinbase_external_holdings_for_user(123, min_value_usd=0.50))
         finally:
             main.user_sessions = original_sessions
             main.load_coinbase_keys_for_user = original_load
@@ -685,7 +685,10 @@ class RevxGuardrailTests(unittest.TestCase):
         self.assertIn(pos, state["positions"])
         self.assertEqual(pos["currentPrice"], 0.25)
 
-    def test_coinbase_exit_keeps_position_when_available_balance_is_zero(self):
+    def test_coinbase_exit_registers_trade_when_available_balance_is_zero(self):
+        # When Coinbase balance is 0 the coin was already sold externally:
+        # exit_position should register the trade and remove the position
+        # without placing a new sell order.
         main = self.main
         state = main.make_session()
         state["currentCapital"] = 100.0
@@ -738,9 +741,8 @@ class RevxGuardrailTests(unittest.TestCase):
             main.coinbase_request = original_request
             main.notify = original_notify
 
-        self.assertIn(pos, state["positions"])
-        self.assertTrue(pos.get("_manual_action_required"))
-        self.assertFalse(state["trades"])
+        self.assertNotIn(pos, state["positions"])
+        self.assertTrue(state["trades"])
 
     def test_parse_revx_balances_accepts_known_shapes(self):
         parse = self.main.parse_revx_balances
