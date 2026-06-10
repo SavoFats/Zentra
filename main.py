@@ -3434,7 +3434,10 @@ async def reconcile_coinbase_external_closures(
         if not sym:
             continue
         real_qty = float(bal_map.get(sym, 0.0) or 0.0)
-        if real_qty > 0:
+        tracked_qty = float(pos.get("qty_purchased") or 0.0)
+        sold_externally = real_qty == 0.0 or (tracked_qty > 0 and real_qty < tracked_qty * 0.05)
+        print(f"[coinbase_reconcile] {sym}: real_qty={real_qty:.8f} tracked={tracked_qty:.8f} sold_externally={sold_externally}")
+        if not sold_externally:
             pos["qty_purchased"] = real_qty
         elif not pos.get("_already_sold"):
             await exit_position(state, pos, "external_close", user_id=user_id)
