@@ -1094,7 +1094,7 @@ body.auth-active .tabbar { display:none !important; }
         <p style="font-size:13px;color:var(--text2);margin:0 0 16px">Per collegare il tuo account Telegram all'agente:</p>
         <ol style="font-size:13px;color:var(--text2);margin:0 0 16px;padding-left:18px;line-height:2">
           <li>Clicca <strong>Genera codice</strong></li>
-          <li>Apri il bot Telegram e invia il comando mostrato</li>
+          <li>Apri <a href="https://t.me/Zentra_Bot" target="_blank" style="color:var(--blue);font-weight:700">@Zentra_Bot</a> e invia il comando mostrato</li>
           <li>Il collegamento avviene automaticamente</li>
         </ol>
         <div id="tgBotLink" style="display:none;font-size:13px;color:var(--text2);margin-bottom:10px;text-align:center"></div>
@@ -4200,7 +4200,7 @@ async function setMode(real) {
 }
 
 // ── FIELD VALIDATION HELPERS ─────────────────────────────────────────────────
-function showFieldError(fieldId, message) {
+function showConfigFieldError(fieldId, message) {
   const el = document.getElementById(fieldId);
   if (el) {
     el.style.borderColor = 'var(--red)';
@@ -4230,11 +4230,11 @@ async function startAgent() {
   clearFieldError('capitalUsd');
   clearFieldError('allocUsd');
   const capitalUsdVal = parseFloat(document.getElementById('capitalUsd').value);
-  if (!capitalUsdVal || capitalUsdVal <= 0) { showFieldError('capitalUsd', 'Inserisci un capitale valido'); return; }
-  if (capitalUsdVal > 1000000) { showFieldError('capitalUsd', 'Capitale troppo alto (max $1,000,000)'); return; }
+  if (!capitalUsdVal || capitalUsdVal <= 0) { showConfigFieldError('capitalUsd', 'Inserisci un capitale valido'); return; }
+  if (capitalUsdVal > 1000000) { showConfigFieldError('capitalUsd', 'Capitale troppo alto (max $1,000,000)'); return; }
   const allocUsdVal = parseFloat(document.getElementById('allocUsd').value);
-  if (!allocUsdVal || allocUsdVal <= 0) { showFieldError('allocUsd', 'Inserisci un importo per trade valido'); return; }
-  if (allocUsdVal > capitalUsdVal) { showFieldError('allocUsd', 'Importo per trade superiore al capitale'); return; }
+  if (!allocUsdVal || allocUsdVal <= 0) { showConfigFieldError('allocUsd', 'Inserisci un importo per trade valido'); return; }
+  if (allocUsdVal > capitalUsdVal) { showConfigFieldError('allocUsd', 'Importo per trade superiore al capitale'); return; }
   const sessionDur = parseInt(document.getElementById('sessionDuration').value);
   if (sessionDur < 0 || sessionDur > 24) { showToast('Durata sessione non valida (0–24h)', true); return; }
   const total = parseFloat(document.getElementById('capital').dataset.total || 0);
@@ -4242,8 +4242,8 @@ async function startAgent() {
   const hasCoinbaseKeys = _exchangeKeys && _exchangeKeys.coinbase;
   const isReal = _plan !== 'free' && !_simMode && (selectedExch === 'coinbase' ? !!hasCoinbaseKeys : _hasRevxKeys);
   const capitalVal = parseFloat(capitalUsdVal.toFixed(2));
-  if (isReal && capitalVal <= 0) { showFieldError('capitalUsd', 'Saldo non ancora caricato — attendi e riprova'); return; }
-  if (isReal && total > 0 && capitalVal > total) { showFieldError('capitalUsd', 'Supera il saldo disponibile (' + getCurrSym() + total.toFixed(2) + ')'); return; }
+  if (isReal && capitalVal <= 0) { showConfigFieldError('capitalUsd', 'Saldo non ancora caricato — attendi e riprova'); return; }
+  if (isReal && total > 0 && capitalVal > total) { showConfigFieldError('capitalUsd', 'Supera il saldo disponibile (' + getCurrSym() + total.toFixed(2) + ')'); return; }
   const cfg = {
     capital:               capitalVal,
     capitalPct:            total > 0 ? capitalVal / total : 1.0,
