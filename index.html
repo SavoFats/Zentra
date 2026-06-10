@@ -7225,11 +7225,11 @@ document.addEventListener('touchstart', e => {
 
 let _paywallAction = 'checkout';
 
-function showPaywall(msg, action = 'checkout') {
+function showPaywall(msg, action = 'checkout', title = '') {
   _paywallAction = action;
-  const title = document.getElementById('paywallTitle');
+  const titleEl = document.getElementById('paywallTitle');
   const btn = document.getElementById('paywallPrimaryBtn');
-  if (title) title.textContent = action === 'plans' ? 'Scansioni gratuite esaurite' : 'Piano Free';
+  if (titleEl) titleEl.textContent = title || (action === 'plans' ? 'Funzionalità Pro' : 'Piano Free');
   if (btn) btn.textContent = action === 'plans' ? 'Vedi piani' : 'Passa a Pro';
   document.getElementById('paywallMsg').textContent = msg || 'Passa a Pro per sbloccare sessioni illimitate.';
   document.getElementById('paywallModal').classList.add('open');
@@ -7453,16 +7453,16 @@ function closeFounderWelcome() {
 
 <!-- PAYWALL MODAL -->
 <div class="modal-overlay" id="paywallModal" onclick="if(event.target===this)closePaywall()">
-  <div class="modal-card" style="max-width:360px;text-align:center;padding:32px 24px">
+  <div class="modal-card" style="max-width:400px;text-align:center;padding:32px 24px">
     <div id="paywallTitle" style="font-size:20px;font-weight:700;margin-bottom:8px">Piano Free</div>
     <p id="paywallMsg" style="color:var(--text2);font-size:14px;margin-bottom:24px;line-height:1.5"></p>
-    <div style="background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:20px;text-align:left">
-      <div style="font-weight:700;margin-bottom:10px;color:var(--blue)">Cosa sblocchi con Pro</div>
-      <div style="font-size:13px;color:var(--text2);line-height:1.8">
-        Scansioni di mercato illimitate<br>
-        50 analisi Zentra AI al giorno<br>
-        Collegamento exchange reali<br>
-        Notifiche Telegram
+    <div style="background:var(--surface2);border-radius:12px;padding:16px 20px;margin-bottom:20px">
+      <div style="font-weight:700;margin-bottom:12px;color:var(--blue)">Cosa sblocchi con Pro</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:13px;color:var(--text2);text-align:left">
+        <div>✓ Scansioni illimitate</div>
+        <div>✓ 50 analisi AI/giorno</div>
+        <div>✓ Exchange reali</div>
+        <div>✓ Notifiche Telegram</div>
       </div>
     </div>
     <button class="btn-primary" id="paywallPrimaryBtn" style="width:100%;padding:14px;font-size:16px;margin-bottom:10px;cursor:pointer" onclick="handlePaywallPrimary()">Passa a Pro</button>
