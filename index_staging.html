@@ -835,9 +835,10 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <div class="toggle-switch" id="themeToggle" onclick="toggleTheme()"></div>
   </div>
-  <div class="profile-menu-item" onclick="showTelegramConfig()">
+  <div class="profile-menu-item" onclick="showTelegramConfig()" id="pmTelegramItem">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     <span id="pmTelegram">Collega Telegram</span>
+    <span id="pmTelegramBadge" style="display:none;font-size:9px;font-weight:800;padding:2px 6px;border-radius:20px;background:rgba(0,82,255,0.12);color:var(--blue);letter-spacing:0.04em;margin-left:auto">PRO</span>
   </div>
   <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? manageSubscriptionClick() : null" style="display:none">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
@@ -2928,7 +2929,11 @@ async function loadUserProfile() {
     window._realMode = canUseRealMode();
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
-    if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram collegato' : 'Collega Telegram';
+    if (pmTg) pmTg.textContent = _plan === 'free' ? 'Telegram (Pro)' : (window._tgLinked ? 'Telegram collegato' : 'Collega Telegram');
+    const pmTgBadge = document.getElementById('pmTelegramBadge');
+    if (pmTgBadge) pmTgBadge.style.display = _plan === 'free' ? 'inline' : 'none';
+    const pmTgItem = document.getElementById('pmTelegramItem');
+    if (pmTgItem) pmTgItem.style.opacity = _plan === 'free' ? '0.5' : '1';
 
     if (me.avatar_b64) {
       applyAvatar(me.avatar_b64);
@@ -3316,6 +3321,10 @@ async function microSellCoinbase() {
 
 function showTelegramConfig() {
   document.getElementById('profileMenu').classList.remove('open');
+  if (_plan === 'free') {
+    showToast('Telegram è disponibile dal piano Pro. Fai upgrade per ricevere notifiche.', true);
+    return;
+  }
   const linked = window._tgLinked || false;
   document.getElementById('tgLinkedView').style.display = linked ? 'block' : 'none';
   document.getElementById('tgUnlinkedView').style.display = linked ? 'none' : 'block';

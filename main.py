@@ -2808,7 +2808,6 @@ async def scan_and_trade(state: dict, user_id: int = None):
     slots     = max_pos - len(state["positions"])
     if is_free and slots <= 0:
         add_log(state, "info", "PIANO FREE", "Limite di 1 posizione contemporanea raggiunto. Passa a Pro per aprire più posizioni.")
-        await notify(state, "Piano Free: limite 1 posizione raggiunto.")
         _update_pnl(state)
         return
 
