@@ -453,7 +453,7 @@ body.sidebar-open .sidebar { transform:translateX(0); }
   .hdr, .pages { transition:left 0.28s cubic-bezier(0.4,0,0.2,1); }
   body.sidebar-open .hdr { left:var(--sb-w); }
   body.sidebar-open .pages { left:var(--sb-w); }
-  body.sidebar-open .hdr-avatar-wrap { display:none !important; }
+  .hdr-avatar-wrap { display:none !important; }
 }
 .hdr-hamburger { display:flex; }
 .sb-hdr { display:flex; align-items:center; gap:10px; padding:0 14px; padding-top:var(--safe-t); height:calc(var(--hdr-h) + var(--safe-t)); border-bottom:1px solid var(--border); flex-shrink:0; }
@@ -1361,11 +1361,11 @@ body.auth-active .tabbar { display:none !important; }
       <div class="home-ai-frame" id="homeAiFrame">
         <div class="home-ai-bar" onclick="openHomeAI(true)">
           <div class="home-ai-mark">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg"><polyline points="0,100 40,62 68,82 100,32 140,48" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="140" cy="48" r="11" fill="currentColor"/></svg>
           </div>
           <textarea class="ai-input home-ai-input" id="aiHomeInput" rows="1" placeholder="Chiedi a Zentra AI di analizzare mercato, segnali o posizioni..." onfocus="openHomeAI(false)" onkeydown="aiInputKeydown(event,'home')" oninput="aiInputResize(this,'home')"></textarea>
           <button class="ai-send home-ai-send" id="aiHomeSend" onclick="event.stopPropagation();sendAIMessage('home')" disabled aria-label="Invia a Zentra AI">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
           </button>
         </div>
       </div>
@@ -1419,7 +1419,7 @@ body.auth-active .tabbar { display:none !important; }
     <div id="homeSessionWidget" style="display:none;margin-bottom:12px">
       <div class="card" style="padding-bottom:0">
         <div class="home-pos-label">
-          <span class="home-pos-dot"></span>
+
           Posizioni in corso
         </div>
         <div id="homeSessionContent">
@@ -1467,7 +1467,7 @@ body.auth-active .tabbar { display:none !important; }
           </div>
           <textarea class="ai-input" id="aiInput" rows="1" placeholder="Scrivi un messaggio a Zentra AI..." onkeydown="aiInputKeydown(event,'analysis')" oninput="aiInputResize(this,'analysis')"></textarea>
           <button class="ai-send" id="aiSend" onclick="sendAIMessage('analysis')" disabled aria-label="Invia a Zentra AI">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
           </button>
         </div>
       </div>
@@ -1897,9 +1897,9 @@ body.auth-active .tabbar { display:none !important; }
       .ai-input-row { display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--border); flex-shrink:0; }
       .ai-input { flex:1; border:1px solid var(--border); background:var(--surface2); color:var(--text); border-radius:12px; padding:10px 13px; font:500 13.5px var(--sans); resize:none; outline:none; max-height:120px; min-height:40px; line-height:1.45; }
       .ai-input:focus { border-color:rgba(0,82,255,0.5); box-shadow:0 0 0 3px rgba(0,82,255,0.08); }
-      .ai-send { width:40px; height:40px; border-radius:10px; border:none; background:var(--blue); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:opacity .15s; align-self:flex-end; }
+      .ai-send { width:40px; height:40px; border-radius:50%; border:none; background:var(--blue); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:opacity .15s; align-self:flex-end; }
       .ai-send:disabled { opacity:0.4; cursor:not-allowed; }
-      .ai-send svg { width:18px; height:18px; }
+      .ai-send svg { width:15px; height:15px; }
       .ai-chart-wrap { margin:8px 0 12px; border-radius:16px; overflow:hidden; border:1px solid var(--border); background:var(--surface2); width:min(380px,100%); }
       .ai-chart-label { font-size:11px; font-weight:800; color:var(--text3); padding:8px 12px 4px; letter-spacing:0.06em; text-transform:uppercase; }
       .ai-chart-frame { width:100%; height:480px; min-height:480px; flex-shrink:0; border:none; display:block; }
@@ -1907,20 +1907,18 @@ body.auth-active .tabbar { display:none !important; }
       .ai-ctx-pill { background:rgba(0,82,255,0.1); border-radius:20px; padding:2px 8px; }
       .home-ai { width:min(900px,100%); margin:10px auto 28px; }
       .home-ai-frame { position:relative; isolation:isolate; overflow:hidden; border-radius:24px; padding:2px; box-shadow:0 18px 54px rgba(0,82,255,0.14),0 1px 0 rgba(255,255,255,0.38) inset; }
-      .home-ai-frame::before { content:""; position:absolute; inset:-45%; z-index:-2; background:conic-gradient(from 0deg,#0052ff,#28d7ff,#22c55e,#f59e0b,#ef3b74,#7c3aed,#0052ff); animation:home-ai-rgb 7s linear infinite; opacity:.56; }
+      .home-ai-frame::before { content:""; position:absolute; inset:-45%; z-index:-2; background:conic-gradient(from 0deg,#0052ff,#28d7ff,#22c55e,#f59e0b,#ef3b74,#7c3aed,#0052ff); animation:home-ai-rgb 7s linear 1 forwards; opacity:.56; }
       .home-ai-frame::after { content:""; position:absolute; inset:2px; z-index:-1; border-radius:22px; background:linear-gradient(135deg,#f7faff,#eef4ff); border:1px solid rgba(255,255,255,0.42); }
       [data-theme="dark"] .home-ai-frame::after { background:linear-gradient(135deg,#101633,#0b1026); border-color:rgba(255,255,255,0.08); }
-      .home-ai.open .home-ai-frame::before,
-      .home-ai.focused .home-ai-frame::before { animation-play-state:paused; opacity:.26; }
       @keyframes home-ai-rgb { to { transform:rotate(360deg); } }
       .home-ai-frame > * { position:relative; z-index:1; }
       .home-ai-bar { min-height:62px; display:flex; align-items:center; gap:12px; padding:11px 14px 11px 16px; cursor:text; }
-      .home-ai-mark { width:38px; height:38px; border-radius:14px; background:linear-gradient(135deg,#0b5cff,#0046d9); display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; box-shadow:0 10px 24px rgba(0,82,255,0.26); }
-      .home-ai-mark svg { width:19px; height:19px; }
+      .home-ai-mark { width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#0052ff; flex-shrink:0; }
+      .home-ai-mark svg { width:26px; height:20px; }
       .home-ai-input.ai-input { min-height:38px; max-height:118px; padding:9px 4px; border:none; background:transparent; box-shadow:none; color:var(--text); font-size:14px; line-height:1.45; }
       .home-ai-input.ai-input:focus { border:none; box-shadow:none; }
       .home-ai-input::placeholder { color:var(--text3); }
-      .home-ai-send.ai-send { width:42px; height:42px; border-radius:14px; align-self:center; box-shadow:0 10px 24px rgba(0,82,255,0.24); }
+      .home-ai-send.ai-send { width:32px; height:32px; border-radius:50%; align-self:center; box-shadow:0 6px 16px rgba(0,82,255,0.24); }
       .home-ai .home-ai-panel.ai-panel { position:relative; width:100%; height:auto; max-height:none; display:none; transform:none; transition:none; border:0; border-top:1px solid var(--border); border-radius:0 0 23px 23px; box-shadow:none; background:transparent; }
       .home-ai.open .home-ai-panel.ai-panel { display:flex; }
       .home-ai .ai-messages { min-height:96px; max-height:310px; padding:15px 16px; }
@@ -4876,7 +4874,15 @@ function drawBalanceSparkline(progress = 1) {
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas) return;
   const history = (_portfolioData && _portfolioData.history) || [];
-  if (history.length < 2) { canvas.style.display = 'none'; return; }
+  const card = document.getElementById('balanceHeroCard');
+  const section = document.getElementById('balHeroSparklineSection');
+  if (history.length < 2) {
+    if (section) section.style.display = 'none';
+    if (card) card.style.paddingBottom = '32px';
+    return;
+  }
+  if (section) section.style.display = '';
+  if (card) card.style.paddingBottom = '52px';
   canvas.style.display = 'block';
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
