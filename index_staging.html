@@ -1361,7 +1361,7 @@ body.auth-active .tabbar { display:none !important; }
       <div class="home-ai-frame" id="homeAiFrame">
         <div class="home-ai-bar" onclick="openHomeAI(true)">
           <div class="home-ai-mark">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg"><polyline points="0,100 40,62 68,82 100,32 140,48" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="140" cy="48" r="11" fill="currentColor"/></svg>
           </div>
           <textarea class="ai-input home-ai-input" id="aiHomeInput" rows="1" placeholder="Chiedi a Zentra AI di analizzare mercato, segnali o posizioni..." onfocus="openHomeAI(false)" onkeydown="aiInputKeydown(event,'home')" oninput="aiInputResize(this,'home')"></textarea>
           <button class="ai-send home-ai-send" id="aiHomeSend" onclick="event.stopPropagation();sendAIMessage('home')" disabled aria-label="Invia a Zentra AI">
@@ -1915,8 +1915,8 @@ body.auth-active .tabbar { display:none !important; }
       @keyframes home-ai-rgb { to { transform:rotate(360deg); } }
       .home-ai-frame > * { position:relative; z-index:1; }
       .home-ai-bar { min-height:62px; display:flex; align-items:center; gap:12px; padding:11px 14px 11px 16px; cursor:text; }
-      .home-ai-mark { width:38px; height:38px; border-radius:14px; background:linear-gradient(135deg,#0b5cff,#0046d9); display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; box-shadow:0 10px 24px rgba(0,82,255,0.26); }
-      .home-ai-mark svg { width:19px; height:19px; }
+      .home-ai-mark { width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#0052ff; flex-shrink:0; }
+      .home-ai-mark svg { width:26px; height:20px; }
       .home-ai-input.ai-input { min-height:38px; max-height:118px; padding:9px 4px; border:none; background:transparent; box-shadow:none; color:var(--text); font-size:14px; line-height:1.45; }
       .home-ai-input.ai-input:focus { border:none; box-shadow:none; }
       .home-ai-input::placeholder { color:var(--text3); }
