@@ -1784,7 +1784,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
     if size < 1:
         return
 
-    entry_fee = size * TRADING_FEE
+    entry_fee = size * TRADING_FEE if is_real else 0
 
     # Funzione per formattare prezzi con abbastanza decimali (gestisce coin micro come PEPE)
     def fmt_price(p: float) -> str:
@@ -2007,7 +2007,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
         "R_pct":         R_pct,
         "atr_5m":        candle_data.get(sym, {}).get("atr_5m", 0.0),
         "realMode":      is_real,
-        "fee_pct":       TRADING_FEE,
+        "fee_pct":       TRADING_FEE if is_real else 0,
         "qty_purchased": qty_purchased if is_real else 0.0,
     }
     state["positions"].append(pos)
