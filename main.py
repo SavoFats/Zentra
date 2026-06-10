@@ -4765,10 +4765,10 @@ async def portfolio_snapshot_loop():
 
 @app.get("/portfolio_summary")
 async def get_portfolio_summary(request: Request, user_id: int = Depends(get_current_user)):
-    check_rate_limit(request, max_attempts=30, window=60, key_suffix="portfolio")
     cached = _portfolio_cache.get(user_id)
     if cached and time.time() - cached["ts"] < PORTFOLIO_CACHE_TTL:
         return cached["data"]
+    check_rate_limit(request, max_attempts=10, window=60, key_suffix="portfolio")
 
     total, available_usd = await _compute_portfolio_total(user_id)
     positions_value = round(total - available_usd, 4)

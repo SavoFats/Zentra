@@ -4801,8 +4801,12 @@ function drawHeroSparkline() {
 }
 
 let _portfolioData = null;
+let _lastPortfolioFetch = 0;
 
 async function fetchPortfolioSummary() {
+  const now = Date.now();
+  if (now - _lastPortfolioFetch < 30000) return;
+  _lastPortfolioFetch = now;
   try {
     const r = await fetch(API + '/portfolio_summary', { headers: authHeaders(), cache: 'no-store' });
     if (r.ok) {
