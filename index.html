@@ -4821,31 +4821,32 @@ function updateBalanceHero(animate = false) {
   const isDemo = _simMode || _plan === 'free';
 
   if (isDemo) {
-    const base = S.capital || 1000;
-    const pnl  = S.pnl || 0;
-    const total = base + pnl;
+    const simBalance = S.sim_balance != null ? S.sim_balance : (S.capital || 1000);
+    const sessionPnl = S.pnl || 0;
     const sym = getCurrSym();
     const labelText = document.getElementById('balHeroLabelText');
     if (labelText) labelText.textContent = 'Saldo Demo';
     const totalEl = document.getElementById('balHeroTotal');
-    if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(total); delete totalEl.dataset.real; }
+    if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(simBalance); delete totalEl.dataset.real; }
     const changeEl = document.getElementById('balHeroChange');
     if (changeEl) {
-      if (pnl === 0) {
-        changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
+      if (sessionPnl === 0) {
+        changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% sessione</span>';
       } else {
-        const isPos = pnl >= 0;
+        const isPos = sessionPnl >= 0;
         const color = isPos ? '#05c168' : '#f6465d';
         const arrow = isPos ? '↑' : '↓';
         const sign  = isPos ? '+' : '';
-        const pct   = base > 0 ? Math.abs(pnl / base * 100) : 0;
-        changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(pnl))} · ${sign}${pct.toFixed(1)}% oggi</span>`;
+        const baseBeforeSession = simBalance - sessionPnl;
+        const pct = baseBeforeSession > 0 ? Math.abs(sessionPnl / baseBeforeSession * 100) : 0;
+        changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(sessionPnl))} · ${sign}${pct.toFixed(1)}% sessione</span>`;
       }
     }
     const rawHistory = S.pnlHistory || [];
     if (rawHistory.length >= 2) {
+      const baseBeforeSession = simBalance - sessionPnl;
       if (!_portfolioData) _portfolioData = {};
-      _portfolioData.history = rawHistory.map(p => ({ total: base + p.v }));
+      _portfolioData.history = rawHistory.map(p => ({ total: baseBeforeSession + p.v }));
     }
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);

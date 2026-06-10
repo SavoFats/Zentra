@@ -1619,6 +1619,8 @@ def make_session() -> dict:
         "consecutiveLosses": 0,
         "plan": "free",
         "paused": False,
+        "sim_pnl_total": 0.0,
+        "sim_pnl_loaded": False,
     }
 
 def get_session(user_id: int) -> dict:
@@ -2485,6 +2487,12 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     float(buy_fee_usd), float(sell_fee_usd),
                     pos.get("_sell_type", "Market")
                 )
+                if not pos.get("realMode"):
+                    await conn.execute(
+                        "UPDATE users SET sim_pnl_total = sim_pnl_total + $1 WHERE id = $2",
+                        float(total_pnl), user_id
+                    )
+                    state["sim_pnl_total"] = state.get("sim_pnl_total", 0.0) + total_pnl
         except Exception as e:
             print(f"DB trade save error: {e}")
     state["positions"] = [p for p in state["positions"] if p is not pos]
@@ -3664,6 +3672,7 @@ async def startup():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMP;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_session_date DATE;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS sessions_today INT DEFAULT 0;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS sim_pnl_total FLOAT DEFAULT 0;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_scan_date DATE;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS scans_today INT DEFAULT 0;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_ai_chat_date DATE;
@@ -4672,6 +4681,15 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
                 state["telegram_chat_id"] = row["telegram_chat_id"]
         except Exception:
             pass
+    if not state.get("sim_pnl_loaded") and db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT sim_pnl_total FROM users WHERE id = $1", user_id)
+            if row:
+                state["sim_pnl_total"] = float(row["sim_pnl_total"] or 0)
+            state["sim_pnl_loaded"] = True
+        except Exception:
+            state["sim_pnl_loaded"] = True
     await refresh_status_position_prices(state, user_id)
     unr     = unrealized_pnl(state)
     pos_val = sum(p.get("size_remaining", p["size"]) for p in state["positions"])
@@ -4695,6 +4713,7 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
         "pnlHistory": state["pnlHistory"][-100:],
         "log": state.get("log", [])[:40],
         "paused": state.get("paused", False),
+        "sim_balance": round(1000 + state.get("sim_pnl_total", 0.0), 2),
     }
 
 _portfolio_cache: dict = {}
