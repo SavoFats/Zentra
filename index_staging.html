@@ -4876,7 +4876,15 @@ function drawBalanceSparkline(progress = 1) {
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas) return;
   const history = (_portfolioData && _portfolioData.history) || [];
-  if (history.length < 2) { canvas.style.display = 'none'; return; }
+  const card = document.getElementById('balanceHeroCard');
+  const section = document.getElementById('balHeroSparklineSection');
+  if (history.length < 2) {
+    if (section) section.style.display = 'none';
+    if (card) card.style.paddingBottom = '32px';
+    return;
+  }
+  if (section) section.style.display = '';
+  if (card) card.style.paddingBottom = '52px';
   canvas.style.display = 'block';
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
