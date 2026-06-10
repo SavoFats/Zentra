@@ -835,10 +835,9 @@ body.auth-active .tabbar { display:none !important; }
     </div>
     <div class="toggle-switch" id="themeToggle" onclick="toggleTheme()"></div>
   </div>
-  <div class="profile-menu-item" onclick="showTelegramConfig()" id="pmTelegramItem">
+  <div class="profile-menu-item" onclick="showTelegramConfig()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
     <span id="pmTelegram">Collega Telegram</span>
-    <span id="pmTelegramBadge" style="display:none;font-size:9px;font-weight:800;padding:2px 6px;border-radius:20px;background:rgba(0,82,255,0.12);color:var(--blue);letter-spacing:0.04em;margin-left:auto">PRO</span>
   </div>
   <div class="profile-menu-item" id="pmBillingItem" onclick="STRIPE_ENABLED ? manageSubscriptionClick() : null" style="display:none">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
@@ -2216,7 +2215,7 @@ body.auth-active .tabbar { display:none !important; }
     <!-- Telegram -->
     <div class="acc-section">
       <div class="acc-sec-title">Notifiche</div>
-      <div class="acc-row clickable" onclick="showTelegramConfig()">
+      <div class="acc-row" style="cursor:default">
         <div class="acc-icon" style="background:rgba(0,136,204,0.12)">
           <svg width="22" height="22" viewBox="0 0 240 240" fill="none" aria-hidden="true"><circle cx="120" cy="120" r="120" fill="#229ED9"/><path d="M179.7 70.8 155.8 183c-1.8 8-6.5 9.9-13.1 6.2l-36.2-26.7-17.5 16.8c-1.9 1.9-3.5 3.5-7.2 3.5l2.6-36.8 67-60.5c2.9-2.6-.6-4-4.5-1.4l-82.8 52.1-35.7-11.2c-7.8-2.4-7.9-7.8 1.6-11.5l139.6-53.8c6.5-2.4 12.2 1.6 10.1 11.1Z" fill="#fff"/></svg>
         </div>
@@ -2224,7 +2223,7 @@ body.auth-active .tabbar { display:none !important; }
           <div class="acc-row-label">Telegram</div>
           <div class="acc-row-sub" id="accTgSub">Non collegato</div>
         </div>
-        <div class="acc-row-right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+        <button id="accTgBtn" onclick="showTelegramConfig()" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
       </div>
     </div>
 
@@ -2929,11 +2928,7 @@ async function loadUserProfile() {
     window._realMode = canUseRealMode();
     window._tgLinked = me.telegram_linked || false;
     const pmTg = document.getElementById('pmTelegram');
-    if (pmTg) pmTg.textContent = _plan === 'free' ? 'Telegram (Pro)' : (window._tgLinked ? 'Telegram collegato' : 'Collega Telegram');
-    const pmTgBadge = document.getElementById('pmTelegramBadge');
-    if (pmTgBadge) pmTgBadge.style.display = _plan === 'free' ? 'inline' : 'none';
-    const pmTgItem = document.getElementById('pmTelegramItem');
-    if (pmTgItem) pmTgItem.style.opacity = _plan === 'free' ? '0.5' : '1';
+    if (pmTg) pmTg.textContent = window._tgLinked ? 'Telegram collegato' : 'Collega Telegram';
 
     if (me.avatar_b64) {
       applyAvatar(me.avatar_b64);
@@ -3322,7 +3317,7 @@ async function microSellCoinbase() {
 function showTelegramConfig() {
   document.getElementById('profileMenu').classList.remove('open');
   if (_plan === 'free') {
-    showToast('Telegram è disponibile dal piano Pro. Fai upgrade per ricevere notifiche.', true);
+    showPaywall('Le notifiche Telegram sono disponibili dal piano Pro.', 'plans');
     return;
   }
   const linked = window._tgLinked || false;
@@ -5969,6 +5964,12 @@ function renderAccountPage() {
   // Telegram
   const tgSub = document.getElementById('accTgSub');
   if (tgSub) tgSub.textContent = window._tgLinked ? 'Collegato' : 'Non collegato';
+  const accTgBtn = document.getElementById('accTgBtn');
+  if (accTgBtn) {
+    accTgBtn.textContent = window._tgLinked ? 'Gestisci' : 'Collega';
+    accTgBtn.style.background = window._tgLinked ? 'var(--surface2)' : 'var(--blue)';
+    accTgBtn.style.color = window._tgLinked ? 'var(--text)' : '#fff';
+  }
 }
 
 function renderPlansPage() {
