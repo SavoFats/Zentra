@@ -1337,8 +1337,8 @@ body.auth-active .tabbar { display:none !important; }
     <div id="balanceHeroCard" style="padding:24px 0 52px;display:flex;flex-direction:column;align-items:center;overflow:visible">
       <!-- saldo centrato -->
       <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
-        <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;display:flex;align-items:center;gap:6px">
-          Saldo reale
+        <div id="balHeroLabel" style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;display:flex;align-items:center;gap:6px">
+          <span id="balHeroLabelText">Saldo reale</span>
           <svg id="balHeroEye" onclick="toggleBalanceVisibility()" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#9aa0b8;cursor:pointer;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </div>
         <div id="balHeroTotal" style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-1.08px;line-height:1;font-variant-numeric:tabular-nums">--</div>
@@ -4782,6 +4782,10 @@ let _portfolioData = null;
 let _lastPortfolioFetch = 0;
 
 async function fetchPortfolioSummary() {
+  if (_simMode || _plan === 'free') {
+    updateBalanceHero(true);
+    return;
+  }
   const now = Date.now();
   if (now - _lastPortfolioFetch < 30000) return;
   _lastPortfolioFetch = now;
@@ -4814,6 +4818,42 @@ function toggleBalanceVisibility() {
 }
 
 function updateBalanceHero(animate = false) {
+  const isDemo = _simMode || _plan === 'free';
+
+  if (isDemo) {
+    const base = S.capital || 1000;
+    const pnl  = S.pnl || 0;
+    const total = base + pnl;
+    const sym = getCurrSym();
+    const labelText = document.getElementById('balHeroLabelText');
+    if (labelText) labelText.textContent = 'Saldo Demo';
+    const totalEl = document.getElementById('balHeroTotal');
+    if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(total); delete totalEl.dataset.real; }
+    const changeEl = document.getElementById('balHeroChange');
+    if (changeEl) {
+      if (pnl === 0) {
+        changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
+      } else {
+        const isPos = pnl >= 0;
+        const color = isPos ? '#05c168' : '#f6465d';
+        const arrow = isPos ? '↑' : '↓';
+        const sign  = isPos ? '+' : '';
+        const pct   = base > 0 ? Math.abs(pnl / base * 100) : 0;
+        changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(pnl))} · ${sign}${pct.toFixed(1)}% oggi</span>`;
+      }
+    }
+    const rawHistory = S.pnlHistory || [];
+    if (rawHistory.length >= 2) {
+      if (!_portfolioData) _portfolioData = {};
+      _portfolioData.history = rawHistory.map(p => ({ total: base + p.v }));
+    }
+    if (animate) animateBalanceSparkline();
+    else drawBalanceSparkline(1);
+    return;
+  }
+
+  const labelText = document.getElementById('balHeroLabelText');
+  if (labelText) labelText.textContent = 'Saldo reale';
   if (!_portfolioData) return;
   const sym = getCurrSym();
   const d = _portfolioData;
