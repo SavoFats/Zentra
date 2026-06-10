@@ -6546,6 +6546,20 @@ async function tmFetchPrice() {
   const exchange = document.getElementById('tmExchange')?.value;
   const lbl = document.getElementById('tmPriceLabel');
   if (!exchange || !_tmSymbol) return;
+  if (_plan === 'free') {
+    const coin = mktData.find(c => c.symbol === _tmSymbol);
+    if (coin && coin.price > 0) {
+      _tmPrice = coin.price;
+      lbl.textContent = fmtPrice(_tmPrice);
+      lbl.style.color = '';
+    } else {
+      _tmPrice = 0;
+      lbl.textContent = 'Prezzo non disponibile';
+      lbl.style.color = 'var(--red)';
+    }
+    tmUpdateSummary();
+    return;
+  }
   try {
     const r = await fetch(API + `/exchange_price/${exchange}/${_tmSymbol}`, { headers: authHeaders() });
     const d = await r.json();
@@ -6629,7 +6643,7 @@ function tmSetAmount(amount) {
 }
 
 function tmSetAmountMax() {
-  const max = _tmBalance > 0 ? Math.floor(_tmBalance) : 500;
+  const max = _plan === 'free' ? Math.floor(S.currentCapital || 1000) : (_tmBalance > 0 ? Math.floor(_tmBalance) : 500);
   document.getElementById('tmAmountInput').value = max;
   _tmHighlightBtn('max');
   tmUpdateSummary();
@@ -6699,7 +6713,7 @@ function tmUpdateSummary() {
   const qty = _tmPrice > 0 ? netAmount / _tmPrice : 0;
   const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
   document.getElementById('tmQtyEst').textContent   = qty > 0    ? qtyFmt + ' ' + base   : '—';
-  document.getElementById('tmFeeEst').textContent   = amount > 0 ? '$' + (fee < 0.01 ? fee.toFixed(4) : fee.toFixed(2)) : '—';
+  document.getElementById('tmFeeEst').textContent   = _plan === 'free' ? '—' : (amount > 0 ? '$' + (fee < 0.01 ? fee.toFixed(4) : fee.toFixed(2)) : '—');
   document.getElementById('tmTotalEst').textContent = amount > 0 ? '$' + amount.toFixed(2) : '—';
 }
 
@@ -6712,7 +6726,7 @@ async function executeManualTrade() {
   const exchange = document.getElementById('tmExchange').value;
 
   if (!_tmPrice || _tmPrice <= 0) {
-    if (errEl) errEl.textContent = 'Coin non presente nell\'exchange selezionato';
+    if (errEl) { errEl.textContent = 'Prezzo non disponibile. Riprova tra qualche secondo.'; errEl.style.display = 'block'; }
     return;
   }
 
