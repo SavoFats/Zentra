@@ -4780,6 +4780,9 @@ function drawHeroSparkline() {
 
 let _portfolioData = null;
 let _lastPortfolioFetch = 0;
+let _portfolioHistoryBase = null;
+let _simLiveHistory = [];
+let _realLiveHistory = [];
 
 async function fetchPortfolioSummary() {
   if (_simMode || _plan === 'free') {
@@ -4793,6 +4796,7 @@ async function fetchPortfolioSummary() {
     const r = await fetch(API + '/portfolio_summary', { headers: authHeaders(), cache: 'no-store' });
     if (r.ok) {
       _portfolioData = await r.json();
+      _portfolioHistoryBase = _portfolioData.history ? [..._portfolioData.history] : [];
       updateBalanceHero(true);
     }
   } catch(e) {}
@@ -4857,24 +4861,19 @@ function updateBalanceHero(animate = false) {
         changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
       }
     }
-    // Sparkline: aggiorna l'ultimo punto (oggi) con il balance live
+    // Accumula storia live intraday (max 1000 punti ≈ 33 min a 2s)
+    _simLiveHistory.push({ total: simBalance });
+    if (_simLiveHistory.length > 1000) _simLiveHistory.shift();
+
+    // Sparkline: giorni passati (daily snapshots) + oggi intraday live
     const rawSimHistory = S.sim_history || [];
-    const simHistory = rawSimHistory.length > 0
-      ? rawSimHistory.slice(0, -1).concat([{ ...rawSimHistory[rawSimHistory.length - 1], total: simBalance }])
-      : [];
-    const simHistoryHasVariation = simHistory.length >= 2 &&
-      Math.abs(simHistory[0].total - simHistory[simHistory.length - 1].total) > 0.001;
-    if (simHistoryHasVariation) {
-      if (!_portfolioData) _portfolioData = {};
-      _portfolioData.history = simHistory;
+    const pastDays = rawSimHistory.slice(0, -1);
+    if (!_portfolioData) _portfolioData = {};
+    if (_simLiveHistory.length >= 2) {
+      _portfolioData.history = pastDays.concat(_simLiveHistory);
     } else {
-      const rawHistory = S.pnlHistory || [];
-      if (rawHistory.length >= 2) {
-        const baseAtStart = simBalance - (S.pnl || 0);
-        if (!_portfolioData) _portfolioData = {};
-        _portfolioData.history = rawHistory.map(p => ({ total: baseAtStart + p.v }));
-      } else {
-        if (!_portfolioData) _portfolioData = {};
+      _portfolioData.history = pastDays.concat([{ total: simBalance }]);
+      if (_portfolioData.history.length < 2) {
         _portfolioData.history = [{ total: simBalance }, { total: simBalance }];
       }
     }
@@ -4904,9 +4903,20 @@ function updateBalanceHero(animate = false) {
   const liveChg = yesterdayBase > 0 ? liveTotal - yesterdayBase : 0;
   const livePct = yesterdayBase > 0 ? liveChg / yesterdayBase * 100 : 0;
 
-  // Aggiorna l'ultimo punto della sparkline con il totale live
-  if (d.history && d.history.length > 0) {
-    d.history[d.history.length - 1].total = liveTotal;
+  // Accumula storia live intraday (max 1000 punti ≈ 33 min a 2s)
+  _realLiveHistory.push({ total: liveTotal });
+  if (_realLiveHistory.length > 1000) _realLiveHistory.shift();
+
+  // Sparkline: giorni passati (daily snapshots) + oggi intraday live
+  const histBase = _portfolioHistoryBase || (d.history ? [...d.history] : []);
+  const pastDays = histBase.slice(0, -1);
+  if (_realLiveHistory.length >= 2) {
+    _portfolioData.history = pastDays.concat(_realLiveHistory);
+  } else {
+    _portfolioData.history = pastDays.concat([{ total: liveTotal }]);
+    if (_portfolioData.history.length < 2) {
+      _portfolioData.history = [{ total: liveTotal }, { total: liveTotal }];
+    }
   }
 
   const totalEl  = document.getElementById('balHeroTotal');
