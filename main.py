@@ -1903,6 +1903,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                 "opened_by_zentra": True,
             }
             state["positions"].append(pos)
+            await db_save_open_position(user_id, pos)
             await persist_sessions()
             return
         elif state.get("use_coinbase"):
@@ -1984,6 +1985,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                 "opened_by_zentra": True,
             }
             state["positions"].append(pos)
+            await db_save_open_position(user_id, pos)
             await persist_sessions()
             return
         else:
@@ -2024,6 +2026,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
         "qty_purchased": qty_purchased if is_real else 0.0,
     }
     state["positions"].append(pos)
+    await db_save_open_position(user_id, pos)
 
 REVX_LIMIT_DROPS = [0.01, 0.02, 0.04, 0.06, 0.09, 0.12, 0.16, 0.20, 0.25, 0.30]
 
@@ -2442,6 +2445,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
         pos["tp1_pnl"]         = pnl  # salviamo per il messaggio finale
         pos["qty_tp1_sold"]    = qty_to_sell  # qty venduta a TP1 per calcolo proporzione
         _exiting.discard(sym)
+        await db_save_open_position(user_id, pos)
         if pos.get("realMode") and user_id:
             await persist_sessions()
         return  # posizione resta aperta per TP2
@@ -2508,6 +2512,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
             print(f"DB trade save error: {e}")
     state["positions"] = [p for p in state["positions"] if p is not pos]
     _exiting.discard(sym)
+    await db_delete_open_position(user_id, sym)
     if user_id:
         await persist_sessions()
     mode = "REALE" if pos.get("realMode") else "SIM"
@@ -3612,6 +3617,38 @@ async def persist_sessions():
         except Exception as e:
             print(f"Errore persist sessione user {uid}: {e}")
 
+async def db_save_open_position(user_id: int, pos: dict):
+    """Salva o aggiorna una posizione aperta nella tabella open_positions (fonte di verità)."""
+    if not db_pool or not user_id:
+        return
+    mode = "real" if pos.get("realMode") else "sim"
+    try:
+        pos_json = json.dumps(pos, default=str)
+        async with db_pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO open_positions (user_id, symbol, mode, position_json, opened_at, updated_at)
+                VALUES ($1, $2, $3, $4, NOW(), NOW())
+                ON CONFLICT (user_id, symbol) DO UPDATE
+                SET position_json = EXCLUDED.position_json,
+                    mode          = EXCLUDED.mode,
+                    updated_at    = NOW()
+            """, user_id, pos["symbol"], mode, pos_json)
+    except Exception as e:
+        print(f"[open_positions] save error {pos.get('symbol')}: {e}")
+
+async def db_delete_open_position(user_id: int, symbol: str):
+    """Rimuove una posizione da open_positions alla chiusura."""
+    if not db_pool or not user_id:
+        return
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM open_positions WHERE user_id = $1 AND symbol = $2",
+                user_id, symbol
+            )
+    except Exception as e:
+        print(f"[open_positions] delete error {symbol}: {e}")
+
 async def telegram_loop():
     """Loop separato per Telegram. Attende 20s all'avvio per dare tempo al vecchio container Railway di spegnersi (rolling deploy)."""
     await asyncio.sleep(20)
@@ -3773,7 +3810,18 @@ async def startup():
                         snapshot_ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         total_usd NUMERIC(18,4) NOT NULL
                     );
-                    CREATE INDEX IF NOT EXISTS idx_ris_user_ts ON real_intraday_snapshots(user_id, snapshot_ts)
+                    CREATE INDEX IF NOT EXISTS idx_ris_user_ts ON real_intraday_snapshots(user_id, snapshot_ts);
+                    CREATE TABLE IF NOT EXISTS open_positions (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        symbol TEXT NOT NULL,
+                        mode TEXT NOT NULL DEFAULT 'sim',
+                        position_json TEXT NOT NULL,
+                        opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        UNIQUE(user_id, symbol)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_op_user ON open_positions(user_id)
                 """)
             print("Database connesso e schema creato")
 
@@ -3949,6 +3997,7 @@ async def recover_coinbase_positions(state: dict, user_id: int) -> bool:
             "manual": True, "_recovered": True, "_manual_action_required": True,
         }
         state["positions"].append(pos)
+        await db_save_open_position(user_id, pos)
         tracked.add(currency)
         add_log(state, "buy", "POSIZIONE RECUPERATA",
                 f"{currency} — trovata {total:.6f} su Coinbase, non tracciata. Imposta SL/TP.")
@@ -4013,6 +4062,7 @@ async def recover_revx_positions(state: dict, user_id: int):
             "manual": True, "_recovered": True, "_manual_action_required": True,
         }
         state["positions"].append(pos)
+        await db_save_open_position(user_id, pos)
         tracked.add(currency)
         add_log(state, "buy", "POSIZIONE RECUPERATA",
                 f"{currency} — trovata {total:.6f} su RevX, non tracciata. Imposta SL/TP.")
@@ -4031,36 +4081,86 @@ async def recover_revx_positions(state: dict, user_id: int):
 
 async def restore_sessions_from_db(pool):
     """Ripristina sessioni dal DB dopo un riavvio.
+    Fonte di verità per le posizioni: tabella open_positions.
+    Fonte di verità per lo stato sessione (capitale, running, ecc.): active_sessions.
     Sessioni con posizioni aperte sopravvivono al deploy con SL/TP attivi:
     - running=True  → rimane True, paused=True  (scan_and_trade monitora, no nuovi ingressi)
     - running=False → rimane False               (monitor_all_positions monitora SL/TP)
     """
     try:
-        async with pool.acquire() as conn:
-            rows = await conn.fetch("""
-                SELECT s.user_id, s.state_json, s.updated_at,
-                       u.revx_key_id, u.revx_private_key
-                FROM active_sessions s JOIN users u ON u.id = s.user_id
-            """)
-        for row in rows:
-            uid = row["user_id"]
+        # ── Step 1: carica open_positions (fonte di verità per le posizioni) ──
+        open_pos_by_user: dict = {}
+        try:
+            async with pool.acquire() as conn:
+                pos_rows = await conn.fetch(
+                    "SELECT user_id, position_json FROM open_positions ORDER BY opened_at"
+                )
+            for r in pos_rows:
+                uid = r["user_id"]
+                try:
+                    open_pos_by_user.setdefault(uid, []).append(json.loads(r["position_json"]))
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"[RESTORE] Errore lettura open_positions: {e}")
+
+        # ── Step 2: carica sessioni da active_sessions ──
+        session_rows: dict = {}
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT s.user_id, s.state_json, s.updated_at,
+                           u.revx_key_id, u.revx_private_key
+                    FROM active_sessions s JOIN users u ON u.id = s.user_id
+                """)
+            for r in rows:
+                session_rows[r["user_id"]] = r
+        except Exception as e:
+            print(f"[RESTORE] Errore lettura active_sessions: {e}")
+
+        # ── Step 3: ripristina tutti gli utenti con posizioni aperte ──
+        all_uids = set(open_pos_by_user.keys()) | set(session_rows.keys())
+
+        for uid in all_uids:
             try:
                 state = make_session()
-                state.update(json.loads(row["state_json"]))
+
+                # Carica stato sessione da active_sessions se disponibile
+                if uid in session_rows:
+                    row = session_rows[uid]
+                    state.update(json.loads(row["state_json"]))
+                    state["revx_key_id"]      = decrypt_key(row["revx_key_id"] or "")
+                    state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
+                else:
+                    # Nessun active_session: carica solo le chiavi dal DB
+                    try:
+                        async with pool.acquire() as conn:
+                            u_row = await conn.fetchrow(
+                                "SELECT revx_key_id, revx_private_key FROM users WHERE id = $1", uid
+                            )
+                        if u_row:
+                            state["revx_key_id"]      = decrypt_key(u_row["revx_key_id"] or "")
+                            state["revx_private_key"] = decrypt_key(u_row["revx_private_key"] or "")
+                    except Exception:
+                        pass
+
+                # open_positions sovrascrive sempre le posizioni dallo state JSON
+                if uid in open_pos_by_user:
+                    state["positions"] = open_pos_by_user[uid]
+
                 exiting_raw = state.get("_exiting", [])
                 state["_exiting"] = set(exiting_raw) if isinstance(exiting_raw, list) else set()
-                positions = state.get("positions", [])
-
-                if not positions:
-                    async with pool.acquire() as conn:
-                        await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
-                    restore_debug_log(f"[RESTORE] User {uid}: nessuna posizione, rimossa dal DB")
-                    continue
-
-                state["revx_key_id"]      = decrypt_key(row["revx_key_id"] or "")
-                state["revx_private_key"] = decrypt_key(row["revx_private_key"] or "")
                 state.pop("_auto_stop_on_restore", None)
                 state.pop("_stopping", None)
+
+                positions = state.get("positions", [])
+                if not positions:
+                    # Nessuna posizione da nessuna fonte: pulizia
+                    if uid in session_rows:
+                        async with pool.acquire() as conn:
+                            await conn.execute("DELETE FROM active_sessions WHERE user_id = $1", uid)
+                    restore_debug_log(f"[RESTORE] User {uid}: nessuna posizione, rimossa dal DB")
+                    continue
 
                 was_running = state.get("running", False)
                 if was_running:
@@ -4068,10 +4168,14 @@ async def restore_sessions_from_db(pool):
 
                 user_sessions[uid] = state
 
-                n    = len(state.get("positions", []))
-                syms = ", ".join(p.get("symbol", "?") for p in state.get("positions", []))
+                n    = len(positions)
+                syms = ", ".join(p.get("symbol", "?") for p in positions)
+                src  = "open_positions" if uid in open_pos_by_user else "active_sessions (fallback)"
                 mode = "paused" if was_running else "monitor"
-                restore_debug_log(f"[RESTORE] User {uid}: RIPRISTINATO {n} posizioni ({syms}) — modalità {mode}")
+                restore_debug_log(
+                    f"[RESTORE] User {uid}: RIPRISTINATO {n} posizioni ({syms}) "
+                    f"— sorgente: {src} — modalità {mode}"
+                )
 
                 tg_chat = state.get("telegram_chat_id", "")
                 pausa_note = ("L'agente è in <b>PAUSA</b> — riavvialo dall'app quando sei pronto."
@@ -5536,6 +5640,7 @@ async def update_position_sltp(symbol: str, body: SLTPUpdateReq, request: Reques
     pos.pop("_recovered", None)
     add_log(state, "info", "SL/TP AGGIORNATO",
             f"{sym} — SL: ${body.stop_price:.4f}" + (f" | TP: ${body.tp_price:.4f}" if body.tp_price > 0 else ""))
+    await db_save_open_position(user_id, pos)
     await persist_sessions()
     return {"ok": True, "stopPrice": pos["stopPrice"], "tp1Price": pos["tp1Price"]}
 
@@ -5655,6 +5760,7 @@ async def inspect_coinbase_external_holdings_for_user(user_id: int, min_value_us
             "_manual_action_required": True,
         }
         state.setdefault("positions", []).append(pos)
+        await db_save_open_position(user_id, pos)
         state["currentCapital"] = max(0.0, float(state.get("currentCapital") or 0.0) - pos["size"])
         existing.add(sym)
         imported.append({
@@ -5963,6 +6069,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "opened_by_zentra": True,
             }
             state["positions"].append(pos)
+            await db_save_open_position(user_id, pos)
             await persist_sessions()
             return {"ok": True, "price": actual_price, "qty": qty, "exchange": "coinbase"}
         except HTTPException:
@@ -6032,6 +6139,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "opened_by_zentra": True,
             }
             state["positions"].append(pos)
+            await db_save_open_position(user_id, pos)
             await persist_sessions()
             return {"ok": True, "price": actual_price, "qty": qty}
         except HTTPException:
@@ -6058,6 +6166,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
             "realMode": False, "fee_pct": 0.001, "qty_purchased": 0.0, "manual": True,
         }
         state["positions"].append(pos)
+        await db_save_open_position(user_id, pos)
         await persist_sessions()
         return {"ok": True, "price": price, "qty": qty}
 
