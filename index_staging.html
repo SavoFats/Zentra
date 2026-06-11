@@ -1350,11 +1350,6 @@ body.auth-active .tabbar { display:none !important; }
         <div id="balHeroNoData" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:11px;color:#9aa0b8"></div>
         <div id="balHeroSparklineLabel" style="display:none"></div>
       </div>
-      <!-- stats nascosti (riservati) -->
-      <div id="balHeroRightStats" style="display:none">
-        <div id="balHeroAvail"></div>
-        <div id="balHeroInPos"></div>
-      </div>
     </div>
 
     <div class="home-ai" id="homeAiShell">
@@ -1908,6 +1903,7 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai { width:min(900px,100%); margin:10px auto 28px; }
       .home-ai-frame { position:relative; isolation:isolate; overflow:hidden; border-radius:24px; padding:2px; box-shadow:0 18px 54px rgba(0,82,255,0.14),0 1px 0 rgba(255,255,255,0.38) inset; }
       .home-ai-frame::before { content:""; position:absolute; inset:-45%; z-index:-2; background:conic-gradient(from 0deg,#0052ff,#28d7ff,#22c55e,#f59e0b,#ef3b74,#7c3aed,#0052ff); animation:home-ai-rgb 7s linear 1 forwards; opacity:.56; }
+      .home-ai-frame.rgb-done::before { animation:none; }
       .home-ai-frame::after { content:""; position:absolute; inset:2px; z-index:-1; border-radius:22px; background:linear-gradient(135deg,#f7faff,#eef4ff); border:1px solid rgba(255,255,255,0.42); }
       [data-theme="dark"] .home-ai-frame::after { background:linear-gradient(135deg,#101633,#0b1026); border-color:rgba(255,255,255,0.08); }
       @keyframes home-ai-rgb { to { transform:rotate(360deg); } }
@@ -4449,7 +4445,7 @@ async function poll() {
     if (typeof updateAIUsageUI === 'function') updateAIUsageUI();
   } catch(e) {
     _pollFailCount++;
-    if (_pollFailCount === 3) showToast('Connessione al server persa. Ricontrolla la rete.');
+    if (_pollFailCount === 6) showToast('Connessione al server persa. Ricontrolla la rete.');
     console.error(e);
   }
 }
@@ -4506,6 +4502,7 @@ async function startupSession() {
 }
 
 checkAuth();
+setTimeout(() => document.getElementById('homeAiFrame')?.classList.add('rgb-done'), 7000);
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
 const _recoveryValues = {};
@@ -4780,19 +4777,25 @@ function drawHeroSparkline() {
 
 let _portfolioData = null;
 let _lastPortfolioFetch = 0;
+let _portfolioHistoryBase = null;
+let _placeholderAnim = null;
+let _placeholderDone = false;
+let _sparklinePoints = [];       // [{x,y,total,t}] — punti renderizzati per hover
+let _sparklineCursor = null;     // {x,y} CSS px quando si scrolla
+let _sparklineHovering = false;
+let _sparklineInteractionReady = false;
 
 async function fetchPortfolioSummary() {
   if (_simMode || _plan === 'free') {
     updateBalanceHero(false);
     return;
   }
-  const now = Date.now();
-  if (now - _lastPortfolioFetch < 30000) { updateBalanceHero(false); return; }
-  _lastPortfolioFetch = now;
+  _lastPortfolioFetch = Date.now();
   try {
     const r = await fetch(API + '/portfolio_summary', { headers: authHeaders(), cache: 'no-store' });
     if (r.ok) {
       _portfolioData = await r.json();
+      _portfolioHistoryBase = _portfolioData.history ? [..._portfolioData.history] : [];
       updateBalanceHero(true);
     }
   } catch(e) {}
@@ -4802,7 +4805,7 @@ let _balHidden = false;
 
 function toggleBalanceVisibility() {
   _balHidden = !_balHidden;
-  const ids = ['balHeroTotal', 'balHeroAvail', 'balHeroInPos'];
+  const ids = ['balHeroTotal'];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -4838,15 +4841,13 @@ function updateBalanceHero(animate = false) {
     const totalEl = document.getElementById('balHeroTotal');
     if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(simBalance); delete totalEl.dataset.real; }
     const changeEl = document.getElementById('balHeroChange');
+    let chg = 0;
+    if ((S.sim_today_change || 0) !== 0 || (S.sim_today_change_pct || 0) !== 0) {
+      chg = (S.sim_today_change || 0) + simUnrealized;
+    } else if ((S.pnl || 0) !== 0) {
+      chg = S.pnl;
+    }
     if (changeEl) {
-      let chg = 0;
-      if ((S.sim_today_change || 0) !== 0 || (S.sim_today_change_pct || 0) !== 0) {
-        // Ha snapshot di ieri: variazione reale + unrealized attuale
-        chg = (S.sim_today_change || 0) + simUnrealized;
-      } else if ((S.pnl || 0) !== 0) {
-        // Nessuno snapshot: usa P&L sessione (già include unrealized)
-        chg = S.pnl;
-      }
       const base = simBalance - chg;
       const pct = base > 0 ? chg / base * 100 : 0;
       if (Math.abs(chg) < 0.005) {
@@ -4859,27 +4860,20 @@ function updateBalanceHero(animate = false) {
         changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
       }
     }
-    // Sparkline: aggiorna l'ultimo punto (oggi) con il balance live
+    // Sparkline: snapshot 15-min dal DB + live tip
+    const nowMs = Date.now();
     const rawSimHistory = S.sim_history || [];
-    const simHistory = rawSimHistory.length > 0
-      ? rawSimHistory.slice(0, -1).concat([{ ...rawSimHistory[rawSimHistory.length - 1], total: simBalance }])
-      : [];
-    const simHistoryHasVariation = simHistory.length >= 2 &&
-      Math.abs(simHistory[0].total - simHistory[simHistory.length - 1].total) > 0.001;
-    if (simHistoryHasVariation) {
-      if (!_portfolioData) _portfolioData = {};
-      _portfolioData.history = simHistory;
-    } else {
-      const rawHistory = S.pnlHistory || [];
-      if (rawHistory.length >= 2) {
-        const baseAtStart = simBalance - (S.pnl || 0);
-        if (!_portfolioData) _portfolioData = {};
-        _portfolioData.history = rawHistory.map(p => ({ total: baseAtStart + p.v }));
-      } else {
-        if (!_portfolioData) _portfolioData = {};
-        _portfolioData.history = [{ total: simBalance }, { total: simBalance }];
-      }
+    const historyPts = rawSimHistory.map(p => ({
+      total: p.total,
+      t: new Date(p.ts).getTime()
+    }));
+    if (!_portfolioData) _portfolioData = {};
+    const histWithTip = historyPts.slice();
+    if (histWithTip.length === 0 || histWithTip[histWithTip.length - 1].total !== simBalance) {
+      histWithTip.push({ total: simBalance, t: nowMs });
     }
+    _portfolioData.history = histWithTip;
+    _portfolioData.isUpToday = chg >= 0;
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);
     return;
@@ -4887,7 +4881,11 @@ function updateBalanceHero(animate = false) {
 
   const labelText = document.getElementById('balHeroLabelText');
   if (labelText) labelText.textContent = 'Saldo reale';
-  if (!_portfolioData) return;
+  if (!_portfolioData) {
+    if (trades.length === 0 && !_placeholderDone) startPlaceholderSparkline();
+    else { stopPlaceholderSparkline(); drawFlatSparkline(); }
+    return;
+  }
   const sym = getCurrSym();
   const d = _portfolioData;
 
@@ -4906,20 +4904,24 @@ function updateBalanceHero(animate = false) {
   const liveChg = yesterdayBase > 0 ? liveTotal - yesterdayBase : 0;
   const livePct = yesterdayBase > 0 ? liveChg / yesterdayBase * 100 : 0;
 
-  // Aggiorna l'ultimo punto della sparkline con il totale live
-  if (d.history && d.history.length > 0) {
-    d.history[d.history.length - 1].total = liveTotal;
+  // Sparkline: snapshot 15-min dal DB + live tip
+  const nowMsR = Date.now();
+  const rawRealHistory = d.intraday_history || [];
+  const realHistoryPts = rawRealHistory.map(p => ({
+    total: p.total,
+    t: new Date(p.ts).getTime()
+  }));
+  const realHistWithTip = realHistoryPts.slice();
+  if (realHistWithTip.length === 0 || realHistWithTip[realHistWithTip.length - 1].total !== liveTotal) {
+    realHistWithTip.push({ total: liveTotal, t: nowMsR });
   }
+  _portfolioData.history = realHistWithTip;
 
   const totalEl  = document.getElementById('balHeroTotal');
-  const availEl  = document.getElementById('balHeroAvail');
-  const inPosEl  = document.getElementById('balHeroInPos');
   const changeEl = document.getElementById('balHeroChange');
 
   if (!_balHidden) {
     if (totalEl) { totalEl.textContent = sym + fmtMoney(liveTotal); delete totalEl.dataset.real; }
-    if (availEl) { availEl.textContent = sym + fmtMoney(d.available); delete availEl.dataset.real; }
-    if (inPosEl) { inPosEl.textContent = sym + fmtMoney(livePositionsValue); delete inPosEl.dataset.real; }
   }
 
   if (changeEl) {
@@ -4936,6 +4938,7 @@ function updateBalanceHero(animate = false) {
     }
   }
 
+  _portfolioData.isUpToday = liveChg >= 0;
   if (animate) animateBalanceSparkline();
   else drawBalanceSparkline(1);
 }
@@ -4952,17 +4955,100 @@ function animateBalanceSparkline() {
   requestAnimationFrame(frame);
 }
 
+function stopPlaceholderSparkline() {
+  if (_placeholderAnim) { cancelAnimationFrame(_placeholderAnim); _placeholderAnim = null; }
+}
+
+function startPlaceholderSparkline() {
+  if (_placeholderAnim || _placeholderDone) return;
+  const canvas = document.getElementById('balHeroSparkline');
+  if (!canvas) return;
+  const section = document.getElementById('balHeroSparklineSection');
+  const card = document.getElementById('balanceHeroCard');
+  if (section) section.style.display = '';
+  if (card) card.style.paddingBottom = '52px';
+  canvas.style.display = 'block';
+  const t0 = performance.now();
+  const period = 4800;
+  function frame(now) {
+    const elapsed = now - t0;
+    const t = elapsed / period;
+    if (t >= 1) {
+      _placeholderAnim = null;
+      _placeholderDone = true;
+      drawFlatSparkline();
+      return;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width || 300, h = rect.height || 72;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    let amp = 0;
+    if (t < 0.38) amp = h * 0.24 * (t / 0.38);
+    else if (t < 0.72) amp = h * 0.24 * (1 - (t - 0.38) / 0.34);
+    const alpha = 0.12 + (amp / (h * 0.24 || 1)) * 0.22;
+    const midY = h / 2, pts = 60;
+    const wave = i => midY - amp * Math.sin((i / pts) * Math.PI * 3.5);
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, `rgba(0,82,255,${Math.max(0, alpha * 0.45)})`);
+    g.addColorStop(1, 'rgba(0,82,255,0)');
+    ctx.beginPath(); ctx.moveTo(0, h);
+    for (let i = 0; i <= pts; i++) ctx.lineTo((i / pts) * w, wave(i));
+    ctx.lineTo(w, h); ctx.closePath();
+    ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath();
+    for (let i = 0; i <= pts; i++) { const x = (i/pts)*w, y = wave(i); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.strokeStyle = `rgba(0,82,255,${alpha})`; ctx.lineWidth = 1.5; ctx.stroke();
+    _placeholderAnim = requestAnimationFrame(frame);
+  }
+  _placeholderAnim = requestAnimationFrame(frame);
+}
+
+function drawFlatSparkline() {
+  const canvas = document.getElementById('balHeroSparkline');
+  if (!canvas) return;
+  const section = document.getElementById('balHeroSparklineSection');
+  const card = document.getElementById('balanceHeroCard');
+  if (section) section.style.display = '';
+  if (card) card.style.paddingBottom = '52px';
+  canvas.style.display = 'block';
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width || 300, h = rect.height || 72;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const y = h * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0, y);
+  ctx.lineTo(w, y);
+  ctx.strokeStyle = 'rgba(0,82,255,0.18)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
 function drawBalanceSparkline(progress = 1) {
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas) return;
   const history = (_portfolioData && _portfolioData.history) || [];
   const card = document.getElementById('balanceHeroCard');
   const section = document.getElementById('balHeroSparklineSection');
-  if (history.length < 2) {
-    if (section) section.style.display = 'none';
-    if (card) card.style.paddingBottom = '32px';
+  const allVals = history.map(p => p.total);
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+  if (history.length < 2 || maxV - minV < 0.01) {
+    if (trades.length === 0 && !_placeholderDone) {
+      startPlaceholderSparkline();
+    } else {
+      stopPlaceholderSparkline();
+      drawFlatSparkline();
+    }
     return;
   }
+  stopPlaceholderSparkline();
   if (section) section.style.display = '';
   if (card) card.style.paddingBottom = '52px';
   canvas.style.display = 'block';
@@ -4983,6 +5069,15 @@ function drawBalanceSparkline(progress = 1) {
     x: (i / (vals.length - 1)) * w,
     y: h - padY - ((v - min) / range) * (h - padY * 2)
   }));
+  // Salva punti per interazione hover (solo a progress completo)
+  if (progress >= 1) {
+    _sparklinePoints = allPts.map((pt, i) => ({
+      x: pt.x, y: pt.y,
+      total: vals[i],
+      t: history[i] ? history[i].t : null
+    }));
+    if (!_sparklineInteractionReady) initSparklineInteraction(canvas);
+  }
   // Interpola fino a progress
   const rawIdx = progress * (allPts.length - 1);
   const fullIdx = Math.floor(rawIdx);
@@ -4993,7 +5088,9 @@ function drawBalanceSparkline(progress = 1) {
     pts.push({ x: p0.x + (p1.x - p0.x) * frac, y: p0.y + (p1.y - p0.y) * frac });
   }
   if (pts.length < 2) return;
-  const isUp = vals[vals.length - 1] >= vals[0];
+  const isUp = (_portfolioData && _portfolioData.isUpToday != null)
+    ? _portfolioData.isUpToday
+    : vals[vals.length - 1] >= vals[0];
   const lineColor = isUp ? '#22c55e' : '#f6465d';
   const fillA = isUp ? 'rgba(34,197,94,0.18)' : 'rgba(246,70,93,0.18)';
   const fillB = isUp ? 'rgba(34,197,94,0)' : 'rgba(246,70,93,0)';
@@ -5019,11 +5116,76 @@ function drawBalanceSparkline(progress = 1) {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.stroke();
-  // dot animato alla punta
-  ctx.beginPath();
-  ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
-  ctx.fillStyle = lineColor;
-  ctx.fill();
+  // dot animato alla punta (solo se non si sta hovering)
+  if (!_sparklineHovering) {
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+  }
+  // Cursore interattivo
+  if (_sparklineCursor && progress >= 1) {
+    const cx = _sparklineCursor.x, cy = _sparklineCursor.y;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function initSparklineInteraction(canvas) {
+  _sparklineInteractionReady = true;
+  const move = cssX => {
+    if (_sparklinePoints.length < 2) return;
+    let closest = _sparklinePoints[0];
+    for (const pt of _sparklinePoints) {
+      if (Math.abs(pt.x - cssX) < Math.abs(closest.x - cssX)) closest = pt;
+    }
+    _sparklineHovering = true;
+    _sparklineCursor = { x: closest.x, y: closest.y };
+    const sym = getCurrSym();
+    const totalEl = document.getElementById('balHeroTotal');
+    if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(closest.total); delete totalEl.dataset.real; }
+    const changeEl = document.getElementById('balHeroChange');
+    if (changeEl && closest.t) {
+      const d = new Date(closest.t);
+      const today = new Date();
+      const sameDay = d.toDateString() === today.toDateString();
+      const datePart = sameDay ? 'Oggi' : d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+      const timePart = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      changeEl.innerHTML = `<span style="color:#9aa0b8">${datePart} · ${timePart}</span>`;
+    }
+    drawBalanceSparkline(1);
+  };
+  const leave = () => {
+    if (!_sparklineHovering) return;
+    _sparklineHovering = false;
+    _sparklineCursor = null;
+    updateBalanceHero(false);
+  };
+  canvas.addEventListener('mousemove', e => {
+    const r = canvas.getBoundingClientRect();
+    move(e.clientX - r.left);
+  });
+  canvas.addEventListener('mouseleave', leave);
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    move(e.touches[0].clientX - r.left);
+  }, { passive: false });
+  canvas.addEventListener('touchend', leave);
 }
 
 function renderPositions() {
