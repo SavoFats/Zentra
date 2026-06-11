@@ -4911,13 +4911,20 @@ function updateBalanceHero(animate = false) {
   const liveChg = yesterdayBase > 0 ? liveTotal - yesterdayBase : 0;
   const livePct = yesterdayBase > 0 ? liveChg / yesterdayBase * 100 : 0;
 
-  // Sparkline: snapshot 15-min dal DB + live tip
+  // Sparkline: snapshot 15-min dal DB + live tip; fallback a daily history se intraday insufficiente
   const nowMsR = Date.now();
   const rawRealHistory = d.intraday_history || [];
-  const realHistoryPts = rawRealHistory.map(p => ({
+  let realHistoryPts = rawRealHistory.map(p => ({
     total: p.total,
     t: new Date(p.ts).getTime()
   }));
+  if (realHistoryPts.length < 2) {
+    const rawDaily = d.history || [];
+    const dailyPts = rawDaily
+      .filter(p => p.total > 0)
+      .map(p => ({ total: p.total, t: new Date(p.date + 'T12:00:00Z').getTime() }));
+    if (dailyPts.length >= 2) realHistoryPts = dailyPts;
+  }
   const realHistWithTip = realHistoryPts.slice();
   if (realHistWithTip.length === 0 || realHistWithTip[realHistWithTip.length - 1].total !== liveTotal) {
     realHistWithTip.push({ total: liveTotal, t: nowMsR });
