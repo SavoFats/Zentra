@@ -5096,23 +5096,32 @@ function drawBalanceSparkline(progress = 1) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
-  const vals = history.map(p => p.total);
+  // Downsample a 48 punti: densità giusta per bezier fluido senza perdere forma
+  const allVals = history.map(p => p.total);
+  const TARGET = 48;
+  const stride = Math.max(1, Math.floor((history.length - 1) / (TARGET - 1)));
+  const sampledHistory = [];
+  for (let i = 0; i < history.length; i += stride) sampledHistory.push(history[i]);
+  if (sampledHistory[sampledHistory.length - 1] !== history[history.length - 1])
+    sampledHistory.push(history[history.length - 1]);
+
+  const vals = sampledHistory.map(p => p.total);
   const min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || 1;
-  const padY = 6;
+  const padY = 8;
   const allPts = vals.map((v, i) => ({
     x: (i / (vals.length - 1)) * w,
-    y: h - padY - ((v - min) / range) * (h - padY * 2)
+    y: h - padY - ((v - min) / range) * (h - padY * 2),
+    total: v,
+    t: sampledHistory[i] ? new Date(sampledHistory[i].ts || sampledHistory[i].t).getTime() : null
   }));
+
   // Salva punti per interazione hover (solo a progress completo)
   if (progress >= 1) {
-    _sparklinePoints = allPts.map((pt, i) => ({
-      x: pt.x, y: pt.y,
-      total: vals[i],
-      t: history[i] ? history[i].t : null
-    }));
+    _sparklinePoints = allPts.map(pt => ({ x: pt.x, y: pt.y, total: pt.total, t: pt.t }));
     if (!_sparklineInteractionReady) initSparklineInteraction(canvas);
   }
+
   // Interpola fino a progress
   const rawIdx = progress * (allPts.length - 1);
   const fullIdx = Math.floor(rawIdx);
@@ -5123,20 +5132,39 @@ function drawBalanceSparkline(progress = 1) {
     pts.push({ x: p0.x + (p1.x - p0.x) * frac, y: p0.y + (p1.y - p0.y) * frac });
   }
   if (pts.length < 2) return;
+
   const isUp = (_portfolioData && _portfolioData.isUpToday != null)
     ? _portfolioData.isUpToday
-    : vals[vals.length - 1] >= vals[0];
+    : allVals[allVals.length - 1] >= allVals[0];
   const lineColor = isUp ? '#22c55e' : '#f6465d';
   const last = pts[pts.length - 1];
 
-  // Stessa tecnica delle sparkline piccole: lineTo + round joins, niente smoothing
-  ctx.beginPath();
-  ctx.moveTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  // Cubic Bézier smooth (Catmull-Rom tensione 0.3)
+  // Andamento fluido ma organico — nessun fill, nessuna decorazione
+  function cubicBezierPath(p) {
+    const T = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(p[0].x, p[0].y);
+    for (let i = 0; i < p.length - 1; i++) {
+      const p0 = p[Math.max(i - 1, 0)];
+      const p1 = p[i];
+      const p2 = p[i + 1];
+      const p3 = p[Math.min(i + 2, p.length - 1)];
+      ctx.bezierCurveTo(
+        p1.x + (p2.x - p0.x) * T,
+        p1.y + (p2.y - p0.y) * T,
+        p2.x - (p3.x - p1.x) * T,
+        p2.y - (p3.y - p1.y) * T,
+        p2.x, p2.y
+      );
+    }
+  }
+
+  cubicBezierPath(pts);
   ctx.strokeStyle = lineColor;
   ctx.lineWidth = 1.5;
-  ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.stroke();
   // dot animato alla punta (solo se non si sta hovering)
   if (!_sparklineHovering) {
