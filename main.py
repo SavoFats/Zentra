@@ -3768,6 +3768,65 @@ async def startup():
                 """)
             print("Database connesso e schema creato")
 
+            # Backfill sim_pnl_total + sim_intraday_snapshots da trades_history
+            # Per utenti con trades sim ma sim_pnl_total ancora a 0 (es. dopo migrate da staging)
+            try:
+                async with db_pool.acquire() as conn:
+                    # 1. Trova utenti da fixare
+                    affected_users = await conn.fetch("""
+                        SELECT DISTINCT u.id
+                        FROM users u
+                        WHERE u.sim_pnl_total = 0
+                        AND EXISTS (
+                            SELECT 1 FROM trades_history WHERE user_id = u.id AND mode = 'sim'
+                        )
+                    """)
+                    for arow in affected_users:
+                        uid = arow["id"]
+                        # 2. Calcola PnL totale sim e aggiorna users
+                        await conn.execute("""
+                            UPDATE users SET sim_pnl_total = COALESCE((
+                                SELECT SUM(pnl) FROM trades_history
+                                WHERE user_id = $1 AND mode = 'sim'
+                            ), 0) WHERE id = $1
+                        """, uid)
+                        # 3. Backfill snapshots storici: $1000 ad inizio + running balance dopo ogni trade
+                        trades = await conn.fetch("""
+                            SELECT pnl, exit_time FROM trades_history
+                            WHERE user_id = $1 AND mode = 'sim'
+                            ORDER BY exit_time ASC
+                        """, uid)
+                        if trades:
+                            # Salta se l'utente ha già snapshot (evita duplicati su restart multipli)
+                            existing = await conn.fetchval(
+                                "SELECT COUNT(*) FROM sim_intraday_snapshots WHERE user_id = $1", uid
+                            )
+                            if existing == 0:
+                                # Inserisci snapshot a $1000 15 minuti prima del primo trade
+                                try:
+                                    first_exit = datetime.fromisoformat(trades[0]["exit_time"].rstrip("Z"))
+                                except Exception:
+                                    first_exit = datetime.utcnow() - timedelta(hours=2)
+                                snap_start = first_exit - timedelta(minutes=15)
+                                running = 1000.0
+                                snap_rows = [(uid, snap_start, running)]
+                                for t in trades:
+                                    running = round(running + float(t["pnl"]), 4)
+                                    try:
+                                        ts = datetime.fromisoformat(t["exit_time"].rstrip("Z"))
+                                    except Exception:
+                                        ts = datetime.utcnow()
+                                    snap_rows.append((uid, ts, running))
+                                await conn.executemany("""
+                                    INSERT INTO sim_intraday_snapshots (user_id, snapshot_ts, sim_total_usd)
+                                    VALUES ($1, $2, $3)
+                                """, snap_rows)
+                        print(f"[MIGRATION] sim backfill user {uid}: {len(trades)} trades")
+                    if affected_users:
+                        print(f"[MIGRATION] sim_pnl_total + snapshots backfilled per {len(affected_users)} utenti")
+            except Exception as _mig_err:
+                print(f"[MIGRATION] sim_pnl_total backfill error: {_mig_err}")
+
             # Ripristina sessioni attive dopo riavvio
             await restore_sessions_from_db(db_pool)
             # Ricarica token revocati ancora validi
