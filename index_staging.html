@@ -4449,7 +4449,7 @@ async function poll() {
     if (typeof updateAIUsageUI === 'function') updateAIUsageUI();
   } catch(e) {
     _pollFailCount++;
-    if (_pollFailCount === 3) showToast('Connessione al server persa. Ricontrolla la rete.');
+    if (_pollFailCount === 6) showToast('Connessione al server persa. Ricontrolla la rete.');
     console.error(e);
   }
 }
@@ -4992,15 +4992,15 @@ function startPlaceholderSparkline() {
     const midY = h / 2, pts = 60;
     const wave = i => midY - amp * Math.sin((i / pts) * Math.PI * 3.5);
     const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, `rgba(255,255,255,${Math.max(0, alpha * 0.45)})`);
-    g.addColorStop(1, 'rgba(255,255,255,0)');
+    g.addColorStop(0, `rgba(0,82,255,${Math.max(0, alpha * 0.45)})`);
+    g.addColorStop(1, 'rgba(0,82,255,0)');
     ctx.beginPath(); ctx.moveTo(0, h);
     for (let i = 0; i <= pts; i++) ctx.lineTo((i / pts) * w, wave(i));
     ctx.lineTo(w, h); ctx.closePath();
     ctx.fillStyle = g; ctx.fill();
     ctx.beginPath();
     for (let i = 0; i <= pts; i++) { const x = (i/pts)*w, y = wave(i); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
-    ctx.strokeStyle = `rgba(255,255,255,${alpha})`; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = `rgba(0,82,255,${alpha})`; ctx.lineWidth = 1.5; ctx.stroke();
     _placeholderAnim = requestAnimationFrame(frame);
   }
   _placeholderAnim = requestAnimationFrame(frame);
