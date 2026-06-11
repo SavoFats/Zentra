@@ -4782,6 +4782,7 @@ let _portfolioData = null;
 let _lastPortfolioFetch = 0;
 let _portfolioHistoryBase = null;
 let _placeholderAnim = null;
+let _placeholderDone = false;
 let _sparklinePoints = [];
 let _sparklineCursor = null;
 let _sparklineHovering = false;
@@ -4961,10 +4962,11 @@ function animateBalanceSparkline() {
 
 function stopPlaceholderSparkline() {
   if (_placeholderAnim) { cancelAnimationFrame(_placeholderAnim); _placeholderAnim = null; }
+  _placeholderDone = false;
 }
 
 function startPlaceholderSparkline() {
-  if (_placeholderAnim) return;
+  if (_placeholderAnim || _placeholderDone) return;
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas) return;
   const section = document.getElementById('balHeroSparklineSection');
@@ -4975,7 +4977,18 @@ function startPlaceholderSparkline() {
   const t0 = performance.now();
   const period = 4800;
   function frame(now) {
-    const t = ((now - t0) % period) / period;
+    const elapsed = now - t0;
+    const t = elapsed / period;
+    if (t >= 1) {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = (rect.width || 300) * dpr;
+      canvas.height = (rect.height || 72) * dpr;
+      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+      _placeholderAnim = null;
+      _placeholderDone = true;
+      return;
+    }
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     const w = rect.width || 300, h = rect.height || 72;
