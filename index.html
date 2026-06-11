@@ -5026,7 +5026,8 @@ function drawBalanceSparkline(progress = 1) {
   const allVals = history.map(p => p.total);
   const minV = Math.min(...allVals), maxV = Math.max(...allVals);
   if (history.length < 2 || maxV - minV < 0.01) {
-    startPlaceholderSparkline();
+    if (trades.length === 0) startPlaceholderSparkline();
+    else stopPlaceholderSparkline();
     return;
   }
   stopPlaceholderSparkline();
