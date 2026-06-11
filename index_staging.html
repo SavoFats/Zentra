@@ -4860,6 +4860,10 @@ function updateBalanceHero(animate = false) {
         const baseAtStart = simBalance - (S.pnl || 0);
         if (!_portfolioData) _portfolioData = {};
         _portfolioData.history = rawHistory.map(p => ({ total: baseAtStart + p.v }));
+      } else {
+        // Nessun dato: mostra linea piatta al balance attuale
+        if (!_portfolioData) _portfolioData = {};
+        _portfolioData.history = [{ total: simBalance }, { total: simBalance }];
       }
     }
     if (animate) animateBalanceSparkline();
