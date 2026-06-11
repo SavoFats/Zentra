@@ -4712,6 +4712,13 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
             state["sim_history_cache"] = []
 
     last_snap = state.get("sim_intraday_last_snap")
+    if isinstance(last_snap, str):
+        try:
+            last_snap = datetime.fromisoformat(last_snap.replace("Z", "+00:00")).replace(tzinfo=None)
+            state["sim_intraday_last_snap"] = last_snap
+        except Exception:
+            last_snap = None
+            state["sim_intraday_last_snap"] = None
     if db_pool and (last_snap is None or (now_utc - last_snap).total_seconds() >= 15 * 60):
         try:
             async with db_pool.acquire() as conn:
