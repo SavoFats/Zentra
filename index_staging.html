@@ -5129,7 +5129,7 @@ function drawBalanceSparkline(progress = 1) {
   const lineColor = isUp ? '#22c55e' : '#f6465d';
 
   // Downsampling a ~50 punti: preserva forma e movimenti reali, evita il rumore micro
-  const TARGET_PTS = 50;
+  const TARGET_PTS = 120;
   function downsample(points, target) {
     if (points.length <= target) return points;
     const result = [points[0]];
