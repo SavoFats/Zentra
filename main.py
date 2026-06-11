@@ -100,7 +100,9 @@ async def cors_middleware(request: Request, call_next):
 
     try:
         response = await call_next(request)
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[HTTP-500] {request.method} {request.url.path}: {e}\n{traceback.format_exc()}")
         response = Response(status_code=500, content=b'{"detail":"Internal Server Error"}',
                             media_type="application/json")
     if allowed and origin:
@@ -1898,6 +1900,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                 "revx_order_id": order_id,
                 "entry_usd": round(size, 2),
                 "buy_fee_usd": round(buy_fee_usd, 4),
+                "opened_by_zentra": True,
             }
             state["positions"].append(pos)
             await persist_sessions()
@@ -1975,8 +1978,10 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                 "realMode": True, "fee_pct": 0.012,
                 "qty_purchased": qty_purchased, "exchange": "coinbase",
                 "symbol_pair": product_id,
+                "coinbase_order_id": order_id,
                 "entry_usd": round(size, 2),
                 "buy_fee_usd": round(buy_fee_usd, 4),
+                "opened_by_zentra": True,
             }
             state["positions"].append(pos)
             await persist_sessions()
@@ -4063,16 +4068,6 @@ async def restore_sessions_from_db(pool):
 
                 user_sessions[uid] = state
 
-                # Recupera posizioni non trovate nel DB (RevX + Coinbase)
-                try:
-                    await recover_revx_positions(state, uid)
-                except Exception as _rec_err:
-                    print(f"[RECOVER-REVX] User {uid}: {_rec_err}")
-                try:
-                    await recover_coinbase_positions(state, uid)
-                except Exception as _rec_err:
-                    print(f"[RECOVER-CB] User {uid}: {_rec_err}")
-
                 n    = len(state.get("positions", []))
                 syms = ", ".join(p.get("symbol", "?") for p in state.get("positions", []))
                 mode = "paused" if was_running else "monitor"
@@ -4095,38 +4090,6 @@ async def restore_sessions_from_db(pool):
             except Exception as e:
                 import traceback as _tb
                 print(f"[RESTORE] Errore user {uid}: {e}\n{_tb.format_exc()}")
-
-        # Controlla utenti con exchange configurato ma senza sessione attiva
-        try:
-            async with pool.acquire() as conn:
-                all_users = await conn.fetch(
-                    "SELECT id, revx_key_id, revx_private_key, coinbase_api_key, coinbase_api_secret "
-                    "FROM users WHERE (revx_key_id IS NOT NULL AND revx_key_id != '') "
-                    "OR (coinbase_api_key IS NOT NULL AND coinbase_api_key != '')"
-                )
-            for row in all_users:
-                uid = row["id"]
-                if uid in user_sessions:
-                    continue
-                try:
-                    state = make_session()
-                    state["revx_key_id"]         = decrypt_key(row["revx_key_id"] or "")
-                    state["revx_private_key"]     = decrypt_key(row["revx_private_key"] or "")
-                    state["coinbase_api_key"]     = decrypt_key(row["coinbase_api_key"] or "")
-                    state["coinbase_api_secret"]  = decrypt_key(row["coinbase_api_secret"] or "")
-                    user_sessions[uid] = state
-                    found_revx = await recover_revx_positions(state, uid)
-                    found_cb   = await recover_coinbase_positions(state, uid)
-                    if found_revx or found_cb:
-                        await persist_sessions()
-                    else:
-                        user_sessions.pop(uid, None)
-                except Exception as _rec_err:
-                    user_sessions.pop(uid, None)
-                    print(f"[RECOVER-SCAN] User {uid}: {_rec_err}")
-        except Exception as e:
-            import traceback as _tb
-            print(f"[RECOVER-SCAN] Errore: {e}\n{_tb.format_exc()}")
 
     except Exception as e:
         import traceback as _tb
@@ -4802,7 +4765,7 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
     }
 
 _portfolio_cache: dict = {}
-PORTFOLIO_CACHE_TTL = 30
+PORTFOLIO_CACHE_TTL = 2
 _real_intraday_cache: dict = {}
 _real_intraday_last_snap: dict = {}
 
@@ -4876,9 +4839,14 @@ async def portfolio_snapshot_loop():
                         _snapped_today.add(uid)
                 except Exception as e:
                     print(f"[snapshot] loop error user {uid}: {e}")
-            # Sim snapshots for all users
+            # Sim snapshots for all users. trades_history is authoritative.
             async with db_pool.acquire() as conn:
-                all_rows = await conn.fetch("SELECT id, sim_pnl_total FROM users")
+                all_rows = await conn.fetch("""
+                    SELECT u.id, COALESCE(SUM(t.pnl), 0) AS sim_pnl_total
+                    FROM users u
+                    LEFT JOIN trades_history t ON t.user_id = u.id AND t.mode = 'sim'
+                    GROUP BY u.id
+                """)
             for row in all_rows:
                 uid = row["id"]
                 if uid in _sim_snapped_today:
@@ -4916,7 +4884,7 @@ async def get_portfolio_summary(request: Request, user_id: int = Depends(get_cur
     cached = _portfolio_cache.get(user_id)
     if cached and time.time() - cached["ts"] < PORTFOLIO_CACHE_TTL:
         return cached["data"]
-    check_rate_limit(request, max_attempts=10, window=60, key_suffix="portfolio")
+    check_rate_limit(request, max_attempts=45, window=60, key_suffix="portfolio")
 
     total, available_usd = await _compute_portfolio_total(user_id)
     positions_value = round(total - available_usd, 4)
@@ -5983,7 +5951,9 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
                 "realMode": True, "fee_pct": 0.0012,
                 "qty_purchased": qty, "exchange": "coinbase", "symbol_pair": product_id,
+                "coinbase_order_id": order_id,
                 "entry_usd": amount, "buy_fee_usd": round(buy_fee_usd, 4), "manual": True,
+                "opened_by_zentra": True,
             }
             state["positions"].append(pos)
             await persist_sessions()
@@ -6052,6 +6022,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "qty_purchased": qty, "exchange": "revx", "symbol_pair": symbol_revx,
                 "revx_order_id": order_id,
                 "entry_usd": amount, "buy_fee_usd": round(fee_usd, 4), "manual": True,
+                "opened_by_zentra": True,
             }
             state["positions"].append(pos)
             await persist_sessions()
