@@ -4787,7 +4787,7 @@ async function fetchPortfolioSummary() {
     return;
   }
   const now = Date.now();
-  if (now - _lastPortfolioFetch < 30000) return;
+  if (now - _lastPortfolioFetch < 30000) { updateBalanceHero(false); return; }
   _lastPortfolioFetch = now;
   try {
     const r = await fetch(API + '/portfolio_summary', { headers: authHeaders(), cache: 'no-store' });
@@ -4821,7 +4821,17 @@ function updateBalanceHero(animate = false) {
   const isDemo = _simMode || _plan === 'free';
 
   if (isDemo) {
-    const simBalance = S.sim_balance != null ? S.sim_balance : (S.capital || 1000);
+    // Balance live = saldo chiuso + unrealized posizioni sim aperte
+    const simBase = S.sim_balance != null ? S.sim_balance : 1000;
+    const simUnrealized = (S.positions || [])
+      .filter(p => !p.realMode)
+      .reduce((sum, p) => {
+        const size = p.size_remaining || p.size || 0;
+        const entry = parseFloat(p.entryPrice) || 0;
+        const current = parseFloat(p.currentPrice) || entry;
+        return sum + (entry > 0 ? (current - entry) / entry * size : 0);
+      }, 0);
+    const simBalance = simBase + simUnrealized;
     const sym = getCurrSym();
     const labelText = document.getElementById('balHeroLabelText');
     if (labelText) labelText.textContent = 'Saldo Demo';
@@ -4829,15 +4839,17 @@ function updateBalanceHero(animate = false) {
     if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(simBalance); delete totalEl.dataset.real; }
     const changeEl = document.getElementById('balHeroChange');
     if (changeEl) {
-      let chg = S.sim_today_change || 0;
-      let pct = S.sim_today_change_pct || 0;
-      // fallback: usa P&L sessione se non c'è snapshot di ieri
-      if (chg === 0 && pct === 0 && (S.pnl || 0) !== 0) {
+      let chg = 0;
+      if ((S.sim_today_change || 0) !== 0 || (S.sim_today_change_pct || 0) !== 0) {
+        // Ha snapshot di ieri: variazione reale + unrealized attuale
+        chg = (S.sim_today_change || 0) + simUnrealized;
+      } else if ((S.pnl || 0) !== 0) {
+        // Nessuno snapshot: usa P&L sessione (già include unrealized)
         chg = S.pnl;
-        const base = simBalance - chg;
-        pct = base > 0 ? chg / base * 100 : 0;
       }
-      if (chg === 0 && pct === 0) {
+      const base = simBalance - chg;
+      const pct = base > 0 ? chg / base * 100 : 0;
+      if (Math.abs(chg) < 0.005) {
         changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
       } else {
         const isPos = chg >= 0;
@@ -4847,10 +4859,13 @@ function updateBalanceHero(animate = false) {
         changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
       }
     }
-    // Sparkline: usa sim_history se ha variazione reale, altrimenti pnlHistory intra-sessione
-    const simHistory = S.sim_history || [];
+    // Sparkline: aggiorna l'ultimo punto (oggi) con il balance live
+    const rawSimHistory = S.sim_history || [];
+    const simHistory = rawSimHistory.length > 0
+      ? rawSimHistory.slice(0, -1).concat([{ ...rawSimHistory[rawSimHistory.length - 1], total: simBalance }])
+      : [];
     const simHistoryHasVariation = simHistory.length >= 2 &&
-      simHistory[0].total !== simHistory[simHistory.length - 1].total;
+      Math.abs(simHistory[0].total - simHistory[simHistory.length - 1].total) > 0.001;
     if (simHistoryHasVariation) {
       if (!_portfolioData) _portfolioData = {};
       _portfolioData.history = simHistory;
@@ -4861,7 +4876,6 @@ function updateBalanceHero(animate = false) {
         if (!_portfolioData) _portfolioData = {};
         _portfolioData.history = rawHistory.map(p => ({ total: baseAtStart + p.v }));
       } else {
-        // Nessun dato: mostra linea piatta al balance attuale
         if (!_portfolioData) _portfolioData = {};
         _portfolioData.history = [{ total: simBalance }, { total: simBalance }];
       }
@@ -4877,21 +4891,41 @@ function updateBalanceHero(animate = false) {
   const sym = getCurrSym();
   const d = _portfolioData;
 
+  // Balance live = available (da ultimo fetch) + valore corrente posizioni reali da S.positions
+  const livePositionsValue = (S.positions || [])
+    .filter(p => p.realMode)
+    .reduce((sum, p) => {
+      const qty = parseFloat(p.qty_purchased || 0);
+      const price = parseFloat(p.currentPrice || p.entryPrice || 0);
+      return sum + qty * price;
+    }, 0);
+  const liveTotal = (d.total || 0) + livePositionsValue - (d.positions || 0);
+
+  // Today change live
+  const yesterdayBase = (d.total || 0) - (d.today_change || 0);
+  const liveChg = yesterdayBase > 0 ? liveTotal - yesterdayBase : 0;
+  const livePct = yesterdayBase > 0 ? liveChg / yesterdayBase * 100 : 0;
+
+  // Aggiorna l'ultimo punto della sparkline con il totale live
+  if (d.history && d.history.length > 0) {
+    d.history[d.history.length - 1].total = liveTotal;
+  }
+
   const totalEl  = document.getElementById('balHeroTotal');
   const availEl  = document.getElementById('balHeroAvail');
   const inPosEl  = document.getElementById('balHeroInPos');
   const changeEl = document.getElementById('balHeroChange');
 
   if (!_balHidden) {
-    if (totalEl) { totalEl.textContent = sym + fmtMoney(d.total); delete totalEl.dataset.real; }
+    if (totalEl) { totalEl.textContent = sym + fmtMoney(liveTotal); delete totalEl.dataset.real; }
     if (availEl) { availEl.textContent = sym + fmtMoney(d.available); delete availEl.dataset.real; }
-    if (inPosEl) { inPosEl.textContent = sym + fmtMoney(d.positions); delete inPosEl.dataset.real; }
+    if (inPosEl) { inPosEl.textContent = sym + fmtMoney(livePositionsValue); delete inPosEl.dataset.real; }
   }
 
   if (changeEl) {
-    const chg = d.today_change || 0;
-    const pct = d.today_change_pct || 0;
-    if (chg === 0 && pct === 0) {
+    const chg = liveChg;
+    const pct = livePct;
+    if (Math.abs(chg) < 0.005) {
       changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
     } else {
       const isPos = chg >= 0;
