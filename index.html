@@ -1350,11 +1350,6 @@ body.auth-active .tabbar { display:none !important; }
         <div id="balHeroNoData" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:11px;color:#9aa0b8"></div>
         <div id="balHeroSparklineLabel" style="display:none"></div>
       </div>
-      <!-- stats nascosti (riservati) -->
-      <div id="balHeroRightStats" style="display:none">
-        <div id="balHeroAvail"></div>
-        <div id="balHeroInPos"></div>
-      </div>
     </div>
 
     <div class="home-ai" id="homeAiShell">
@@ -4795,9 +4790,7 @@ async function fetchPortfolioSummary() {
     updateBalanceHero(false);
     return;
   }
-  const now = Date.now();
-  if (now - _lastPortfolioFetch < 30000) { updateBalanceHero(false); return; }
-  _lastPortfolioFetch = now;
+  _lastPortfolioFetch = Date.now();
   try {
     const r = await fetch(API + '/portfolio_summary', { headers: authHeaders(), cache: 'no-store' });
     if (r.ok) {
@@ -4812,7 +4805,7 @@ let _balHidden = false;
 
 function toggleBalanceVisibility() {
   _balHidden = !_balHidden;
-  const ids = ['balHeroTotal', 'balHeroAvail', 'balHeroInPos'];
+  const ids = ['balHeroTotal'];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -4888,7 +4881,11 @@ function updateBalanceHero(animate = false) {
 
   const labelText = document.getElementById('balHeroLabelText');
   if (labelText) labelText.textContent = 'Saldo reale';
-  if (!_portfolioData) return;
+  if (!_portfolioData) {
+    if (trades.length === 0 && !_placeholderDone) startPlaceholderSparkline();
+    else { stopPlaceholderSparkline(); drawFlatSparkline(); }
+    return;
+  }
   const sym = getCurrSym();
   const d = _portfolioData;
 
@@ -4921,14 +4918,10 @@ function updateBalanceHero(animate = false) {
   _portfolioData.history = realHistWithTip;
 
   const totalEl  = document.getElementById('balHeroTotal');
-  const availEl  = document.getElementById('balHeroAvail');
-  const inPosEl  = document.getElementById('balHeroInPos');
   const changeEl = document.getElementById('balHeroChange');
 
   if (!_balHidden) {
     if (totalEl) { totalEl.textContent = sym + fmtMoney(liveTotal); delete totalEl.dataset.real; }
-    if (availEl) { availEl.textContent = sym + fmtMoney(d.available); delete availEl.dataset.real; }
-    if (inPosEl) { inPosEl.textContent = sym + fmtMoney(livePositionsValue); delete inPosEl.dataset.real; }
   }
 
   if (changeEl) {
