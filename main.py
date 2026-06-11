@@ -4843,6 +4843,8 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
         today_midnight = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         ref = next((p for p in reversed(sim_history)
                     if datetime.strptime(p["ts"], "%Y-%m-%dT%H:%M:%SZ") < today_midnight), None)
+        if ref is None:
+            ref = sim_history[0]
         if ref and ref["total"] > 0:
             sim_today_change = round(sim_balance - ref["total"], 2)
             sim_today_change_pct = round(sim_today_change / ref["total"] * 100, 2)
@@ -5063,6 +5065,13 @@ async def get_portfolio_summary(request: Request, user_id: int = Depends(get_cur
                 print(f"[real_intraday] save error: {e}")
 
         intraday_history = _real_intraday_cache.get(user_id) or []
+
+    # Fallback: nessun snapshot giornaliero di ieri → usa il primo intraday come baseline
+    if today_change == 0.0 and intraday_history:
+        first = intraday_history[0]
+        if first["total"] > 0 and abs(total - first["total"]) > 0.01:
+            today_change = round(total - first["total"], 2)
+            today_change_pct = round(today_change / first["total"] * 100, 2)
 
     data = {
         "total":              round(total, 2),
