@@ -4768,9 +4768,12 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
     if not state.get("sim_pnl_loaded") and db_pool:
         try:
             async with db_pool.acquire() as conn:
-                row = await conn.fetchrow("SELECT sim_pnl_total FROM users WHERE id = $1", user_id)
+                row = await conn.fetchrow(
+                    "SELECT COALESCE(SUM(pnl), 0) AS total FROM trades_history WHERE user_id = $1 AND mode = 'sim'",
+                    user_id
+                )
             if row:
-                state["sim_pnl_total"] = float(row["sim_pnl_total"] or 0)
+                state["sim_pnl_total"] = float(row["total"])
             state["sim_pnl_loaded"] = True
         except Exception:
             state["sim_pnl_loaded"] = True
