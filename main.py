@@ -12,7 +12,7 @@ import hashlib
 import json
 import secrets
 import stripe
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
@@ -818,6 +818,9 @@ SCANNER_SIGNAL_KEYS = {
     "tsi_bullish",
     "death_cross",
     "volume_spike",
+    "rsi_divergence",
+    "pullback",
+    "rel_strength",
 }
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
@@ -831,6 +834,86 @@ _ws_connected: bool = False  # True quando il WebSocket Binance è attivo
 _cg_price_last_fetch: float = 0  # throttle fallback CoinGecko prezzi
 _ws_last_msg_ts: float = 0       # timestamp ultimo messaggio ricevuto dal WebSocket
 _rest_price_last_fetch: float = 0  # throttle fetch REST periodico prezzi
+
+def _calc_atr(highs: list, lows: list, closes: list, period: int = 14) -> float:
+    """Calcola ATR(period) su serie OHLC."""
+    if len(highs) < period + 1:
+        return 0.0
+    trs = []
+    for i in range(1, len(highs)):
+        tr = max(highs[i] - lows[i], abs(highs[i] - closes[i-1]), abs(lows[i] - closes[i-1]))
+        trs.append(tr)
+    if not trs:
+        return 0.0
+    atr = sum(trs[:period]) / period
+    for tr in trs[period:]:
+        atr = tr / period + atr * (1 - 1 / period)
+    return atr
+
+def _find_swing_levels(highs: list, lows: list, n_left: int = 3, n_right: int = 3, top_n: int = 3):
+    """Trova i pivot swing high/low più significativi (lookback = n_left + n_right candele)."""
+    swing_h, swing_l = [], []
+    for i in range(n_left, len(highs) - n_right):
+        if all(highs[i] >= highs[i-j] for j in range(1, n_left+1)) and \
+           all(highs[i] >= highs[i+j] for j in range(1, n_right+1)):
+            swing_h.append(highs[i])
+        if all(lows[i] <= lows[i-j] for j in range(1, n_left+1)) and \
+           all(lows[i] <= lows[i+j] for j in range(1, n_right+1)):
+            swing_l.append(lows[i])
+    # Deduplica livelli entro lo 0.4% (cluster sullo stesso livello)
+    def dedup(levels):
+        out = []
+        for lv in sorted(levels, reverse=True):
+            if not out or abs(lv - out[-1]) / out[-1] > 0.004:
+                out.append(lv)
+        return out
+    return dedup(swing_h)[:top_n], dedup(swing_l[::-1])[:top_n]
+
+def _calc_rsi_series(prices: list, period: int = 14) -> list:
+    """RSI(period) con smoothing di Wilder per ogni barra. out[i] = RSI alla chiusura i."""
+    n = len(prices)
+    if n < period + 1:
+        return [50.0] * n
+    out = [50.0] * n
+    gains = losses = 0.0
+    for i in range(1, period + 1):
+        d = prices[i] - prices[i-1]
+        gains  += max(d, 0.0)
+        losses += max(-d, 0.0)
+    avg_g, avg_l = gains / period, losses / period
+    out[period] = 100.0 if avg_l == 0 else 100.0 - 100.0 / (1 + avg_g / avg_l)
+    for i in range(period + 1, n):
+        d = prices[i] - prices[i-1]
+        avg_g = (avg_g * (period - 1) + max(d, 0.0)) / period
+        avg_l = (avg_l * (period - 1) + max(-d, 0.0)) / period
+        out[i] = 100.0 if avg_l == 0 else 100.0 - 100.0 / (1 + avg_g / avg_l)
+    return out
+
+def _detect_bullish_divergence(lows: list, rsi_series: list,
+                               lookback: int = 40, n_side: int = 3) -> bool:
+    """Divergenza bullish RSI/prezzo: il prezzo segna un minimo più basso ma l'RSI
+    un minimo più alto (i venditori perdono forza). Confronta gli ultimi due pivot
+    low nel lookback; il secondo deve essere recente perché il segnale sia operativo."""
+    n = len(lows)
+    if n < lookback or len(rsi_series) != n:
+        return False
+    pivots = []
+    for i in range(max(n - lookback, n_side), n - n_side):
+        if all(lows[i] <= lows[i-j] for j in range(1, n_side+1)) and \
+           all(lows[i] <= lows[i+j] for j in range(1, n_side+1)):
+            pivots.append(i)
+    if len(pivots) < 2:
+        return False
+    i1, i2 = pivots[-2], pivots[-1]
+    if n - 1 - i2 > 8:    # il secondo minimo deve essere fresco (max 8 candele fa)
+        return False
+    if i2 - i1 < 5:       # minimi troppo ravvicinati = stesso movimento, non divergenza
+        return False
+    price_ll = lows[i2] < lows[i1] * 0.999            # lower low di prezzo (almeno -0.1%)
+    rsi_hl   = rsi_series[i2] > rsi_series[i1] + 2.0  # higher low RSI (almeno +2 punti)
+    rsi_zone = rsi_series[i1] < 40.0                  # prima gamba in zona di debolezza
+    return price_ll and rsi_hl and rsi_zone
+
 
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
@@ -1223,26 +1306,117 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
         golden_cross = (ema50 > ema200) and (ema50_p24 <= ema200_p24)
         death_cross  = (ema50 < ema200) and (ema50_p24 >= ema200_p24)
 
+        # ATR e pivot S/R su tutti i TF (i pivot servono anche al filtro breakout)
+        atr_val = _calc_atr(highs[:-1], lows[:-1], closes[:-1], 14)
+        swing_highs, swing_lows = _find_swing_levels(highs[:-1], lows[:-1])
+
+        # Breakout bloccato se c'è una resistenza (swing high) entro l'1% sopra il prezzo:
+        # il movimento rischia di morire subito contro quel livello
+        resistance_near = any(last_close < sh <= last_close * 1.01 for sh in swing_highs)
+
+        # Divergenza bullish RSI/prezzo: minimo di prezzo più basso ma RSI più alto
+        rsi_series = _calc_rsi_series(closed, 14)
+        rsi_divergence = _detect_bullish_divergence(lows[:-1], rsi_series)
+
+        # Pullback in trend: trend sano (EMA allineate), il prezzo ritraccia fino alla
+        # EMA20 nelle ultime 3 candele chiuse e rimbalza richiudendo sopra
+        trend_up    = ema20 > ema50 > ema200 > 0
+        touched_ema = min(lows[-4:-1]) <= ema20 * 1.002 if len(lows) >= 4 else False
+        bounced     = last_close > ema20 and len(closed) >= 2 and last_close > closed[-2]
+        pullback    = trend_up and touched_ema and bounced
+
         return {
             "golden_cross":   golden_cross,
             "death_cross":    death_cross,
             "rsi_14":         round(rsi, 1),
             "rsi_oversold":   rsi < 30.0,
             "rsi_overbought": rsi > 70.0,
-            "ema_stack":      (last_close > ema20 > ema50) if ema50 > 0 else False,
+            "ema_stack":      (last_close > ema20 > ema50 > ema200) if ema200 > 0 else False,
+            "ema20":          round(ema20, 6),
+            "ema50":          round(ema50, 6),
             "macd_hist":      round(macd_hist, 6),
             "macd_hist_prev": round(macd_hist_prev, 6),
             "macd_bullish":   macd_hist > 0 and macd_hist > macd_hist_prev,
             "macd_bearish":   macd_hist < 0 and macd_hist < macd_hist_prev,
             "tsi_bullish":    tsi_cur > 0 and tsi_cur >= tsi_prev,
-            "breakout":       last_close > high10 and vol_spike,
+            "breakout":       last_close > high10 and vol_spike and not resistance_near,
+            "rsi_divergence": rsi_divergence,
+            "pullback":       pullback,
             "volume_spike":   vol_spike,
             "vol_ratio":      round(vol_last / vol_avg20, 2) if vol_avg20 > 0 else 0.0,
+            "atr":            round(atr_val, 6),
+            "swing_highs":    [round(x, 6) for x in swing_highs],
+            "swing_lows":     [round(x, 6) for x in swing_lows],
             "sparkline":      closes[-25:-1],
         }
     except Exception as e:
         print(f"Scanner candle error {sym} {timeframe}: {e}")
         return None
+
+
+# ── Tracking esiti segnali: ogni accensione viene registrata con il prezzo,
+# poi signal_outcome_loop calcola il ritorno a +1h/+4h/+24h ─────────────────────
+_TRACKED_SIGNALS = ["golden_cross","ema_stack","rsi_oversold","rsi_divergence",
+                    "macd_bullish","breakout","volume_spike","pullback","rel_strength"]
+_signal_log_last: dict = {}        # (sym, signal, tf) -> ts ultimo insert
+_SIGNAL_LOG_COOLDOWN = 4 * 3600    # non riloggare lo stesso segnale entro 4h
+
+async def log_signal_event(sym: str, signal: str, tf: str, price: float):
+    """Registra l'accensione di un segnale in signal_events (per le statistiche di esito)."""
+    if not db_pool or price <= 0:
+        return
+    key = (sym, signal, tf)
+    now = time.time()
+    if now - _signal_log_last.get(key, 0) < _SIGNAL_LOG_COOLDOWN:
+        return
+    _signal_log_last[key] = now
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO signal_events (symbol, signal, timeframe, price) VALUES ($1, $2, $3, $4)",
+                sym, signal, tf, price
+            )
+    except Exception as e:
+        print(f"[SIGNAL LOG] errore {sym} {signal} {tf}: {e}")
+
+async def signal_outcome_loop():
+    """Completa i ritorni a 1h/4h/24h degli eventi segnale usando il prezzo corrente."""
+    await asyncio.sleep(90)
+    while True:
+        try:
+            if db_pool:
+                async with db_pool.acquire() as conn:
+                    rows = await conn.fetch("""
+                        SELECT id, symbol, price, fired_at FROM signal_events
+                        WHERE (ret_1h  IS NULL AND fired_at <= NOW() - INTERVAL '1 hour')
+                           OR (ret_4h  IS NULL AND fired_at <= NOW() - INTERVAL '4 hours')
+                           OR (ret_24h IS NULL AND fired_at <= NOW() - INTERVAL '24 hours')
+                        LIMIT 500
+                    """)
+                    now = datetime.now(timezone.utc)
+                    for r in rows:
+                        cur = market_data.get(r["symbol"], {}).get("price", 0)
+                        fired_price = float(r["price"])
+                        if cur <= 0 or fired_price <= 0:
+                            continue
+                        ret = round((cur - fired_price) / fired_price * 100, 4)
+                        age = (now - r["fired_at"]).total_seconds()
+                        if age >= 86400:
+                            await conn.execute(
+                                "UPDATE signal_events SET ret_1h=COALESCE(ret_1h,$2), "
+                                "ret_4h=COALESCE(ret_4h,$2), ret_24h=COALESCE(ret_24h,$2) WHERE id=$1",
+                                r["id"], ret)
+                        elif age >= 14400:
+                            await conn.execute(
+                                "UPDATE signal_events SET ret_1h=COALESCE(ret_1h,$2), "
+                                "ret_4h=COALESCE(ret_4h,$2) WHERE id=$1", r["id"], ret)
+                        elif age >= 3600:
+                            await conn.execute(
+                                "UPDATE signal_events SET ret_1h=COALESCE(ret_1h,$2) WHERE id=$1",
+                                r["id"], ret)
+        except Exception as e:
+            print(f"[SIGNAL OUTCOME] errore: {e}")
+        await asyncio.sleep(600)
 
 
 async def fetch_all_scanner_candles(timeframe: str = "1h"):
@@ -1275,8 +1449,14 @@ async def fetch_all_scanner_candles(timeframe: str = "1h"):
         updated = 0
         for sym, res in zip(syms, results):
             if res and not isinstance(res, Exception):
+                old = scanner_candle_data[timeframe].get(sym, {})
                 scanner_candle_data[timeframe][sym] = res
                 updated += 1
+                # Log delle accensioni (transizione spento -> acceso) per le statistiche
+                price = market_data.get(sym, {}).get("price", 0)
+                for sig_name in _TRACKED_SIGNALS:
+                    if res.get(sig_name) and not old.get(sig_name):
+                        asyncio.create_task(log_signal_event(sym, sig_name, timeframe, price))
         _scanner_candles_ts[timeframe] = time.time()
         print(f"Scanner [{timeframe}] aggiornate: {updated}/{len(syms)}")
     finally:
@@ -3821,7 +4001,20 @@ async def startup():
                         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         UNIQUE(user_id, symbol)
                     );
-                    CREATE INDEX IF NOT EXISTS idx_op_user ON open_positions(user_id)
+                    CREATE INDEX IF NOT EXISTS idx_op_user ON open_positions(user_id);
+                    CREATE TABLE IF NOT EXISTS signal_events (
+                        id SERIAL PRIMARY KEY,
+                        symbol TEXT NOT NULL,
+                        signal TEXT NOT NULL,
+                        timeframe TEXT NOT NULL,
+                        price NUMERIC(20,8) NOT NULL,
+                        fired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        ret_1h NUMERIC(10,4),
+                        ret_4h NUMERIC(10,4),
+                        ret_24h NUMERIC(10,4)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_se_fired ON signal_events(fired_at);
+                    CREATE INDEX IF NOT EXISTS idx_se_sig ON signal_events(signal, timeframe)
                 """)
             print("Database connesso e schema creato")
 
@@ -3845,6 +4038,7 @@ async def startup():
         ("load_telegram_bot_info", load_telegram_bot_info()),
         ("fetch_coingecko_logos", fetch_coingecko_logos()),
         ("cleanup_rate_buckets",  _cleanup_rate_buckets()),
+        ("signal_outcome_loop",   signal_outcome_loop()),
     ]:
         _t = asyncio.create_task(_coro, name=_name)
         _t.add_done_callback(_on_task_done)
@@ -4098,9 +4292,10 @@ async def restore_sessions_from_db(pool):
             for r in pos_rows:
                 uid = r["user_id"]
                 try:
-                    open_pos_by_user.setdefault(uid, []).append(json.loads(r["position_json"]))
+                    pos = json.loads(r["position_json"])
                 except Exception:
-                    pass
+                    continue
+                open_pos_by_user.setdefault(uid, []).append(pos)
         except Exception as e:
             print(f"[RESTORE] Errore lettura open_positions: {e}")
 
@@ -5129,6 +5324,7 @@ async def get_market(
     momentum_thr  = active_cfg.get("momentumPct", 0.01)
 
     tf_cache = scanner_candle_data.get(timeframe, {})
+    btc_change = market_data.get("BTC", {}).get("change24h", 0.0)
 
     for s, d in market_data.items():
         if d["price"] <= 0:
@@ -5136,6 +5332,11 @@ async def get_market(
         if s not in _dynamic_universe:
             continue
         item = {"symbol": s, **d}
+        # Forza relativa vs BTC: sovraperformance 24h di almeno 3 punti percentuali
+        rs_24h = d.get("change24h", 0.0) - btc_change
+        rel_strength = s != "BTC" and rs_24h >= 3.0
+        if rel_strength:
+            asyncio.create_task(log_signal_event(s, "rel_strength", "24h", d["price"]))
         sig = get_momentum_signal(s, d["price"], max_stop_pct, vol_mult, momentum_thr)
         item["ema"] = {
             "breakout_ok":  sig.get("breakout_ok", False),
@@ -5161,6 +5362,10 @@ async def get_market(
             "rsi_oversold":   sc.get("rsi_oversold",    False),
             "rsi_overbought": sc.get("rsi_overbought",  False),
             "breakout":       sc.get("breakout",        False),
+            "rsi_divergence": sc.get("rsi_divergence",  False),
+            "pullback":       sc.get("pullback",        False),
+            "rel_strength":   rel_strength,
+            "rs_24h":         round(rs_24h, 2),
             "macd_bullish":   sc.get("macd_bullish",    False),
             "macd_bearish":   sc.get("macd_bearish",    False),
             "tsi_bullish":    sc.get("tsi_bullish",     False),
@@ -5249,6 +5454,45 @@ async def scanner_count(
         "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today),
         "plan": raw_plan,
     }
+
+@app.get("/scanner/signal-stats")
+async def signal_stats(request: Request, user_id: int = Depends(get_current_user), days: int = Query(30)):
+    """Statistiche di esito dei segnali scanner: win rate e ritorno medio a 1h/4h/24h."""
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="signal_stats")
+    days = max(1, min(days, 90))
+    if not db_pool:
+        return {"signals": [], "days": days}
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch(f"""
+            SELECT signal, timeframe, COUNT(*) AS fired,
+                   COUNT(ret_1h)  AS n1,  SUM(CASE WHEN ret_1h  > 0 THEN 1 ELSE 0 END) AS w1,
+                   AVG(ret_1h)  AS a1,
+                   COUNT(ret_4h)  AS n4,  SUM(CASE WHEN ret_4h  > 0 THEN 1 ELSE 0 END) AS w4,
+                   AVG(ret_4h)  AS a4,
+                   COUNT(ret_24h) AS n24, SUM(CASE WHEN ret_24h > 0 THEN 1 ELSE 0 END) AS w24,
+                   AVG(ret_24h) AS a24
+            FROM signal_events
+            WHERE fired_at >= NOW() - INTERVAL '{days} days'
+            GROUP BY signal, timeframe
+            ORDER BY signal, timeframe
+        """)
+    out = []
+    for r in rows:
+        def _wr(w, n):
+            return round(100 * w / n, 1) if n else None
+        out.append({
+            "signal":    r["signal"],
+            "timeframe": r["timeframe"],
+            "fired":     r["fired"],
+            "win_rate_1h":  _wr(r["w1"],  r["n1"]),
+            "win_rate_4h":  _wr(r["w4"],  r["n4"]),
+            "win_rate_24h": _wr(r["w24"], r["n24"]),
+            "avg_ret_1h":   round(float(r["a1"]),  3) if r["a1"]  is not None else None,
+            "avg_ret_4h":   round(float(r["a4"]),  3) if r["a4"]  is not None else None,
+            "avg_ret_24h":  round(float(r["a24"]), 3) if r["a24"] is not None else None,
+            "samples_1h":  r["n1"], "samples_4h": r["n4"], "samples_24h": r["n24"],
+        })
+    return {"signals": out, "days": days}
 
 @app.get("/trades")
 async def get_trades(request: Request, user_id: int = Depends(get_current_user)):
@@ -6208,6 +6452,34 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
         await persist_sessions()
         return {"ok": True, "price": price, "qty": qty}
 
+async def fetch_futures_data(symbol: str) -> dict:
+    """Funding rate, open interest e mark price da Binance Futures."""
+    pair = symbol.upper()
+    if not pair.endswith("USDT"):
+        pair += "USDT"
+    result: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r_prem, r_oi = await asyncio.gather(
+                client.get("https://fapi.binance.com/fapi/v1/premiumIndex", params={"symbol": pair}),
+                client.get("https://fapi.binance.com/fapi/v1/openInterest", params={"symbol": pair}),
+                return_exceptions=True,
+            )
+            if isinstance(r_prem, httpx.Response) and r_prem.status_code == 200:
+                d = r_prem.json()
+                result["funding_rate_pct"] = round(float(d.get("lastFundingRate", 0)) * 100, 4)
+                result["mark_price"]       = float(d.get("markPrice", 0))
+            if isinstance(r_oi, httpx.Response) and r_oi.status_code == 200:
+                d = r_oi.json()
+                base_sym = symbol.replace("USDT", "")
+                price    = market_data.get(base_sym, {}).get("price", 0)
+                oi_coins = float(d.get("openInterest", 0))
+                result["open_interest_usd"] = oi_coins * price if price else 0.0
+    except Exception:
+        pass
+    return result
+
+
 async def fetch_crypto_news(coins: list | None = None) -> list:
     import xml.etree.ElementTree as ET
     cache_key = coins[0] if coins else "general"
@@ -6374,8 +6646,8 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     market_ctx += "Top losers:  " + ", ".join(f"{s} {d.get('change24h',0):+.1f}%" for s, d in losers)  + "\n"
 
     # Scanner signals across all timeframes
-    _SIGNALS = ["golden_cross","ema_stack","rsi_oversold","rsi_overbought",
-                "macd_bullish","macd_bearish","tsi_bullish","breakout","volume_spike"]
+    _SIGNALS = ["golden_cross","ema_stack","rsi_oversold","rsi_overbought","rsi_divergence",
+                "pullback","macd_bullish","macd_bearish","tsi_bullish","breakout","volume_spike"]
     scanner_ctx = ""
     for tf in ["5m","15m","1h","4h","1d"]:
         tf_data = scanner_candle_data.get(tf, {})
@@ -6465,19 +6737,67 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     if chart_coin:
         cd = market_data.get(chart_coin, {})
         if cd.get("price"):
+            price = cd['price']
             coin_ctx = f"\n[Dati {chart_coin}]\n"
-            coin_ctx += f"  Prezzo: ${cd['price']:,.4f} | 24h: {cd.get('change24h', 0):+.2f}% | Volume: ${cd.get('volume24h', 0)/1e6:.1f}M\n"
-            # Scanner signals per tutti i TF
+            coin_ctx += f"  Prezzo: ${price:,.4f} | 24h: {cd.get('change24h', 0):+.2f}% | Volume: ${cd.get('volume24h', 0)/1e6:.1f}M\n"
+            _btc_ch = market_data.get("BTC", {}).get("change24h", 0.0)
+            if chart_coin != "BTC":
+                _rs = cd.get("change24h", 0.0) - _btc_ch
+                coin_ctx += f"  Forza relativa vs BTC (24h): {_rs:+.2f} punti\n"
+
+            # Scanner signals + ATR + EMA + S/R pivot per tutti i TF
             sig_lines = []
             for tf in ["5m", "15m", "1h", "4h", "1d"]:
                 td = scanner_candle_data.get(tf, {}).get(chart_coin, {})
+                if not td:
+                    continue
                 sigs = [s for s in _SIGNALS if td.get(s)]
+                atr  = td.get("atr", 0)
+                ema20 = td.get("ema20", 0)
+                ema50 = td.get("ema50", 0)
+                rsi  = td.get("rsi_14", 0)
+                line = f"  {tf}:"
                 if sigs:
-                    sig_lines.append(f"  {tf}: {', '.join(sigs)}")
+                    line += f" [{', '.join(sigs)}]"
+                if rsi:
+                    line += f" RSI {rsi:.0f}"
+                if ema20 and ema50:
+                    line += f" EMA20 ${ema20:,.4f} EMA50 ${ema50:,.4f}"
+                if atr:
+                    atr_pct = atr / price * 100
+                    line += f" ATR ${atr:,.4f} ({atr_pct:.2f}%)"
+                    line += f" | SL scalp ~${price - atr:.4f} | SL swing ~${price - 2*atr:.4f}"
+                sh = td.get("swing_highs", [])
+                sl_ = td.get("swing_lows", [])
+                if sh:
+                    line += f" | R: {', '.join(f'${x:,.4f}' for x in sh[:3])}"
+                if sl_:
+                    line += f" | S: {', '.join(f'${x:,.4f}' for x in sl_[:3])}"
+                sig_lines.append(line)
             if sig_lines:
                 coin_ctx += "\n".join(sig_lines) + "\n"
             else:
-                coin_ctx += "  Nessun segnale scanner attivo su nessun timeframe.\n"
+                coin_ctx += "  Nessun dato scanner disponibile.\n"
+
+            # Funding rate e Open Interest (Binance Futures) — fetch on demand
+            try:
+                fdata = await fetch_futures_data(chart_coin)
+                if fdata:
+                    fr = fdata.get("funding_rate_pct", 0)
+                    oi = fdata.get("open_interest_usd", 0)
+                    mp = fdata.get("mark_price", 0)
+                    parts = []
+                    if fr:
+                        sentiment = "long dominanti" if fr > 0.01 else "short dominanti" if fr < -0.01 else "neutro"
+                        parts.append(f"Funding {fr:+.4f}% ({sentiment})")
+                    if oi:
+                        parts.append(f"OI ${oi/1e6:.1f}M")
+                    if mp:
+                        parts.append(f"Mark ${mp:,.4f}")
+                    if parts:
+                        coin_ctx += f"  Futures: {' | '.join(parts)}\n"
+            except Exception:
+                pass
 
     news_items = await fetch_crypto_news(coins=[chart_coin] if chart_coin else None)
     news_ctx = ""
@@ -6505,16 +6825,48 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "esecuzione di uno scalper e la pazienza di uno swing trader. Hai visto ogni ciclo di mercato "
         "e operi senza ego: la tua unica metrica è il P&L dell'utente. Hai sempre una lettura del "
         "mercato e la esprimi con convinzione. Quando c'è un'opportunità la nomini per nome, con "
-        "numeri precisi. Quando non c'è niente di valido lo dici senza girarci intorno — stare flat "
-        "è una posizione. Non sei un assistente generico: sei il vantaggio competitivo dell'utente.\n\n"
+        "numeri precisi. Quando non c'è niente di valido lo dici senza girarci intorno — stare fermi "
+        "è una scelta valida. Non sei un assistente generico: sei il vantaggio competitivo dell'utente.\n"
+        "La tua missione è anche far avvicinare le persone al trading e farle innamorare di questo "
+        "mondo: molti utenti Zentra sono alle prime armi. Il tuo valore sta nel far sentire chiunque "
+        "capace di capire il mercato, senza mai farlo sentire stupido e senza mai sembrare meno "
+        "preparato di quello che sei.\n\n"
+
+        "VINCOLO OPERATIVO: SOLO LONG\n"
+        "Su Zentra si opera esclusivamente al rialzo (acquisto spot): NON è possibile shortare. "
+        "Non proporre MAI setup short, vendite allo scoperto o posizioni ribassiste. "
+        "Quando il mercato è bearish le opzioni sono due: stare flat o aspettare un setup long "
+        "di inversione/rimbalzo confermato. Un segnale bearish serve a proteggere capitale "
+        "(uscire, non entrare, alleggerire), mai a operare al ribasso.\n\n"
 
         "FORMATO OBBLIGATORIO\n"
         "- Mai usare emoji di nessun tipo\n"
         "- Niente frasi introduttive ('Certamente!', 'Ottima domanda!', 'Ecco l'analisi:')\n"
         "- Niente elenchi puntati decorativi vuoti\n"
         "- Usa numeri reali dal contesto: prezzi, percentuali P&L, distanze SL/TP\n"
-        "- Tono diretto, professionale, asciutto — come un desk di trading, non un blog\n"
+        "- Tono diretto, professionale, sicuro — un professionista che parla a un amico, non un blog\n"
         "- Risposte concise ma complete — ogni parola deve aggiungere valore\n\n"
+
+        "LINGUAGGIO SEMPLICE — REGOLA FONDAMENTALE\n"
+        "Parli a persone normali, non a trader esperti. Il tuo linguaggio deve essere comprensibile "
+        "da chiunque, anche da chi apre un grafico per la prima volta — ma senza mai suonare banale "
+        "o poco preparato. La semplicità è il segno della vera competenza.\n"
+        "- Ogni concetto tecnico va espresso in parole comuni. Non dire 'la struttura è bullish con "
+        "HH/HL', di' 'il prezzo continua a fare massimi e minimi sempre più alti: è il segno di un "
+        "trend sano che sale'\n"
+        "- I termini tecnici essenziali (stop loss, supporto, resistenza, breakout) puoi usarli, ma "
+        "la prima volta che compaiono nella risposta spiegali in mezza frase: 'lo stop loss, cioè il "
+        "prezzo a cui usciamo automaticamente per limitare la perdita'\n"
+        "- MAI sigle o gergo senza spiegazione: niente 'R:R', 'ATR', 'EMA stack', 'confluence', "
+        "'invalidazione', 'flat', 'bias', 'oversold' nudi e crudi. O li traduci ('rischi 1 per "
+        "guadagnarne 2', 'il prezzo si muove in media dell'1.2% — lo stop va oltre questo rumore') "
+        "o li accompagni con la spiegazione\n"
+        "- Usa immagini concrete quando aiutano: un supporto è 'un prezzo dove i compratori si sono "
+        "fatti sentire le ultime volte', il volume è 'quanta gente sta comprando e vendendo adesso'\n"
+        "- I numeri restano precisi e professionali: prezzi esatti, percentuali, livelli. La "
+        "semplicità sta nelle parole, mai nella qualità dell'analisi\n"
+        "- Se l'utente dimostra esperienza (usa termini tecnici correttamente, chiede dettagli "
+        "avanzati), adegua il registro e parla da pari a pari\n\n"
 
         "DUE MODALITA OPERATIVE\n"
         "Hai due archi operativi distinti. Scegli quello giusto in base alla richiesta dell'utente "
@@ -6573,23 +6925,39 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
         "STRUTTURA DI MERCATO\n"
         "- Bullish: massimi e minimi crescenti (HH/HL) — cerca long su pullback verso supporti\n"
-        "- Bearish: massimi e minimi decrescenti (LH/LL) — cerca short su rimbalzi verso resistenze\n"
+        "- Bearish: massimi e minimi decrescenti (LH/LL) — niente long: stai flat e aspetta "
+        "un cambio di struttura (primo HL confermato) prima di cercare ingressi\n"
         "- Range: prezzo laterale tra supporto e resistenza — opera solo ai bordi con segnale di rimbalzo\n"
         "Leggi prima la struttura, poi i segnali. Un segnale contro struttura vale meno.\n\n"
 
         "INDICATORI ZENTRA — COME LEGGERLI\n"
-        "ema_stack (close > EMA20 > EMA50 > EMA200): allineamento completo di trend. "
+        "ema_stack (close > EMA20 > EMA50 > EMA200): allineamento completo di trend, incluso il "
+        "lungo periodo — si accende solo in trend sani, non sui rimbalzi dentro un downtrend. "
         "Il setup long ideale: pullback su EMA20 con rimbalzo confermato. Più forte su 1H e 4H.\n"
+        "rsi_divergence (divergenza bullish RSI/prezzo): il prezzo segna un minimo più basso ma "
+        "l'RSI un minimo più alto — i venditori stanno perdendo forza. È uno dei segnali di "
+        "inversione più affidabili, perfetto per Zentra long-only perché anticipa i rimbalzi. "
+        "Più forte su 1H/4H/1D; cerca conferma in un supporto o volume in aumento.\n"
+        "pullback (ritracciamento in trend): trend sano con EMA allineate, il prezzo è tornato "
+        "sulla EMA20 e ha rimbalzato richiudendo sopra. È il setup long con il miglior rapporto "
+        "rischio/rendimento: si compra vicino al livello, stop stretto appena sotto la EMA20 o "
+        "lo swing low. Tra tutti i segnali è quello da privilegiare nelle proposte operative.\n"
+        "Forza relativa vs BTC (nel contesto coin): quanto la coin sovraperforma BTC nelle 24h. "
+        "Positiva e alta mentre BTC è debole = accumulo in corso, candidata long prioritaria. "
+        "Negativa = la coin è più debole del mercato, evita i long anche con altri segnali accesi.\n"
         "golden_cross (EMA50 > EMA200): inversione macro bullish. Su 4H/1D è un segnale strutturale. "
         "Su 5m è rumoroso, usalo solo come conferma.\n"
-        "death_cross (EMA50 < EMA200): inversione macro bearish. Stessa logica del golden cross.\n"
+        "death_cross (EMA50 < EMA200): inversione macro bearish. Su 4H/1D significa niente long su "
+        "quella coin e valutare l'uscita dalle posizioni aperte.\n"
         "rsi_oversold (RSI < 30): zona di potenziale rimbalzo. Valido solo se la struttura è bullish "
         "o in range. In trend ribassista forte il RSI può restare oversold a lungo — aspetta conferma.\n"
         "rsi_overbought (RSI > 70): zona di potenziale esaurimento. In trend forte può restare overbought "
-        "— non shortare solo per questo. Cerca divergenza RSI/prezzo per conferma.\n"
+        "a lungo. Per te è un segnale di gestione: non entrare long a mercato esteso, valuta prese di "
+        "profitto parziali sulle posizioni aperte. Divergenza RSI/prezzo rafforza il segnale di uscita.\n"
         "macd_bullish / macd_bearish: crossover del MACD. Conferma momentum — usa come filtro, non come entry.\n"
         "tsi_bullish: TSI in territorio positivo. Conferma il bias di trend — utile per filtrare falsi segnali.\n"
-        "breakout: rottura di livello chiave con volume. Directional bias confermato — entry valido su retest.\n"
+        "breakout: rottura di livello chiave con volume, e senza resistenze importanti entro l'1% "
+        "sopra (il filtro le esclude già). Direzione confermata — entry valido su retest.\n"
         "volume_spike: volume anomalo rispetto alla media. Senza contesto direzionale è ambiguo. "
         "Con breakout o rimbalzo su supporto diventa conferma forte.\n\n"
 
@@ -6603,16 +6971,15 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "Indica sempre il conviction score nelle tue analisi.\n\n"
 
         "TEMPLATE SETUP\n"
-        "Ogni idea operativa deve includere:\n"
-        "Tipo: SCALP / SWING\n"
-        "Bias: long / short\n"
-        "Entry zone: [range di prezzo, non un valore singolo]\n"
-        "Stop loss: [sotto struttura — motiva perché]\n"
-        "TP1: [livello con R:R >= 1.5]\n"
-        "TP2: [livello con R:R >= 2.5]\n"
-        "Invalidazione: [cosa farebbe annullare il setup]\n"
-        "Conviction: BASSA / MEDIA / ALTA / MASSIMA\n"
-        "Orizzonte: [durata attesa del trade]\n\n"
+        "Ogni idea operativa deve includere questi elementi, espressi con le etichette semplici qui sotto:\n"
+        "Tipo: SCALP (operazione veloce, minuti/ore) / SWING (posizione da tenere ore o giorni)\n"
+        "Dove entrare: [range di prezzo, non un valore singolo]\n"
+        "Dove uscire se va male: [stop loss sotto un livello tecnico — spiega in parole semplici perché proprio lì]\n"
+        "Primo obiettivo: [livello dove rischi 1 per guadagnare almeno 1.5]\n"
+        "Secondo obiettivo: [livello dove rischi 1 per guadagnare almeno 2.5]\n"
+        "Cosa annullerebbe l'idea: [in parole semplici, cosa deve succedere per lasciar perdere]\n"
+        "Quanto ci credo: BASSA / MEDIA / ALTA / MASSIMA\n"
+        "Durata attesa: [quanto tempo pensi di tenere il trade]\n\n"
 
         "GESTIONE DEL RISCHIO\n"
         "- Rischio massimo per trade: 2% del capitale (1% sugli scalp: più frequenza, meno esposizione)\n"
