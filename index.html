@@ -1345,7 +1345,7 @@ body.auth-active .tabbar { display:none !important; }
         <div id="balHeroChange" style="font-size:12px;font-weight:600;color:#9aa0b8;display:flex;align-items:center;gap:4px;margin-top:8px">+$0 · +0% oggi</div>
       </div>
       <!-- sparkline animata edge-to-edge -->
-      <div id="balHeroSparklineSection" style="margin:20px -16px 0;width:calc(100% + 32px);height:110px;position:relative">
+      <div id="balHeroSparklineSection" style="margin:20px -16px 0;width:calc(100% + 32px);height:110px;position:relative;overflow:hidden">
         <canvas id="balHeroSparkline" style="display:block;width:100%;height:100%"></canvas>
         <div id="balHeroNoData" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:11px;color:#9aa0b8"></div>
         <div id="balHeroSparklineLabel" style="display:none"></div>
@@ -4796,6 +4796,10 @@ let _lastPortfolioFetch = 0;
 let _portfolioHistoryBase = null;
 let _placeholderAnim = null;
 let _placeholderDone = false;
+const BALANCE_SPARKLINE_REFRESH_MS = 30000;
+let _lastBalanceSparklineUpdate = 0;
+let _balanceSparklineDrawnOnce = false;
+let _lastBalanceSparklineMode = null;
 let _sparklinePoints = [];       // [{x,y,total,t}] — punti renderizzati per hover
 let _sparklineCursor = null;     // {x,y} CSS px quando si scrolla
 let _sparklineHovering = false;
@@ -4812,7 +4816,7 @@ async function fetchPortfolioSummary() {
     if (r.ok) {
       _portfolioData = await r.json();
       _portfolioHistoryBase = _portfolioData.history ? [..._portfolioData.history] : [];
-      updateBalanceHero(true);
+      updateBalanceHero(false);
     }
   } catch(e) {}
 }
@@ -4838,6 +4842,12 @@ function toggleBalanceVisibility() {
 
 function updateBalanceHero(animate = false) {
   const isDemo = _simMode || _plan === 'free';
+  const sparklineMode = isDemo ? 'demo' : 'real';
+  if (_lastBalanceSparklineMode !== sparklineMode) {
+    _lastBalanceSparklineMode = sparklineMode;
+    _lastBalanceSparklineUpdate = 0;
+    _balanceSparklineDrawnOnce = false;
+  }
 
   if (isDemo) {
     // Balance live = saldo chiuso + unrealized posizioni sim aperte
@@ -4889,6 +4899,7 @@ function updateBalanceHero(animate = false) {
 
     // Sparkline: snapshot 15-min dal DB + live tip
     const nowMs = Date.now();
+    if (_balanceSparklineDrawnOnce && nowMs - _lastBalanceSparklineUpdate < BALANCE_SPARKLINE_REFRESH_MS) return;
     const rawSimHistory = S.sim_history || [];
     const historyPts = rawSimHistory.map(p => ({
       total: p.total,
@@ -4901,8 +4912,9 @@ function updateBalanceHero(animate = false) {
     }
     _portfolioData.history = dedupeHistory(histWithTip);
     _portfolioData.isUpToday = chg >= 0;
-    if (animate) animateBalanceSparkline();
-    else drawBalanceSparkline(1);
+    _lastBalanceSparklineUpdate = nowMs;
+    _balanceSparklineDrawnOnce = true;
+    drawBalanceSparkline(1);
     return;
   }
 
@@ -4933,23 +4945,26 @@ function updateBalanceHero(animate = false) {
 
   // Sparkline: snapshot 15-min dal DB + live tip; fallback a daily history se intraday insufficiente
   const nowMsR = Date.now();
-  const rawRealHistory = d.intraday_history || [];
-  let realHistoryPts = rawRealHistory.map(p => ({
-    total: p.total,
-    t: new Date(p.ts).getTime()
-  }));
-  if (realHistoryPts.length < 2) {
-    const rawDaily = d.history || [];
-    const dailyPts = rawDaily
-      .filter(p => p.total > 0)
-      .map(p => ({ total: p.total, t: new Date(p.date + 'T12:00:00Z').getTime() }));
-    if (dailyPts.length >= 2) realHistoryPts = dailyPts;
+  const shouldRefreshSparkline = !_balanceSparklineDrawnOnce || nowMsR - _lastBalanceSparklineUpdate >= BALANCE_SPARKLINE_REFRESH_MS;
+  if (shouldRefreshSparkline) {
+    const rawRealHistory = d.intraday_history || [];
+    let realHistoryPts = rawRealHistory.map(p => ({
+      total: p.total,
+      t: new Date(p.ts).getTime()
+    }));
+    if (realHistoryPts.length < 2) {
+      const rawDaily = d.history || [];
+      const dailyPts = rawDaily
+        .filter(p => p.total > 0)
+        .map(p => ({ total: p.total, t: new Date(p.date + 'T12:00:00Z').getTime() }));
+      if (dailyPts.length >= 2) realHistoryPts = dailyPts;
+    }
+    const realHistWithTip = realHistoryPts.slice();
+    if (realHistWithTip.length === 0 || realHistWithTip[realHistWithTip.length - 1].total !== liveTotal) {
+      realHistWithTip.push({ total: liveTotal, t: nowMsR });
+    }
+    _portfolioData.history = dedupeHistory(realHistWithTip);
   }
-  const realHistWithTip = realHistoryPts.slice();
-  if (realHistWithTip.length === 0 || realHistWithTip[realHistWithTip.length - 1].total !== liveTotal) {
-    realHistWithTip.push({ total: liveTotal, t: nowMsR });
-  }
-  _portfolioData.history = dedupeHistory(realHistWithTip);
 
   const totalEl  = document.getElementById('balHeroTotal');
   const changeEl = document.getElementById('balHeroChange');
@@ -4973,8 +4988,11 @@ function updateBalanceHero(animate = false) {
   }
 
   _portfolioData.isUpToday = liveChg >= 0;
-  if (animate) animateBalanceSparkline();
-  else drawBalanceSparkline(1);
+  if (shouldRefreshSparkline) {
+    _lastBalanceSparklineUpdate = nowMsR;
+    _balanceSparklineDrawnOnce = true;
+    drawBalanceSparkline(1);
+  }
 }
 
 function animateBalanceSparkline() {
@@ -5116,10 +5134,11 @@ function drawBalanceSparkline(progress = 1) {
   const vals = sampledHistory.map(p => p.total);
   const min = Math.min(...vals), max = Math.max(...vals);
   const range = max - min || 1;
-  const padY = 8;
+  const padY = Math.max(14, h * 0.18);
+  const clampY = y => Math.max(padY, Math.min(h - padY, y));
   const allPts = vals.map((v, i) => ({
     x: (i / (vals.length - 1)) * w,
-    y: h - padY - ((v - min) / range) * (h - padY * 2),
+    y: clampY(h - padY - ((v - min) / range) * (h - padY * 2)),
     total: v,
     t: sampledHistory[i] ? new Date(sampledHistory[i].ts || sampledHistory[i].t).getTime() : null
   }));
@@ -5160,9 +5179,9 @@ function drawBalanceSparkline(progress = 1) {
       const p3 = p[Math.min(i + 2, p.length - 1)];
       ctx.bezierCurveTo(
         p1.x + (p2.x - p0.x) * T,
-        p1.y + (p2.y - p0.y) * T,
+        clampY(p1.y + (p2.y - p0.y) * T),
         p2.x - (p3.x - p1.x) * T,
-        p2.y - (p3.y - p1.y) * T,
+        clampY(p2.y - (p3.y - p1.y) * T),
         p2.x, p2.y
       );
     }
