@@ -6552,6 +6552,14 @@ async function selectScanSignal(key, el) {
   const ok = await refreshMarket(true);
   if (ok === false) return;
   renderScanner();
+  let _pollAttempts = 0;
+  while (_scannerRefreshing && _scanSignal === key && _pollAttempts < 10) {
+    await new Promise(r => setTimeout(r, 3000));
+    if (_scanSignal !== key) return;
+    await refreshMarket(false);
+    renderScanner();
+    _pollAttempts++;
+  }
 }
 
 async function selectTimeframe(tf, el) {
