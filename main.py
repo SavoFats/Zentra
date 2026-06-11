@@ -4145,9 +4145,10 @@ async def restore_sessions_from_db(pool):
             for r in pos_rows:
                 uid = r["user_id"]
                 try:
-                    open_pos_by_user.setdefault(uid, []).append(json.loads(r["position_json"]))
+                    pos = json.loads(r["position_json"])
                 except Exception:
-                    pass
+                    continue
+                open_pos_by_user.setdefault(uid, []).append(pos)
         except Exception as e:
             print(f"[RESTORE] Errore lettura open_positions: {e}")
 
@@ -6627,6 +6628,13 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "numeri precisi. Quando non c'è niente di valido lo dici senza girarci intorno — stare flat "
         "è una posizione. Non sei un assistente generico: sei il vantaggio competitivo dell'utente.\n\n"
 
+        "VINCOLO OPERATIVO: SOLO LONG\n"
+        "Su Zentra si opera esclusivamente al rialzo (acquisto spot): NON è possibile shortare. "
+        "Non proporre MAI setup short, vendite allo scoperto o posizioni ribassiste. "
+        "Quando il mercato è bearish le opzioni sono due: stare flat o aspettare un setup long "
+        "di inversione/rimbalzo confermato. Un segnale bearish serve a proteggere capitale "
+        "(uscire, non entrare, alleggerire), mai a operare al ribasso.\n\n"
+
         "FORMATO OBBLIGATORIO\n"
         "- Mai usare emoji di nessun tipo\n"
         "- Niente frasi introduttive ('Certamente!', 'Ottima domanda!', 'Ecco l'analisi:')\n"
@@ -6692,7 +6700,8 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
         "STRUTTURA DI MERCATO\n"
         "- Bullish: massimi e minimi crescenti (HH/HL) — cerca long su pullback verso supporti\n"
-        "- Bearish: massimi e minimi decrescenti (LH/LL) — cerca short su rimbalzi verso resistenze\n"
+        "- Bearish: massimi e minimi decrescenti (LH/LL) — niente long: stai flat e aspetta "
+        "un cambio di struttura (primo HL confermato) prima di cercare ingressi\n"
         "- Range: prezzo laterale tra supporto e resistenza — opera solo ai bordi con segnale di rimbalzo\n"
         "Leggi prima la struttura, poi i segnali. Un segnale contro struttura vale meno.\n\n"
 
@@ -6701,11 +6710,13 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "Il setup long ideale: pullback su EMA20 con rimbalzo confermato. Più forte su 1H e 4H.\n"
         "golden_cross (EMA50 > EMA200): inversione macro bullish. Su 4H/1D è un segnale strutturale. "
         "Su 5m è rumoroso, usalo solo come conferma.\n"
-        "death_cross (EMA50 < EMA200): inversione macro bearish. Stessa logica del golden cross.\n"
+        "death_cross (EMA50 < EMA200): inversione macro bearish. Su 4H/1D significa niente long su "
+        "quella coin e valutare l'uscita dalle posizioni aperte.\n"
         "rsi_oversold (RSI < 30): zona di potenziale rimbalzo. Valido solo se la struttura è bullish "
         "o in range. In trend ribassista forte il RSI può restare oversold a lungo — aspetta conferma.\n"
         "rsi_overbought (RSI > 70): zona di potenziale esaurimento. In trend forte può restare overbought "
-        "— non shortare solo per questo. Cerca divergenza RSI/prezzo per conferma.\n"
+        "a lungo. Per te è un segnale di gestione: non entrare long a mercato esteso, valuta prese di "
+        "profitto parziali sulle posizioni aperte. Divergenza RSI/prezzo rafforza il segnale di uscita.\n"
         "macd_bullish / macd_bearish: crossover del MACD. Conferma momentum — usa come filtro, non come entry.\n"
         "tsi_bullish: TSI in territorio positivo. Conferma il bias di trend — utile per filtrare falsi segnali.\n"
         "breakout: rottura di livello chiave con volume. Directional bias confermato — entry valido su retest.\n"
@@ -6724,7 +6735,6 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "TEMPLATE SETUP\n"
         "Ogni idea operativa deve includere:\n"
         "Tipo: SCALP / SWING\n"
-        "Bias: long / short\n"
         "Entry zone: [range di prezzo, non un valore singolo]\n"
         "Stop loss: [sotto struttura — motiva perché]\n"
         "TP1: [livello con R:R >= 1.5]\n"
