@@ -4781,8 +4781,6 @@ function drawHeroSparkline() {
 let _portfolioData = null;
 let _lastPortfolioFetch = 0;
 let _portfolioHistoryBase = null;
-let _realIntraday = [];  // snapshot ogni 15 min in real
-let _lastRealSnap = 0;
 let _placeholderAnim = null;
 let _sparklinePoints = [];       // [{x,y,total,t}] — punti renderizzati per hover
 let _sparklineCursor = null;     // {x,y} CSS px quando si scrolla
@@ -4881,6 +4879,7 @@ function updateBalanceHero(animate = false) {
       histWithTip.push({ total: simBalance, t: nowMs });
     }
     _portfolioData.history = histWithTip;
+    _portfolioData.isUpToday = chg >= 0;
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);
     return;
@@ -4907,24 +4906,18 @@ function updateBalanceHero(animate = false) {
   const liveChg = yesterdayBase > 0 ? liveTotal - yesterdayBase : 0;
   const livePct = yesterdayBase > 0 ? liveChg / yesterdayBase * 100 : 0;
 
-  // Snapshot ogni 15 min (+ subito al primo caricamento)
+  // Sparkline: snapshot 15-min dal DB + live tip
   const nowMsR = Date.now();
-  if (_lastRealSnap === 0 || nowMsR - _lastRealSnap >= 15 * 60 * 1000) {
-    _realIntraday.push({ total: liveTotal, t: nowMsR });
-    if (_realIntraday.length > 500) _realIntraday.shift();
-    _lastRealSnap = nowMsR;
-  }
-  // Sparkline: giorni passati + snapshot 15-min + live tip
-  const histBase = _portfolioHistoryBase || (d.history ? [...d.history] : []);
-  const pastDaysR = histBase.slice(0, -1).map(p => ({
+  const rawRealHistory = d.intraday_history || [];
+  const realHistoryPts = rawRealHistory.map(p => ({
     total: p.total,
-    t: p.t || new Date((p.date || '') + 'T12:00:00Z').getTime()
+    t: new Date(p.ts).getTime()
   }));
-  const intradayRWithTip = _realIntraday.slice();
-  if (intradayRWithTip.length === 0 || intradayRWithTip[intradayRWithTip.length - 1].total !== liveTotal) {
-    intradayRWithTip.push({ total: liveTotal, t: nowMsR });
+  const realHistWithTip = realHistoryPts.slice();
+  if (realHistWithTip.length === 0 || realHistWithTip[realHistWithTip.length - 1].total !== liveTotal) {
+    realHistWithTip.push({ total: liveTotal, t: nowMsR });
   }
-  _portfolioData.history = pastDaysR.concat(intradayRWithTip);
+  _portfolioData.history = realHistWithTip;
 
   const totalEl  = document.getElementById('balHeroTotal');
   const availEl  = document.getElementById('balHeroAvail');
@@ -4951,6 +4944,7 @@ function updateBalanceHero(animate = false) {
     }
   }
 
+  _portfolioData.isUpToday = liveChg >= 0;
   if (animate) animateBalanceSparkline();
   else drawBalanceSparkline(1);
 }
@@ -5064,7 +5058,9 @@ function drawBalanceSparkline(progress = 1) {
     pts.push({ x: p0.x + (p1.x - p0.x) * frac, y: p0.y + (p1.y - p0.y) * frac });
   }
   if (pts.length < 2) return;
-  const isUp = vals[vals.length - 1] >= vals[0];
+  const isUp = (_portfolioData && _portfolioData.isUpToday != null)
+    ? _portfolioData.isUpToday
+    : vals[vals.length - 1] >= vals[0];
   const lineColor = isUp ? '#22c55e' : '#f6465d';
   const fillA = isUp ? 'rgba(34,197,94,0.18)' : 'rgba(246,70,93,0.18)';
   const fillB = isUp ? 'rgba(34,197,94,0)' : 'rgba(246,70,93,0)';

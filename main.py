@@ -3757,7 +3757,14 @@ async def startup():
                         snapshot_ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         sim_total_usd NUMERIC(18,4) NOT NULL
                     );
-                    CREATE INDEX IF NOT EXISTS idx_sis_user_ts ON sim_intraday_snapshots(user_id, snapshot_ts)
+                    CREATE INDEX IF NOT EXISTS idx_sis_user_ts ON sim_intraday_snapshots(user_id, snapshot_ts);
+                    CREATE TABLE IF NOT EXISTS real_intraday_snapshots (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        snapshot_ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        total_usd NUMERIC(18,4) NOT NULL
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_ris_user_ts ON real_intraday_snapshots(user_id, snapshot_ts)
                 """)
             print("Database connesso e schema creato")
 
@@ -4789,6 +4796,8 @@ async def get_status(request: Request, user_id: int = Depends(get_current_user))
 
 _portfolio_cache: dict = {}
 PORTFOLIO_CACHE_TTL = 30
+_real_intraday_cache: dict = {}
+_real_intraday_last_snap: dict = {}
 
 async def _compute_portfolio_total(user_id: int) -> tuple[float, float]:
     """Returns (total_usd, available_usd). Refreshes position prices first."""
@@ -4886,8 +4895,12 @@ async def portfolio_snapshot_loop():
                         "DELETE FROM sim_intraday_snapshots WHERE snapshot_ts < $1",
                         cutoff
                     )
+                    await conn.execute(
+                        "DELETE FROM real_intraday_snapshots WHERE snapshot_ts < $1",
+                        cutoff
+                    )
             except Exception as e:
-                print(f"[sim_intraday] cleanup error: {e}")
+                print(f"[intraday] cleanup error: {e}")
         except Exception as e:
             print(f"[snapshot] loop error: {e}")
 
@@ -4905,9 +4918,10 @@ async def get_portfolio_summary(request: Request, user_id: int = Depends(get_cur
     today_change = 0.0
     today_change_pct = 0.0
     history = []
+    now_utc = datetime.utcnow()
     if db_pool:
         try:
-            today = datetime.utcnow().date()
+            today = now_utc.date()
             async with db_pool.acquire() as conn:
                 rows = await conn.fetch(
                     "SELECT snapshot_date, total_usd FROM portfolio_snapshots "
@@ -4915,15 +4929,54 @@ async def get_portfolio_summary(request: Request, user_id: int = Depends(get_cur
                     user_id
                 )
             snapshots = [{"date": str(r["snapshot_date"]), "total": float(r["total_usd"])} for r in reversed(rows)]
-            # Build 7-day history: snapshots + today's live value
             history = snapshots[-6:] + [{"date": str(today), "total": round(total, 2)}]
-            # Today's change vs yesterday's snapshot
             yesterday_snap = next((s for s in reversed(snapshots) if s["date"] != str(today)), None)
             if yesterday_snap and yesterday_snap["total"] > 0:
                 today_change = round(total - yesterday_snap["total"], 2)
                 today_change_pct = round(today_change / yesterday_snap["total"] * 100, 2)
         except Exception as e:
             print(f"[portfolio] history error: {e}")
+
+    # Real intraday snapshots (15-min, 7-day rolling)
+    intraday_history = []
+    if db_pool:
+        if _real_intraday_cache.get(user_id) is None:
+            try:
+                since = now_utc - timedelta(days=7)
+                async with db_pool.acquire() as conn:
+                    irows = await conn.fetch(
+                        "SELECT snapshot_ts, total_usd FROM real_intraday_snapshots "
+                        "WHERE user_id = $1 AND snapshot_ts >= $2 ORDER BY snapshot_ts",
+                        user_id, since
+                    )
+                _real_intraday_cache[user_id] = [
+                    {"ts": r["snapshot_ts"].replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                     "total": float(r["total_usd"])}
+                    for r in irows
+                ]
+                if irows:
+                    _real_intraday_last_snap[user_id] = irows[-1]["snapshot_ts"].replace(tzinfo=None)
+            except Exception as e:
+                print(f"[real_intraday] load error: {e}")
+                _real_intraday_cache[user_id] = []
+
+        last_snap = _real_intraday_last_snap.get(user_id)
+        if last_snap is None or (now_utc - last_snap).total_seconds() >= 15 * 60:
+            try:
+                snap_total = round(total, 2)
+                async with db_pool.acquire() as conn:
+                    await conn.execute(
+                        "INSERT INTO real_intraday_snapshots (user_id, snapshot_ts, total_usd) VALUES ($1, $2, $3)",
+                        user_id, now_utc, snap_total
+                    )
+                if _real_intraday_cache.get(user_id) is None:
+                    _real_intraday_cache[user_id] = []
+                _real_intraday_cache[user_id].append({"ts": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "total": snap_total})
+                _real_intraday_last_snap[user_id] = now_utc
+            except Exception as e:
+                print(f"[real_intraday] save error: {e}")
+
+        intraday_history = _real_intraday_cache.get(user_id) or []
 
     data = {
         "total":              round(total, 2),
@@ -4932,6 +4985,7 @@ async def get_portfolio_summary(request: Request, user_id: int = Depends(get_cur
         "today_change":       today_change,
         "today_change_pct":   today_change_pct,
         "history":            history,
+        "intraday_history":   intraday_history,
     }
     _portfolio_cache[user_id] = {"ts": time.time(), "data": data}
     return data
