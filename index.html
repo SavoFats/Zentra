@@ -4966,7 +4966,9 @@ function drawBalanceSparkline(progress = 1) {
   const history = (_portfolioData && _portfolioData.history) || [];
   const card = document.getElementById('balanceHeroCard');
   const section = document.getElementById('balHeroSparklineSection');
-  if (history.length < 2) {
+  const allVals = history.map(p => p.total);
+  const minV = Math.min(...allVals), maxV = Math.max(...allVals);
+  if (history.length < 2 || maxV - minV < 0.01) {
     if (section) section.style.display = 'none';
     if (card) card.style.paddingBottom = '32px';
     return;
