@@ -4867,30 +4867,7 @@ function updateBalanceHero(animate = false) {
     }
     // Sparkline: snapshot 15-min dal DB + live tip
     const nowMs = Date.now();
-    // ── DEV MOCK ── rimuovere prima del deploy ───────────────────────────────
-    const _mockSimHistory = (() => {
-      const pts = [];
-      // 3 giorni a 15min = 288 punti — rumore realistico + grandi movimenti distanziati
-      const N = 288;
-      let v = 1000;
-      let rng = 42; // seed deterministico
-      const rand = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0xffffffff; };
-      for (let i = 0; i < N; i++) {
-        // Trend: salita +18% (i<80), plateau (80-110), crollo -28% (110-180), recovery +10% (180-288)
-        let trend;
-        if      (i < 80)  trend = 1000 + (i / 79)  * 180;
-        else if (i < 110) trend = 1180 + Math.sin((i - 80) * 0.21) * 15;
-        else if (i < 180) trend = 1180 - ((i - 110) / 69) * 330;
-        else              trend = 850  + ((i - 180) / 107) * 110;
-        // Rumore composito: trend lento + micro-volatilità
-        const noise = (rand() - 0.5) * 22 + Math.sin(i * 0.8) * 6 + Math.sin(i * 2.3) * 3;
-        v = trend + noise;
-        pts.push({ ts: new Date(nowMs - (N - i) * 15 * 60 * 1000).toISOString(), total: parseFloat(v.toFixed(2)) });
-      }
-      return pts;
-    })();
-    const rawSimHistory = _mockSimHistory.length ? _mockSimHistory : (S.sim_history || []);
-    // ── END DEV MOCK ─────────────────────────────────────────────────────────
+    const rawSimHistory = S.sim_history || [];
     const historyPts = rawSimHistory.map(p => ({
       total: p.total,
       t: new Date(p.ts).getTime()
