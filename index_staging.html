@@ -1809,6 +1809,16 @@ body.auth-active .tabbar { display:none !important; }
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><path d="M4,32 Q20,30 48,28" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.25"/><path d="M4,26 Q20,24 48,21" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.45"/><path d="M4,20 Q20,17 48,12" stroke="currentColor" stroke-width="2" fill="none" opacity="0.9"/></svg></div>
         <div class="scan-card-label">EMA Stack</div>
       </button>
+      <button class="scan-card" id="scard-pullback" onclick="selectScanSignal('pullback',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'pullback')">i</span>
+        <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><path d="M4,34 Q18,30 48,18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-dasharray="3,2" opacity="0.4"/><path d="M4,30 L16,20 L26,27 L48,8" stroke="currentColor" stroke-width="2" fill="none" opacity="0.85"/><circle cx="26" cy="27" r="3.5" fill="currentColor" opacity="0.9"/></svg></div>
+        <div class="scan-card-label">Pullback</div>
+      </button>
+      <button class="scan-card" id="scard-rel_strength" onclick="selectScanSignal('rel_strength',this)">
+        <span class="scan-info-btn" onclick="showScanInfo(event,'rel_strength')">i</span>
+        <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><path d="M4,16 Q18,20 48,30" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.3"/><path d="M4,28 Q18,22 48,7" stroke="currentColor" stroke-width="2" fill="none" opacity="0.9"/><circle cx="48" cy="7" r="3" fill="currentColor" opacity="0.9"/></svg></div>
+        <div class="scan-card-label">Forza Relativa</div>
+      </button>
     </div>
 
     <!-- Indicators signals -->
@@ -6402,6 +6412,8 @@ const _scanSignalFn = {
   macd_bullish:  c => c.scanner?.macd_bullish,
   rsi_oversold:  c => c.scanner?.rsi_oversold,
   rsi_divergence:c => c.scanner?.rsi_divergence,
+  pullback:      c => c.scanner?.pullback,
+  rel_strength:  c => c.scanner?.rel_strength,
   death_cross:   c => c.scanner?.death_cross,
   macd_bearish:  c => c.scanner?.macd_bearish,
   rsi_overbought:c => c.scanner?.rsi_overbought,
@@ -6413,6 +6425,7 @@ const _scanSignalFn = {
 const _scanLabelMap = {
   breakout:'Breakout', golden_cross:'Golden Cross', macd_bullish:'MACD Bullish',
   rsi_oversold:'RSI Oversold', rsi_divergence:'RSI Divergence',
+  pullback:'Pullback', rel_strength:'Forza Relativa',
   death_cross:'Death Cross', macd_bearish:'MACD Bearish', rsi_overbought:'RSI Overbought',
   ema_stack:'EMA Stack', volume_spike:'Volume Spike',
 };
@@ -6456,6 +6469,14 @@ const _scanInfoData = {
   rsi_divergence: {
     title: 'RSI Divergence',
     body: 'Il prezzo segna un nuovo minimo, ma l\'RSI no: i venditori stanno perdendo forza anche se il grafico sembra ancora debole. È uno dei segnali più affidabili per anticipare un rimbalzo. Più solido su timeframe 1h o superiori.'
+  },
+  pullback: {
+    title: 'Pullback',
+    body: 'La coin è in un trend rialzista sano, il prezzo è tornato temporaneamente sulla media mobile EMA20 ed è rimbalzato. È il momento migliore per comprare in un trend: si entra vicino al supporto, quindi con uno stop loss stretto e poco da perdere se l\'idea è sbagliata.'
+  },
+  rel_strength: {
+    title: 'Forza Relativa',
+    body: 'La coin sta sovraperformando Bitcoin di almeno 3 punti percentuali nelle ultime 24 ore. Quando una coin sale mentre il mercato è fermo o scende, qualcuno la sta accumulando con convinzione: è spesso la prima a partire quando la pressione si allenta.'
   },
   volume_spike: {
     title: 'Volume Spike',
@@ -6701,6 +6722,8 @@ const SIGNAL_STUDIES = {
   macd_bullish:   ['MACD@tv-basicstudies'],
   macd_bearish:   ['MACD@tv-basicstudies'],
   rsi_divergence: ['RSI@tv-basicstudies'],
+  pullback:       [{id:'MAExp@tv-basicstudies',inputs:{length:20}},{id:'MAExp@tv-basicstudies',inputs:{length:50}}],
+  rel_strength:   [],
   breakout:       [],
   volume_spike:   []
 };
@@ -6708,7 +6731,7 @@ const SIGNAL_INTERVAL = {
   golden_cross: '60', death_cross: '60', ema_stack: '60',
   rsi_oversold: '60', rsi_overbought: '60',
   macd_bullish: '5',  macd_bearish: '5',
-  rsi_divergence: '60', breakout: '5',  volume_spike: '5'
+  rsi_divergence: '60', pullback: '60', rel_strength: '60', breakout: '5',  volume_spike: '5'
 };
 let _tvWidget = null;
 

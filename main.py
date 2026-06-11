@@ -12,7 +12,7 @@ import hashlib
 import json
 import secrets
 import stripe
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, Query
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
@@ -818,6 +818,9 @@ SCANNER_SIGNAL_KEYS = {
     "tsi_bullish",
     "death_cross",
     "volume_spike",
+    "rsi_divergence",
+    "pullback",
+    "rel_strength",
 }
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale
@@ -1315,6 +1318,13 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
         rsi_series = _calc_rsi_series(closed, 14)
         rsi_divergence = _detect_bullish_divergence(lows[:-1], rsi_series)
 
+        # Pullback in trend: trend sano (EMA allineate), il prezzo ritraccia fino alla
+        # EMA20 nelle ultime 3 candele chiuse e rimbalza richiudendo sopra
+        trend_up    = ema20 > ema50 > ema200 > 0
+        touched_ema = min(lows[-4:-1]) <= ema20 * 1.002 if len(lows) >= 4 else False
+        bounced     = last_close > ema20 and len(closed) >= 2 and last_close > closed[-2]
+        pullback    = trend_up and touched_ema and bounced
+
         return {
             "golden_cross":   golden_cross,
             "death_cross":    death_cross,
@@ -1331,6 +1341,7 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
             "tsi_bullish":    tsi_cur > 0 and tsi_cur >= tsi_prev,
             "breakout":       last_close > high10 and vol_spike and not resistance_near,
             "rsi_divergence": rsi_divergence,
+            "pullback":       pullback,
             "volume_spike":   vol_spike,
             "vol_ratio":      round(vol_last / vol_avg20, 2) if vol_avg20 > 0 else 0.0,
             "atr":            round(atr_val, 6),
@@ -1341,6 +1352,71 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
     except Exception as e:
         print(f"Scanner candle error {sym} {timeframe}: {e}")
         return None
+
+
+# ── Tracking esiti segnali: ogni accensione viene registrata con il prezzo,
+# poi signal_outcome_loop calcola il ritorno a +1h/+4h/+24h ─────────────────────
+_TRACKED_SIGNALS = ["golden_cross","ema_stack","rsi_oversold","rsi_divergence",
+                    "macd_bullish","breakout","volume_spike","pullback","rel_strength"]
+_signal_log_last: dict = {}        # (sym, signal, tf) -> ts ultimo insert
+_SIGNAL_LOG_COOLDOWN = 4 * 3600    # non riloggare lo stesso segnale entro 4h
+
+async def log_signal_event(sym: str, signal: str, tf: str, price: float):
+    """Registra l'accensione di un segnale in signal_events (per le statistiche di esito)."""
+    if not db_pool or price <= 0:
+        return
+    key = (sym, signal, tf)
+    now = time.time()
+    if now - _signal_log_last.get(key, 0) < _SIGNAL_LOG_COOLDOWN:
+        return
+    _signal_log_last[key] = now
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO signal_events (symbol, signal, timeframe, price) VALUES ($1, $2, $3, $4)",
+                sym, signal, tf, price
+            )
+    except Exception as e:
+        print(f"[SIGNAL LOG] errore {sym} {signal} {tf}: {e}")
+
+async def signal_outcome_loop():
+    """Completa i ritorni a 1h/4h/24h degli eventi segnale usando il prezzo corrente."""
+    await asyncio.sleep(90)
+    while True:
+        try:
+            if db_pool:
+                async with db_pool.acquire() as conn:
+                    rows = await conn.fetch("""
+                        SELECT id, symbol, price, fired_at FROM signal_events
+                        WHERE (ret_1h  IS NULL AND fired_at <= NOW() - INTERVAL '1 hour')
+                           OR (ret_4h  IS NULL AND fired_at <= NOW() - INTERVAL '4 hours')
+                           OR (ret_24h IS NULL AND fired_at <= NOW() - INTERVAL '24 hours')
+                        LIMIT 500
+                    """)
+                    now = datetime.now(timezone.utc)
+                    for r in rows:
+                        cur = market_data.get(r["symbol"], {}).get("price", 0)
+                        fired_price = float(r["price"])
+                        if cur <= 0 or fired_price <= 0:
+                            continue
+                        ret = round((cur - fired_price) / fired_price * 100, 4)
+                        age = (now - r["fired_at"]).total_seconds()
+                        if age >= 86400:
+                            await conn.execute(
+                                "UPDATE signal_events SET ret_1h=COALESCE(ret_1h,$2), "
+                                "ret_4h=COALESCE(ret_4h,$2), ret_24h=COALESCE(ret_24h,$2) WHERE id=$1",
+                                r["id"], ret)
+                        elif age >= 14400:
+                            await conn.execute(
+                                "UPDATE signal_events SET ret_1h=COALESCE(ret_1h,$2), "
+                                "ret_4h=COALESCE(ret_4h,$2) WHERE id=$1", r["id"], ret)
+                        elif age >= 3600:
+                            await conn.execute(
+                                "UPDATE signal_events SET ret_1h=COALESCE(ret_1h,$2) WHERE id=$1",
+                                r["id"], ret)
+        except Exception as e:
+            print(f"[SIGNAL OUTCOME] errore: {e}")
+        await asyncio.sleep(600)
 
 
 async def fetch_all_scanner_candles(timeframe: str = "1h"):
@@ -1373,8 +1449,14 @@ async def fetch_all_scanner_candles(timeframe: str = "1h"):
         updated = 0
         for sym, res in zip(syms, results):
             if res and not isinstance(res, Exception):
+                old = scanner_candle_data[timeframe].get(sym, {})
                 scanner_candle_data[timeframe][sym] = res
                 updated += 1
+                # Log delle accensioni (transizione spento -> acceso) per le statistiche
+                price = market_data.get(sym, {}).get("price", 0)
+                for sig_name in _TRACKED_SIGNALS:
+                    if res.get(sig_name) and not old.get(sig_name):
+                        asyncio.create_task(log_signal_event(sym, sig_name, timeframe, price))
         _scanner_candles_ts[timeframe] = time.time()
         print(f"Scanner [{timeframe}] aggiornate: {updated}/{len(syms)}")
     finally:
@@ -3919,7 +4001,20 @@ async def startup():
                         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         UNIQUE(user_id, symbol)
                     );
-                    CREATE INDEX IF NOT EXISTS idx_op_user ON open_positions(user_id)
+                    CREATE INDEX IF NOT EXISTS idx_op_user ON open_positions(user_id);
+                    CREATE TABLE IF NOT EXISTS signal_events (
+                        id SERIAL PRIMARY KEY,
+                        symbol TEXT NOT NULL,
+                        signal TEXT NOT NULL,
+                        timeframe TEXT NOT NULL,
+                        price NUMERIC(20,8) NOT NULL,
+                        fired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        ret_1h NUMERIC(10,4),
+                        ret_4h NUMERIC(10,4),
+                        ret_24h NUMERIC(10,4)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_se_fired ON signal_events(fired_at);
+                    CREATE INDEX IF NOT EXISTS idx_se_sig ON signal_events(signal, timeframe)
                 """)
             print("Database connesso e schema creato")
 
@@ -3943,6 +4038,7 @@ async def startup():
         ("load_telegram_bot_info", load_telegram_bot_info()),
         ("fetch_coingecko_logos", fetch_coingecko_logos()),
         ("cleanup_rate_buckets",  _cleanup_rate_buckets()),
+        ("signal_outcome_loop",   signal_outcome_loop()),
     ]:
         _t = asyncio.create_task(_coro, name=_name)
         _t.add_done_callback(_on_task_done)
@@ -5228,6 +5324,7 @@ async def get_market(
     momentum_thr  = active_cfg.get("momentumPct", 0.01)
 
     tf_cache = scanner_candle_data.get(timeframe, {})
+    btc_change = market_data.get("BTC", {}).get("change24h", 0.0)
 
     for s, d in market_data.items():
         if d["price"] <= 0:
@@ -5235,6 +5332,11 @@ async def get_market(
         if s not in _dynamic_universe:
             continue
         item = {"symbol": s, **d}
+        # Forza relativa vs BTC: sovraperformance 24h di almeno 3 punti percentuali
+        rs_24h = d.get("change24h", 0.0) - btc_change
+        rel_strength = s != "BTC" and rs_24h >= 3.0
+        if rel_strength:
+            asyncio.create_task(log_signal_event(s, "rel_strength", "24h", d["price"]))
         sig = get_momentum_signal(s, d["price"], max_stop_pct, vol_mult, momentum_thr)
         item["ema"] = {
             "breakout_ok":  sig.get("breakout_ok", False),
@@ -5261,6 +5363,9 @@ async def get_market(
             "rsi_overbought": sc.get("rsi_overbought",  False),
             "breakout":       sc.get("breakout",        False),
             "rsi_divergence": sc.get("rsi_divergence",  False),
+            "pullback":       sc.get("pullback",        False),
+            "rel_strength":   rel_strength,
+            "rs_24h":         round(rs_24h, 2),
             "macd_bullish":   sc.get("macd_bullish",    False),
             "macd_bearish":   sc.get("macd_bearish",    False),
             "tsi_bullish":    sc.get("tsi_bullish",     False),
@@ -5349,6 +5454,45 @@ async def scanner_count(
         "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today),
         "plan": raw_plan,
     }
+
+@app.get("/scanner/signal-stats")
+async def signal_stats(request: Request, user_id: int = Depends(get_current_user), days: int = Query(30)):
+    """Statistiche di esito dei segnali scanner: win rate e ritorno medio a 1h/4h/24h."""
+    check_rate_limit(request, max_attempts=30, window=60, key_suffix="signal_stats")
+    days = max(1, min(days, 90))
+    if not db_pool:
+        return {"signals": [], "days": days}
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch(f"""
+            SELECT signal, timeframe, COUNT(*) AS fired,
+                   COUNT(ret_1h)  AS n1,  SUM(CASE WHEN ret_1h  > 0 THEN 1 ELSE 0 END) AS w1,
+                   AVG(ret_1h)  AS a1,
+                   COUNT(ret_4h)  AS n4,  SUM(CASE WHEN ret_4h  > 0 THEN 1 ELSE 0 END) AS w4,
+                   AVG(ret_4h)  AS a4,
+                   COUNT(ret_24h) AS n24, SUM(CASE WHEN ret_24h > 0 THEN 1 ELSE 0 END) AS w24,
+                   AVG(ret_24h) AS a24
+            FROM signal_events
+            WHERE fired_at >= NOW() - INTERVAL '{days} days'
+            GROUP BY signal, timeframe
+            ORDER BY signal, timeframe
+        """)
+    out = []
+    for r in rows:
+        def _wr(w, n):
+            return round(100 * w / n, 1) if n else None
+        out.append({
+            "signal":    r["signal"],
+            "timeframe": r["timeframe"],
+            "fired":     r["fired"],
+            "win_rate_1h":  _wr(r["w1"],  r["n1"]),
+            "win_rate_4h":  _wr(r["w4"],  r["n4"]),
+            "win_rate_24h": _wr(r["w24"], r["n24"]),
+            "avg_ret_1h":   round(float(r["a1"]),  3) if r["a1"]  is not None else None,
+            "avg_ret_4h":   round(float(r["a4"]),  3) if r["a4"]  is not None else None,
+            "avg_ret_24h":  round(float(r["a24"]), 3) if r["a24"] is not None else None,
+            "samples_1h":  r["n1"], "samples_4h": r["n4"], "samples_24h": r["n24"],
+        })
+    return {"signals": out, "days": days}
 
 @app.get("/trades")
 async def get_trades(request: Request, user_id: int = Depends(get_current_user)):
@@ -6503,7 +6647,7 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
 
     # Scanner signals across all timeframes
     _SIGNALS = ["golden_cross","ema_stack","rsi_oversold","rsi_overbought","rsi_divergence",
-                "macd_bullish","macd_bearish","tsi_bullish","breakout","volume_spike"]
+                "pullback","macd_bullish","macd_bearish","tsi_bullish","breakout","volume_spike"]
     scanner_ctx = ""
     for tf in ["5m","15m","1h","4h","1d"]:
         tf_data = scanner_candle_data.get(tf, {})
@@ -6596,6 +6740,10 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
             price = cd['price']
             coin_ctx = f"\n[Dati {chart_coin}]\n"
             coin_ctx += f"  Prezzo: ${price:,.4f} | 24h: {cd.get('change24h', 0):+.2f}% | Volume: ${cd.get('volume24h', 0)/1e6:.1f}M\n"
+            _btc_ch = market_data.get("BTC", {}).get("change24h", 0.0)
+            if chart_coin != "BTC":
+                _rs = cd.get("change24h", 0.0) - _btc_ch
+                coin_ctx += f"  Forza relativa vs BTC (24h): {_rs:+.2f} punti\n"
 
             # Scanner signals + ATR + EMA + S/R pivot per tutti i TF
             sig_lines = []
@@ -6790,6 +6938,13 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "l'RSI un minimo più alto — i venditori stanno perdendo forza. È uno dei segnali di "
         "inversione più affidabili, perfetto per Zentra long-only perché anticipa i rimbalzi. "
         "Più forte su 1H/4H/1D; cerca conferma in un supporto o volume in aumento.\n"
+        "pullback (ritracciamento in trend): trend sano con EMA allineate, il prezzo è tornato "
+        "sulla EMA20 e ha rimbalzato richiudendo sopra. È il setup long con il miglior rapporto "
+        "rischio/rendimento: si compra vicino al livello, stop stretto appena sotto la EMA20 o "
+        "lo swing low. Tra tutti i segnali è quello da privilegiare nelle proposte operative.\n"
+        "Forza relativa vs BTC (nel contesto coin): quanto la coin sovraperforma BTC nelle 24h. "
+        "Positiva e alta mentre BTC è debole = accumulo in corso, candidata long prioritaria. "
+        "Negativa = la coin è più debole del mercato, evita i long anche con altri segnali accesi.\n"
         "golden_cross (EMA50 > EMA200): inversione macro bullish. Su 4H/1D è un segnale strutturale. "
         "Su 5m è rumoroso, usalo solo come conferma.\n"
         "death_cross (EMA50 < EMA200): inversione macro bearish. Su 4H/1D significa niente long su "
