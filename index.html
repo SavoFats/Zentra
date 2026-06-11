@@ -6088,28 +6088,35 @@ function closeDrawer() {
 
 
 
-async function refreshMarket(countScan = false) {
+async function refreshMarket() {
   try {
-    const params = new URLSearchParams({ timeframe: _scanTimeframe });
-    if (countScan) {
-      params.set('count_scan', '1');
-      if (_scanSignal) params.set('scan_signal', _scanSignal);
-    }
-    const url = API + '/market?' + params.toString();
+    const url = API + '/market?timeframe=' + encodeURIComponent(_scanTimeframe);
     const r = await fetch(url, { headers: authHeaders() });
     const d = await r.json();
     updateScanUsageFromPayload(d);
-    if (d.error === 'scan_limit') {
-      resetScannerAfterScanLimit();
-      showScanLimitModal(d.message);
-      return false;
-    }
     mktData = d.market || [];
     _scannerRefreshing = d.scanner_refreshing || false;
     renderMarket();
     return true;
   } catch(e) {}
   return false;
+}
+
+async function _countScan(signal) {
+  try {
+    const r = await fetch(
+      API + '/scanner/count?scan_signal=' + encodeURIComponent(signal),
+      { method: 'POST', headers: authHeaders() }
+    );
+    const d = await r.json();
+    if (d.error === 'scan_limit') {
+      resetScannerAfterScanLimit();
+      showScanLimitModal(d.message);
+      return false;
+    }
+    updateScanUsageFromPayload(d);
+  } catch(e) {}
+  return true;
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
@@ -6549,17 +6556,20 @@ async function selectScanSignal(key, el) {
   if (card)  card.style.display  = '';
   const list = document.getElementById('scannerList');
   if (list) list.innerHTML = _scanSpinnerHTML;
-  const ok = await refreshMarket(true);
-  if (ok === false) return;
+  await refreshMarket();
   renderScanner();
   let _pollAttempts = 0;
   while (_scannerRefreshing && _scanSignal === key && _pollAttempts < 10) {
     await new Promise(r => setTimeout(r, 3000));
     if (_scanSignal !== key) return;
-    const retryOk = await refreshMarket(true);
-    if (retryOk === false) return;
+    await refreshMarket();
     renderScanner();
     _pollAttempts++;
+  }
+  if (_scanSignal !== key) return;
+  const fn = _scanSignalFn[key];
+  if (fn && mktData.some(c => c.scanner && fn(c))) {
+    await _countScan(key);
   }
 }
 

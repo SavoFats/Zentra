@@ -5090,8 +5090,6 @@ async def get_market(
     request: Request,
     user_id: int = Depends(get_current_user),
     timeframe: str = Query("1h"),
-    count_scan: bool = Query(False),
-    scan_signal: str = Query(""),
 ):
     check_rate_limit(request, max_attempts=60, window=60, key_suffix="market")
 
@@ -5177,41 +5175,6 @@ async def get_market(
 
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
 
-    scan_signal = (scan_signal or "").strip()
-    scan_has_results = (
-        scan_signal in SCANNER_SIGNAL_KEYS
-        and not scanner_refreshing
-        and any((item.get("scanner") or {}).get(scan_signal) for item in result)
-    )
-    if count_scan and raw_plan == "free" and db_pool and scan_has_results:
-        async with db_pool.acquire() as conn:
-            updated = await conn.fetchrow(
-                """
-                UPDATE users
-                   SET last_scan_date = $1,
-                       scans_today = CASE
-                           WHEN last_scan_date = $1 THEN COALESCE(scans_today, 0) + 1
-                           ELSE 1
-                       END
-                 WHERE id = $2
-                   AND (last_scan_date IS DISTINCT FROM $1 OR COALESCE(scans_today, 0) < $3)
-             RETURNING scans_today
-                """,
-                today, user_id, FREE_SCANS_PER_DAY
-            )
-        if not updated:
-            return {
-                "error": "scan_limit",
-                "message": "Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.",
-                "plan": raw_plan,
-                "scans_today": scans_today,
-                "scans_per_day": FREE_SCANS_PER_DAY,
-                "scans_remaining": 0,
-                "market": [],
-                "scanner_refreshing": False,
-            }
-        scans_today = updated["scans_today"] or scans_today
-
     return {
         "market": result,
         "scanner_refreshing": scanner_refreshing,
@@ -5219,6 +5182,72 @@ async def get_market(
         "scans_today": scans_today,
         "scans_per_day": FREE_SCANS_PER_DAY,
         "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today) if raw_plan == "free" else 999,
+    }
+
+@app.post("/scanner/count")
+async def scanner_count(
+    request: Request,
+    user_id: int = Depends(get_current_user),
+    scan_signal: str = Query(""),
+):
+    check_rate_limit(request, max_attempts=60, window=60, key_suffix="scanner_count")
+    scan_signal = (scan_signal or "").strip()
+    if scan_signal not in SCANNER_SIGNAL_KEYS:
+        return {"error": "invalid_signal"}
+
+    today = datetime.utcnow().date()
+    raw_plan = "free"
+    scans_today = 0
+    if db_pool:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT plan, subscription_expires_at, last_scan_date, scans_today FROM users WHERE id = $1",
+                user_id
+            )
+            if row:
+                raw_plan = normalize_plan(row["plan"] or "free")
+                exp = row["subscription_expires_at"]
+                if raw_plan in PAID_PLANS and exp and exp < datetime.utcnow():
+                    raw_plan = "free"
+                last_scan_date = row["last_scan_date"]
+                scans_today = (row["scans_today"] or 0) if (last_scan_date and last_scan_date == today) else 0
+
+    if raw_plan != "free":
+        return {"scans_today": scans_today, "scans_per_day": FREE_SCANS_PER_DAY, "scans_remaining": 999, "plan": raw_plan}
+
+    if not db_pool:
+        return {"scans_today": scans_today, "scans_per_day": FREE_SCANS_PER_DAY, "scans_remaining": 0, "plan": raw_plan}
+
+    async with db_pool.acquire() as conn:
+        updated = await conn.fetchrow(
+            """
+            UPDATE users
+               SET last_scan_date = $1,
+                   scans_today = CASE
+                       WHEN last_scan_date = $1 THEN COALESCE(scans_today, 0) + 1
+                       ELSE 1
+                   END
+             WHERE id = $2
+               AND (last_scan_date IS DISTINCT FROM $1 OR COALESCE(scans_today, 0) < $3)
+         RETURNING scans_today
+            """,
+            today, user_id, FREE_SCANS_PER_DAY
+        )
+    if not updated:
+        return {
+            "error": "scan_limit",
+            "message": "Hai raggiunto le 10 scansioni gratuite di oggi. Passa a Pro o Founder per scansioni illimitate.",
+            "plan": raw_plan,
+            "scans_today": scans_today,
+            "scans_per_day": FREE_SCANS_PER_DAY,
+            "scans_remaining": 0,
+        }
+    scans_today = updated["scans_today"] or scans_today
+    return {
+        "scans_today": scans_today,
+        "scans_per_day": FREE_SCANS_PER_DAY,
+        "scans_remaining": max(0, FREE_SCANS_PER_DAY - scans_today),
+        "plan": raw_plan,
     }
 
 @app.get("/trades")
