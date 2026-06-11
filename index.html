@@ -4980,13 +4980,9 @@ function startPlaceholderSparkline() {
     const elapsed = now - t0;
     const t = elapsed / period;
     if (t >= 1) {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = (rect.width || 300) * dpr;
-      canvas.height = (rect.height || 72) * dpr;
-      canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
       _placeholderAnim = null;
       _placeholderDone = true;
+      drawFlatSparkline();
       return;
     }
     const dpr = window.devicePixelRatio || 1;
@@ -5017,6 +5013,30 @@ function startPlaceholderSparkline() {
   _placeholderAnim = requestAnimationFrame(frame);
 }
 
+function drawFlatSparkline() {
+  const canvas = document.getElementById('balHeroSparkline');
+  if (!canvas) return;
+  const section = document.getElementById('balHeroSparklineSection');
+  const card = document.getElementById('balanceHeroCard');
+  if (section) section.style.display = '';
+  if (card) card.style.paddingBottom = '52px';
+  canvas.style.display = 'block';
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width || 300, h = rect.height || 72;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const y = h * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0, y);
+  ctx.lineTo(w, y);
+  ctx.strokeStyle = 'rgba(0,82,255,0.18)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
 function drawBalanceSparkline(progress = 1) {
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas) return;
@@ -5026,8 +5046,12 @@ function drawBalanceSparkline(progress = 1) {
   const allVals = history.map(p => p.total);
   const minV = Math.min(...allVals), maxV = Math.max(...allVals);
   if (history.length < 2 || maxV - minV < 0.01) {
-    if (trades.length === 0) startPlaceholderSparkline();
-    else stopPlaceholderSparkline();
+    if (trades.length === 0 && !_placeholderDone) {
+      startPlaceholderSparkline();
+    } else {
+      stopPlaceholderSparkline();
+      drawFlatSparkline();
+    }
     return;
   }
   stopPlaceholderSparkline();
