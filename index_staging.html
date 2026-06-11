@@ -4869,20 +4869,22 @@ function updateBalanceHero(animate = false) {
     const nowMs = Date.now();
     // ── DEV MOCK ── rimuovere prima del deploy ───────────────────────────────
     const _mockSimHistory = (() => {
-      const pts = []; let v = 1000;
-        // Fase 1 (0-50): salita graduale da 1000 a 1150 (+15%)
-      // Fase 2 (50-80): plateau rumoroso intorno a 1140-1160
-      // Fase 3 (80-130): crollo da 1150 a 870 (-24%)
-      // Fase 4 (130-192): recovery parziale verso 950
-      const N = 193;
+      const pts = [];
+      // 3 giorni a 15min = 288 punti — rumore realistico + grandi movimenti distanziati
+      const N = 288;
+      let v = 1000;
+      let rng = 42; // seed deterministico
+      const rand = () => { rng = (rng * 1664525 + 1013904223) & 0xffffffff; return (rng >>> 0) / 0xffffffff; };
       for (let i = 0; i < N; i++) {
-        const noise = (Math.sin(i * 1.7) * 4 + Math.sin(i * 3.1) * 2 + Math.sin(i * 0.5) * 3);
-        let base;
-        if (i < 50)       base = 1000 + (i / 49) * 150;
-        else if (i < 80)  base = 1150 + Math.sin((i - 50) * 0.4) * 12;
-        else if (i < 130) base = 1150 - ((i - 80) / 49) * 280;
-        else              base = 870  + ((i - 130) / 62) * 80;
-        v = base + noise;
+        // Trend: salita +18% (i<80), plateau (80-110), crollo -28% (110-180), recovery +10% (180-288)
+        let trend;
+        if      (i < 80)  trend = 1000 + (i / 79)  * 180;
+        else if (i < 110) trend = 1180 + Math.sin((i - 80) * 0.21) * 15;
+        else if (i < 180) trend = 1180 - ((i - 110) / 69) * 330;
+        else              trend = 850  + ((i - 180) / 107) * 110;
+        // Rumore composito: trend lento + micro-volatilità
+        const noise = (rand() - 0.5) * 22 + Math.sin(i * 0.8) * 6 + Math.sin(i * 2.3) * 3;
+        v = trend + noise;
         pts.push({ ts: new Date(nowMs - (N - i) * 15 * 60 * 1000).toISOString(), total: parseFloat(v.toFixed(2)) });
       }
       return pts;
@@ -5126,27 +5128,20 @@ function drawBalanceSparkline(progress = 1) {
     : vals[vals.length - 1] >= vals[0];
   const lineColor = isUp ? '#22c55e' : '#f6465d';
 
-  // Smoothing gaussiano sui valori: elimina il rumore mantenendo la forma
-  // window proporzionale alla densità — più punti = più smoothing
-  const smoothWindow = Math.max(3, Math.round(pts.length / 18));
-  function gaussianSmooth(points) {
-    const half = Math.floor(smoothWindow / 2);
-    return points.map((p, i) => {
-      let sumY = 0, sumW = 0;
-      for (let j = -half; j <= half; j++) {
-        const idx = Math.min(Math.max(i + j, 0), points.length - 1);
-        const w = Math.exp(-(j * j) / (2 * (half / 2) * (half / 2) + 1));
-        sumY += points[idx].y * w;
-        sumW += w;
-      }
-      return { x: p.x, y: sumY / sumW };
-    });
+  // Downsampling a ~50 punti: preserva forma e movimenti reali, evita il rumore micro
+  const TARGET_PTS = 50;
+  function downsample(points, target) {
+    if (points.length <= target) return points;
+    const result = [points[0]];
+    const step = (points.length - 1) / (target - 1);
+    for (let i = 1; i < target - 1; i++) {
+      const idx = Math.round(i * step);
+      result.push(points[idx]);
+    }
+    result.push(points[points.length - 1]);
+    return result;
   }
-  // Mantieni il primo e l'ultimo punto invariati (valori reali)
-  const smoothedPts = gaussianSmooth(pts);
-  smoothedPts[0].y = pts[0].y;
-  smoothedPts[smoothedPts.length - 1].y = pts[pts.length - 1].y;
-
+  const smoothedPts = downsample(pts, TARGET_PTS);
   const last = smoothedPts[smoothedPts.length - 1];
 
   // Catmull-Rom → bezier cubiche sui punti smoothati
