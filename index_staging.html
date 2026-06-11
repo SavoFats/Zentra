@@ -4877,7 +4877,7 @@ function updateBalanceHero(animate = false) {
     if (histWithTip.length === 0 || histWithTip[histWithTip.length - 1].total !== simBalance) {
       histWithTip.push({ total: simBalance, t: nowMs });
     }
-    _portfolioData.history = histWithTip;
+    _portfolioData.history = dedupeHistory(histWithTip);
     _portfolioData.isUpToday = chg >= 0;
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);
@@ -4927,7 +4927,7 @@ function updateBalanceHero(animate = false) {
   if (realHistWithTip.length === 0 || realHistWithTip[realHistWithTip.length - 1].total !== liveTotal) {
     realHistWithTip.push({ total: liveTotal, t: nowMsR });
   }
-  _portfolioData.history = realHistWithTip;
+  _portfolioData.history = dedupeHistory(realHistWithTip);
 
   const totalEl  = document.getElementById('balHeroTotal');
   const changeEl = document.getElementById('balHeroChange');
@@ -5041,6 +5041,16 @@ function drawFlatSparkline() {
   ctx.strokeStyle = 'rgba(0,82,255,0.18)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
+}
+
+function dedupeHistory(pts) {
+  if (pts.length <= 2) return pts;
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    if (pts[i].total !== out[out.length - 1].total) out.push(pts[i]);
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
 }
 
 function drawBalanceSparkline(progress = 1) {
