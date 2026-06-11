@@ -866,6 +866,51 @@ def _find_swing_levels(highs: list, lows: list, n_left: int = 3, n_right: int = 
         return out
     return dedup(swing_h)[:top_n], dedup(swing_l[::-1])[:top_n]
 
+def _calc_rsi_series(prices: list, period: int = 14) -> list:
+    """RSI(period) con smoothing di Wilder per ogni barra. out[i] = RSI alla chiusura i."""
+    n = len(prices)
+    if n < period + 1:
+        return [50.0] * n
+    out = [50.0] * n
+    gains = losses = 0.0
+    for i in range(1, period + 1):
+        d = prices[i] - prices[i-1]
+        gains  += max(d, 0.0)
+        losses += max(-d, 0.0)
+    avg_g, avg_l = gains / period, losses / period
+    out[period] = 100.0 if avg_l == 0 else 100.0 - 100.0 / (1 + avg_g / avg_l)
+    for i in range(period + 1, n):
+        d = prices[i] - prices[i-1]
+        avg_g = (avg_g * (period - 1) + max(d, 0.0)) / period
+        avg_l = (avg_l * (period - 1) + max(-d, 0.0)) / period
+        out[i] = 100.0 if avg_l == 0 else 100.0 - 100.0 / (1 + avg_g / avg_l)
+    return out
+
+def _detect_bullish_divergence(lows: list, rsi_series: list,
+                               lookback: int = 40, n_side: int = 3) -> bool:
+    """Divergenza bullish RSI/prezzo: il prezzo segna un minimo più basso ma l'RSI
+    un minimo più alto (i venditori perdono forza). Confronta gli ultimi due pivot
+    low nel lookback; il secondo deve essere recente perché il segnale sia operativo."""
+    n = len(lows)
+    if n < lookback or len(rsi_series) != n:
+        return False
+    pivots = []
+    for i in range(max(n - lookback, n_side), n - n_side):
+        if all(lows[i] <= lows[i-j] for j in range(1, n_side+1)) and \
+           all(lows[i] <= lows[i+j] for j in range(1, n_side+1)):
+            pivots.append(i)
+    if len(pivots) < 2:
+        return False
+    i1, i2 = pivots[-2], pivots[-1]
+    if n - 1 - i2 > 8:    # il secondo minimo deve essere fresco (max 8 candele fa)
+        return False
+    if i2 - i1 < 5:       # minimi troppo ravvicinati = stesso movimento, non divergenza
+        return False
+    price_ll = lows[i2] < lows[i1] * 0.999            # lower low di prezzo (almeno -0.1%)
+    rsi_hl   = rsi_series[i2] > rsi_series[i1] + 2.0  # higher low RSI (almeno +2 punti)
+    rsi_zone = rsi_series[i1] < 40.0                  # prima gamba in zona di debolezza
+    return price_ll and rsi_hl and rsi_zone
+
 
 def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
@@ -1258,13 +1303,17 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
         golden_cross = (ema50 > ema200) and (ema50_p24 <= ema200_p24)
         death_cross  = (ema50 < ema200) and (ema50_p24 >= ema200_p24)
 
-        # ATR e pivot S/R (solo TF significativi — risparmia CPU su 5m)
-        atr_val = 0.0
-        swing_highs: list = []
-        swing_lows: list  = []
-        if timeframe in ("1h", "4h", "1d"):
-            atr_val = _calc_atr(highs[:-1], lows[:-1], closes[:-1], 14)
-            swing_highs, swing_lows = _find_swing_levels(highs[:-1], lows[:-1])
+        # ATR e pivot S/R su tutti i TF (i pivot servono anche al filtro breakout)
+        atr_val = _calc_atr(highs[:-1], lows[:-1], closes[:-1], 14)
+        swing_highs, swing_lows = _find_swing_levels(highs[:-1], lows[:-1])
+
+        # Breakout bloccato se c'è una resistenza (swing high) entro l'1% sopra il prezzo:
+        # il movimento rischia di morire subito contro quel livello
+        resistance_near = any(last_close < sh <= last_close * 1.01 for sh in swing_highs)
+
+        # Divergenza bullish RSI/prezzo: minimo di prezzo più basso ma RSI più alto
+        rsi_series = _calc_rsi_series(closed, 14)
+        rsi_divergence = _detect_bullish_divergence(lows[:-1], rsi_series)
 
         return {
             "golden_cross":   golden_cross,
@@ -1272,7 +1321,7 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
             "rsi_14":         round(rsi, 1),
             "rsi_oversold":   rsi < 30.0,
             "rsi_overbought": rsi > 70.0,
-            "ema_stack":      (last_close > ema20 > ema50) if ema50 > 0 else False,
+            "ema_stack":      (last_close > ema20 > ema50 > ema200) if ema200 > 0 else False,
             "ema20":          round(ema20, 6),
             "ema50":          round(ema50, 6),
             "macd_hist":      round(macd_hist, 6),
@@ -1280,7 +1329,8 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
             "macd_bullish":   macd_hist > 0 and macd_hist > macd_hist_prev,
             "macd_bearish":   macd_hist < 0 and macd_hist < macd_hist_prev,
             "tsi_bullish":    tsi_cur > 0 and tsi_cur >= tsi_prev,
-            "breakout":       last_close > high10 and vol_spike,
+            "breakout":       last_close > high10 and vol_spike and not resistance_near,
+            "rsi_divergence": rsi_divergence,
             "volume_spike":   vol_spike,
             "vol_ratio":      round(vol_last / vol_avg20, 2) if vol_avg20 > 0 else 0.0,
             "atr":            round(atr_val, 6),
@@ -5210,6 +5260,7 @@ async def get_market(
             "rsi_oversold":   sc.get("rsi_oversold",    False),
             "rsi_overbought": sc.get("rsi_overbought",  False),
             "breakout":       sc.get("breakout",        False),
+            "rsi_divergence": sc.get("rsi_divergence",  False),
             "macd_bullish":   sc.get("macd_bullish",    False),
             "macd_bearish":   sc.get("macd_bearish",    False),
             "tsi_bullish":    sc.get("tsi_bullish",     False),
@@ -6451,7 +6502,7 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     market_ctx += "Top losers:  " + ", ".join(f"{s} {d.get('change24h',0):+.1f}%" for s, d in losers)  + "\n"
 
     # Scanner signals across all timeframes
-    _SIGNALS = ["golden_cross","ema_stack","rsi_oversold","rsi_overbought",
+    _SIGNALS = ["golden_cross","ema_stack","rsi_oversold","rsi_overbought","rsi_divergence",
                 "macd_bullish","macd_bearish","tsi_bullish","breakout","volume_spike"]
     scanner_ctx = ""
     for tf in ["5m","15m","1h","4h","1d"]:
@@ -6732,8 +6783,13 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "Leggi prima la struttura, poi i segnali. Un segnale contro struttura vale meno.\n\n"
 
         "INDICATORI ZENTRA — COME LEGGERLI\n"
-        "ema_stack (close > EMA20 > EMA50 > EMA200): allineamento completo di trend. "
+        "ema_stack (close > EMA20 > EMA50 > EMA200): allineamento completo di trend, incluso il "
+        "lungo periodo — si accende solo in trend sani, non sui rimbalzi dentro un downtrend. "
         "Il setup long ideale: pullback su EMA20 con rimbalzo confermato. Più forte su 1H e 4H.\n"
+        "rsi_divergence (divergenza bullish RSI/prezzo): il prezzo segna un minimo più basso ma "
+        "l'RSI un minimo più alto — i venditori stanno perdendo forza. È uno dei segnali di "
+        "inversione più affidabili, perfetto per Zentra long-only perché anticipa i rimbalzi. "
+        "Più forte su 1H/4H/1D; cerca conferma in un supporto o volume in aumento.\n"
         "golden_cross (EMA50 > EMA200): inversione macro bullish. Su 4H/1D è un segnale strutturale. "
         "Su 5m è rumoroso, usalo solo come conferma.\n"
         "death_cross (EMA50 < EMA200): inversione macro bearish. Su 4H/1D significa niente long su "
@@ -6745,7 +6801,8 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         "profitto parziali sulle posizioni aperte. Divergenza RSI/prezzo rafforza il segnale di uscita.\n"
         "macd_bullish / macd_bearish: crossover del MACD. Conferma momentum — usa come filtro, non come entry.\n"
         "tsi_bullish: TSI in territorio positivo. Conferma il bias di trend — utile per filtrare falsi segnali.\n"
-        "breakout: rottura di livello chiave con volume. Directional bias confermato — entry valido su retest.\n"
+        "breakout: rottura di livello chiave con volume, e senza resistenze importanti entro l'1% "
+        "sopra (il filtro le esclude già). Direzione confermata — entry valido su retest.\n"
         "volume_spike: volume anomalo rispetto alla media. Senza contesto direzionale è ambiguo. "
         "Con breakout o rimbalzo su supporto diventa conferma forte.\n\n"
 
