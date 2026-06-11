@@ -4786,6 +4786,10 @@ let _lastSimSnap = 0;
 let _realIntraday = [];  // snapshot ogni 15 min in real
 let _lastRealSnap = 0;
 let _placeholderAnim = null;
+let _sparklinePoints = [];       // [{x,y,total,t}] — punti renderizzati per hover
+let _sparklineCursor = null;     // {x,y} CSS px quando si scrolla
+let _sparklineHovering = false;
+let _sparklineInteractionReady = false;
 
 async function fetchPortfolioSummary() {
   if (_simMode || _plan === 'free') {
@@ -4869,17 +4873,20 @@ function updateBalanceHero(animate = false) {
     // Snapshot ogni 15 min (+ subito al primo caricamento)
     const nowMs = Date.now();
     if (_lastSimSnap === 0 || nowMs - _lastSimSnap >= 15 * 60 * 1000) {
-      _simIntraday.push({ total: simBalance });
+      _simIntraday.push({ total: simBalance, t: nowMs });
       if (_simIntraday.length > 500) _simIntraday.shift();
       _lastSimSnap = nowMs;
     }
     // Sparkline: giorni passati + snapshot 15-min + live tip
     const rawSimHistory = S.sim_history || [];
-    const pastDays = rawSimHistory.slice(0, -1);
+    const pastDays = rawSimHistory.slice(0, -1).map(p => ({
+      total: p.total,
+      t: p.t || new Date((p.date || '') + 'T12:00:00Z').getTime()
+    }));
     if (!_portfolioData) _portfolioData = {};
     const intradayWithTip = _simIntraday.slice();
     if (intradayWithTip.length === 0 || intradayWithTip[intradayWithTip.length - 1].total !== simBalance) {
-      intradayWithTip.push({ total: simBalance });
+      intradayWithTip.push({ total: simBalance, t: nowMs });
     }
     _portfolioData.history = pastDays.concat(intradayWithTip);
     if (animate) animateBalanceSparkline();
@@ -4911,16 +4918,19 @@ function updateBalanceHero(animate = false) {
   // Snapshot ogni 15 min (+ subito al primo caricamento)
   const nowMsR = Date.now();
   if (_lastRealSnap === 0 || nowMsR - _lastRealSnap >= 15 * 60 * 1000) {
-    _realIntraday.push({ total: liveTotal });
+    _realIntraday.push({ total: liveTotal, t: nowMsR });
     if (_realIntraday.length > 500) _realIntraday.shift();
     _lastRealSnap = nowMsR;
   }
   // Sparkline: giorni passati + snapshot 15-min + live tip
   const histBase = _portfolioHistoryBase || (d.history ? [...d.history] : []);
-  const pastDaysR = histBase.slice(0, -1);
+  const pastDaysR = histBase.slice(0, -1).map(p => ({
+    total: p.total,
+    t: p.t || new Date((p.date || '') + 'T12:00:00Z').getTime()
+  }));
   const intradayRWithTip = _realIntraday.slice();
   if (intradayRWithTip.length === 0 || intradayRWithTip[intradayRWithTip.length - 1].total !== liveTotal) {
-    intradayRWithTip.push({ total: liveTotal });
+    intradayRWithTip.push({ total: liveTotal, t: nowMsR });
   }
   _portfolioData.history = pastDaysR.concat(intradayRWithTip);
 
@@ -5043,6 +5053,15 @@ function drawBalanceSparkline(progress = 1) {
     x: (i / (vals.length - 1)) * w,
     y: h - padY - ((v - min) / range) * (h - padY * 2)
   }));
+  // Salva punti per interazione hover (solo a progress completo)
+  if (progress >= 1) {
+    _sparklinePoints = allPts.map((pt, i) => ({
+      x: pt.x, y: pt.y,
+      total: vals[i],
+      t: history[i] ? history[i].t : null
+    }));
+    if (!_sparklineInteractionReady) initSparklineInteraction(canvas);
+  }
   // Interpola fino a progress
   const rawIdx = progress * (allPts.length - 1);
   const fullIdx = Math.floor(rawIdx);
@@ -5079,11 +5098,76 @@ function drawBalanceSparkline(progress = 1) {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.stroke();
-  // dot animato alla punta
-  ctx.beginPath();
-  ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
-  ctx.fillStyle = lineColor;
-  ctx.fill();
+  // dot animato alla punta (solo se non si sta hovering)
+  if (!_sparklineHovering) {
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+  }
+  // Cursore interattivo
+  if (_sparklineCursor && progress >= 1) {
+    const cx = _sparklineCursor.x, cy = _sparklineCursor.y;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function initSparklineInteraction(canvas) {
+  _sparklineInteractionReady = true;
+  const move = cssX => {
+    if (_sparklinePoints.length < 2) return;
+    let closest = _sparklinePoints[0];
+    for (const pt of _sparklinePoints) {
+      if (Math.abs(pt.x - cssX) < Math.abs(closest.x - cssX)) closest = pt;
+    }
+    _sparklineHovering = true;
+    _sparklineCursor = { x: closest.x, y: closest.y };
+    const sym = getCurrSym();
+    const totalEl = document.getElementById('balHeroTotal');
+    if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(closest.total); delete totalEl.dataset.real; }
+    const changeEl = document.getElementById('balHeroChange');
+    if (changeEl && closest.t) {
+      const d = new Date(closest.t);
+      const today = new Date();
+      const sameDay = d.toDateString() === today.toDateString();
+      const datePart = sameDay ? 'Oggi' : d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+      const timePart = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      changeEl.innerHTML = `<span style="color:#9aa0b8">${datePart} · ${timePart}</span>`;
+    }
+    drawBalanceSparkline(1);
+  };
+  const leave = () => {
+    if (!_sparklineHovering) return;
+    _sparklineHovering = false;
+    _sparklineCursor = null;
+    updateBalanceHero(false);
+  };
+  canvas.addEventListener('mousemove', e => {
+    const r = canvas.getBoundingClientRect();
+    move(e.clientX - r.left);
+  });
+  canvas.addEventListener('mouseleave', leave);
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    move(e.touches[0].clientX - r.left);
+  }, { passive: false });
+  canvas.addEventListener('touchend', leave);
 }
 
 function renderPositions() {
