@@ -832,7 +832,41 @@ _cg_price_last_fetch: float = 0  # throttle fallback CoinGecko prezzi
 _ws_last_msg_ts: float = 0       # timestamp ultimo messaggio ricevuto dal WebSocket
 _rest_price_last_fetch: float = 0  # throttle fetch REST periodico prezzi
 
-def calc_ema(prices: list, period: int) -> float:
+def _calc_atr(highs: list, lows: list, closes: list, period: int = 14) -> float:
+    """Calcola ATR(period) su serie OHLC."""
+    if len(highs) < period + 1:
+        return 0.0
+    trs = []
+    for i in range(1, len(highs)):
+        tr = max(highs[i] - lows[i], abs(highs[i] - closes[i-1]), abs(lows[i] - closes[i-1]))
+        trs.append(tr)
+    if not trs:
+        return 0.0
+    atr = sum(trs[:period]) / period
+    for tr in trs[period:]:
+        atr = tr / period + atr * (1 - 1 / period)
+    return atr
+
+def _find_swing_levels(highs: list, lows: list, n_left: int = 3, n_right: int = 3, top_n: int = 3):
+    """Trova i pivot swing high/low più significativi (lookback = n_left + n_right candele)."""
+    swing_h, swing_l = [], []
+    for i in range(n_left, len(highs) - n_right):
+        if all(highs[i] >= highs[i-j] for j in range(1, n_left+1)) and \
+           all(highs[i] >= highs[i+j] for j in range(1, n_right+1)):
+            swing_h.append(highs[i])
+        if all(lows[i] <= lows[i-j] for j in range(1, n_left+1)) and \
+           all(lows[i] <= lows[i+j] for j in range(1, n_right+1)):
+            swing_l.append(lows[i])
+    # Deduplica livelli entro lo 0.4% (cluster sullo stesso livello)
+    def dedup(levels):
+        out = []
+        for lv in sorted(levels, reverse=True):
+            if not out or abs(lv - out[-1]) / out[-1] > 0.004:
+                out.append(lv)
+        return out
+    return dedup(swing_h)[:top_n], dedup(swing_l[::-1])[:top_n]
+
+
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
     if len(prices) < period:
         return 0.0
@@ -1223,6 +1257,14 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
         golden_cross = (ema50 > ema200) and (ema50_p24 <= ema200_p24)
         death_cross  = (ema50 < ema200) and (ema50_p24 >= ema200_p24)
 
+        # ATR e pivot S/R (solo TF significativi — risparmia CPU su 5m)
+        atr_val = 0.0
+        swing_highs: list = []
+        swing_lows: list  = []
+        if timeframe in ("1h", "4h", "1d"):
+            atr_val = _calc_atr(highs[:-1], lows[:-1], closes[:-1], 14)
+            swing_highs, swing_lows = _find_swing_levels(highs[:-1], lows[:-1])
+
         return {
             "golden_cross":   golden_cross,
             "death_cross":    death_cross,
@@ -1230,6 +1272,8 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
             "rsi_oversold":   rsi < 30.0,
             "rsi_overbought": rsi > 70.0,
             "ema_stack":      (last_close > ema20 > ema50) if ema50 > 0 else False,
+            "ema20":          round(ema20, 6),
+            "ema50":          round(ema50, 6),
             "macd_hist":      round(macd_hist, 6),
             "macd_hist_prev": round(macd_hist_prev, 6),
             "macd_bullish":   macd_hist > 0 and macd_hist > macd_hist_prev,
@@ -1238,6 +1282,9 @@ async def fetch_scanner_candles(sym: str, client: httpx.AsyncClient, timeframe: 
             "breakout":       last_close > high10 and vol_spike,
             "volume_spike":   vol_spike,
             "vol_ratio":      round(vol_last / vol_avg20, 2) if vol_avg20 > 0 else 0.0,
+            "atr":            round(atr_val, 6),
+            "swing_highs":    [round(x, 6) for x in swing_highs],
+            "swing_lows":     [round(x, 6) for x in swing_lows],
             "sparkline":      closes[-25:-1],
         }
     except Exception as e:
@@ -6208,6 +6255,34 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
         await persist_sessions()
         return {"ok": True, "price": price, "qty": qty}
 
+async def fetch_futures_data(symbol: str) -> dict:
+    """Funding rate, open interest e mark price da Binance Futures."""
+    pair = symbol.upper()
+    if not pair.endswith("USDT"):
+        pair += "USDT"
+    result: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r_prem, r_oi = await asyncio.gather(
+                client.get("https://fapi.binance.com/fapi/v1/premiumIndex", params={"symbol": pair}),
+                client.get("https://fapi.binance.com/fapi/v1/openInterest", params={"symbol": pair}),
+                return_exceptions=True,
+            )
+            if isinstance(r_prem, httpx.Response) and r_prem.status_code == 200:
+                d = r_prem.json()
+                result["funding_rate_pct"] = round(float(d.get("lastFundingRate", 0)) * 100, 4)
+                result["mark_price"]       = float(d.get("markPrice", 0))
+            if isinstance(r_oi, httpx.Response) and r_oi.status_code == 200:
+                d = r_oi.json()
+                base_sym = symbol.replace("USDT", "")
+                price    = market_data.get(base_sym, {}).get("price", 0)
+                oi_coins = float(d.get("openInterest", 0))
+                result["open_interest_usd"] = oi_coins * price if price else 0.0
+    except Exception:
+        pass
+    return result
+
+
 async def fetch_crypto_news(coins: list | None = None) -> list:
     import xml.etree.ElementTree as ET
     cache_key = coins[0] if coins else "general"
@@ -6465,19 +6540,63 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     if chart_coin:
         cd = market_data.get(chart_coin, {})
         if cd.get("price"):
+            price = cd['price']
             coin_ctx = f"\n[Dati {chart_coin}]\n"
-            coin_ctx += f"  Prezzo: ${cd['price']:,.4f} | 24h: {cd.get('change24h', 0):+.2f}% | Volume: ${cd.get('volume24h', 0)/1e6:.1f}M\n"
-            # Scanner signals per tutti i TF
+            coin_ctx += f"  Prezzo: ${price:,.4f} | 24h: {cd.get('change24h', 0):+.2f}% | Volume: ${cd.get('volume24h', 0)/1e6:.1f}M\n"
+
+            # Scanner signals + ATR + EMA + S/R pivot per tutti i TF
             sig_lines = []
             for tf in ["5m", "15m", "1h", "4h", "1d"]:
                 td = scanner_candle_data.get(tf, {}).get(chart_coin, {})
+                if not td:
+                    continue
                 sigs = [s for s in _SIGNALS if td.get(s)]
+                atr  = td.get("atr", 0)
+                ema20 = td.get("ema20", 0)
+                ema50 = td.get("ema50", 0)
+                rsi  = td.get("rsi_14", 0)
+                line = f"  {tf}:"
                 if sigs:
-                    sig_lines.append(f"  {tf}: {', '.join(sigs)}")
+                    line += f" [{', '.join(sigs)}]"
+                if rsi:
+                    line += f" RSI {rsi:.0f}"
+                if ema20 and ema50:
+                    line += f" EMA20 ${ema20:,.4f} EMA50 ${ema50:,.4f}"
+                if atr:
+                    atr_pct = atr / price * 100
+                    line += f" ATR ${atr:,.4f} ({atr_pct:.2f}%)"
+                    line += f" | SL scalp ~${price - atr:.4f} | SL swing ~${price - 2*atr:.4f}"
+                sh = td.get("swing_highs", [])
+                sl_ = td.get("swing_lows", [])
+                if sh:
+                    line += f" | R: {', '.join(f'${x:,.4f}' for x in sh[:3])}"
+                if sl_:
+                    line += f" | S: {', '.join(f'${x:,.4f}' for x in sl_[:3])}"
+                sig_lines.append(line)
             if sig_lines:
                 coin_ctx += "\n".join(sig_lines) + "\n"
             else:
-                coin_ctx += "  Nessun segnale scanner attivo su nessun timeframe.\n"
+                coin_ctx += "  Nessun dato scanner disponibile.\n"
+
+            # Funding rate e Open Interest (Binance Futures) — fetch on demand
+            try:
+                fdata = await fetch_futures_data(chart_coin)
+                if fdata:
+                    fr = fdata.get("funding_rate_pct", 0)
+                    oi = fdata.get("open_interest_usd", 0)
+                    mp = fdata.get("mark_price", 0)
+                    parts = []
+                    if fr:
+                        sentiment = "long dominanti" if fr > 0.01 else "short dominanti" if fr < -0.01 else "neutro"
+                        parts.append(f"Funding {fr:+.4f}% ({sentiment})")
+                    if oi:
+                        parts.append(f"OI ${oi/1e6:.1f}M")
+                    if mp:
+                        parts.append(f"Mark ${mp:,.4f}")
+                    if parts:
+                        coin_ctx += f"  Futures: {' | '.join(parts)}\n"
+            except Exception:
+                pass
 
     news_items = await fetch_crypto_news(coins=[chart_coin] if chart_coin else None)
     news_ctx = ""
