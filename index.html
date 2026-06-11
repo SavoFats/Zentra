@@ -1908,6 +1908,7 @@ body.auth-active .tabbar { display:none !important; }
       .home-ai { width:min(900px,100%); margin:10px auto 28px; }
       .home-ai-frame { position:relative; isolation:isolate; overflow:hidden; border-radius:24px; padding:2px; box-shadow:0 18px 54px rgba(0,82,255,0.14),0 1px 0 rgba(255,255,255,0.38) inset; }
       .home-ai-frame::before { content:""; position:absolute; inset:-45%; z-index:-2; background:conic-gradient(from 0deg,#0052ff,#28d7ff,#22c55e,#f59e0b,#ef3b74,#7c3aed,#0052ff); animation:home-ai-rgb 7s linear 1 forwards; opacity:.56; }
+      .home-ai-frame.rgb-done::before { animation:none; }
       .home-ai-frame::after { content:""; position:absolute; inset:2px; z-index:-1; border-radius:22px; background:linear-gradient(135deg,#f7faff,#eef4ff); border:1px solid rgba(255,255,255,0.42); }
       [data-theme="dark"] .home-ai-frame::after { background:linear-gradient(135deg,#101633,#0b1026); border-color:rgba(255,255,255,0.08); }
       @keyframes home-ai-rgb { to { transform:rotate(360deg); } }
@@ -4506,6 +4507,7 @@ async function startupSession() {
 }
 
 checkAuth();
+setTimeout(() => document.getElementById('homeAiFrame')?.classList.add('rgb-done'), 7000);
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
 const _recoveryValues = {};
