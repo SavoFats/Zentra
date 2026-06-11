@@ -5178,11 +5178,12 @@ async def get_market(
     result = sorted(items, key=lambda x: x["change24h"], reverse=True)
 
     scan_signal = (scan_signal or "").strip()
-    scan_countable = (
+    scan_has_results = (
         scan_signal in SCANNER_SIGNAL_KEYS
         and not scanner_refreshing
+        and any((item.get("scanner") or {}).get(scan_signal) for item in result)
     )
-    if count_scan and raw_plan == "free" and db_pool and scan_countable:
+    if count_scan and raw_plan == "free" and db_pool and scan_has_results:
         async with db_pool.acquire() as conn:
             updated = await conn.fetchrow(
                 """
