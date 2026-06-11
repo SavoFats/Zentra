@@ -867,6 +867,7 @@ def _find_swing_levels(highs: list, lows: list, n_left: int = 3, n_right: int = 
     return dedup(swing_h)[:top_n], dedup(swing_l[::-1])[:top_n]
 
 
+def calc_ema(prices: list, period: int) -> float:
     """Calcola EMA su una lista di prezzi (close). Restituisce l'ultimo valore."""
     if len(prices) < period:
         return 0.0
