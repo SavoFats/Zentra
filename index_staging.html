@@ -4780,9 +4780,12 @@ function drawHeroSparkline() {
 
 let _portfolioData = null;
 let _lastPortfolioFetch = 0;
-let _portfolioHistoryBase = null; // daily snapshots dal server, mai modificato
-let _simLiveHistory = [];         // storia live intraday sim (resettata a ogni sessione)
-let _realLiveHistory = [];        // storia live intraday real
+let _portfolioHistoryBase = null;
+let _simIntraday = [];   // snapshot ogni 15 min in sim
+let _lastSimSnap = 0;
+let _realIntraday = [];  // snapshot ogni 15 min in real
+let _lastRealSnap = 0;
+let _placeholderAnim = null;
 
 async function fetchPortfolioSummary() {
   if (_simMode || _plan === 'free') {
@@ -4863,24 +4866,22 @@ function updateBalanceHero(animate = false) {
         changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
       }
     }
-    // Accumula storia live intraday (max 1000 punti ≈ 33 min a 2s)
-    _simLiveHistory.push({ total: simBalance });
-    if (_simLiveHistory.length > 1000) _simLiveHistory.shift();
-
-    // Sparkline: giorni passati (daily snapshots) + oggi intraday live
-    const rawSimHistory = S.sim_history || [];
-    const pastDays = rawSimHistory.slice(0, -1); // escludi il punto "oggi"
-    if (!_portfolioData) _portfolioData = {};
-    if (_simLiveHistory.length >= 2) {
-      // Storia completa: giorni passati + traiettoria live di oggi
-      _portfolioData.history = pastDays.concat(_simLiveHistory);
-    } else {
-      // Non ancora abbastanza dati live: usa daily snapshots con oggi aggiornato
-      _portfolioData.history = pastDays.concat([{ total: simBalance }]);
-      if (_portfolioData.history.length < 2) {
-        _portfolioData.history = [{ total: simBalance }, { total: simBalance }];
-      }
+    // Snapshot ogni 15 min (+ subito al primo caricamento)
+    const nowMs = Date.now();
+    if (_lastSimSnap === 0 || nowMs - _lastSimSnap >= 15 * 60 * 1000) {
+      _simIntraday.push({ total: simBalance });
+      if (_simIntraday.length > 500) _simIntraday.shift();
+      _lastSimSnap = nowMs;
     }
+    // Sparkline: giorni passati + snapshot 15-min + live tip
+    const rawSimHistory = S.sim_history || [];
+    const pastDays = rawSimHistory.slice(0, -1);
+    if (!_portfolioData) _portfolioData = {};
+    const intradayWithTip = _simIntraday.slice();
+    if (intradayWithTip.length === 0 || intradayWithTip[intradayWithTip.length - 1].total !== simBalance) {
+      intradayWithTip.push({ total: simBalance });
+    }
+    _portfolioData.history = pastDays.concat(intradayWithTip);
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);
     return;
@@ -4907,21 +4908,21 @@ function updateBalanceHero(animate = false) {
   const liveChg = yesterdayBase > 0 ? liveTotal - yesterdayBase : 0;
   const livePct = yesterdayBase > 0 ? liveChg / yesterdayBase * 100 : 0;
 
-  // Accumula storia live intraday (max 1000 punti ≈ 33 min a 2s)
-  _realLiveHistory.push({ total: liveTotal });
-  if (_realLiveHistory.length > 1000) _realLiveHistory.shift();
-
-  // Sparkline: giorni passati (daily snapshots) + oggi intraday live
-  const histBase = _portfolioHistoryBase || (d.history ? [...d.history] : []);
-  const pastDays = histBase.slice(0, -1);
-  if (_realLiveHistory.length >= 2) {
-    _portfolioData.history = pastDays.concat(_realLiveHistory);
-  } else {
-    _portfolioData.history = pastDays.concat([{ total: liveTotal }]);
-    if (_portfolioData.history.length < 2) {
-      _portfolioData.history = [{ total: liveTotal }, { total: liveTotal }];
-    }
+  // Snapshot ogni 15 min (+ subito al primo caricamento)
+  const nowMsR = Date.now();
+  if (_lastRealSnap === 0 || nowMsR - _lastRealSnap >= 15 * 60 * 1000) {
+    _realIntraday.push({ total: liveTotal });
+    if (_realIntraday.length > 500) _realIntraday.shift();
+    _lastRealSnap = nowMsR;
   }
+  // Sparkline: giorni passati + snapshot 15-min + live tip
+  const histBase = _portfolioHistoryBase || (d.history ? [...d.history] : []);
+  const pastDaysR = histBase.slice(0, -1);
+  const intradayRWithTip = _realIntraday.slice();
+  if (intradayRWithTip.length === 0 || intradayRWithTip[intradayRWithTip.length - 1].total !== liveTotal) {
+    intradayRWithTip.push({ total: liveTotal });
+  }
+  _portfolioData.history = pastDaysR.concat(intradayRWithTip);
 
   const totalEl  = document.getElementById('balHeroTotal');
   const availEl  = document.getElementById('balHeroAvail');
@@ -4964,6 +4965,51 @@ function animateBalanceSparkline() {
   requestAnimationFrame(frame);
 }
 
+function stopPlaceholderSparkline() {
+  if (_placeholderAnim) { cancelAnimationFrame(_placeholderAnim); _placeholderAnim = null; }
+}
+
+function startPlaceholderSparkline() {
+  if (_placeholderAnim) return;
+  const canvas = document.getElementById('balHeroSparkline');
+  if (!canvas) return;
+  const section = document.getElementById('balHeroSparklineSection');
+  const card = document.getElementById('balanceHeroCard');
+  if (section) section.style.display = '';
+  if (card) card.style.paddingBottom = '52px';
+  canvas.style.display = 'block';
+  const t0 = performance.now();
+  const period = 4800;
+  function frame(now) {
+    const t = ((now - t0) % period) / period;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width || 300, h = rect.height || 72;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    let amp = 0;
+    if (t < 0.38) amp = h * 0.24 * (t / 0.38);
+    else if (t < 0.72) amp = h * 0.24 * (1 - (t - 0.38) / 0.34);
+    const alpha = 0.12 + (amp / (h * 0.24 || 1)) * 0.22;
+    const midY = h / 2, pts = 60;
+    const wave = i => midY - amp * Math.sin((i / pts) * Math.PI * 3.5);
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, `rgba(255,255,255,${Math.max(0, alpha * 0.45)})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.beginPath(); ctx.moveTo(0, h);
+    for (let i = 0; i <= pts; i++) ctx.lineTo((i / pts) * w, wave(i));
+    ctx.lineTo(w, h); ctx.closePath();
+    ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath();
+    for (let i = 0; i <= pts; i++) { const x = (i/pts)*w, y = wave(i); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`; ctx.lineWidth = 1.5; ctx.stroke();
+    _placeholderAnim = requestAnimationFrame(frame);
+  }
+  _placeholderAnim = requestAnimationFrame(frame);
+}
+
 function drawBalanceSparkline(progress = 1) {
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas) return;
@@ -4973,10 +5019,10 @@ function drawBalanceSparkline(progress = 1) {
   const allVals = history.map(p => p.total);
   const minV = Math.min(...allVals), maxV = Math.max(...allVals);
   if (history.length < 2 || maxV - minV < 0.01) {
-    if (section) section.style.display = 'none';
-    if (card) card.style.paddingBottom = '32px';
+    startPlaceholderSparkline();
     return;
   }
+  stopPlaceholderSparkline();
   if (section) section.style.display = '';
   if (card) card.style.paddingBottom = '52px';
   canvas.style.display = 'block';
