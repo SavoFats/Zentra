@@ -702,8 +702,8 @@ body.auth-active .tabbar { display:none !important; }
 .pos-sl-dot { position:absolute; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; border:3px solid var(--bg); }
 .pos-sl-price { position:absolute; top:-18px; transform:translateX(-50%); font-size:9px; font-weight:700; white-space:nowrap; }
 .pos-sl-lbl { position:absolute; bottom:-16px; font-size:9px; font-weight:700; color:var(--text3); white-space:nowrap; }
-.pos-close-btn { display:inline-flex; align-items:center; gap:6px; padding:10px 18px; background:transparent; border:1.5px solid rgba(246,70,93,0.4); border-radius:var(--radius-sm); color:var(--red); font-size:13px; font-weight:700; cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
-.pos-close-btn:active { background:rgba(246,70,93,0.08); }
+.pos-close-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:20px; color:var(--red); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
+.pos-close-btn:active { background:rgba(255,255,255,0.12); }
 
 /* ── HOME REDESIGN ── */
 .home-mode-badge { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:5px 11px; border-radius:20px; flex-shrink:0; margin-top:4px; }
@@ -1260,7 +1260,7 @@ body.auth-active .tabbar { display:none !important; }
       <span id="sbPosBadge" style="display:none;width:8px;height:8px;background:var(--red);border-radius:50%;margin-left:auto;flex-shrink:0"></span>
     </button>
     <button class="sb-item" data-tab="exchange" onclick="showTab('exchange',this)">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M2 10h20"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Exchange
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Exchange
     </button>
     <button class="sb-item" data-tab="plans" onclick="showTab('plans',this)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M7 15h3"/><path d="M14 15h3"/></svg>Piani
@@ -1337,8 +1337,8 @@ body.auth-active .tabbar { display:none !important; }
     <div id="balanceHeroCard" style="padding:24px 0 52px;display:flex;flex-direction:column;align-items:center;overflow:visible">
       <!-- saldo centrato -->
       <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
-        <div style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;display:flex;align-items:center;gap:6px">
-          Saldo reale
+        <div id="balHeroLabel" style="font-size:11px;font-weight:600;color:#9aa0b8;letter-spacing:0.88px;text-transform:uppercase;display:flex;align-items:center;gap:6px">
+          <span id="balHeroLabelText">Saldo reale</span>
           <svg id="balHeroEye" onclick="toggleBalanceVisibility()" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#9aa0b8;cursor:pointer;flex-shrink:0"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </div>
         <div id="balHeroTotal" style="font-size:36px;font-weight:800;color:var(--text);letter-spacing:-1.08px;line-height:1;font-variant-numeric:tabular-nums">--</div>
@@ -2030,10 +2030,7 @@ body.auth-active .tabbar { display:none !important; }
           <img src="assets/exchanges/revolut.svg" alt="Revolut" style="width:24px;height:24px;display:block">
         </div>
         <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div style="font-size:16px;font-weight:800;color:var(--text)">Revolut X</div>
-            <span id="exchangeRevxStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
-          </div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">Revolut X</div>
           <div id="exchangeRevxSub" style="font-size:13px;color:var(--text3);margin-top:4px">Configura le API key</div>
         </div>
         <button id="exchangeRevxBtn" onclick="showRevxConfig()" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
@@ -2046,10 +2043,7 @@ body.auth-active .tabbar { display:none !important; }
           <img src="assets/exchanges/coinbase.ico" alt="Coinbase" style="width:27px;height:27px;display:block">
         </div>
         <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div style="font-size:16px;font-weight:800;color:var(--text)">Coinbase</div>
-            <span id="exchangeCoinbaseStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">Non collegato</span>
-          </div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">Coinbase</div>
           <div id="exchangeCoinbaseSub" style="font-size:13px;color:var(--text3);margin-top:4px"></div>
         </div>
         <button id="exchangeCoinbaseBtn" onclick="showExternalExchangeConfig('coinbase')" style="border:none;background:var(--blue);color:#fff;border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0">Collega</button>
@@ -2059,41 +2053,28 @@ body.auth-active .tabbar { display:none !important; }
 
     <div style="font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);margin:22px 0 10px">In arrivo</div>
 
-    <div class="card" style="margin-top:14px;padding:0;overflow:hidden;position:relative">
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
         <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
           <img src="assets/exchanges/binance.svg" alt="Binance" style="width:27px;height:27px;display:block">
         </div>
         <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div style="font-size:16px;font-weight:800;color:var(--text)">Binance</div>
-            <span id="exchangeBinanceStatus" style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">In arrivo</span>
-          </div>
-          <div id="exchangeBinanceSub" style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">Binance</div>
+          <div id="exchangeBinanceSub" style="font-size:13px;color:var(--text3);margin-top:4px"></div>
         </div>
-        <button disabled style="border:none;background:var(--surface2);color:var(--text3);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:default;flex-shrink:0">In arrivo</button>
-      </div>
-      <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">In arrivo</span>
+        <button disabled style="border:none;background:var(--surface2);color:var(--text3);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:default;flex-shrink:0">Collega</button>
       </div>
     </div>
 
-    <div class="card" style="margin-top:14px;padding:0;overflow:hidden;position:relative">
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:14px;padding:18px 18px;border-bottom:1px solid var(--border)">
         <div style="width:42px;height:42px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px var(--border)">
           <img src="https://assets.coingecko.com/markets/images/698/large/bybit_spot.png" alt="Bybit" style="width:27px;height:27px;display:block;border-radius:6px">
         </div>
         <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <div style="font-size:16px;font-weight:800;color:var(--text)">Bybit</div>
-            <span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em">In arrivo</span>
-          </div>
-          <div style="font-size:13px;color:var(--text3);margin-top:4px">Salva API key e secret</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text)">Bybit</div>
         </div>
-        <button disabled style="border:none;background:var(--surface2);color:var(--text3);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:default;flex-shrink:0">In arrivo</button>
-      </div>
-      <div style="position:absolute;inset:0;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);background:rgba(10,10,18,0.45);border-radius:inherit;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <span style="font-size:11px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#fff;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);padding:6px 14px;border-radius:20px">In arrivo</span>
+        <button disabled style="border:none;background:var(--surface2);color:var(--text3);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:800;cursor:default;flex-shrink:0">Collega</button>
       </div>
     </div>
   </div>
@@ -4801,8 +4782,12 @@ let _portfolioData = null;
 let _lastPortfolioFetch = 0;
 
 async function fetchPortfolioSummary() {
+  if (_simMode || _plan === 'free') {
+    updateBalanceHero(false);
+    return;
+  }
   const now = Date.now();
-  if (now - _lastPortfolioFetch < 30000) return;
+  if (now - _lastPortfolioFetch < 30000) { updateBalanceHero(false); return; }
   _lastPortfolioFetch = now;
   try {
     const r = await fetch(API + '/portfolio_summary', { headers: authHeaders(), cache: 'no-store' });
@@ -4833,9 +4818,96 @@ function toggleBalanceVisibility() {
 }
 
 function updateBalanceHero(animate = false) {
+  const isDemo = _simMode || _plan === 'free';
+
+  if (isDemo) {
+    // Balance live = saldo chiuso + unrealized posizioni sim aperte
+    const simBase = S.sim_balance != null ? S.sim_balance : 1000;
+    const simUnrealized = (S.positions || [])
+      .filter(p => !p.realMode)
+      .reduce((sum, p) => {
+        const size = p.size_remaining || p.size || 0;
+        const entry = parseFloat(p.entryPrice) || 0;
+        const current = parseFloat(p.currentPrice) || entry;
+        return sum + (entry > 0 ? (current - entry) / entry * size : 0);
+      }, 0);
+    const simBalance = simBase + simUnrealized;
+    const sym = getCurrSym();
+    const labelText = document.getElementById('balHeroLabelText');
+    if (labelText) labelText.textContent = 'Saldo Demo';
+    const totalEl = document.getElementById('balHeroTotal');
+    if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(simBalance); delete totalEl.dataset.real; }
+    const changeEl = document.getElementById('balHeroChange');
+    if (changeEl) {
+      let chg = 0;
+      if ((S.sim_today_change || 0) !== 0 || (S.sim_today_change_pct || 0) !== 0) {
+        chg = (S.sim_today_change || 0) + simUnrealized;
+      } else if ((S.pnl || 0) !== 0) {
+        chg = S.pnl;
+      }
+      const base = simBalance - chg;
+      const pct = base > 0 ? chg / base * 100 : 0;
+      if (Math.abs(chg) < 0.005) {
+        changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
+      } else {
+        const isPos = chg >= 0;
+        const color = isPos ? '#05c168' : '#f6465d';
+        const arrow = isPos ? '↑' : '↓';
+        const sign  = isPos ? '+' : '';
+        changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
+      }
+    }
+    // Sparkline: aggiorna l'ultimo punto (oggi) con il balance live
+    const rawSimHistory = S.sim_history || [];
+    const simHistory = rawSimHistory.length > 0
+      ? rawSimHistory.slice(0, -1).concat([{ ...rawSimHistory[rawSimHistory.length - 1], total: simBalance }])
+      : [];
+    const simHistoryHasVariation = simHistory.length >= 2 &&
+      Math.abs(simHistory[0].total - simHistory[simHistory.length - 1].total) > 0.001;
+    if (simHistoryHasVariation) {
+      if (!_portfolioData) _portfolioData = {};
+      _portfolioData.history = simHistory;
+    } else {
+      const rawHistory = S.pnlHistory || [];
+      if (rawHistory.length >= 2) {
+        const baseAtStart = simBalance - (S.pnl || 0);
+        if (!_portfolioData) _portfolioData = {};
+        _portfolioData.history = rawHistory.map(p => ({ total: baseAtStart + p.v }));
+      } else {
+        if (!_portfolioData) _portfolioData = {};
+        _portfolioData.history = [{ total: simBalance }, { total: simBalance }];
+      }
+    }
+    if (animate) animateBalanceSparkline();
+    else drawBalanceSparkline(1);
+    return;
+  }
+
+  const labelText = document.getElementById('balHeroLabelText');
+  if (labelText) labelText.textContent = 'Saldo reale';
   if (!_portfolioData) return;
   const sym = getCurrSym();
   const d = _portfolioData;
+
+  // Balance live = available (da ultimo fetch) + valore corrente posizioni reali da S.positions
+  const livePositionsValue = (S.positions || [])
+    .filter(p => p.realMode)
+    .reduce((sum, p) => {
+      const qty = parseFloat(p.qty_purchased || 0);
+      const price = parseFloat(p.currentPrice || p.entryPrice || 0);
+      return sum + qty * price;
+    }, 0);
+  const liveTotal = (d.total || 0) + livePositionsValue - (d.positions || 0);
+
+  // Today change live
+  const yesterdayBase = (d.total || 0) - (d.today_change || 0);
+  const liveChg = yesterdayBase > 0 ? liveTotal - yesterdayBase : 0;
+  const livePct = yesterdayBase > 0 ? liveChg / yesterdayBase * 100 : 0;
+
+  // Aggiorna l'ultimo punto della sparkline con il totale live
+  if (d.history && d.history.length > 0) {
+    d.history[d.history.length - 1].total = liveTotal;
+  }
 
   const totalEl  = document.getElementById('balHeroTotal');
   const availEl  = document.getElementById('balHeroAvail');
@@ -4843,15 +4915,15 @@ function updateBalanceHero(animate = false) {
   const changeEl = document.getElementById('balHeroChange');
 
   if (!_balHidden) {
-    if (totalEl) { totalEl.textContent = sym + fmtMoney(d.total); delete totalEl.dataset.real; }
+    if (totalEl) { totalEl.textContent = sym + fmtMoney(liveTotal); delete totalEl.dataset.real; }
     if (availEl) { availEl.textContent = sym + fmtMoney(d.available); delete availEl.dataset.real; }
-    if (inPosEl) { inPosEl.textContent = sym + fmtMoney(d.positions); delete inPosEl.dataset.real; }
+    if (inPosEl) { inPosEl.textContent = sym + fmtMoney(livePositionsValue); delete inPosEl.dataset.real; }
   }
 
   if (changeEl) {
-    const chg = d.today_change || 0;
-    const pct = d.today_change_pct || 0;
-    if (chg === 0 && pct === 0) {
+    const chg = liveChg;
+    const pct = livePct;
+    if (Math.abs(chg) < 0.005) {
       changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
     } else {
       const isPos = chg >= 0;
@@ -5071,7 +5143,7 @@ function renderPositions() {
         <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val">${durFmt}</div></div>
       </div>
       ${barHtml}
-      <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px">
         <button onclick="openTVChart('${esc(p.symbol)}')" style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--text2);font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Grafico
@@ -6095,16 +6167,8 @@ async function confirmEditName() {
 
 function renderExchangePage() {
   const connected = !!_hasRevxKeys;
-  const status = document.getElementById('exchangeRevxStatus');
-  if (status) {
-    status.textContent = connected ? 'Collegato' : 'Non collegato';
-    status.style.background = connected ? 'rgba(34,197,94,0.14)' : 'var(--surface2)';
-    status.style.color = connected ? 'var(--green)' : 'var(--text3)';
-  }
   const sub = document.getElementById('exchangeRevxSub');
-  if (sub) sub.textContent = connected
-    ? 'API key configurate. Disponibile per il trading reale.'
-    : 'Collega le API key Revolut X per abilitare gli ordini reali.';
+  if (sub) sub.textContent = connected ? 'API key configurate. Disponibile per il trading reale.' : '';
   const btn = document.getElementById('exchangeRevxBtn');
   if (btn) btn.textContent = connected ? 'Gestisci' : 'Collega';
   renderExternalExchangeStatus('coinbase');
@@ -6115,12 +6179,6 @@ function renderExternalExchangeStatus(exchange) {
   if (!label) return;
   const connected = !!_exchangeKeys[exchange];
   const cap = exchange.charAt(0).toUpperCase() + exchange.slice(1);
-  const status = document.getElementById('exchange' + cap + 'Status');
-  if (status) {
-    status.textContent = connected ? 'Collegato' : 'Non collegato';
-    status.style.background = connected ? 'rgba(34,197,94,0.14)' : 'var(--surface2)';
-    status.style.color = connected ? 'var(--green)' : 'var(--text3)';
-  }
   const sub = document.getElementById('exchange' + cap + 'Sub');
   if (sub) sub.textContent = connected ? 'API key configurate. Disponibile per il trading reale.' : '';
   const note = document.getElementById('exchange' + cap + 'Note');
@@ -6655,7 +6713,9 @@ function tmSetAmount(amount) {
 }
 
 function tmSetAmountMax() {
-  const max = _plan === 'free' ? Math.floor(S.currentCapital || 1000) : (_tmBalance > 0 ? Math.floor(_tmBalance) : 500);
+  const openInvested = (S.positions || []).filter(p => !p.realMode).reduce((s, p) => s + (p.size_remaining || p.size || 0), 0);
+  const simAvail = Math.max(0, Math.floor((S.sim_balance || 1000) - openInvested));
+  const max = _plan === 'free' ? simAvail : (_tmBalance > 0 ? Math.floor(_tmBalance) : 500);
   document.getElementById('tmAmountInput').value = max;
   _tmHighlightBtn('max');
   tmUpdateSummary();
@@ -6823,9 +6883,7 @@ function openTradeDetail(i) {
 
   document.getElementById('tdSymbol').textContent = base;
   const badge = document.getElementById('tdBadge');
-  badge.textContent        = isWin ? 'WIN' : 'LOSS';
-  badge.style.background   = isWin ? 'rgba(5,193,104,0.15)' : 'rgba(246,70,93,0.15)';
-  badge.style.color        = color;
+  badge.style.display = 'none';
 
   const exitDt  = new Date(t.time);
   const entryDt = t.entryTime ? new Date(t.entryTime) : null;
@@ -6860,7 +6918,7 @@ function openTradeDetail(i) {
     : `${Math.round(dur)}m`;
 
   const totalFee = (t.buyFee || 0) + (t.sellFee || 0);
-  document.getElementById('tdFee').textContent = totalFee > 0 ? `Commissione $${totalFee.toFixed(2)}` : '';
+  document.getElementById('tdFee').textContent = (!t.realMode || totalFee <= 0) ? '' : `Commissione $${totalFee.toFixed(2)}`;
 
   const shareBtn = document.getElementById('tdShareBtn');
   shareBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> Condividi';
