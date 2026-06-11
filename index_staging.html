@@ -4379,9 +4379,7 @@ async function poll() {
     const fetchTrades = _pollTradeCounter === 1
       ? fetch(API + '/trades', { headers:authHeaders(), ...noCache })
       : Promise.resolve({ ok: true, json: async () => ({ trades: _cachedTrades }) });
-    const fetchMarket = positionsActive
-      ? Promise.resolve({ ok: true, json: async () => ({ market: mktData }) })
-      : fetch(API + '/market?timeframe=' + _scanTimeframe, { headers:authHeaders(), ...noCache });
+    const fetchMarket = fetch(API + '/market?timeframe=' + _scanTimeframe, { headers:authHeaders(), ...noCache });
     const [sRes, tRes, mRes] = await Promise.all([
       fetch(API + '/status', { headers:authHeaders(), ...noCache }),
       fetchTrades,
