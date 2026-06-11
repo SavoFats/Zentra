@@ -4845,13 +4845,13 @@ function updateBalanceHero(animate = false) {
     const totalEl = document.getElementById('balHeroTotal');
     if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(simBalance); delete totalEl.dataset.real; }
     const changeEl = document.getElementById('balHeroChange');
+    let chg = 0;
+    if ((S.sim_today_change || 0) !== 0 || (S.sim_today_change_pct || 0) !== 0) {
+      chg = (S.sim_today_change || 0) + simUnrealized;
+    } else if ((S.pnl || 0) !== 0) {
+      chg = S.pnl;
+    }
     if (changeEl) {
-      let chg = 0;
-      if ((S.sim_today_change || 0) !== 0 || (S.sim_today_change_pct || 0) !== 0) {
-        chg = (S.sim_today_change || 0) + simUnrealized;
-      } else if ((S.pnl || 0) !== 0) {
-        chg = S.pnl;
-      }
       const base = simBalance - chg;
       const pct = base > 0 ? chg / base * 100 : 0;
       if (Math.abs(chg) < 0.005) {
@@ -4877,6 +4877,7 @@ function updateBalanceHero(animate = false) {
       histWithTip.push({ total: simBalance, t: nowMs });
     }
     _portfolioData.history = histWithTip;
+    _portfolioData.isUpToday = chg >= 0;
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);
     return;
