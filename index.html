@@ -4781,8 +4781,6 @@ function drawHeroSparkline() {
 let _portfolioData = null;
 let _lastPortfolioFetch = 0;
 let _portfolioHistoryBase = null;
-let _simIntraday = [];
-let _lastSimSnap = 0;
 let _realIntraday = [];
 let _lastRealSnap = 0;
 let _placeholderAnim = null;
@@ -4868,25 +4866,19 @@ function updateBalanceHero(animate = false) {
         changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
       }
     }
-    // Snapshot ogni 15 min (+ subito al primo caricamento)
+    // Sparkline: snapshot 15-min dal DB + live tip
     const nowMs = Date.now();
-    if (_lastSimSnap === 0 || nowMs - _lastSimSnap >= 15 * 60 * 1000) {
-      _simIntraday.push({ total: simBalance, t: nowMs });
-      if (_simIntraday.length > 500) _simIntraday.shift();
-      _lastSimSnap = nowMs;
-    }
-    // Sparkline: giorni passati + snapshot 15-min + live tip
     const rawSimHistory = S.sim_history || [];
-    const pastDays = rawSimHistory.slice(0, -1).map(p => ({
+    const historyPts = rawSimHistory.map(p => ({
       total: p.total,
-      t: p.t || new Date((p.date || '') + 'T12:00:00Z').getTime()
+      t: new Date(p.ts).getTime()
     }));
     if (!_portfolioData) _portfolioData = {};
-    const intradayWithTip = _simIntraday.slice();
-    if (intradayWithTip.length === 0 || intradayWithTip[intradayWithTip.length - 1].total !== simBalance) {
-      intradayWithTip.push({ total: simBalance, t: nowMs });
+    const histWithTip = historyPts.slice();
+    if (histWithTip.length === 0 || histWithTip[histWithTip.length - 1].total !== simBalance) {
+      histWithTip.push({ total: simBalance, t: nowMs });
     }
-    _portfolioData.history = pastDays.concat(intradayWithTip);
+    _portfolioData.history = histWithTip;
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);
     return;
