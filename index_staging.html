@@ -4783,7 +4783,7 @@ let _lastPortfolioFetch = 0;
 
 async function fetchPortfolioSummary() {
   if (_simMode || _plan === 'free') {
-    updateBalanceHero(true);
+    updateBalanceHero(false);
     return;
   }
   const now = Date.now();
@@ -4829,8 +4829,14 @@ function updateBalanceHero(animate = false) {
     if (totalEl && !_balHidden) { totalEl.textContent = sym + fmtMoney(simBalance); delete totalEl.dataset.real; }
     const changeEl = document.getElementById('balHeroChange');
     if (changeEl) {
-      const chg = S.sim_today_change || 0;
-      const pct = S.sim_today_change_pct || 0;
+      let chg = S.sim_today_change || 0;
+      let pct = S.sim_today_change_pct || 0;
+      // fallback: usa P&L sessione se non c'è snapshot di ieri
+      if (chg === 0 && pct === 0 && (S.pnl || 0) !== 0) {
+        chg = S.pnl;
+        const base = simBalance - chg;
+        pct = base > 0 ? chg / base * 100 : 0;
+      }
       if (chg === 0 && pct === 0) {
         changeEl.innerHTML = '<span style="color:#9aa0b8">+$0 · +0% oggi</span>';
       } else {
@@ -4841,10 +4847,20 @@ function updateBalanceHero(animate = false) {
         changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
       }
     }
+    // Sparkline: usa sim_history se ha variazione reale, altrimenti pnlHistory intra-sessione
     const simHistory = S.sim_history || [];
-    if (simHistory.length >= 2) {
+    const simHistoryHasVariation = simHistory.length >= 2 &&
+      simHistory[0].total !== simHistory[simHistory.length - 1].total;
+    if (simHistoryHasVariation) {
       if (!_portfolioData) _portfolioData = {};
       _portfolioData.history = simHistory;
+    } else {
+      const rawHistory = S.pnlHistory || [];
+      if (rawHistory.length >= 2) {
+        const baseAtStart = simBalance - (S.pnl || 0);
+        if (!_portfolioData) _portfolioData = {};
+        _portfolioData.history = rawHistory.map(p => ({ total: baseAtStart + p.v }));
+      }
     }
     if (animate) animateBalanceSparkline();
     else drawBalanceSparkline(1);
