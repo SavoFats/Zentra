@@ -4876,6 +4876,17 @@ function updateBalanceHero(animate = false) {
         changeEl.innerHTML = `<span style="color:${color}">${arrow} ${sign}${sym}${fmtMoney(Math.abs(chg))} · ${sign}${Math.abs(pct).toFixed(1)}% oggi</span>`;
       }
     }
+    const hasDemoOpenPositions = (S.positions || []).some(p => !p.realMode);
+    const hasDemoClosedTrades = (trades || []).some(t => !t.realMode);
+    if (!hasDemoOpenPositions && !hasDemoClosedTrades) {
+      if (!_portfolioData) _portfolioData = {};
+      _portfolioData.history = [];
+      _portfolioData.isUpToday = true;
+      if (!_placeholderDone) startPlaceholderSparkline();
+      else drawFlatSparkline();
+      return;
+    }
+
     // Sparkline: snapshot 15-min dal DB + live tip
     const nowMs = Date.now();
     const rawSimHistory = S.sim_history || [];
