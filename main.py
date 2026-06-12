@@ -5626,6 +5626,18 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
             print(f"DB trades fetch error: {e}")
     return {"trades": mem_trades}
 
+@app.get("/trades_raw_debug")
+async def trades_raw_debug(request: Request, user_id: int = Depends(get_current_user)):
+    """Endpoint temporaneo — mostra raw rows dal DB per debug duplicati."""
+    if not db_pool:
+        return {"rows": []}
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, symbol, entry_time, exit_time, pnl, size FROM trades_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50",
+            user_id
+        )
+    return {"rows": [{"id": r["id"], "symbol": r["symbol"], "entry_time": r["entry_time"], "exit_time": r["exit_time"], "pnl": r["pnl"], "size": r["size"]} for r in rows]}
+
 @app.delete("/trades")
 async def clear_trades(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=10, window=60, key_suffix="clear_trades")
