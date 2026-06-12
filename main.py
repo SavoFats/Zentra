@@ -4002,14 +4002,14 @@ async def startup():
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_fee FLOAT DEFAULT 0;
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_type TEXT DEFAULT 'Market';
                 """)
-                # Rimuovi duplicati esatti (stessa entry_time + exit_time) tenendo l'id minore
+                # Rimuovi duplicati: stessa (entry_time, symbol, pnl arrotondato), tieni id minore
                 await conn.execute("""
                     DELETE FROM trades_history a USING trades_history b
                     WHERE a.id > b.id
                       AND a.user_id = b.user_id
                       AND a.symbol = b.symbol
                       AND a.entry_time = b.entry_time
-                      AND a.exit_time = b.exit_time;
+                      AND ROUND(a.pnl::numeric, 4) = ROUND(b.pnl::numeric, 4);
                 """)
                 await conn.execute("""
                     CREATE UNIQUE INDEX IF NOT EXISTS trades_history_no_dup
@@ -5601,7 +5601,7 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
                     ) t ORDER BY created_at DESC LIMIT 500""",
                     user_id
                 )
-            db_trades = [{
+            raw = [{
                 "symbol": r["symbol"],
                 "entryPrice": r["entry_price"],
                 "exitPrice": r["exit_price"],
@@ -5618,10 +5618,17 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
                 "sellFee": float(r["sell_fee"] or 0),
                 "sellType": r["sell_type"] or "Market",
             } for r in rows]
-            # Merge: DB è fonte di verità; mem aggiunge solo trade non ancora persistiti
-            # Chiave: (symbol, entryTime, exitTime) per distinguere TP1 parziale da chiusura finale
-            db_keys = set((t["symbol"], t["entryTime"], t["time"]) for t in db_trades)
-            extra = [t for t in mem_trades if (t["symbol"], t["entryTime"], t.get("time","")) not in db_keys]
+            # Dedup: (symbol, entryTime, pnl arrotondato) — rimuove copie con exit_time diversi
+            # ma mantiene TP1 parziale + chiusura finale (pnl diverso)
+            seen_keys: set = set()
+            db_trades = []
+            for t in raw:
+                k = (t["symbol"], t["entryTime"], round(t["pnl"], 4))
+                if k not in seen_keys:
+                    seen_keys.add(k)
+                    db_trades.append(t)
+            # mem aggiunge solo trade non ancora nel DB
+            extra = [t for t in mem_trades if (t["symbol"], t["entryTime"], round(t["pnl"], 4)) not in seen_keys]
             return {"trades": extra + db_trades}
         except Exception as e:
             print(f"DB trades fetch error: {e}")
