@@ -4323,11 +4323,7 @@ async function poll() {
       fetchPortfolioSummary();
     }
     if (positionsActive) {
-      if (Object.keys(_recoveryValues).length > 0) {
-        updatePositionPricesInPlace();
-      } else {
-        renderPositions();
-      }
+      syncOpenPositionsView();
     }
     const newTrades = td.trades || [];
 
@@ -4427,6 +4423,40 @@ setTimeout(() => document.getElementById('homeAiFrame')?.classList.add('rgb-done
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
 const _recoveryValues = {};
+let _positionsRenderSignature = '';
+
+function getPositionsRenderSignature() {
+  return (S.positions || []).map(p => [
+    p.symbol,
+    p.exchange || '',
+    p.manual ? 'manual' : 'agent',
+    p.realMode ? 'real' : 'sim',
+    p.trailingActive ? 'trail' : '',
+    p._sell_mode || '',
+    p._sell_attempt || '',
+    p.stopPrice || '',
+    p.tp1Price || '',
+    p.tp2Price || ''
+  ].join(':')).join('|');
+}
+
+function formatPositionDuration(entryTime) {
+  const start = new Date(entryTime || Date.now()).getTime();
+  const durMin = Math.max(0, Math.round((Date.now() - start) / 60000));
+  return durMin < 60 ? `${durMin}m` : `${Math.floor(durMin / 60)}h ${durMin % 60}m`;
+}
+
+function syncOpenPositionsView(force = false) {
+  const wrap = document.getElementById('positionsWrap');
+  if (!wrap) return;
+  const sig = getPositionsRenderSignature();
+  const pos = S.positions || [];
+  const hasCards = !!wrap.querySelector('.pos-card-new');
+  const hasEmpty = !!wrap.querySelector('.empty');
+  const needsRender = force || _positionsRenderSignature !== sig || (pos.length ? !hasCards : !hasEmpty);
+  if (needsRender) renderPositions();
+  else updatePositionPricesInPlace();
+}
 
 function render() {
   const dot = document.getElementById('logoDot');
@@ -4494,11 +4524,7 @@ function render() {
   drawHeroSparkline();
   updateBalanceHero();
 
-  if (Object.keys(_recoveryValues).length > 0) {
-    updatePositionPricesInPlace();
-  } else {
-    renderPositions();
-  }
+  syncOpenPositionsView();
 
   // Attività log
   const actList = document.getElementById('agentActivityList');
@@ -5210,7 +5236,12 @@ function initSparklineInteraction(canvas) {
 function renderPositions() {
   const wrap = document.getElementById('positionsWrap');
   const pos = S.positions || [];
-  if (!pos.length) { wrap.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div>'; return; }
+  if (!pos.length) {
+    _positionsRenderSignature = '';
+    wrap.dataset.positionsSignature = '';
+    wrap.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione aperta</div></div>';
+    return;
+  }
   pos.forEach(p => {
     const md = mktData.find(c => c.symbol === p.symbol);
     if (!p.realMode && md && md.price > 0) p.currentPrice = md.price;
@@ -5236,8 +5267,7 @@ function renderPositions() {
     const posQty     = p.qty_purchased > 0 ? p.qty_purchased : (entryPrice > 0 ? size / entryPrice : 0);
     const posQtyFmt  = posQty >= 1000 ? posQty.toFixed(0) : posQty >= 1 ? posQty.toFixed(3) : posQty.toFixed(6);
     const curVal     = currentPrice * posQty;
-    const durMin     = Math.round((Date.now() - new Date(p.entryTime || Date.now()).getTime()) / 60000);
-    const durFmt     = durMin < 60 ? `${durMin}m` : `${Math.floor(durMin/60)}h ${durMin%60}m`;
+    const durFmt     = formatPositionDuration(p.entryTime);
 
     // SL bar: SL (sinistra) → ENTRY → prezzo corrente (dot) → TP (destra)
     let barHtml = '';
@@ -5293,17 +5323,17 @@ function renderPositions() {
         const tpPct    = tpPrice > 0 ? Math.max(10, Math.min(98, (tpPrice - stopPrice) / total * 100)) : 0;
         const barCol   = isPos ? 'var(--green)' : 'var(--red)';
         barHtml = `<div class="pos-sl-bar-wrap"><div class="pos-sl-bar">
-          <div class="pos-sl-fill" style="width:${curPct}%;background:${barCol}"></div>
-          <div class="pos-sl-dot" style="left:${curPct}%;background:${barCol}"></div>
-          <span class="pos-sl-price" style="left:${curPct}%;color:${barCol}">${fmtPrice(currentPrice)}</span>
+          <div class="pos-sl-fill" id="pos-sl-fill-${esc(p.symbol)}" style="width:${curPct}%;background:${barCol}"></div>
+          <div class="pos-sl-dot" id="pos-sl-dot-${esc(p.symbol)}" style="left:${curPct}%;background:${barCol}"></div>
+          <span class="pos-sl-price" id="pos-sl-price-${esc(p.symbol)}" style="left:${curPct}%;color:${barCol}">${fmtPrice(currentPrice)}</span>
           <span class="pos-sl-lbl" style="left:0">SL ${fmtPrice(stopPrice)}</span>
           <span class="pos-sl-lbl" style="left:${entryPct}%;transform:translateX(-50%)">ENTRY</span>
-          ${tpPct > 0 ? `<span class="pos-sl-lbl" style="left:${tpPct}%;transform:translateX(-100%)">TP ${fmtPrice(tpPrice)}</span>` : ''}
+          ${tpPct > 0 ? `<span class="pos-sl-lbl" id="pos-sl-tp-${esc(p.symbol)}" style="left:${tpPct}%;transform:translateX(-100%)">TP ${fmtPrice(tpPrice)}</span>` : ''}
         </div></div>`;
       }
     }
 
-    return `<div class="pos-card-new">
+    return `<div class="pos-card-new" data-pos-symbol="${esc(p.symbol)}">
       <div class="pos-head-new">
         <div class="pos-coin-new">${img}
           <div style="display:flex;align-items:center;gap:7px">
@@ -5323,7 +5353,7 @@ function renderPositions() {
         <div class="pos-g4-cell"><div class="pos-g4-label">Investito</div><div class="pos-g4-val">${getCurrSym()}${fmtMoney(size)}</div></div>
         <div class="pos-g4-cell"><div class="pos-g4-label">Quantità</div><div class="pos-g4-val">${posQtyFmt}</div></div>
         <div class="pos-g4-cell"><div class="pos-g4-label">Entry</div><div class="pos-g4-val">${fmtPrice(entryPrice)}</div></div>
-        <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val">${durFmt}</div></div>
+        <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val" id="pos-duration-${esc(p.symbol)}">${durFmt}</div></div>
       </div>
       ${barHtml}
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px">
@@ -5338,6 +5368,8 @@ function renderPositions() {
       </div>
     </div>`;
   }).join('');
+  _positionsRenderSignature = getPositionsRenderSignature();
+  wrap.dataset.positionsSignature = _positionsRenderSignature;
 }
 
 function updatePositionPricesInPlace() {
@@ -5363,6 +5395,7 @@ function updatePositionPricesInPlace() {
     const pnlValEl = document.getElementById('pos-pnlval-' + sym);
     const pnlPctEl = document.getElementById('pos-pnlpct-' + sym);
     const curValEl = document.getElementById('pos-curval-' + sym);
+    const durEl    = document.getElementById('pos-duration-' + sym);
 
     if (pnlValEl) {
       pnlValEl.textContent = (isPos ? '+' : isNeg ? '-' : '') + getCurrSym() + fmtMoney(Math.abs(pnl));
@@ -5374,6 +5407,40 @@ function updatePositionPricesInPlace() {
     }
     if (curValEl) {
       curValEl.textContent = getCurrSym() + fmtMoney(curVal);
+    }
+    if (durEl) durEl.textContent = formatPositionDuration(p.entryTime);
+
+    const stopPrice = p.stopPrice || 0;
+    const tpPrice = p.tp2Price || p.tp1Price || 0;
+    if (stopPrice > 0 && entryPrice > 0) {
+      const barMax = tpPrice > entryPrice ? tpPrice : entryPrice + (entryPrice - stopPrice) * 0.6;
+      const total = barMax - stopPrice;
+      if (total > 0) {
+        const curPct = Math.max(2, Math.min(97, (currentPrice - stopPrice) / total * 100));
+        const tpPct = tpPrice > 0 ? Math.max(10, Math.min(98, (tpPrice - stopPrice) / total * 100)) : 0;
+        const barCol = isPos ? 'var(--green)' : 'var(--red)';
+        const fillEl = document.getElementById('pos-sl-fill-' + sym);
+        const dotEl = document.getElementById('pos-sl-dot-' + sym);
+        const priceEl = document.getElementById('pos-sl-price-' + sym);
+        const tpEl = document.getElementById('pos-sl-tp-' + sym);
+        if (fillEl) {
+          fillEl.style.width = curPct + '%';
+          fillEl.style.background = barCol;
+        }
+        if (dotEl) {
+          dotEl.style.left = curPct + '%';
+          dotEl.style.background = barCol;
+        }
+        if (priceEl) {
+          priceEl.style.left = curPct + '%';
+          priceEl.style.color = barCol;
+          priceEl.textContent = fmtPrice(currentPrice);
+        }
+        if (tpEl && tpPct > 0) {
+          tpEl.style.left = tpPct + '%';
+          tpEl.textContent = 'TP ' + fmtPrice(tpPrice);
+        }
+      }
     }
   });
 }
