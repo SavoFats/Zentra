@@ -6380,19 +6380,22 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 state["plan"] = user_plan
         except Exception as _e:
             print(f"[MANUAL TRADE] plan lookup: {_e}")
-    # Leggi chiavi RevX: prima dalla sessione in memoria, poi dal DB
-    revx_key_id = state.get("revx_key_id", "")
-    revx_priv   = state.get("revx_private_key", "")
-    is_real     = state.get("use_revx", False)
-    if (not is_real or not revx_key_id or not state.get("telegram_chat_id")) and db_pool:
+    # SICUREZZA: leggi sim_mode dal DB PRIMA di qualsiasi logica su exchange reali.
+    # Il session cache (use_revx) può essere stantio — il DB è fonte di verità.
+    db_sim_mode = True  # default sicuro: se la query fallisce, tratta come sim
+    revx_key_id = ""
+    revx_priv   = ""
+    is_real     = False
+    if db_pool:
         try:
             async with db_pool.acquire() as conn:
                 row = await conn.fetchrow(
                     "SELECT sim_mode, revx_key_id, revx_private_key, telegram_chat_id FROM users WHERE id = $1", user_id)
             if row:
+                db_sim_mode = row["sim_mode"] if row["sim_mode"] is not None else True
                 if not state.get("telegram_chat_id") and row["telegram_chat_id"]:
                     state["telegram_chat_id"] = row["telegram_chat_id"]
-                if not row["sim_mode"] and row["revx_key_id"]:
+                if not db_sim_mode and row["revx_key_id"]:
                     revx_key_id = decrypt_key(row["revx_key_id"])
                     revx_priv   = decrypt_key(row["revx_private_key"])
                     is_real     = True
@@ -6408,17 +6411,8 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 detail="Il piano Free supporta solo trade manuali in simulazione. Passa a Pro per usare exchange reali."
             )
         is_real = False
-    # Se l'utente ha sim_mode attivo nel DB, forza simulazione indipendentemente dall'exchange richiesto
-    user_sim_mode = True
-    if db_pool:
-        try:
-            async with db_pool.acquire() as conn:
-                sm_row = await conn.fetchrow("SELECT sim_mode FROM users WHERE id = $1", user_id)
-            if sm_row:
-                user_sim_mode = sm_row["sim_mode"] if sm_row["sim_mode"] is not None else True
-        except Exception:
-            pass
-    if user_sim_mode:
+    # Se sim_mode è attivo, forza simulazione — nessun ordine reale possibile
+    if db_sim_mode:
         is_real = False
         exchange = "revx"
     price = market_data.get(sym, {}).get("price", 0.0)
