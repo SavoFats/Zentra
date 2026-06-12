@@ -2383,6 +2383,8 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     _exiting = state.setdefault("_exiting", set())
     if sym in _exiting:
         return
+    if not any(p is pos for p in state.get("positions", [])):
+        return
     _exiting.add(sym)
     try:
         dur  = (datetime.utcnow() - datetime.fromisoformat(pos["entryTime"].replace("Z", ""))).total_seconds() / 60
@@ -5593,10 +5595,10 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
             async with db_pool.acquire() as conn:
                 rows = await conn.fetch(
                     """SELECT * FROM (
-                        SELECT DISTINCT ON (entry_time, symbol, exit_time) *
+                        SELECT DISTINCT ON (entry_time, symbol) *
                         FROM trades_history
                         WHERE user_id = $1
-                        ORDER BY entry_time, symbol, exit_time, created_at ASC
+                        ORDER BY entry_time, symbol, id ASC
                     ) t ORDER BY created_at DESC LIMIT 500""",
                     user_id
                 )
@@ -5618,25 +5620,13 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
                 "sellType": r["sell_type"] or "Market",
             } for r in rows]
             # Merge: DB è fonte di verità; mem aggiunge solo trade non ancora persistiti
-            # Chiave: (symbol, entryTime, exitTime) per distinguere TP1 parziale da chiusura finale
-            db_keys = set((t["symbol"], t["entryTime"], t["time"]) for t in db_trades)
-            extra = [t for t in mem_trades if (t["symbol"], t["entryTime"], t.get("time","")) not in db_keys]
+            db_keys = set((t["symbol"], t["entryTime"]) for t in db_trades)
+            extra = [t for t in mem_trades if (t["symbol"], t["entryTime"]) not in db_keys]
             return {"trades": extra + db_trades}
         except Exception as e:
             print(f"DB trades fetch error: {e}")
     return {"trades": mem_trades}
 
-@app.get("/trades_raw_debug")
-async def trades_raw_debug(request: Request, user_id: int = Depends(get_current_user)):
-    """Endpoint temporaneo — mostra raw rows dal DB per debug duplicati."""
-    if not db_pool:
-        return {"rows": []}
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT id, symbol, entry_time, exit_time, pnl, size FROM trades_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50",
-            user_id
-        )
-    return {"rows": [{"id": r["id"], "symbol": r["symbol"], "entry_time": r["entry_time"], "exit_time": r["exit_time"], "pnl": r["pnl"], "size": r["size"]} for r in rows]}
 
 @app.delete("/trades")
 async def clear_trades(request: Request, user_id: int = Depends(get_current_user)):
