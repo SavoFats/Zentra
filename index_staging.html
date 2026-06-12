@@ -4975,8 +4975,10 @@ function drawFlatSparkline() {
   if (card) card.style.paddingBottom = '90px';
   canvas.style.display = 'block';
   const dpr = window.devicePixelRatio || 1;
+  const sectionW = section ? section.offsetWidth : 0;
   const rect = canvas.getBoundingClientRect();
-  const w = rect.width || 300, h = rect.height || 72;
+  const w = sectionW > 50 ? sectionW : (rect.width || 300);
+  const h = rect.height || section?.offsetHeight || 72;
   canvas.width = w * dpr; canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -5022,9 +5024,16 @@ function drawBalanceSparkline(progress = 1) {
   if (card) card.style.paddingBottom = '90px';
   canvas.style.display = 'block';
   const dpr = window.devicePixelRatio || 1;
+  // Usa offsetWidth del container per forzare un reflow sincrono.
+  // getBoundingClientRect() dopo un display-change non ha ancora il layout aggiornato
+  // e può restituire una larghezza vecchia/piccola, causando il buffer troppo stretto.
+  const sectionW = section ? section.offsetWidth : 0;
   const rect = canvas.getBoundingClientRect();
-  const w = rect.width || 300;
-  const h = rect.height || 72;
+  const w = sectionW > 50 ? sectionW : (rect.width > 50 ? rect.width : 300);
+  const h = rect.height || section?.offsetHeight || 72;
+  // Se la section era appena diventata visibile e layout non è ancora pronto,
+  // rinvia di un frame per evitare il canvas stretto.
+  if (w <= 50) { requestAnimationFrame(() => drawBalanceSparkline(progress)); return; }
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
@@ -5139,9 +5148,11 @@ function redrawBalanceSparklineOverlay() {
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas || !_balanceSparklineRender || !_balanceSparklineRender.pts || _balanceSparklineRender.pts.length < 2) return;
   const dpr = window.devicePixelRatio || 1;
+  const section = document.getElementById('balHeroSparklineSection');
+  const sectionW = section ? section.offsetWidth : 0;
   const rect = canvas.getBoundingClientRect();
-  const w = rect.width || 300;
-  const h = rect.height || 72;
+  const w = sectionW > 50 ? sectionW : (rect.width || 300);
+  const h = rect.height || section?.offsetHeight || 72;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
