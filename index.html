@@ -4411,6 +4411,9 @@ async function startupSession() {
       document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
     }, 300);
   });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) redrawBalanceSparklineOverlay();
+  });
   startPolling();
 }
 
