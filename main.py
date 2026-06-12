@@ -3644,6 +3644,16 @@ async def reconcile_coinbase_external_closures(
         sym = str(pos.get("symbol") or "").upper()
         if not sym:
             continue
+        # Grace period: ignora posizioni aperte da meno di 2 minuti.
+        # Coinbase imposta available_balance=0 durante il settlement post-acquisto;
+        # senza questo guard la reconcile chiuderebbe la posizione come "venduta esternamente".
+        try:
+            entry_age_s = (datetime.utcnow() - datetime.fromisoformat(
+                pos["entryTime"].replace("Z", ""))).total_seconds()
+        except Exception:
+            entry_age_s = 9999
+        if entry_age_s < 120:
+            continue
         real_qty = float(bal_map.get(sym, 0.0) or 0.0)
         tracked_qty = float(pos.get("qty_purchased") or 0.0)
         sold_externally = real_qty == 0.0 or (tracked_qty > 0 and real_qty < tracked_qty * 0.05)
