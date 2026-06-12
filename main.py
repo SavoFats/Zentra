@@ -6587,7 +6587,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
             "entryTime": datetime.utcnow().isoformat() + "Z",
             "stopPrice": stop_price, "tp1Price": tp_price, "tp2Price": tp_price,
             "R_pct": R_pct, "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
-            "realMode": False, "fee_pct": 0.001, "qty_purchased": 0.0, "manual": True,
+            "realMode": False, "fee_pct": 0.0, "qty_purchased": 0.0, "manual": True,
         }
         state["positions"].append(pos)
         await db_save_open_position(user_id, pos)
