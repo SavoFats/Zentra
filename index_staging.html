@@ -6997,7 +6997,7 @@ function openTradeModal(sym, price) {
 function renderTradeExchangeOptions() {
   const sel = document.getElementById('tmExchange');
   if (!sel) return;
-  if (_plan === 'free') {
+  if (_plan === 'free' || _simMode) {
     sel.innerHTML = '<option value="revx">Conto Demo</option>';
     sel.value = 'revx';
     return;
@@ -7062,7 +7062,12 @@ async function tmFetchBalance() {
   if (!lbl) return;
   lbl.textContent = '';
   _tmBalance = 0;
-  if (_plan === 'free') return;
+  if (_plan === 'free' || _simMode) {
+    const openInvested = (S.positions || []).filter(p => !p.realMode).reduce((s, p) => s + (p.size_remaining || p.size || 0), 0);
+    _tmBalance = Math.max(0, (S.sim_balance || 1000) - openInvested);
+    lbl.textContent = '$' + _tmBalance.toFixed(2) + ' disponibili';
+    return;
+  }
   try {
     if (exchange === 'coinbase') {
       const r = await fetch(API + '/test_coinbase', { headers: authHeaders() });
@@ -7116,7 +7121,7 @@ function tmSetAmount(amount) {
 function tmSetAmountMax() {
   const openInvested = (S.positions || []).filter(p => !p.realMode).reduce((s, p) => s + (p.size_remaining || p.size || 0), 0);
   const simAvail = Math.max(0, Math.floor((S.sim_balance || 1000) - openInvested));
-  const max = _plan === 'free' ? simAvail : (_tmBalance > 0 ? Math.floor(_tmBalance) : 500);
+  const max = (_plan === 'free' || _simMode) ? simAvail : (_tmBalance > 0 ? Math.floor(_tmBalance) : 500);
   document.getElementById('tmAmountInput').value = max;
   _tmHighlightBtn('max');
   tmUpdateSummary();
@@ -7186,7 +7191,7 @@ function tmUpdateSummary() {
   const qty = _tmPrice > 0 ? netAmount / _tmPrice : 0;
   const qtyFmt = qty >= 1 ? qty.toFixed(4) : qty.toFixed(6);
   document.getElementById('tmQtyEst').textContent   = qty > 0    ? qtyFmt + ' ' + base   : '—';
-  document.getElementById('tmFeeEst').textContent   = _plan === 'free' ? '—' : (amount > 0 ? '$' + (fee < 0.01 ? fee.toFixed(4) : fee.toFixed(2)) : '—');
+  document.getElementById('tmFeeEst').textContent   = (_plan === 'free' || _simMode) ? '—' : (amount > 0 ? '$' + (fee < 0.01 ? fee.toFixed(4) : fee.toFixed(2)) : '—');
   document.getElementById('tmTotalEst').textContent = amount > 0 ? '$' + amount.toFixed(2) : '—';
 }
 

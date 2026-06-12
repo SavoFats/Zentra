@@ -6406,6 +6406,19 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 detail="Il piano Free supporta solo trade manuali in simulazione. Passa a Pro per usare exchange reali."
             )
         is_real = False
+    # Se l'utente ha sim_mode attivo nel DB, forza simulazione indipendentemente dall'exchange richiesto
+    user_sim_mode = True
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                sm_row = await conn.fetchrow("SELECT sim_mode FROM users WHERE id = $1", user_id)
+            if sm_row:
+                user_sim_mode = sm_row["sim_mode"] if sm_row["sim_mode"] is not None else True
+        except Exception:
+            pass
+    if user_sim_mode:
+        is_real = False
+        exchange = "revx"
     price = market_data.get(sym, {}).get("price", 0.0)
     if not price and (user_plan == "free" or exchange not in ("coinbase", "revx")):
         raise HTTPException(status_code=400, detail="Prezzo non disponibile per questa coin")
