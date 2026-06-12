@@ -4908,6 +4908,11 @@ function updateBalanceHero(animate = false) {
       total: p.total,
       t: new Date(p.ts).getTime()
     }));
+    // Preferisci solo i punti di oggi: Y-range basato sul giorno corrente,
+    // così le variazioni intraday sono visibili e non compresse da settimane di history.
+    const midnightMs = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+    const todayPts = realHistoryPts.filter(p => p.t >= midnightMs);
+    if (todayPts.length >= 3) realHistoryPts = todayPts;
     if (realHistoryPts.length < 2) {
       const rawDaily = d.history || [];
       const dailyPts = rawDaily
