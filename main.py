@@ -2661,10 +2661,11 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     state["cooldowns"][sym] = (datetime.now().timestamp() + cooldown_h * 3600) * 1000
     buy_fee_usd  = pos.get("buy_fee_usd", 0.0)
     sell_fee_usd = pos.get("sell_fee_usd", exit_fee)
+    exit_time_iso = datetime.utcnow().isoformat() + "Z"
     trade_record = {
         "symbol": sym, "reason": reason,
         "entryPrice": pos["entryPrice"], "exitPrice": cur,
-        "pnl": total_pnl, "pct": total_pct, "time": datetime.utcnow().isoformat() + "Z",
+        "pnl": total_pnl, "pct": total_pct, "time": exit_time_iso,
         "entryTime": pos["entryTime"], "durationMin": round(dur, 1),
         "size": pos["size"], "realMode": pos.get("realMode", False),
         "tp1_hit": pos.get("tp1_hit", False),
@@ -2686,7 +2687,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                     float(pos["entryPrice"]), float(cur),
                     float(pos["size"]), float(total_pnl), float(total_pct),
                     reason, bool(pos.get("tp1_hit", False)), float(round(dur, 1)),
-                    pos["entryTime"], datetime.utcnow().isoformat() + "Z",
+                    pos["entryTime"], exit_time_iso,
                     "real" if pos.get("realMode") else "sim",
                     float(buy_fee_usd), float(sell_fee_usd),
                     pos.get("_sell_type", "Market")
@@ -3798,7 +3799,7 @@ async def persist_sessions():
     sessions_snapshot = list(user_sessions.items())
     for uid, state in sessions_snapshot:
         try:
-            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_stopping")}
+            state_to_save = {k: v for k, v in state.items() if k not in _SENSITIVE_KEYS and k not in ("log", "_stopping", "trades")}
             if "_exiting" in state_to_save:
                 state_to_save["_exiting"] = list(state_to_save["_exiting"] or [])
             state_json = json.dumps(state_to_save, default=str)
