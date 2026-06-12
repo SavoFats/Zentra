@@ -5602,9 +5602,11 @@ async function confirmClosePosition() {
     const d = await r.json().catch(()=>({}));
     if (!r.ok || d.error) {
       showToast('Errore chiusura: ' + (d.detail || d.error || r.status), true);
+      _pollTradeCounter = 0;
       await poll().catch(()=>{});
       return;
     }
+    _pollTradeCounter = 0;
     await poll().catch(()=>{});
   } catch(e) { showToast('Errore di connessione durante la chiusura', true); }
 }
