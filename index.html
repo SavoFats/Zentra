@@ -4737,6 +4737,32 @@ let _sparklineCursor = null;     // {x,y} CSS px quando si scrolla
 let _sparklineHovering = false;
 let _sparklineInteractionReady = false;
 
+function getBalanceSparklineSize(canvas) {
+  const section = document.getElementById('balHeroSparklineSection');
+  const sectionW = section ? section.offsetWidth : 0;
+  const rect = canvas.getBoundingClientRect();
+  return {
+    w: sectionW > 50 ? sectionW : (rect.width > 50 ? rect.width : 300),
+    h: rect.height || section?.offsetHeight || 72
+  };
+}
+
+function normalizeSparklinePoints(pts, w, h) {
+  return pts.map(pt => ({
+    x: w > 0 ? pt.x / w : 0,
+    y: h > 0 ? pt.y / h : 0,
+    total: pt.total,
+    t: pt.t
+  }));
+}
+
+function scaleSparklinePoints(render, w, h) {
+  if (!render || !render.pts) return [];
+  return render.normalized
+    ? render.pts.map(pt => ({ x: pt.x * w, y: pt.y * h, total: pt.total, t: pt.t }))
+    : render.pts.map(pt => ({ ...pt }));
+}
+
 async function fetchPortfolioSummary() {
   if (_simMode || _plan === 'free') {
     updateBalanceHero(false);
@@ -5053,10 +5079,7 @@ function drawBalanceSparkline(progress = 1) {
   // Usa offsetWidth del container per forzare un reflow sincrono.
   // getBoundingClientRect() dopo un display-change non ha ancora il layout aggiornato
   // e può restituire una larghezza vecchia/piccola, causando il buffer troppo stretto.
-  const sectionW = section ? section.offsetWidth : 0;
-  const rect = canvas.getBoundingClientRect();
-  const w = sectionW > 50 ? sectionW : (rect.width > 50 ? rect.width : 300);
-  const h = rect.height || section?.offsetHeight || 72;
+  const { w, h } = getBalanceSparklineSize(canvas);
   // Se la section era appena diventata visibile e layout non è ancora pronto,
   // rinvia di un frame per evitare il canvas stretto.
   if (w <= 50) { requestAnimationFrame(() => drawBalanceSparkline(progress)); return; }
@@ -5107,7 +5130,7 @@ function drawBalanceSparkline(progress = 1) {
     : allVals[allVals.length - 1] >= allVals[0];
   const lineColor = isUp ? '#22c55e' : '#f6465d';
   if (progress >= 1) {
-    _balanceSparklineRender = { pts: allPts.map(pt => ({ ...pt })), lineColor };
+    _balanceSparklineRender = { pts: normalizeSparklinePoints(allPts, w, h), lineColor, normalized: true };
   }
 
   drawBalanceSparklinePath(ctx, pts, lineColor, w, h, clampY, progress >= 1);
@@ -5174,11 +5197,7 @@ function redrawBalanceSparklineOverlay() {
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas || !_balanceSparklineRender || !_balanceSparklineRender.pts || _balanceSparklineRender.pts.length < 2) return;
   const dpr = window.devicePixelRatio || 1;
-  const section = document.getElementById('balHeroSparklineSection');
-  const sectionW = section ? section.offsetWidth : 0;
-  const rect = canvas.getBoundingClientRect();
-  const w = sectionW > 50 ? sectionW : (rect.width || 300);
-  const h = rect.height || section?.offsetHeight || 72;
+  const { w, h } = getBalanceSparklineSize(canvas);
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
@@ -5186,12 +5205,19 @@ function redrawBalanceSparklineOverlay() {
   ctx.clearRect(0, 0, w, h);
   const padY = Math.max(14, h * 0.18);
   const clampY = y => Math.max(padY, Math.min(h - padY, y));
-  drawBalanceSparklinePath(ctx, _balanceSparklineRender.pts, _balanceSparklineRender.lineColor, w, h, clampY, true);
+  const pts = scaleSparklinePoints(_balanceSparklineRender, w, h);
+  _sparklinePoints = pts.map(pt => ({ x: pt.x, y: pt.y, total: pt.total, t: pt.t }));
+  drawBalanceSparklinePath(ctx, pts, _balanceSparklineRender.lineColor, w, h, clampY, true);
 }
 
 function initSparklineInteraction(canvas) {
   _sparklineInteractionReady = true;
   const move = cssX => {
+    if (_balanceSparklineRender) {
+      const { w, h } = getBalanceSparklineSize(canvas);
+      const scaledPts = scaleSparklinePoints(_balanceSparklineRender, w, h);
+      if (scaledPts.length >= 2) _sparklinePoints = scaledPts;
+    }
     if (_sparklinePoints.length < 2) return;
     let closest = _sparklinePoints[0];
     for (const pt of _sparklinePoints) {
