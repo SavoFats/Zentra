@@ -4892,8 +4892,9 @@ function updateBalanceHero(animate = false) {
     let chg = 0;
     if ((S.sim_today_change || 0) !== 0 || (S.sim_today_change_pct || 0) !== 0) {
       chg = (S.sim_today_change || 0) + simUnrealized;
-    } else if ((S.pnl || 0) !== 0) {
-      chg = S.pnl;
+    } else {
+      // Fallback: variazione rispetto ai $1000 iniziali demo
+      chg = simBalance - 1000;
     }
     if (changeEl) {
       const base = simBalance - chg;
