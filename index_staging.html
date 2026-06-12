@@ -3805,6 +3805,8 @@ async function clearTrades() {
   try {
     await fetch(API + '/trades', { method: 'DELETE', headers: authHeaders() });
     trades = [];
+    _cachedTrades = [];
+    _pollTradeCounter = 0;
     _newTradeCount = 0;
     _lastSeenTradeCount = 0;
     _expandedTrades.clear();
