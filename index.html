@@ -573,8 +573,8 @@ body.sidebar-open .sidebar { transform:translateX(0); }
   --border: rgba(120,140,255,0.1);
   --border2: rgba(140,160,255,0.16);
   --text: #e8ecff;
-  --text2: #7a85aa;
-  --text3: #4a5272;
+  --text2: #8d99bf;
+  --text3: #68749a;
   --glass-border: rgba(255,255,255,0.06);
 }
 
@@ -677,7 +677,7 @@ body.auth-active .tabbar { display:none !important; }
 
 /* ── MONITOR POSITION CARDS ── */
 .pos-card-new { background:var(--surface); border:1px solid var(--glass-border); border-radius:var(--radius); margin-bottom:12px; padding:18px 16px 14px; backdrop-filter:var(--blur); -webkit-backdrop-filter:var(--blur); box-shadow:0 4px 20px rgba(0,0,0,0.04),inset 0 1px 0 rgba(255,255,255,0.6); }
-[data-theme="dark"] .pos-card-new { box-shadow:0 4px 24px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.05); }
+[data-theme="dark"] .pos-card-new { box-shadow:0 4px 24px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.05); border-color:transparent; }
 .pos-head-new { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
 .pos-coin-new { display:flex; align-items:center; gap:12px; }
 .pos-logo-new { width:44px; height:44px; border-radius:50%; object-fit:cover; flex-shrink:0; }
@@ -702,8 +702,8 @@ body.auth-active .tabbar { display:none !important; }
 .pos-sl-dot { position:absolute; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; border:3px solid var(--bg); }
 .pos-sl-price { position:absolute; top:-18px; transform:translateX(-50%); font-size:9px; font-weight:700; white-space:nowrap; }
 .pos-sl-lbl { position:absolute; bottom:-16px; font-size:9px; font-weight:700; color:var(--text3); white-space:nowrap; }
-.pos-close-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:20px; color:var(--red); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
-.pos-close-btn:active { background:rgba(255,255,255,0.12); }
+.pos-close-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; background:none; border:none; color:var(--red); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--sans); transition:opacity 0.15s; }
+.pos-close-btn:active { opacity:0.6; }
 
 /* ── HOME REDESIGN ── */
 .home-mode-badge { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:5px 11px; border-radius:20px; flex-shrink:0; margin-top:4px; }
@@ -1608,7 +1608,6 @@ body.auth-active .tabbar { display:none !important; }
     <div class="mon-tabs">
       <button class="mon-tab active" id="posTabAperte" onclick="switchPosTab('aperte')">Aperte</button>
       <button class="mon-tab" id="posTabChiuse" onclick="switchPosTab('chiuse')">Chiuse</button>
-      <button class="mon-tab" id="posTabAttivita" onclick="switchPosTab('attivita')">Attività</button>
     </div>
 
     <!-- Panel Aperte -->
@@ -1660,10 +1659,7 @@ body.auth-active .tabbar { display:none !important; }
       <div id="transazioniList"><div class="empty"><div class="empty-text">Nessuna posizione chiusa</div></div></div>
     </div>
 
-    <!-- Panel Attività -->
-    <div id="posPanelAttivita" style="display:none">
-      <div id="agentActivityList"><div class="empty" style="padding:20px 0"><div class="empty-text">Nessuna attività</div></div></div>
-    </div>
+    <div id="posPanelAttivita" style="display:none"><div id="agentActivityList"></div></div>
   </div>
 
   <!-- elementi di compatibilità (page-market/monitor/transazioni eliminati ma JS null-safe) -->
@@ -4682,14 +4678,12 @@ function drawMiniChart(canvas, closes, entryPrice) {
 }
 
 function switchPosTab(tab) {
-  document.getElementById('posPanelAperte').style.display   = tab === 'aperte'   ? '' : 'none';
-  document.getElementById('posPanelChiuse').style.display   = tab === 'chiuse'   ? '' : 'none';
-  document.getElementById('posPanelAttivita').style.display = tab === 'attivita' ? '' : 'none';
-  document.getElementById('posTabAperte').classList.toggle('active',   tab === 'aperte');
-  document.getElementById('posTabChiuse').classList.toggle('active',   tab === 'chiuse');
-  document.getElementById('posTabAttivita').classList.toggle('active', tab === 'attivita');
-  if (tab === 'chiuse')   renderTransazioni();
-  if (tab === 'aperte')   renderPositions();
+  document.getElementById('posPanelAperte').style.display = tab === 'aperte' ? '' : 'none';
+  document.getElementById('posPanelChiuse').style.display = tab === 'chiuse' ? '' : 'none';
+  document.getElementById('posTabAperte').classList.toggle('active', tab === 'aperte');
+  document.getElementById('posTabChiuse').classList.toggle('active', tab === 'chiuse');
+  if (tab === 'chiuse') renderTransazioni();
+  if (tab === 'aperte') renderPositions();
 }
 
 function drawHeroSparkline() {
@@ -5382,8 +5376,8 @@ function renderPositions() {
         <div class="pos-g4-cell"><div class="pos-g4-label">Durata</div><div class="pos-g4-val" id="pos-duration-${esc(p.symbol)}">${durFmt}</div></div>
       </div>
       ${barHtml}
-      <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px">
-        <button onclick="openTVChart('${esc(p.symbol)}')" style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--text2);font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer">
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:22px">
+        <button onclick="openTVChart('${esc(p.symbol)}')" style="display:flex;align-items:center;gap:5px;background:none;border:none;color:var(--text2);font-size:12px;font-weight:600;padding:7px 13px;cursor:pointer;font-family:var(--sans);transition:opacity 0.15s" onmousedown="this.style.opacity='0.6'" onmouseup="this.style.opacity='1'">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Grafico
         </button>
@@ -5586,7 +5580,7 @@ function applyTxFilters(list) {
 function renderTransazioni() {
   const list = document.getElementById('transazioniList');
   if (!trades.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna transazione</div></div>';
+    list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione chiusa</div></div>';
     document.getElementById('txCount').textContent = '-- trade';
     document.getElementById('txWinRate').textContent = '--%';
     document.getElementById('txPnl').textContent = '--';
@@ -5613,7 +5607,7 @@ function renderTransazioni() {
   const fc = document.getElementById('txFilterCount'); if (fc) fc.textContent = filtered.length + ' operazioni';
 
   if (!filtered.length) {
-    list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna transazione</div></div>';
+    list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna posizione chiusa</div></div>';
     return;
   }
 

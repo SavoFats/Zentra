@@ -2681,6 +2681,7 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
                      reason, tp1_hit, duration_min, entry_time, exit_time, mode,
                      buy_fee, sell_fee, sell_type)
                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                    ON CONFLICT (user_id, symbol, entry_time, exit_time) DO NOTHING
                 """, user_id, sym,
                     float(pos["entryPrice"]), float(cur),
                     float(pos["size"]), float(total_pnl), float(total_pct),
@@ -3999,6 +4000,19 @@ async def startup():
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS buy_fee FLOAT DEFAULT 0;
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_fee FLOAT DEFAULT 0;
                     ALTER TABLE trades_history ADD COLUMN IF NOT EXISTS sell_type TEXT DEFAULT 'Market';
+                """)
+                # Rimuovi duplicati esatti (stessa entry_time + exit_time) tenendo l'id minore
+                await conn.execute("""
+                    DELETE FROM trades_history a USING trades_history b
+                    WHERE a.id > b.id
+                      AND a.user_id = b.user_id
+                      AND a.symbol = b.symbol
+                      AND a.entry_time = b.entry_time
+                      AND a.exit_time = b.exit_time;
+                """)
+                await conn.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS trades_history_no_dup
+                    ON trades_history (user_id, symbol, entry_time, exit_time);
                 """)
                 await conn.execute("""
                     CREATE TABLE IF NOT EXISTS portfolio_snapshots (
@@ -5578,7 +5592,12 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
         try:
             async with db_pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM trades_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500",
+                    """SELECT * FROM (
+                        SELECT DISTINCT ON (entry_time, symbol, exit_time) *
+                        FROM trades_history
+                        WHERE user_id = $1
+                        ORDER BY entry_time, symbol, exit_time, created_at ASC
+                    ) t ORDER BY created_at DESC LIMIT 500""",
                     user_id
                 )
             db_trades = [{
@@ -5598,10 +5617,10 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
                 "sellFee": float(r["sell_fee"] or 0),
                 "sellType": r["sell_type"] or "Market",
             } for r in rows]
-            # Merge: DB ha tutto, mem ha solo sessione corrente
-            # Usa entryTime come chiave — è identico in memoria e nel DB
-            db_keys = set((t["symbol"], t["entryTime"]) for t in db_trades)
-            extra = [t for t in mem_trades if (t["symbol"], t["entryTime"]) not in db_keys]
+            # Merge: DB è fonte di verità; mem aggiunge solo trade non ancora persistiti
+            # Chiave: (symbol, entryTime, exitTime) per distinguere TP1 parziale da chiusura finale
+            db_keys = set((t["symbol"], t["entryTime"], t["time"]) for t in db_trades)
+            extra = [t for t in mem_trades if (t["symbol"], t["entryTime"], t.get("time","")) not in db_keys]
             return {"trades": extra + db_trades}
         except Exception as e:
             print(f"DB trades fetch error: {e}")
