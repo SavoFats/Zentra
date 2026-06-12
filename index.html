@@ -702,10 +702,8 @@ body.auth-active .tabbar { display:none !important; }
 .pos-sl-dot { position:absolute; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; border:3px solid var(--bg); }
 .pos-sl-price { position:absolute; top:-18px; transform:translateX(-50%); font-size:9px; font-weight:700; white-space:nowrap; }
 .pos-sl-lbl { position:absolute; bottom:-16px; font-size:9px; font-weight:700; color:var(--text3); white-space:nowrap; }
-.pos-close-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:20px; color:var(--red); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--sans); transition:all 0.15s; }
-.pos-close-btn:active { background:rgba(255,255,255,0.12); }
-[data-theme="dark"] .pos-close-btn,
-[data-theme="dark"] .pos-graph-btn { border-color:transparent; }
+.pos-close-btn { display:inline-flex; align-items:center; gap:6px; padding:7px 13px; background:none; border:none; color:var(--red); font-size:12px; font-weight:600; cursor:pointer; font-family:var(--sans); transition:opacity 0.15s; }
+.pos-close-btn:active { opacity:0.6; }
 
 /* ── HOME REDESIGN ── */
 .home-mode-badge { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; padding:5px 11px; border-radius:20px; flex-shrink:0; margin-top:4px; }
@@ -5379,7 +5377,7 @@ function renderPositions() {
       </div>
       ${barHtml}
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:22px">
-        <button onclick="openTVChart('${esc(p.symbol)}')" class="pos-graph-btn" style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--text2);font-size:12px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer">
+        <button onclick="openTVChart('${esc(p.symbol)}')" style="display:flex;align-items:center;gap:5px;background:none;border:none;color:var(--text2);font-size:12px;font-weight:600;padding:7px 13px;cursor:pointer;font-family:var(--sans);transition:opacity 0.15s" onmousedown="this.style.opacity='0.6'" onmouseup="this.style.opacity='1'">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Grafico
         </button>
