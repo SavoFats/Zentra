@@ -1519,7 +1519,15 @@ def get_momentum_signal(sym: str, current_price: float,
     tsi_ok       = tsi_1h > 0 and tsi_1h >= tsi_1h_p
     macd_ok      = macd_hist > 0 and macd_hist > macd_hist_prev
 
-    stop_price = current_price * (1 - max_stop_pct)
+    # Stop ATR-based: 1.5× ATR sotto il prezzo di entrata.
+    # max_stop_pct è il pavimento catastrofico (es. -3%): lo stop non può
+    # essere più lontano di così, indipendentemente dall'ATR.
+    atr_5m = cd.get("atr_5m", 0.0)
+    if atr_5m > 0:
+        stop_price = max(current_price - atr_5m * 1.5,
+                         current_price * (1 - max_stop_pct))
+    else:
+        stop_price = current_price * (1 - max_stop_pct)
 
     signal = (breakout_ok and vol_ok and rsi_ok and
               decomp_ok and wick_ok and keltner_ok and tsi_ok and macd_ok)
@@ -2882,7 +2890,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if pos.get("_manual_action_required") or pos.get("imported"):
             continue
 
-        max_hold_hours = cfg.get("maxHoldHours", 4)
+        max_hold_hours = cfg.get("maxHoldHours", 1)
 
         # Max hold time: chiude se la posizione è aperta da troppo
         if max_hold_hours > 0:
@@ -2913,7 +2921,7 @@ async def scan_and_trade(state: dict, user_id: int = None):
         if pos.get("trailingActive"):
             peak = pos.get("peak_price", cur)
             atr  = pos.get("atr_5m", 0.0)
-            mult = cfg.get("trailAtrMultiplier", 2.0)
+            mult = cfg.get("trailAtrMultiplier", 3.5)
             if atr > 0:
                 trail_price = peak - atr * mult
             else:
@@ -5625,7 +5633,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     cfg["minR"]               = _clamp(cfg.get("minR", 0.01), 0.001, 0.10, 0.01)
     cfg["rsiMin"]             = _clamp(cfg.get("rsiMin", 35.0), 0.0, 100.0, 35.0)
     cfg["rsiMax"]             = _clamp(cfg.get("rsiMax", 65.0), 0.0, 100.0, 65.0)
-    cfg["maxHoldHours"]       = _clamp(cfg.get("maxHoldHours", 4.0), 0.25, 72.0, 4.0)
+    cfg["maxHoldHours"]       = _clamp(cfg.get("maxHoldHours", 1.0), 0.25, 72.0, 4.0)
     cfg["cooldown"]           = _clamp(cfg.get("cooldown", 1.0), 0.0, 24.0, 1.0)
     cfg["pullbackTolerance"]  = _clamp(cfg.get("pullbackTolerance", 0.02), 0.0, 0.10, 0.02)
     cfg["capitalPct"]         = _clamp(cfg.get("capitalPct", 1.0), 0.01, 1.0, 1.0)
@@ -5698,7 +5706,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
         cfg["pullbackTolerance"] = 0.02
         cfg["cooldown"]        = 1.0
         cfg["maxTrades"]       = 0
-        cfg["maxHoldHours"]    = 4.0
+        cfg["maxHoldHours"]    = 1.0
         cfg["minR"]            = 0.01
 
     existing_manual = [p for p in state.get("positions", []) if p.get("manual")]
@@ -5736,12 +5744,12 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
             "tp1R":                float(cfg.get("tp1R", 2.0)),
             "tp2R":                float(cfg.get("tp2R", 4.0)),
             "trailingStop":        bool(cfg.get("trailingStop", True)),
-            "maxHoldHours":        float(cfg.get("maxHoldHours", 4.0)),
+            "maxHoldHours":        float(cfg.get("maxHoldHours", 1.0)),
             "timeFilter":          bool(cfg.get("timeFilter", True)),
             "momentumPct":         float(cfg.get("momentumPct", 0.01)),
             "profitTolerance":        float(cfg.get("profitTolerance", 0.20)),
             "profitActivation":       float(cfg.get("profitActivation", 0.003)),
-            "trailAtrMultiplier":     float(cfg.get("trailAtrMultiplier", 2.0)),
+            "trailAtrMultiplier":     float(cfg.get("trailAtrMultiplier", 3.5)),
             "circuitBreakerEnabled":  bool(cfg.get("circuitBreakerEnabled", False)),
             "dailyLossLimit":         float(cfg.get("dailyLossLimit", 0.03)),
             "strategy":               cfg.get("strategy", "momentum"),
@@ -5769,7 +5777,7 @@ async def start_agent(body: dict, request: Request, user_id: int = Depends(get_c
     mode   = "REALE" if real_mode else "SIMULAZIONE"
     mt           = int(cfg.get("maxTrades", 0))
     mcl          = int(cfg.get("maxConsecutiveLosses", 3))
-    mxh          = float(cfg.get("maxHoldHours", 4.0))
+    mxh          = float(cfg.get("maxHoldHours", 1.0))
     max_stop_pct_s = float(cfg.get("maxStopPct", 0.02)) * 100
     btc_filt_s   = "ON" if cfg.get("btcEmaFilter", True) else "OFF"
     curr_sym     = "$"
