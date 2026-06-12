@@ -2642,7 +2642,16 @@ function saveKeys() {
 }
 function skipKeys() { hideAuthScreen(); initApp(); }
 async function logout() {
-  await fetch(API + '/auth/logout', { method: 'POST', headers: authHeaders() }).catch(() => {});
+  if (S.running || (S.positions || []).length > 0) {
+    showToast('Chiudi le posizioni aperte prima di uscire.', true);
+    return;
+  }
+  const res = await fetch(API + '/auth/logout', { method: 'POST', headers: authHeaders() }).catch(() => null);
+  if (res && !res.ok) {
+    const d = await res.json().catch(() => ({}));
+    showToast(d.detail || d.error || 'Chiudi le posizioni aperte prima di uscire.', true);
+    return;
+  }
   localStorage.removeItem('ca_token');
   localStorage.removeItem('ca_username');
   localStorage.removeItem('ca_email');
@@ -2652,6 +2661,10 @@ async function logout() {
 }
 
 function deleteAccount() {
+  if (S.running || (S.positions || []).length > 0) {
+    showToast('Chiudi le posizioni aperte prima di eliminare il profilo.', true);
+    return;
+  }
   const modal = document.getElementById('deleteAccountModal');
   const input = document.getElementById('deleteAccountInput');
   if (input) input.value = '';
@@ -3430,24 +3443,38 @@ async function setSimMode(sim) {
     updateSimToggle();
     return;
   }
-  // Blocca switch se sessione attiva
-  if (S.running) {
+  // Blocca switch se sessione o posizioni aperte sono attive
+  if (S.running || (S.positions || []).length > 0) {
     document.getElementById('profileMenu').classList.remove('open');
-    document.getElementById('sessionActiveModal').classList.add('open');
-    // Rimetti il toggle nella posizione corretta
+    showToast('Chiudi le posizioni aperte prima di cambiare conto.', true);
     updateSimToggle();
     return;
   }
+  const prevMode = _simMode;
   _simMode = sim;
   window._realMode = canUseRealMode();
-  S = { running:false, capital:0, currentCapital:0, pnl:0, pct:0, tradeCount:0, winRate:0, positions:[], pnlHistory:[], log:[], remainingMs:0 };
   try {
-    await fetch(API + '/auth/sim_mode', {
+    const res = await fetch(API + '/auth/sim_mode', {
       method: 'POST', headers: authHeaders(),
       body: JSON.stringify({ sim_mode: sim })
     });
-  } catch(e) {}
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      _simMode = prevMode;
+      window._realMode = canUseRealMode();
+      showToast(data.detail || data.error || 'Cambio conto non riuscito.', true);
+      updateSimToggle();
+      return;
+    }
+  } catch(e) {
+    _simMode = prevMode;
+    window._realMode = canUseRealMode();
+    showToast('Errore di rete durante il cambio conto.', true);
+    updateSimToggle();
+    return;
+  }
   updateSimToggle();
+  await poll();
   render();
   renderHome();
   renderTransazioni();

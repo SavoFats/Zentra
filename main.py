@@ -3837,6 +3837,29 @@ async def db_delete_open_position(user_id: int, symbol: str):
     except Exception as e:
         print(f"[open_positions] delete error {symbol}: {e}")
 
+async def db_load_open_positions(user_id: int) -> list[dict]:
+    """Ricarica dal DB le posizioni aperte tracciate da Zentra."""
+    if not db_pool or not user_id:
+        return []
+    try:
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT position_json FROM open_positions WHERE user_id = $1 ORDER BY opened_at",
+                user_id
+            )
+        positions = []
+        for row in rows:
+            try:
+                pos = json.loads(row["position_json"])
+                if isinstance(pos, dict):
+                    positions.append(pos)
+            except Exception:
+                continue
+        return positions
+    except Exception as e:
+        print(f"[open_positions] load error user {user_id}: {e}")
+        return []
+
 async def telegram_loop():
     """Loop separato per Telegram. Attende 20s all'avvio per dare tempo al vecchio container Railway di spegnersi (rolling deploy)."""
     await asyncio.sleep(20)
@@ -4559,7 +4582,16 @@ async def register(req: RegisterRequest, request: Request):
         raise HTTPException(status_code=500, detail="Errore durante la registrazione")
 
 @app.post("/auth/logout")
-async def logout_user(request: Request):
+async def logout_user(request: Request, user_id: int = Depends(get_current_user)):
+    state = user_sessions.get(user_id)
+    persisted_positions = await db_load_open_positions(user_id)
+    if state and persisted_positions and not state.get("positions"):
+        state["positions"] = persisted_positions
+    if (state and (state.get("running") or state.get("positions"))) or persisted_positions:
+        raise HTTPException(
+            status_code=409,
+            detail="Chiudi le posizioni aperte prima di uscire dall'account."
+        )
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         token = auth[7:]
@@ -4843,7 +4875,7 @@ async def get_me(request: Request, user_id: int = Depends(get_current_user)):
     has_binance_keys = bool(row.get("binance_api_key"))
     has_coinbase_keys = bool(row.get("coinbase_api_key"))
     sim = row["sim_mode"] if row["sim_mode"] is not None else True
-    if not has_keys:
+    if not (has_keys or has_coinbase_keys):
         sim = True
     dname = row["display_name"] or row["username"]
     # Calcola piano effettivo (pro scade se subscription_expires_at è nel passato)
@@ -4889,17 +4921,29 @@ async def set_sim_mode(req: SimModeRequest, request: Request, user_id: int = Dep
     check_rate_limit(request, max_attempts=10, window=60, key_suffix="sim_mode")
     if not db_pool:
         raise HTTPException(status_code=500, detail="DB non disponibile")
+    state = user_sessions.get(user_id)
+    persisted_positions = await db_load_open_positions(user_id)
+    if state and persisted_positions and not state.get("positions"):
+        state["positions"] = persisted_positions
+    if (state and (state.get("running") or state.get("positions"))) or persisted_positions:
+        raise HTTPException(
+            status_code=409,
+            detail="Chiudi le posizioni aperte prima di cambiare tra conto reale e conto demo."
+        )
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT revx_key_id FROM users WHERE id = $1", user_id)
-        if not row["revx_key_id"] and not req.sim_mode:
+        row = await conn.fetchrow(
+            "SELECT revx_key_id, coinbase_api_key FROM users WHERE id = $1",
+            user_id
+        )
+        if not (row["revx_key_id"] or row["coinbase_api_key"]) and not req.sim_mode:
             raise HTTPException(status_code=400, detail="API keys richieste per modalità reale")
         await conn.execute(
             "UPDATE users SET sim_mode = $1 WHERE id = $2",
             req.sim_mode, user_id
         )
-    # Reset session state so stale data from the previous mode doesn't show up
+    # Reset session state solo quando non ci sono posizioni aperte.
     state = user_sessions.get(user_id)
-    if state and not state.get("running"):
+    if state and not state.get("running") and not state.get("positions"):
         user_sessions[user_id] = make_session()
     return {"ok": True, "sim_mode": req.sim_mode}
 
@@ -4969,6 +5013,18 @@ async def klines_history(request: Request, symbol: str, start: int, end: int, in
 async def get_status(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=120, window=60, key_suffix="status")
     state = get_session(user_id)
+    if db_pool and not state.get("positions"):
+        restored_positions = await db_load_open_positions(user_id)
+        if restored_positions:
+            state["positions"] = restored_positions
+            if state.get("capital", 0) <= 0:
+                invested = sum(
+                    float(p.get("size_remaining", p.get("size", 0.0)) or 0.0)
+                    for p in restored_positions
+                )
+                state["capital"] = invested
+                state["currentCapital"] = 0.0
+            add_log(state, "info", "RECUPERO", "Posizioni aperte ricaricate dal registro persistente.")
     if drop_imported_exchange_positions(state):
         await persist_sessions()
     if not state.get("telegram_chat_id") and db_pool:
