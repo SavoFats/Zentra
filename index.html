@@ -7017,7 +7017,7 @@ async function tmFetchPrice() {
   const exchange = document.getElementById('tmExchange')?.value;
   const lbl = document.getElementById('tmPriceLabel');
   if (!exchange || !_tmSymbol) return;
-  if (_plan === 'free') {
+  if (_plan === 'free' || _simMode) {
     const coin = mktData.find(c => c.symbol === _tmSymbol);
     if (coin && coin.price > 0) {
       _tmPrice = coin.price;
