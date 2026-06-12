@@ -5630,6 +5630,38 @@ async def get_trades(request: Request, user_id: int = Depends(get_current_user))
     return {"trades": mem_trades}
 
 
+@app.post("/reset_demo")
+async def reset_demo(request: Request, user_id: int = Depends(get_current_user)):
+    check_rate_limit(request, max_attempts=5, window=60, key_suffix="reset_demo")
+    state = get_session(user_id)
+    # Stop any running demo agent first
+    if state.get("running") and not state.get("real_mode"):
+        state["_stopping"] = True
+    # Reset in-memory demo state
+    state["sim_pnl_total"] = 0.0
+    state["sim_history_cache"] = []
+    state["sim_intraday_last_snap"] = None
+    state["trades"] = [t for t in state.get("trades", []) if t.get("realMode")]
+    state["positions"] = [p for p in state.get("positions", []) if p.get("realMode")]
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    "DELETE FROM trades_history WHERE user_id = $1 AND mode = 'sim'", user_id
+                )
+                await conn.execute(
+                    "DELETE FROM sim_intraday_snapshots WHERE user_id = $1", user_id
+                )
+                await conn.execute(
+                    "DELETE FROM sim_snapshots WHERE user_id = $1", user_id
+                )
+                await conn.execute(
+                    "UPDATE users SET sim_pnl_total = 0 WHERE id = $1", user_id
+                )
+        except Exception as e:
+            print(f"[reset_demo] DB error: {e}")
+    return {"ok": True}
+
 @app.delete("/trades")
 async def clear_trades(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=10, window=60, key_suffix="clear_trades")
