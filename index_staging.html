@@ -4799,6 +4799,7 @@ let _lastBalanceSparklineUpdate = 0;
 let _balanceSparklineDrawnOnce = false;
 let _lastBalanceSparklineMode = null;
 let _balanceSparklineRender = null;
+let _balanceSparklineSize = null;
 let _sparklinePoints = [];       // [{x,y,total,t}] — punti renderizzati per hover
 let _sparklineCursor = null;     // {x,y} CSS px quando si scrolla
 let _sparklineHovering = false;
@@ -4873,6 +4874,7 @@ function updateBalanceHero(animate = false) {
     _lastBalanceSparklineUpdate = 0;
     _balanceSparklineDrawnOnce = false;
     _balanceSparklineRender = null;
+    _balanceSparklineSize = null;
   }
 
   if (isDemo) {
@@ -5158,6 +5160,7 @@ function drawBalanceSparkline(progress = 1) {
   if (w <= 50) { requestAnimationFrame(() => drawBalanceSparkline(progress)); return; }
   canvas.width = w * dpr;
   canvas.height = h * dpr;
+  _balanceSparklineSize = { w, h };
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
@@ -5203,7 +5206,7 @@ function drawBalanceSparkline(progress = 1) {
     : allVals[allVals.length - 1] >= allVals[0];
   const lineColor = isUp ? '#22c55e' : '#f6465d';
   if (progress >= 1) {
-    _balanceSparklineRender = { pts: normalizeSparklinePoints(allPts, w, h), lineColor, normalized: true };
+    _balanceSparklineRender = { pts: normalizeSparklinePoints(allPts, w, h), lineColor, normalized: true, w, h };
   }
 
   drawBalanceSparklinePath(ctx, pts, lineColor, w, h, clampY, progress >= 1);
@@ -5270,7 +5273,9 @@ function redrawBalanceSparklineOverlay() {
   const canvas = document.getElementById('balHeroSparkline');
   if (!canvas || !_balanceSparklineRender || !_balanceSparklineRender.pts || _balanceSparklineRender.pts.length < 2) return;
   const dpr = window.devicePixelRatio || 1;
-  const { w, h } = getBalanceSparklineSize(canvas);
+  const fallbackSize = getBalanceSparklineSize(canvas);
+  const w = _balanceSparklineRender.w || _balanceSparklineSize?.w || fallbackSize.w;
+  const h = _balanceSparklineRender.h || _balanceSparklineSize?.h || fallbackSize.h;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
@@ -5287,7 +5292,9 @@ function initSparklineInteraction(canvas) {
   _sparklineInteractionReady = true;
   const move = cssX => {
     if (_balanceSparklineRender) {
-      const { w, h } = getBalanceSparklineSize(canvas);
+      const fallbackSize = getBalanceSparklineSize(canvas);
+      const w = _balanceSparklineRender.w || _balanceSparklineSize?.w || fallbackSize.w;
+      const h = _balanceSparklineRender.h || _balanceSparklineSize?.h || fallbackSize.h;
       const scaledPts = scaleSparklinePoints(_balanceSparklineRender, w, h);
       if (scaledPts.length >= 2) _sparklinePoints = scaledPts;
     }
@@ -5316,18 +5323,20 @@ function initSparklineInteraction(canvas) {
     if (!_sparklineHovering) return;
     _sparklineHovering = false;
     _sparklineCursor = null;
-    redrawBalanceSparklineOverlay();
     updateBalanceHero(false);
+    redrawBalanceSparklineOverlay();
   };
   canvas.addEventListener('mousemove', e => {
     const r = canvas.getBoundingClientRect();
-    move(e.clientX - r.left);
+    const renderW = _balanceSparklineRender?.w || _balanceSparklineSize?.w || r.width || 1;
+    move((e.clientX - r.left) * (renderW / (r.width || renderW)));
   });
   canvas.addEventListener('mouseleave', leave);
   canvas.addEventListener('touchmove', e => {
     e.preventDefault();
     const r = canvas.getBoundingClientRect();
-    move(e.touches[0].clientX - r.left);
+    const renderW = _balanceSparklineRender?.w || _balanceSparklineSize?.w || r.width || 1;
+    move((e.touches[0].clientX - r.left) * (renderW / (r.width || renderW)));
   }, { passive: false });
   canvas.addEventListener('touchend', leave);
 }

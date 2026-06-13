@@ -2091,7 +2091,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                 "opened_by_zentra": True,
             }
             state["positions"].append(pos)
-            await db_save_open_position(user_id, pos)
+            await require_open_position_saved(user_id, pos)
             await persist_sessions()
             return
         elif state.get("use_coinbase"):
@@ -2173,7 +2173,7 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
                 "opened_by_zentra": True,
             }
             state["positions"].append(pos)
-            await db_save_open_position(user_id, pos)
+            await require_open_position_saved(user_id, pos)
             await persist_sessions()
             return
         else:
@@ -2214,7 +2214,10 @@ async def enter_position(state: dict, sym_data: dict, tradable_capital: float, u
         "qty_purchased": qty_purchased if is_real else 0.0,
     }
     state["positions"].append(pos)
-    await db_save_open_position(user_id, pos)
+    if is_real:
+        await require_open_position_saved(user_id, pos)
+    else:
+        await db_save_open_position(user_id, pos)
 
 REVX_LIMIT_DROPS = [0.01, 0.02, 0.04, 0.06, 0.09, 0.12, 0.16, 0.20, 0.25, 0.30]
 
@@ -3823,24 +3826,38 @@ async def persist_sessions():
         except Exception as e:
             print(f"Errore persist sessione user {uid}: {e}")
 
-async def db_save_open_position(user_id: int, pos: dict):
+async def db_save_open_position(user_id: int, pos: dict) -> bool:
     """Salva o aggiorna una posizione aperta nella tabella open_positions (fonte di verità)."""
     if not db_pool or not user_id:
-        return
+        return False
     mode = "real" if pos.get("realMode") else "sim"
-    try:
-        pos_json = json.dumps(pos, default=str)
-        async with db_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO open_positions (user_id, symbol, mode, position_json, opened_at, updated_at)
-                VALUES ($1, $2, $3, $4, NOW(), NOW())
-                ON CONFLICT (user_id, symbol) DO UPDATE
-                SET position_json = EXCLUDED.position_json,
-                    mode          = EXCLUDED.mode,
-                    updated_at    = NOW()
-            """, user_id, pos["symbol"], mode, pos_json)
-    except Exception as e:
-        print(f"[open_positions] save error {pos.get('symbol')}: {e}")
+    pos_json = json.dumps(pos, default=str)
+    last_error = None
+    for attempt in range(3):
+        try:
+            async with db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO open_positions (user_id, symbol, mode, position_json, opened_at, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    ON CONFLICT (user_id, symbol) DO UPDATE
+                    SET position_json = EXCLUDED.position_json,
+                        mode          = EXCLUDED.mode,
+                        updated_at    = NOW()
+                """, user_id, pos["symbol"], mode, pos_json)
+            return True
+        except Exception as e:
+            last_error = e
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (attempt + 1))
+    print(f"[open_positions] save error {pos.get('symbol')}: {last_error}")
+    return False
+
+async def require_open_position_saved(user_id: int, pos: dict):
+    if await db_save_open_position(user_id, pos):
+        return
+    raise RuntimeError(
+        f"Posizione {pos.get('symbol', '?')} aperta ma non salvata nel registro persistente"
+    )
 
 async def db_delete_open_position(user_id: int, symbol: str):
     """Rimuove una posizione da open_positions alla chiusura."""
@@ -4197,143 +4214,16 @@ async def fetch_coingecko_logos():
         print(f"[CG] Errore fetch loghi: {e}")
 
 async def recover_coinbase_positions(state: dict, user_id: int) -> bool:
-    """Recupera posizioni Coinbase con saldo > 0 non tracciate nel DB dopo un restart."""
-    FIAT = {"USD", "EUR", "GBP", "CHF", "JPY", "USDC", "USDT"}
-    api_key = state.get("coinbase_api_key", "")
-    api_secret = state.get("coinbase_api_secret", "")
-    if not api_key or not api_secret:
-        try:
-            api_key, api_secret = await load_coinbase_keys_for_user(user_id)
-            state["coinbase_api_key"]    = api_key
-            state["coinbase_api_secret"] = api_secret
-        except Exception:
-            return False
-    if not api_key or not api_secret:
-        return False
-    try:
-        accounts = await fetch_coinbase_accounts(api_key, api_secret)
-    except Exception as e:
-        print(f"[RECOVER-CB] User {user_id}: errore fetch accounts: {e}")
-        return False
-    tracked = {p["symbol"].upper() for p in state.get("positions", [])}
-    recovered = False
-    for acc in accounts:
-        if not isinstance(acc, dict):
-            continue
-        currency = str(acc.get("currency", "")).upper()
-        if not currency or currency in FIAT:
-            continue
-        total = float(acc.get("available", 0) or 0)
-        if total <= 0.001 or currency in tracked:
-            continue
-        entry_price = 0.0
-        product_id = ""
-        for pid in (f"{currency}-USD", f"{currency}-USDC"):
-            try:
-                entry_price = await get_coinbase_live_price(pid, api_key, api_secret)
-                product_id = pid
-                break
-            except Exception:
-                continue
-        if entry_price <= 0:
-            restore_debug_log(f"[RECOVER-CB] User {user_id}: prezzo {currency} non disponibile, skip")
-            continue
-        size_usd = total * entry_price
-        pos = {
-            "symbol": currency, "icon": "",
-            "entryPrice": entry_price, "currentPrice": entry_price,
-            "highPrice": entry_price, "peak_price": entry_price,
-            "size": size_usd, "size_remaining": size_usd, "tp1_hit": False,
-            "entryTime": datetime.utcnow().isoformat() + "Z",
-            "stopPrice": 0.0, "tp1Price": 0.0, "tp2Price": 0.0,
-            "R_pct": 0.0, "atr_5m": 0.0,
-            "realMode": True, "fee_pct": 0.0012,
-            "qty_purchased": total, "exchange": "coinbase", "symbol_pair": product_id,
-            "entry_usd": round(size_usd, 2), "buy_fee_usd": 0.0,
-            "manual": True, "_recovered": True, "_manual_action_required": True,
-        }
-        state["positions"].append(pos)
-        await db_save_open_position(user_id, pos)
-        tracked.add(currency)
-        add_log(state, "buy", "POSIZIONE RECUPERATA",
-                f"{currency} — trovata {total:.6f} su Coinbase, non tracciata. Imposta SL/TP.")
-        tg_chat = state.get("telegram_chat_id", "")
-        msg = (f"<b>Posizione recuperata: {currency}</b>\n"
-               f"Trovata {total:.6f} {currency} su Coinbase non tracciata da Zentra.\n"
-               f"Prezzo attuale usato come entry: ${entry_price:.4f}\n"
-               f"<b>Imposta SL/TP dall'app.</b>")
-        if tg_chat:
-            await send_telegram_to(tg_chat, msg)
-        else:
-            await send_telegram(msg)
-        restore_debug_log(f"[RECOVER-CB] User {user_id}: recuperata {currency} {total:.6f} @ ${entry_price:.4f}")
-        recovered = True
-    return recovered
+    """Non importa holdings Coinbase aperti fuori da Zentra."""
+    # Zentra deve recuperare solo posizioni gia tracciate in open_positions.
+    # Holdings aperti direttamente sull'exchange non vanno importati ne gestiti.
+    return False
 
 async def recover_revx_positions(state: dict, user_id: int):
-    """Recupera posizioni RevX con saldo > 0 non tracciate nel DB dopo un restart."""
-    revx_key_id = state.get("revx_key_id", "")
-    revx_priv   = state.get("revx_private_key", "")
-    if not revx_key_id or not revx_priv:
-        return False
-    FIAT = {"USD", "EUR", "GBP", "CHF", "JPY"}
-    try:
-        result   = await revx_request("GET", "/api/1.0/balances", key_id=revx_key_id, private_key=revx_priv)
-        balances = parse_revx_balances(result)
-    except Exception as e:
-        print(f"[RECOVER] User {user_id}: errore fetch balances: {e}")
-        return False
-    tracked = {p["symbol"].upper() for p in state.get("positions", [])}
-    recovered = False
-    for b in balances:
-        if not isinstance(b, dict):
-            continue
-        currency = str(b.get("currency", "")).upper()
-        if not currency or currency in FIAT:
-            continue
-        total = float(b.get("total", 0) or 0)
-        if total <= 0.001 or currency in tracked:
-            continue
-        symbol_pair = f"{currency}-USD"
-        entry_price = 0.0
-        try:
-            entry_price = await get_revx_live_price(symbol_pair, revx_key_id, revx_priv)
-        except Exception:
-            pass
-        if entry_price <= 0:
-            restore_debug_log(f"[RECOVER] User {user_id}: prezzo {currency} non disponibile, skip")
-            continue
-        size_usd = total * entry_price
-        pos = {
-            "symbol": currency, "icon": "",
-            "entryPrice": entry_price, "currentPrice": entry_price,
-            "highPrice": entry_price, "peak_price": entry_price,
-            "size": size_usd, "size_remaining": size_usd, "tp1_hit": False,
-            "entryTime": datetime.utcnow().isoformat() + "Z",
-            "stopPrice": 0.0, "tp1Price": 0.0, "tp2Price": 0.0,
-            "R_pct": 0.0, "atr_5m": 0.0,
-            "realMode": True, "fee_pct": 0.0009,
-            "qty_purchased": total, "exchange": "revx", "symbol_pair": symbol_pair,
-            "entry_usd": round(size_usd, 2), "buy_fee_usd": 0.0,
-            "manual": True, "_recovered": True, "_manual_action_required": True,
-        }
-        state["positions"].append(pos)
-        await db_save_open_position(user_id, pos)
-        tracked.add(currency)
-        add_log(state, "buy", "POSIZIONE RECUPERATA",
-                f"{currency} — trovata {total:.6f} su RevX, non tracciata. Imposta SL/TP.")
-        tg_chat = state.get("telegram_chat_id", "")
-        msg = (f"<b>Posizione recuperata: {currency}</b>\n"
-               f"Trovata {total:.6f} {currency} su RevX non tracciata da Zentra.\n"
-               f"Prezzo attuale usato come entry: ${entry_price:.4f}\n"
-               f"<b>Imposta SL/TP dall'app.</b>")
-        if tg_chat:
-            await send_telegram_to(tg_chat, msg)
-        else:
-            await send_telegram(msg)
-        restore_debug_log(f"[RECOVER] User {user_id}: recuperata {currency} {total:.6f} @ ${entry_price:.4f}")
-        recovered = True
-    return recovered
+    """Non importa holdings RevX aperti fuori da Zentra."""
+    # Zentra deve recuperare solo posizioni gia tracciate in open_positions.
+    # Holdings aperti direttamente sull'exchange non vanno importati ne gestiti.
+    return False
 
 async def restore_sessions_from_db(pool):
     """Ripristina sessioni dal DB dopo un riavvio.
@@ -4645,7 +4535,10 @@ async def logout_user(request: Request, user_id: int = Depends(get_current_user)
 async def delete_account(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=3, window=300, key_suffix="delete_account")
     state = user_sessions.get(user_id)
-    if state and (state.get("running") or state.get("positions")):
+    persisted_positions = await db_load_open_positions(user_id)
+    if state and persisted_positions and not state.get("positions"):
+        state["positions"] = persisted_positions
+    if (state and (state.get("running") or state.get("positions"))) or persisted_positions:
         raise HTTPException(
             status_code=409,
             detail="Ferma la sessione e chiudi le posizioni aperte prima di eliminare l'account."
@@ -5215,14 +5108,17 @@ async def portfolio_snapshot_loop():
     """Every 5 min, in the midnight window (00:00-01:00 UTC), saves daily snapshots."""
     _snapped_today: set = set()
     _sim_snapped_today: set = set()
+    _snapshot_date = None
     while True:
         await asyncio.sleep(300)
         try:
             now = datetime.utcnow()
             today = now.date()
+            if _snapshot_date != today:
+                _snapped_today.clear()
+                _sim_snapped_today.clear()
+                _snapshot_date = today
             if now.hour != 0:
-                _snapped_today.discard(today)
-                _sim_snapped_today.discard(today)
                 continue
             if not db_pool:
                 continue
@@ -6125,7 +6021,7 @@ async def inspect_coinbase_external_holdings_for_user(user_id: int, min_value_us
         for p in state.get("positions", [])
         if p.get("realMode") and p.get("exchange") == "coinbase"
     }
-    imported = []
+    detected = []
     skipped = []
     for acc in accounts:
         sym = str(acc.get("currency") or "").upper()
@@ -6148,49 +6044,21 @@ async def inspect_coinbase_external_holdings_for_user(user_id: int, min_value_us
         if value_usd < min_value_usd:
             skipped.append({"symbol": sym, "reason": "below_min_value", "value_usd": round(value_usd, 4)})
             continue
-        pos = {
-            "symbol": sym,
-            "icon": market_data.get(sym, {}).get("icon", sym[:1]),
-            "entryPrice": price,
-            "currentPrice": price,
-            "highPrice": price,
-            "peak_price": price,
-            "size": round(value_usd, 2),
-            "size_remaining": round(value_usd, 2),
-            "tp1_hit": False,
-            "entryTime": datetime.utcnow().isoformat() + "Z",
-            "stopPrice": 0.0,
-            "tp1Price": price * 10,
-            "tp2Price": price * 10,
-            "R_pct": 0.0,
-            "atr_5m": candle_data.get(sym, {}).get("atr_5m", 0.0),
-            "realMode": True,
-            "fee_pct": 0.012,
-            "qty_purchased": qty,
-            "exchange": "coinbase",
-            "symbol_pair": product_id,
-            "entry_usd": round(value_usd, 2),
-            "buy_fee_usd": 0.0,
-            "manual": True,
-            "imported": True,
-            "_manual_action_required": True,
-        }
-        state.setdefault("positions", []).append(pos)
-        await db_save_open_position(user_id, pos)
-        state["currentCapital"] = max(0.0, float(state.get("currentCapital") or 0.0) - pos["size"])
         existing.add(sym)
-        imported.append({
+        detected.append({
             "symbol": sym,
             "product_id": product_id,
             "qty": qty,
             "price": price,
             "value_usd": round(value_usd, 2),
         })
-    if imported:
-        labels = ", ".join(f"{p['symbol']} ${p['value_usd']:.2f}" for p in imported[:8])
-        add_log(state, "info", "SYNC COINBASE", f"Importate posizioni Coinbase: {labels}")
-        await persist_sessions()
-    return {"ok": True, "imported": imported, "skipped": skipped}
+    return {
+        "ok": True,
+        "detected": detected,
+        "imported": [],
+        "skipped": skipped,
+        "message": "Holdings Coinbase aperti fuori da Zentra rilevati ma non importati.",
+    }
 
 async def get_coinbase_preflight_result(api_key: str, api_secret: str, sym: str, amount: float) -> dict:
     accounts = await fetch_coinbase_accounts(api_key, api_secret)
@@ -6492,7 +6360,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "opened_by_zentra": True,
             }
             state["positions"].append(pos)
-            await db_save_open_position(user_id, pos)
+            await require_open_position_saved(user_id, pos)
             await persist_sessions()
             return {"ok": True, "price": actual_price, "qty": qty, "exchange": "coinbase"}
         except HTTPException:
@@ -6562,7 +6430,7 @@ async def manual_trade(req: ManualTradeReq, request: Request, user_id: int = Dep
                 "opened_by_zentra": True,
             }
             state["positions"].append(pos)
-            await db_save_open_position(user_id, pos)
+            await require_open_position_saved(user_id, pos)
             await persist_sessions()
             return {"ok": True, "price": actual_price, "qty": qty}
         except HTTPException:
