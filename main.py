@@ -1388,8 +1388,9 @@ _ALERT_BULLISH = {
     "tsi_bullish","breakout","pullback","rel_strength","rsi_oversold","volume_spike",
 }
 
-def _find_high_conviction_setups() -> list[dict]:
-    """Coin con segnali su 2+ TF, o 3+ segnali su 1 TF. Max 3 risultati, ordinati per score."""
+def _find_high_conviction_setups(prev_signals: dict | None = None) -> list[dict]:
+    """Coin con segnali su 2+ TF, o 3+ segnali su 1 TF. Max 3 risultati, ordinati per score.
+    Se prev_signals è fornito, esclude setup dove tutti i segnali erano già attivi nel ciclo precedente."""
     coin_sigs: dict[str, dict[str, list]] = {}
     for tf in ["5m", "15m", "1h", "4h", "1d"]:
         for sym, d in scanner_candle_data.get(tf, {}).items():
@@ -1413,9 +1414,23 @@ def _find_high_conviction_setups() -> list[dict]:
             conviction = "ALTA"
         else:
             continue
+
+        # Filtro "appena acceso": richiede almeno 1 segnale in transizione off→on
+        new_signals: dict[str, list] = {}
+        if prev_signals is not None:
+            prev_sym = prev_signals.get(sym, {})
+            for tf, sigs in tf_map.items():
+                prev_tf = set(prev_sym.get(tf, []))
+                fresh = [s for s in sigs if s not in prev_tf]
+                if fresh:
+                    new_signals[tf] = fresh
+            if not new_signals:
+                continue  # nessun segnale nuovo — setup già vecchio
+
         score = n_tfs * 10 + max_sig + (10 if conviction == "MASSIMA" else 0)
         setups.append({"symbol": sym, "conviction": conviction,
-                       "tf_signals": tf_map, "price": price, "score": score})
+                       "tf_signals": tf_map, "price": price, "score": score,
+                       "new_signals": new_signals})
 
     setups.sort(key=lambda x: x["score"], reverse=True)
     return setups[:3]
@@ -1487,34 +1502,109 @@ async def _generate_alert(setup: dict) -> str | None:
         return None
 
 async def proactive_alert_loop():
-    """Ogni 15 min cerca setup ad alta conviction e li invia via Telegram."""
-    await asyncio.sleep(300)   # attesa iniziale 5 min per lasciar caricare lo scanner
+    """Ogni 15 min: controlla swing monitorati per invalidazione, poi cerca nuovi setup."""
+    await asyncio.sleep(300)   # attesa iniziale 5 min
     while True:
         try:
             await asyncio.sleep(15 * 60)
             if not scanner_candle_data or not db_pool:
                 continue
-            setups = _find_high_conviction_setups()
+
+            now = time.time()
+            tg_rows: list | None = None
+
+            async def _get_tg_rows():
+                nonlocal tg_rows
+                if tg_rows is None:
+                    async with db_pool.acquire() as conn:
+                        tg_rows = await conn.fetch(
+                            "SELECT telegram_chat_id FROM users "
+                            "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
+                        )
+                return tg_rows
+
+            # ── Controlla swing attivi per invalidazione ──────────────────────
+            for sym in list(_monitored_swing.keys()):
+                mon = _monitored_swing[sym]
+                current_price = market_data.get(sym, {}).get("price", 0)
+
+                if now - mon["sent_at"] > _MONITORED_SWING_TTL:
+                    await _resolve_alert_in_db(mon["db_id"], "expired", current_price or 0)
+                    del _monitored_swing[sym]
+                    continue
+
+                invalidated = False
+                reason = ""
+                if current_price and current_price < mon["entry_price"] * 0.97:
+                    invalidated = True
+                    reason = f"prezzo sceso del 3%+ (${current_price:,.4f})"
+                else:
+                    # Segnali chiave spenti su tutti i TF
+                    still_active = any(
+                        scanner_candle_data.get(tf, {}).get(sym, {}).get(s)
+                        for tf, sigs in mon["tf_signals"].items()
+                        for s in sigs
+                    )
+                    if not still_active:
+                        invalidated = True
+                        reason = "segnali tecnici spenti"
+
+                if invalidated:
+                    rows = await _get_tg_rows()
+                    text = (
+                        f"Setup {sym} INVALIDATO\n\n"
+                        f"Motivo: {reason}\n"
+                        f"Entrata era: ${mon['entry_price']:,.4f}"
+                    )
+                    for row in rows:
+                        try:
+                            await send_telegram_to(row["telegram_chat_id"], text)
+                        except Exception:
+                            pass
+                    await _resolve_alert_in_db(mon["db_id"], "invalidated", current_price or 0)
+                    del _monitored_swing[sym]
+                    await asyncio.sleep(2)
+
+            # ── Snapshot segnali attuali (aggiorna prima di cercare nuovi setup) ─
+            current_snapshot: dict[str, dict[str, list]] = {}
+            for tf in ["5m", "15m", "1h", "4h", "1d"]:
+                for sym, d in scanner_candle_data.get(tf, {}).items():
+                    active = [s for s in _ALERT_BULLISH if d.get(s)]
+                    if active:
+                        current_snapshot.setdefault(sym, {})[tf] = active
+
+            setups = _find_high_conviction_setups(_swing_prev_signals if _swing_prev_signals else None)
+            _swing_prev_signals.clear()
+            _swing_prev_signals.update(current_snapshot)
+
             if not setups:
                 continue
-            async with db_pool.acquire() as conn:
-                rows = await conn.fetch(
-                    "SELECT telegram_chat_id FROM users "
-                    "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
-                )
+
+            rows = await _get_tg_rows()
             if not rows:
                 continue
+
             for setup in setups:
                 analysis = await _generate_alert(setup)
                 if not analysis:
                     continue
-                _alert_cooldown[setup["symbol"]] = time.time()
+                sym = setup["symbol"]
+                _alert_cooldown[sym] = time.time()
+
+                db_id = await _log_alert_to_db(sym, "swing", setup["price"], None, None, 0.0)
+                _monitored_swing[sym] = {
+                    "entry_price": setup["price"],
+                    "tf_signals":  setup["tf_signals"],
+                    "sent_at":     time.time(),
+                    "db_id":       db_id,
+                }
+
                 for row in rows:
                     try:
                         await send_telegram_to(row["telegram_chat_id"], analysis)
                     except Exception as e:
-                        print(f"[alert] {setup['symbol']} → {row['telegram_chat_id']}: {e}")
-                await asyncio.sleep(3)   # piccola pausa tra alert diversi
+                        print(f"[alert] {sym} → {row['telegram_chat_id']}: {e}")
+                await asyncio.sleep(3)
         except Exception as e:
             print(f"[proactive_alert_loop] {e}")
 
@@ -1527,6 +1617,44 @@ _SCALP_GLOBAL_MAX          = 2    # max 2 alert ogni 10 min
 _SCALP_GLOBAL_WINDOW       = 10 * 60
 _scalp_prev_prices: dict   = {}   # sym -> prezzo al ciclo precedente
 _btc_price_history: list   = []   # [(timestamp, price), ...]
+_swing_prev_signals: dict  = {}   # sym -> {tf: [sigs]} snapshot ciclo precedente
+_monitored_scalp: dict     = {}   # sym -> {level,stop,target,entry,rr,sent_at,db_id}
+_monitored_swing: dict     = {}   # sym -> {entry_price,tf_signals,sent_at,db_id}
+_MONITORED_SCALP_TTL       = 2 * 3600    # scade dopo 2h
+_MONITORED_SWING_TTL       = 48 * 3600   # scade dopo 48h
+
+
+async def _log_alert_to_db(sym: str, alert_type: str, entry: float,
+                            stop: float | None, target: float | None, rr: float) -> int | None:
+    if not db_pool:
+        return None
+    try:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """INSERT INTO alert_outcomes
+                   (symbol, alert_type, entry_price, stop_price, target_price, rr)
+                   VALUES ($1,$2,$3,$4,$5,$6) RETURNING id""",
+                sym, alert_type, entry, stop, target, rr,
+            )
+            return row["id"] if row else None
+    except Exception as e:
+        print(f"[alert_db] insert: {e}")
+        return None
+
+
+async def _resolve_alert_in_db(db_id: int | None, outcome: str, outcome_price: float):
+    if not db_pool or not db_id:
+        return
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                """UPDATE alert_outcomes
+                   SET outcome=$1, outcome_price=$2, outcome_at=NOW()
+                   WHERE id=$3""",
+                outcome, outcome_price, db_id,
+            )
+    except Exception as e:
+        print(f"[alert_db] update: {e}")
 
 
 async def _get_1m_volume_ratio(sym: str, client: httpx.AsyncClient) -> float:
@@ -1573,7 +1701,7 @@ def _btc_5min_change() -> float:
 
 
 async def scalp_alert_monitor():
-    """Ogni 10 secondi: rileva breakout di livelli chiave con conferma volume in real-time."""
+    """Ogni 10 secondi: monitora scalp attivi (target/stop) e rileva nuovi breakout."""
     await asyncio.sleep(600)  # aspetta 10 min iniziali per scanner e market_data
     while True:
         try:
@@ -1588,7 +1716,55 @@ async def scalp_alert_monitor():
             if btc_price:
                 _btc_price_history.append((now, btc_price))
 
-            # Rate limit globale
+            # ── Controlla scalp attivi: target / stop / scadenza ─────────────
+            if _monitored_scalp:
+                scalp_tg: list | None = None
+                for sym in list(_monitored_scalp.keys()):
+                    mon = _monitored_scalp[sym]
+                    cur = market_data.get(sym, {}).get("price", 0)
+                    if not cur:
+                        continue
+
+                    outcome: str | None = None
+                    if now - mon["sent_at"] > _MONITORED_SCALP_TTL:
+                        outcome = "expired"
+                    elif cur <= mon["stop"]:
+                        outcome = "stop_hit"
+                    elif mon["target"] and cur >= mon["target"]:
+                        outcome = "target_hit"
+
+                    if outcome:
+                        if scalp_tg is None:
+                            async with db_pool.acquire() as conn:
+                                scalp_tg = await conn.fetch(
+                                    "SELECT telegram_chat_id FROM users "
+                                    "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
+                                )
+                        if outcome == "target_hit":
+                            text = (
+                                f"TARGET RAGGIUNTO — {sym}USDT\n\n"
+                                f"Entrata: ${mon['entry_price']:,.4f}\n"
+                                f"Target: ${mon['target']:,.4f} | R/R: 1:{mon['rr']:.1f}\n"
+                                f"Prezzo: ${cur:,.4f}"
+                            )
+                        elif outcome == "stop_hit":
+                            text = (
+                                f"STOP HIT — {sym}USDT\n\n"
+                                f"Il prezzo ha toccato lo stop ${mon['stop']:,.4f}\n"
+                                f"Prezzo: ${cur:,.4f}"
+                            )
+                        else:
+                            text = None  # expired: silenzioso
+                        if text:
+                            for row in (scalp_tg or []):
+                                try:
+                                    await send_telegram_to(row["telegram_chat_id"], text)
+                                except Exception:
+                                    pass
+                        await _resolve_alert_in_db(mon["db_id"], outcome, cur)
+                        del _monitored_scalp[sym]
+
+            # ── Rate limit globale (solo per nuovi alert) ─────────────────────
             _scalp_global_alerts[:] = [t for t in _scalp_global_alerts if now - t < _SCALP_GLOBAL_WINDOW]
             if len(_scalp_global_alerts) >= _SCALP_GLOBAL_MAX:
                 continue
@@ -1609,52 +1785,43 @@ async def scalp_alert_monitor():
                 if not prev_price or prev_price == current_price:
                     continue
 
-                # Cooldown per coin
                 if now - _scalp_cooldown.get(sym, 0) < _SCALP_COOLDOWN_S:
                     continue
 
-                # Dati scanner 15m (primario) e 1h (contesto)
                 td_15m = scanner_candle_data.get("15m", {}).get(sym, {})
                 td_1h  = scanner_candle_data.get("1h",  {}).get(sym, {})
                 if not td_15m:
                     continue
 
-                # RSI 15m tra 45 e 68: c'è momentum ma non è esaurito
                 rsi_15m = td_15m.get("rsi_14", 0)
                 if not (45 <= rsi_15m <= 68):
                     continue
 
-                # Swing highs 15m + 1h come livelli di resistenza
                 sh_15m = td_15m.get("swing_highs", [])
                 sh_1h  = td_1h.get("swing_highs", []) if td_1h else []
-                # Dedup tra i due TF (livelli entro 0.5% sono lo stesso livello)
                 all_levels = sorted(set(sh_15m + sh_1h))
                 deduped: list[float] = []
                 for lv in all_levels:
                     if not deduped or abs(lv - deduped[-1]) / deduped[-1] > 0.005:
                         deduped.append(lv)
-
                 if not deduped:
                     continue
 
-                # Cerca il livello appena rotto: prev sotto, ora sopra di almeno 0.15%
                 broken_level = None
-                for level in deduped:  # ascending
+                for level in deduped:
                     if prev_price < level and current_price >= level * 1.0015:
                         broken_level = level
-                        break  # prende il più basso (primo rotto)
-
+                        break
                 if not broken_level:
                     continue
 
-                # Prossima resistenza come target
                 next_target = None
                 for level in deduped:
                     if level > current_price * 1.005:
                         next_target = level
                         break
 
-                stop_price = broken_level * 0.998  # appena sotto il livello rotto
+                stop_price = broken_level * 0.998
                 if next_target:
                     risk   = current_price - stop_price
                     reward = next_target - current_price
@@ -1668,25 +1835,20 @@ async def scalp_alert_monitor():
                     "sym": sym, "price": current_price, "broken_level": broken_level,
                     "next_target": next_target, "stop_price": stop_price,
                     "rsi_15m": rsi_15m, "rr": rr,
-                    "td_15m": td_15m,
                 })
 
             if not candidates:
                 continue
 
-            # Fetch volume solo per i candidati (API call costosa, limitata)
             async with httpx.AsyncClient(timeout=8) as client:
                 for c in candidates:
-                    vol_ratio = await _get_1m_volume_ratio(c["sym"], client)
-                    c["vol_ratio"] = vol_ratio
+                    c["vol_ratio"] = await _get_1m_volume_ratio(c["sym"], client)
 
-            # Filtra per volume e ordina per R/R * volume
             qualified = [c for c in candidates if c["vol_ratio"] >= 1.5]
             if not qualified:
                 continue
             qualified.sort(key=lambda x: x["rr"] * x["vol_ratio"], reverse=True)
 
-            # Fetch utenti Telegram una sola volta
             async with db_pool.acquire() as conn:
                 rows = await conn.fetch(
                     "SELECT telegram_chat_id FROM users "
@@ -1695,19 +1857,19 @@ async def scalp_alert_monitor():
             if not rows:
                 continue
 
-            for c in qualified[:1]:  # max 1 alert per ciclo
+            for c in qualified[:1]:
                 if len(_scalp_global_alerts) >= _SCALP_GLOBAL_MAX:
                     break
 
-                sym      = c["sym"]
-                p        = c["price"]
-                lvl      = c["broken_level"]
-                stop     = c["stop_price"]
-                tgt      = c["next_target"]
-                rr       = c["rr"]
-                vol_r    = c["vol_ratio"]
-                rsi      = c["rsi_15m"]
-                btc_info = f"stabile" if btc_change_5m >= 0 else f"{btc_change_5m:+.2f}% (5m)"
+                sym   = c["sym"]
+                p     = c["price"]
+                lvl   = c["broken_level"]
+                stop  = c["stop_price"]
+                tgt   = c["next_target"]
+                rr    = c["rr"]
+                vol_r = c["vol_ratio"]
+                rsi   = c["rsi_15m"]
+                btc_info = "stabile" if btc_change_5m >= 0 else f"{btc_change_5m:+.2f}% (5m)"
 
                 text = (
                     f"SCALP — {sym}USDT\n\n"
@@ -1723,6 +1885,12 @@ async def scalp_alert_monitor():
 
                 _scalp_cooldown[sym] = now
                 _scalp_global_alerts.append(now)
+
+                db_id = await _log_alert_to_db(sym, "scalp", p, stop, tgt, rr)
+                _monitored_scalp[sym] = {
+                    "entry_price": p, "stop": stop, "target": tgt,
+                    "rr": rr, "sent_at": now, "db_id": db_id,
+                }
 
                 for row in rows:
                     try:
@@ -4429,7 +4597,22 @@ async def startup():
                         ret_24h NUMERIC(10,4)
                     );
                     CREATE INDEX IF NOT EXISTS idx_se_fired ON signal_events(fired_at);
-                    CREATE INDEX IF NOT EXISTS idx_se_sig ON signal_events(signal, timeframe)
+                    CREATE INDEX IF NOT EXISTS idx_se_sig ON signal_events(signal, timeframe);
+                    CREATE TABLE IF NOT EXISTS alert_outcomes (
+                        id SERIAL PRIMARY KEY,
+                        symbol TEXT NOT NULL,
+                        alert_type TEXT NOT NULL,
+                        entry_price NUMERIC(20,8) NOT NULL,
+                        stop_price NUMERIC(20,8),
+                        target_price NUMERIC(20,8),
+                        rr NUMERIC(6,2),
+                        sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        outcome TEXT,
+                        outcome_price NUMERIC(20,8),
+                        outcome_at TIMESTAMPTZ
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_ao_sent ON alert_outcomes(sent_at);
+                    CREATE INDEX IF NOT EXISTS idx_ao_sym ON alert_outcomes(symbol, alert_type)
                 """)
             print("Database connesso e schema creato")
 
