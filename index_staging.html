@@ -6606,6 +6606,12 @@ const _scanTfAllowed = {
 };
 
 function _updateTfBar() {
+  const tfBar = document.querySelector('.scan-tf-bar');
+  if (_scanSignal === 'ricerca') {
+    if (tfBar) tfBar.style.display = 'none';
+    return;
+  }
+  if (tfBar) tfBar.style.display = '';
   const allowed = _scanTfAllowed[_scanSignal];
   document.querySelectorAll('.scan-tf-btn').forEach(b => {
     b.disabled = !!allowed && !allowed.includes(b.textContent.trim());
@@ -6866,6 +6872,7 @@ async function selectTimeframe(tf, el) {
 }
 
 function updateScannerPricesInPlace() {
+  if (_scanSignal === 'ricerca') return;
   const fn = _scanSignalFn[_scanSignal];
   const matched = fn ? mktData.filter(c => c.scanner && fn(c)) : [];
   // Se i simboli nella lista sono cambiati, rebuild completo
@@ -6895,6 +6902,7 @@ function updateScannerPricesInPlace() {
 }
 
 function renderScanner() {
+  if (_scanSignal === 'ricerca') return;
   const list = document.getElementById('scannerList');
   const countEl = document.getElementById('scanCount');
   if (!list) return;
