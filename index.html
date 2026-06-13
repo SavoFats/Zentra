@@ -6761,6 +6761,7 @@ function selectScanSearch(el) {
   if (panel) panel.classList.add('active');
   document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
   _scanSignal = 'ricerca';
+  _updateTfBar();
   const empty = document.getElementById('scan-empty');
   const card  = document.getElementById('scan-results-card');
   if (empty) empty.style.display = 'none';
