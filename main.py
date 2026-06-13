@@ -2146,8 +2146,6 @@ async def fetch_all_scanner_candles(timeframe: str = "1h"):
                 for sig_name in _TRACKED_SIGNALS:
                     if res.get(sig_name) and not old.get(sig_name):
                         asyncio.create_task(log_signal_event(sym, sig_name, timeframe, price))
-                        if sig_name in _ALERT_BULLISH:
-                            asyncio.create_task(_check_and_send_swing_alert(sym, timeframe, price))
         _scanner_candles_ts[timeframe] = time.time()
         print(f"Scanner [{timeframe}] aggiornate: {updated}/{len(syms)}")
     finally:
