@@ -2675,32 +2675,37 @@ async def exit_position(state: dict, pos: dict, reason: str, partial: bool = Fal
     }
     state["trades"].append(trade_record)
     if db_pool and user_id:
-        try:
-            async with db_pool.acquire() as conn:
-                await conn.execute("""
-                    INSERT INTO trades_history
-                    (user_id, symbol, entry_price, exit_price, size, pnl, pct,
-                     reason, tp1_hit, duration_min, entry_time, exit_time, mode,
-                     buy_fee, sell_fee, sell_type)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-                    ON CONFLICT (user_id, symbol, entry_time, exit_time) DO NOTHING
-                """, user_id, sym,
-                    float(pos["entryPrice"]), float(cur),
-                    float(pos["size"]), float(total_pnl), float(total_pct),
-                    reason, bool(pos.get("tp1_hit", False)), float(round(dur, 1)),
-                    pos["entryTime"], datetime.utcnow().isoformat() + "Z",
-                    "real" if pos.get("realMode") else "sim",
-                    float(buy_fee_usd), float(sell_fee_usd),
-                    pos.get("_sell_type", "Market")
-                )
-                if not pos.get("realMode"):
-                    await conn.execute(
-                        "UPDATE users SET sim_pnl_total = sim_pnl_total + $1 WHERE id = $2",
-                        float(total_pnl), user_id
+        for _attempt in range(2):
+            try:
+                async with db_pool.acquire() as conn:
+                    await conn.execute("""
+                        INSERT INTO trades_history
+                        (user_id, symbol, entry_price, exit_price, size, pnl, pct,
+                         reason, tp1_hit, duration_min, entry_time, exit_time, mode,
+                         buy_fee, sell_fee, sell_type)
+                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                        ON CONFLICT (user_id, symbol, entry_time, exit_time) DO NOTHING
+                    """, user_id, sym,
+                        float(pos["entryPrice"]), float(cur),
+                        float(pos["size"]), float(total_pnl), float(total_pct),
+                        reason, bool(pos.get("tp1_hit", False)), float(round(dur, 1)),
+                        pos["entryTime"], datetime.utcnow().isoformat() + "Z",
+                        "real" if pos.get("realMode") else "sim",
+                        float(buy_fee_usd), float(sell_fee_usd),
+                        pos.get("_sell_type", "Market")
                     )
-                    state["sim_pnl_total"] = state.get("sim_pnl_total", 0.0) + total_pnl
-        except Exception as e:
-            print(f"DB trade save error: {e}")
+                    if not pos.get("realMode"):
+                        await conn.execute(
+                            "UPDATE users SET sim_pnl_total = sim_pnl_total + $1 WHERE id = $2",
+                            float(total_pnl), user_id
+                        )
+                        state["sim_pnl_total"] = state.get("sim_pnl_total", 0.0) + total_pnl
+                break
+            except Exception as e:
+                if _attempt == 0:
+                    await asyncio.sleep(1)
+                else:
+                    print(f"DB trade save error after retry: {e}")
     state["positions"] = [p for p in state["positions"] if p is not pos]
     _exiting.discard(sym)
     await db_delete_open_position(user_id, sym)
