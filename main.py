@@ -4304,6 +4304,12 @@ async def background_loop():
             if time.time() - _scanner_candles_ts.get("1h", 0) >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_scanner_candles("1h")
 
+            if time.time() - _scanner_candles_ts.get("4h", 0) >= 5 * 60:
+                await fetch_all_scanner_candles("4h")
+
+            if time.time() - _scanner_candles_ts.get("1d", 0) >= 30 * 60:
+                await fetch_all_scanner_candles("1d")
+
             sessions_snapshot = list(user_sessions.items())
             for uid, state in sessions_snapshot:
                 if drop_imported_exchange_positions(state):
