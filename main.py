@@ -1728,7 +1728,7 @@ def _btc_5min_change() -> float:
 
 async def scalp_alert_monitor():
     """Ogni 10 secondi: monitora scalp attivi (target/stop) e rileva nuovi breakout."""
-    await asyncio.sleep(600)  # aspetta 10 min iniziali per scanner e market_data
+    await asyncio.sleep(150)  # aspetta 2.5 min iniziali per scanner e market_data
     while True:
         try:
             await asyncio.sleep(10)
@@ -1932,7 +1932,7 @@ async def scalp_alert_monitor():
 
 async def pump_alert_monitor():
     """Ogni 30s: rileva pump improvvisi (+3% in 5 min, volume 3x) ancora in corso."""
-    await asyncio.sleep(360)  # 6 min iniziali per accumulare storia prezzi
+    await asyncio.sleep(120)  # 2 min iniziali per accumulare storia prezzi per accumulare storia prezzi
     while True:
         try:
             await asyncio.sleep(30)
@@ -4447,6 +4447,9 @@ async def background_loop():
 
             if time.time() - _scanner_candles_ts.get("1h", 0) >= CANDLE_UPDATE_INTERVAL:
                 await fetch_all_scanner_candles("1h")
+
+            if time.time() - _scanner_candles_ts.get("15m", 0) >= 2 * 60:
+                await fetch_all_scanner_candles("15m")
 
             if time.time() - _scanner_candles_ts.get("4h", 0) >= 5 * 60:
                 await fetch_all_scanner_candles("4h")
