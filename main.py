@@ -1518,6 +1518,222 @@ async def proactive_alert_loop():
         except Exception as e:
             print(f"[proactive_alert_loop] {e}")
 
+# ── Scalp alert monitor ───────────────────────────────────────────────────────
+
+_scalp_cooldown: dict      = {}   # sym -> timestamp ultimo scalp alert inviato
+_SCALP_COOLDOWN_S          = 20 * 60   # 20 min per coin
+_scalp_global_alerts: list = []   # timestamps alert globali recenti
+_SCALP_GLOBAL_MAX          = 2    # max 2 alert ogni 10 min
+_SCALP_GLOBAL_WINDOW       = 10 * 60
+_scalp_prev_prices: dict   = {}   # sym -> prezzo al ciclo precedente
+_btc_price_history: list   = []   # [(timestamp, price), ...]
+
+
+async def _get_1m_volume_ratio(sym: str, client: httpx.AsyncClient) -> float:
+    """Rapporto volume candela 1m corrente / media ultime 20 candele chiuse, normalizzato per tempo trascorso."""
+    try:
+        r = await client.get(
+            "https://api.binance.com/api/v3/klines",
+            params={"symbol": sym + "USDT", "interval": "1m", "limit": 22},
+            timeout=5,
+        )
+        klines = r.json()
+        if not isinstance(klines, list) or len(klines) < 21:
+            return 0.0
+        avg_vol = sum(float(k[5]) for k in klines[-21:-1]) / 20
+        if avg_vol <= 0:
+            return 0.0
+        current_vol = float(klines[-1][5])
+        open_time_ms = klines[-1][0]
+        elapsed_frac = min(1.0, (time.time() * 1000 - open_time_ms) / 60_000)
+        if elapsed_frac < 0.05:
+            return 0.0
+        return (current_vol / elapsed_frac) / avg_vol
+    except Exception:
+        return 0.0
+
+
+def _btc_5min_change() -> float:
+    """% change BTC negli ultimi 5 minuti. Usa _btc_price_history popolato dal loop."""
+    now = time.time()
+    cutoff = now - 600
+    while _btc_price_history and _btc_price_history[0][0] < cutoff:
+        _btc_price_history.pop(0)
+    current = market_data.get("BTC", {}).get("price", 0)
+    if not current:
+        return 0.0
+    target = now - 300
+    price_5m_ago = None
+    for ts, p in _btc_price_history:
+        if ts <= target:
+            price_5m_ago = p
+    if not price_5m_ago:
+        return 0.0
+    return (current - price_5m_ago) / price_5m_ago * 100
+
+
+async def scalp_alert_monitor():
+    """Ogni 10 secondi: rileva breakout di livelli chiave con conferma volume in real-time."""
+    await asyncio.sleep(600)  # aspetta 10 min iniziali per scanner e market_data
+    while True:
+        try:
+            await asyncio.sleep(10)
+            if not scanner_candle_data or not market_data or not db_pool:
+                continue
+
+            now = time.time()
+
+            # Aggiorna storico BTC
+            btc_price = market_data.get("BTC", {}).get("price", 0)
+            if btc_price:
+                _btc_price_history.append((now, btc_price))
+
+            # Rate limit globale
+            _scalp_global_alerts[:] = [t for t in _scalp_global_alerts if now - t < _SCALP_GLOBAL_WINDOW]
+            if len(_scalp_global_alerts) >= _SCALP_GLOBAL_MAX:
+                continue
+
+            # Macro filter: BTC non in caduta
+            btc_change_5m = _btc_5min_change()
+            if btc_change_5m < -0.5:
+                continue
+
+            candidates = []
+
+            for sym, mkt in list(market_data.items()):
+                current_price = mkt.get("price", 0)
+                if not current_price:
+                    continue
+                prev_price = _scalp_prev_prices.get(sym, 0)
+                _scalp_prev_prices[sym] = current_price
+                if not prev_price or prev_price == current_price:
+                    continue
+
+                # Cooldown per coin
+                if now - _scalp_cooldown.get(sym, 0) < _SCALP_COOLDOWN_S:
+                    continue
+
+                # Dati scanner 15m (primario) e 1h (contesto)
+                td_15m = scanner_candle_data.get("15m", {}).get(sym, {})
+                td_1h  = scanner_candle_data.get("1h",  {}).get(sym, {})
+                if not td_15m:
+                    continue
+
+                # RSI 15m tra 45 e 68: c'è momentum ma non è esaurito
+                rsi_15m = td_15m.get("rsi_14", 0)
+                if not (45 <= rsi_15m <= 68):
+                    continue
+
+                # Swing highs 15m + 1h come livelli di resistenza
+                sh_15m = td_15m.get("swing_highs", [])
+                sh_1h  = td_1h.get("swing_highs", []) if td_1h else []
+                # Dedup tra i due TF (livelli entro 0.5% sono lo stesso livello)
+                all_levels = sorted(set(sh_15m + sh_1h))
+                deduped: list[float] = []
+                for lv in all_levels:
+                    if not deduped or abs(lv - deduped[-1]) / deduped[-1] > 0.005:
+                        deduped.append(lv)
+
+                if not deduped:
+                    continue
+
+                # Cerca il livello appena rotto: prev sotto, ora sopra di almeno 0.15%
+                broken_level = None
+                for level in deduped:  # ascending
+                    if prev_price < level and current_price >= level * 1.0015:
+                        broken_level = level
+                        break  # prende il più basso (primo rotto)
+
+                if not broken_level:
+                    continue
+
+                # Prossima resistenza come target
+                next_target = None
+                for level in deduped:
+                    if level > current_price * 1.005:
+                        next_target = level
+                        break
+
+                stop_price = broken_level * 0.998  # appena sotto il livello rotto
+                if next_target:
+                    risk   = current_price - stop_price
+                    reward = next_target - current_price
+                    rr     = reward / risk if risk > 0 else 0
+                    if rr < 1.5:
+                        continue
+                else:
+                    rr = 0.0
+
+                candidates.append({
+                    "sym": sym, "price": current_price, "broken_level": broken_level,
+                    "next_target": next_target, "stop_price": stop_price,
+                    "rsi_15m": rsi_15m, "rr": rr,
+                    "td_15m": td_15m,
+                })
+
+            if not candidates:
+                continue
+
+            # Fetch volume solo per i candidati (API call costosa, limitata)
+            async with httpx.AsyncClient(timeout=8) as client:
+                for c in candidates:
+                    vol_ratio = await _get_1m_volume_ratio(c["sym"], client)
+                    c["vol_ratio"] = vol_ratio
+
+            # Filtra per volume e ordina per R/R * volume
+            qualified = [c for c in candidates if c["vol_ratio"] >= 1.5]
+            if not qualified:
+                continue
+            qualified.sort(key=lambda x: x["rr"] * x["vol_ratio"], reverse=True)
+
+            # Fetch utenti Telegram una sola volta
+            async with db_pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT telegram_chat_id FROM users "
+                    "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
+                )
+            if not rows:
+                continue
+
+            for c in qualified[:1]:  # max 1 alert per ciclo
+                if len(_scalp_global_alerts) >= _SCALP_GLOBAL_MAX:
+                    break
+
+                sym      = c["sym"]
+                p        = c["price"]
+                lvl      = c["broken_level"]
+                stop     = c["stop_price"]
+                tgt      = c["next_target"]
+                rr       = c["rr"]
+                vol_r    = c["vol_ratio"]
+                rsi      = c["rsi_15m"]
+                btc_info = f"stabile" if btc_change_5m >= 0 else f"{btc_change_5m:+.2f}% (5m)"
+
+                text = (
+                    f"SCALP — {sym}USDT\n\n"
+                    f"Ha rotto ${lvl:,.4f} (resistance 15m)\n"
+                    f"Prezzo attuale: ${p:,.4f}\n\n"
+                    f"Volume: {vol_r:.1f}x la media | RSI 15m: {rsi:.0f} | BTC: {btc_info}\n\n"
+                    f"Entrata: ${p:,.4f} – ${p * 1.001:,.4f}\n"
+                    f"Stop: ${stop:,.4f} (sotto il livello rotto)\n"
+                )
+                if tgt:
+                    text += f"Target: ${tgt:,.4f} | R/R: 1:{rr:.1f}\n"
+                text += "\nConviction: ALTA — breakout confermato da volume"
+
+                _scalp_cooldown[sym] = now
+                _scalp_global_alerts.append(now)
+
+                for row in rows:
+                    try:
+                        await send_telegram_to(row["telegram_chat_id"], text)
+                    except Exception as e:
+                        print(f"[scalp_alert] {sym} → {row['telegram_chat_id']}: {e}")
+                await asyncio.sleep(2)
+
+        except Exception as e:
+            print(f"[scalp_alert_monitor] {e}")
+
 # ── Signal outcome loop ───────────────────────────────────────────────────────
 
 async def signal_outcome_loop():
@@ -4239,6 +4455,7 @@ async def startup():
         ("cleanup_rate_buckets",  _cleanup_rate_buckets()),
         ("signal_outcome_loop",   signal_outcome_loop()),
         ("proactive_alert_loop",  proactive_alert_loop()),
+        ("scalp_alert_monitor",   scalp_alert_monitor()),
     ]:
         _t = asyncio.create_task(_coro, name=_name)
         _t.add_done_callback(_on_task_done)
