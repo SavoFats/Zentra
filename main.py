@@ -1641,6 +1641,12 @@ _monitored_swing: dict     = {}   # sym -> {entry_price,tf_signals,sent_at,db_id
 _pending_swing_checks: set = set()  # sym già in elaborazione — evita task duplicati per lo stesso coin
 _MONITORED_SCALP_TTL       = 2 * 3600    # scade dopo 2h
 _MONITORED_SWING_TTL       = 48 * 3600   # scade dopo 48h
+_coin_price_snapshots: dict = {}   # sym -> [(ts, price), ...]  rolling history per pump detection
+_pump_cooldown: dict        = {}   # sym -> timestamp ultimo pump alert
+_PUMP_COOLDOWN_S            = 30 * 60
+_pump_global_alerts: list   = []
+_PUMP_GLOBAL_MAX            = 2
+_PUMP_GLOBAL_WINDOW         = 30 * 60
 
 
 async def _log_alert_to_db(sym: str, alert_type: str, entry: float,
@@ -1920,6 +1926,145 @@ async def scalp_alert_monitor():
 
         except Exception as e:
             print(f"[scalp_alert_monitor] {e}")
+
+# ── Pump alert monitor ───────────────────────────────────────────────────────
+
+async def pump_alert_monitor():
+    """Ogni 30s: rileva pump improvvisi (+3% in 5 min, volume 3x) ancora in corso."""
+    await asyncio.sleep(360)  # 6 min iniziali per accumulare storia prezzi
+    while True:
+        try:
+            await asyncio.sleep(30)
+            if not market_data or not db_pool:
+                continue
+
+            now = time.time()
+
+            # Aggiorna snapshot prezzi per tutti i coin
+            for sym, mkt in list(market_data.items()):
+                p = mkt.get("price", 0)
+                if not p:
+                    continue
+                hist = _coin_price_snapshots.setdefault(sym, [])
+                hist.append((now, p))
+                if len(hist) > 16:   # max 8 minuti di storia (16 × 30s)
+                    hist.pop(0)
+
+            # Rate limit globale
+            _pump_global_alerts[:] = [t for t in _pump_global_alerts if now - t < _PUMP_GLOBAL_WINDOW]
+            if len(_pump_global_alerts) >= _PUMP_GLOBAL_MAX:
+                continue
+
+            # Macro filter: BTC non in caduta libera
+            btc_change_5m = _btc_5min_change()
+            if btc_change_5m < -1.0:
+                continue
+
+            candidates = []
+            for sym, hist in list(_coin_price_snapshots.items()):
+                if len(hist) < 10:   # almeno 5 min di storia
+                    continue
+                if now - _pump_cooldown.get(sym, 0) < _PUMP_COOLDOWN_S:
+                    continue
+
+                current_price = hist[-1][1]
+
+                # Variazione 5 minuti (10 snapshot * 30s = 5 min)
+                price_5m_ago = hist[-10][1]
+                change_5m = (current_price - price_5m_ago) / price_5m_ago * 100
+                if change_5m < 3.0:
+                    continue
+
+                # Il pump è ancora in corso: ultimo 30s deve essere positivo
+                if hist[-1][1] <= hist[-2][1]:
+                    continue
+
+                # RSI 15m: non già overbought
+                td_15m = scanner_candle_data.get("15m", {}).get(sym, {})
+                rsi_15m = td_15m.get("rsi_14", 50) if td_15m else 50
+                if rsi_15m > 72:
+                    continue
+
+                candidates.append({
+                    "sym": sym, "price": current_price,
+                    "change_5m": change_5m, "price_5m_ago": price_5m_ago,
+                    "rsi_15m": rsi_15m, "td_15m": td_15m,
+                })
+
+            if not candidates:
+                continue
+
+            # Fetch volume solo per i candidati (chiamata costosa)
+            async with httpx.AsyncClient(timeout=8) as client:
+                for c in candidates:
+                    c["vol_ratio"] = await _get_1m_volume_ratio(c["sym"], client)
+
+            # Filtra: volume almeno 3x (pump vero, non rumore)
+            qualified = [c for c in candidates if c["vol_ratio"] >= 3.0]
+            if not qualified:
+                continue
+            qualified.sort(key=lambda x: x["change_5m"] * x["vol_ratio"], reverse=True)
+
+            async with db_pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT telegram_chat_id FROM users "
+                    "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
+                )
+            if not rows:
+                continue
+
+            for c in qualified[:1]:
+                if len(_pump_global_alerts) >= _PUMP_GLOBAL_MAX:
+                    break
+
+                sym   = c["sym"]
+                p     = c["price"]
+                chg   = c["change_5m"]
+                vol   = c["vol_ratio"]
+                rsi   = c["rsi_15m"]
+                base  = c["price_5m_ago"]
+                stop  = base * 0.997   # stop sotto la base pre-pump
+                tgt1  = p * 1.02       # target 1: +2% dall'entrata
+
+                sh = (c["td_15m"] or {}).get("swing_highs", [])
+                tgt2 = next((lv for lv in sh if lv > p * 1.015), None)
+
+                risk   = max(p - stop, p * 0.001)
+                reward = tgt1 - p
+                rr     = reward / risk
+
+                btc_info = "stabile" if btc_change_5m >= 0 else f"{btc_change_5m:+.2f}% 5m"
+                text = (
+                    f"PUMP — {sym}USDT\n\n"
+                    f"+{chg:.1f}% in 5 min | Volume: {vol:.1f}x la media | BTC: {btc_info}\n"
+                    f"Prezzo: ${p:,.4f} | RSI 15m: {rsi:.0f}\n\n"
+                    f"Entrata: ${p:,.4f} (momentum ancora attivo)\n"
+                    f"Stop: ${stop:,.4f} (sotto la base pre-pump)\n"
+                    f"Target 1: ${tgt1:,.4f} (+2%) | R/R: 1:{rr:.1f}\n"
+                )
+                if tgt2:
+                    text += f"Target 2: ${tgt2:,.4f} (resistance 15m)\n"
+                text += "\nMOMENTUM TRADE — posizione piccola, esci veloce."
+
+                _pump_cooldown[sym] = now
+                _pump_global_alerts.append(now)
+
+                db_id = await _log_alert_to_db(sym, "pump", p, stop, tgt1, rr)
+                _monitored_scalp[sym] = {
+                    "entry_price": p, "stop": stop, "target": tgt1,
+                    "rr": rr, "sent_at": now, "db_id": db_id,
+                }
+
+                for row in rows:
+                    try:
+                        await send_telegram_to(row["telegram_chat_id"], text)
+                    except Exception as e:
+                        print(f"[pump_alert] {sym} → {row['telegram_chat_id']}: {e}")
+                await asyncio.sleep(2)
+
+        except Exception as e:
+            print(f"[pump_alert_monitor] {e}")
+
 
 # ── Signal outcome loop ───────────────────────────────────────────────────────
 
@@ -4666,6 +4811,7 @@ async def startup():
         ("signal_outcome_loop",   signal_outcome_loop()),
         ("proactive_alert_loop",  proactive_alert_loop()),
         ("scalp_alert_monitor",   scalp_alert_monitor()),
+        ("pump_alert_monitor",    pump_alert_monitor()),
     ]:
         _t = asyncio.create_task(_coro, name=_name)
         _t.add_done_callback(_on_task_done)
