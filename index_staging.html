@@ -7849,14 +7849,15 @@ async function checkoutPlan(plan) {
 
 async function manageSubscriptionClick() {
   try {
+    localStorage.setItem('_portal_prev_plan', _plan);
     const r = await fetch(API + '/billing/portal', {
       method: 'POST', headers: authHeaders(),
       body: JSON.stringify({ return_url: location.href.split('?')[0] + '?portal_return=1' })
     });
     const d = await r.json();
     if (d.url) { location.href = d.url; }
-    else { showToast(d.detail || 'Nessun abbonamento attivo', true); }
-  } catch(e) { showToast('Errore: ' + e.message, true); }
+    else { localStorage.removeItem('_portal_prev_plan'); showToast(d.detail || 'Nessun abbonamento attivo', true); }
+  } catch(e) { localStorage.removeItem('_portal_prev_plan'); showToast('Errore: ' + e.message, true); }
 }
 
 // Aggiorna badge piano nell'header e sessioni home
@@ -7949,7 +7950,8 @@ async function _pollPlanChange(prevPlan, onUpgrade) {
       if (plan === 'founder') showFounderWelcome(); else if (plan === 'pro') showProWelcome();
     }), 400);
   } else if (p.get('portal_return') === '1') {
-    const prevPlan = _plan;
+    const prevPlan = localStorage.getItem('_portal_prev_plan') || _plan;
+    localStorage.removeItem('_portal_prev_plan');
     history.replaceState({}, '', location.pathname);
     setTimeout(() => _pollPlanChange(prevPlan, plan => {
       if (plan && plan !== prevPlan) {
