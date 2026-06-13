@@ -7507,9 +7507,11 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
         for sig in _SIGNALS:
             entries = []
             for sym, d in tf_data.items():
+                if not market_data.get(sym, {}).get("price"):
+                    continue  # escludi coin non nell'universo attivo
                 if d.get(sig):
-                    price = market_data.get(sym, {}).get("price", 0)
-                    entries.append(f"{sym} ${price:,.4f}" if price else sym)
+                    price = market_data[sym]["price"]
+                    entries.append(f"{sym} ${price:,.4f}")
                 if len(entries) >= 8:
                     break
             if entries:
