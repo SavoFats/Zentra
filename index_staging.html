@@ -5473,7 +5473,7 @@ function renderPositions() {
       </div>
       ${barHtml}
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:22px">
-        <button onclick="openTVChart('${esc(p.symbol)}')" style="display:flex;align-items:center;gap:5px;background:none;border:none;color:var(--text2);font-size:12px;font-weight:600;padding:7px 13px;cursor:pointer;font-family:var(--sans);transition:opacity 0.15s" onmousedown="this.style.opacity='0.6'" onmouseup="this.style.opacity='1'">
+        <button onclick="openTVChart('${esc(p.symbol)}',${entryPrice},${stopPrice||0},${tpPrice||0})" style="display:flex;align-items:center;gap:5px;background:none;border:none;color:var(--text2);font-size:12px;font-weight:600;padding:7px 13px;cursor:pointer;font-family:var(--sans);transition:opacity 0.15s" onmousedown="this.style.opacity='0.6'" onmouseup="this.style.opacity='1'">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           Grafico
         </button>
@@ -6978,7 +6978,7 @@ const SIGNAL_INTERVAL = {
 };
 let _tvWidget = null;
 
-function openTVChart(symbol) {
+function openTVChart(symbol, entry=0, sl=0, tp=0) {
   const base = symbol.replace('USDT', '');
   document.getElementById('tvSymbolLabel').textContent = base + ' / USDT';
   document.getElementById('tvModal').style.display = 'flex';
@@ -7007,6 +7007,16 @@ function openTVChart(symbol) {
       hide_side_toolbar: false,
       hide_top_toolbar: false
     });
+    if (entry || sl || tp) {
+      _tvWidget.onChartReady(() => {
+        try {
+          const chart = _tvWidget.chart();
+          if (entry) chart.createShape({price: entry}, {shape:'horizontal_line', lock:true, disableSelection:true, overrides:{linecolor:'#3b82f6', linestyle:0, linewidth:2, showLabel:true, text:`Entry ${fmtPrice(entry)}`}});
+          if (sl)    chart.createShape({price: sl},    {shape:'horizontal_line', lock:true, disableSelection:true, overrides:{linecolor:'#ef4444', linestyle:1, linewidth:1, showLabel:true, text:`SL ${fmtPrice(sl)}`}});
+          if (tp)    chart.createShape({price: tp},    {shape:'horizontal_line', lock:true, disableSelection:true, overrides:{linecolor:'#22c55e', linestyle:1, linewidth:1, showLabel:true, text:`TP ${fmtPrice(tp)}`}});
+        } catch(e) {}
+      });
+    }
   }
 
   if (typeof TradingView !== 'undefined') {
