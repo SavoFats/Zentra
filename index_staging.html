@@ -7939,7 +7939,7 @@ function applyPlanConfig() {
   });
 }
 
-// Polling piano dopo ritorno da Stripe (checkout o portale)
+// Polling piano dopo ritorno da Stripe checkout (con spinner — l'utente ha pagato)
 async function _pollPlanChange(prevPlan, onUpgrade) {
   document.getElementById('upgradingOverlay').style.display = 'flex';
   for (let i = 0; i < 8; i++) {
@@ -7962,6 +7962,24 @@ async function _pollPlanChange(prevPlan, onUpgrade) {
   onUpgrade(_upgradedPlan);
 }
 
+// Check silenzioso dopo ritorno dal portale Stripe (nessuno spinner)
+async function _checkPortalPlanChange(prevPlan, onUpgrade) {
+  await new Promise(r => setTimeout(r, 1200));
+  try {
+    const r = await fetch(API + '/billing/status', { headers: authHeaders() });
+    if (r.ok) {
+      const d = await r.json();
+      STRIPE_ENABLED = d.stripe_enabled || STRIPE_ENABLED;
+      _plan = d.plan || _plan;
+      _sessionsToday = d.sessions_today ?? _sessionsToday;
+      _scansToday = d.scans_today ?? _scansToday;
+      _scansPerDay = d.scans_per_day ?? _scansPerDay;
+      updatePlanUI();
+      if (d.plan && d.plan !== prevPlan) { _upgradedPlan = d.plan; onUpgrade(d.plan); }
+    }
+  } catch(e) {}
+}
+
 // Check ?upgraded=1 param al ritorno da Stripe checkout
 (function() {
   const p = new URLSearchParams(location.search);
@@ -7974,7 +7992,7 @@ async function _pollPlanChange(prevPlan, onUpgrade) {
     const prevPlan = localStorage.getItem('_portal_prev_plan') || _plan;
     localStorage.removeItem('_portal_prev_plan');
     history.replaceState({}, '', location.pathname);
-    setTimeout(() => _pollPlanChange(prevPlan, plan => {
+    setTimeout(() => _checkPortalPlanChange(prevPlan, plan => {
       if (plan && plan !== prevPlan) {
         if (plan === 'founder') showFounderWelcome();
         else if (plan === 'pro') showProWelcome();
