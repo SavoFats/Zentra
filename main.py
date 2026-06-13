@@ -5633,7 +5633,7 @@ async def reset_demo(request: Request, user_id: int = Depends(get_current_user))
     check_rate_limit(request, max_attempts=5, window=60, key_suffix="reset_demo")
     state = get_session(user_id)
     # Stop any running demo agent first
-    if state.get("running") and not state.get("real_mode"):
+    if state.get("running") and not state.get("config", {}).get("realMode", False):
         state["_stopping"] = True
     # Reset in-memory demo state
     state["sim_pnl_total"] = 0.0
@@ -5664,11 +5664,13 @@ async def reset_demo(request: Request, user_id: int = Depends(get_current_user))
 async def clear_trades(request: Request, user_id: int = Depends(get_current_user)):
     check_rate_limit(request, max_attempts=10, window=60, key_suffix="clear_trades")
     state = get_session(user_id)
-    state["trades"] = []
+    state["trades"] = [t for t in state.get("trades", []) if t.get("realMode")]
     if db_pool:
         try:
             async with db_pool.acquire() as conn:
-                await conn.execute("DELETE FROM trades_history WHERE user_id = $1", user_id)
+                await conn.execute(
+                    "DELETE FROM trades_history WHERE user_id = $1 AND mode = 'sim'", user_id
+                )
         except Exception as e:
             print(f"DB clear trades error: {e}")
     return {"ok": True}

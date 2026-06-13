@@ -2723,6 +2723,8 @@ async function confirmResetDemo() {
       S.positions = (S.positions || []).filter(p => p.realMode);
     }
     if (typeof trades !== 'undefined') trades = (trades || []).filter(t => t.realMode);
+    _cachedTrades = [];
+    _pollTradeCounter = 0;
     if (typeof _portfolioData !== 'undefined' && _portfolioData) {
       _portfolioData.history = [];
       _balanceSparklineDrawnOnce = false;
