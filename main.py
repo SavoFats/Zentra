@@ -821,6 +821,7 @@ SCANNER_SIGNAL_KEYS = {
     "rsi_divergence",
     "pullback",
     "rel_strength",
+    "ricerca",
 }
 CANDLE_UNIVERSE_SIZE   = 50    # top N coin per volume (dinamico)
 COIN_WHITELIST = {"BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","SUI","TON","LINK","DOT"}  # fallback iniziale

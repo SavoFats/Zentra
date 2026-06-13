@@ -1685,6 +1685,10 @@ body.auth-active .tabbar { display:none !important; }
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         Volume
       </button>
+      <button class="scan-tab" onclick="selectScanSearch(this)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Ricerca
+      </button>
     </div>
 
     <!-- Trend signals -->
@@ -1742,6 +1746,21 @@ body.auth-active .tabbar { display:none !important; }
         <div class="scan-card-icon"><svg width="52" height="38" viewBox="0 0 52 38" fill="none"><rect x="4" y="26" width="7" height="8" rx="1" fill="currentColor" opacity="0.25"/><rect x="14" y="23" width="7" height="11" rx="1" fill="currentColor" opacity="0.3"/><rect x="24" y="28" width="7" height="6" rx="1" fill="currentColor" opacity="0.25"/><rect x="34" y="24" width="7" height="10" rx="1" fill="currentColor" opacity="0.3"/><rect x="44" y="6" width="7" height="28" rx="1" fill="currentColor" opacity="0.9"/></svg></div>
         <div class="scan-card-label">Volume Spike</div>
       </button>
+    </div>
+
+    <!-- Search panel -->
+    <div class="scan-signals" id="signals-ricerca">
+      <div style="display:flex;gap:8px;align-items:center;padding:4px 0 8px">
+        <input id="scanSearchInput" type="text" autocomplete="off" autocorrect="off" spellcheck="false"
+               placeholder="Es. BTC, SOL, ETH..."
+               style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-family:inherit;outline:none;-webkit-appearance:none"
+               onkeydown="if(event.key==='Enter')executeSearch()"
+               oninput="if(!this.value.trim()){var c=document.getElementById('scan-results-card');if(c)c.style.display='none';}">
+        <button onclick="executeSearch()"
+                style="padding:10px 18px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0">
+          Cerca
+        </button>
+      </div>
     </div>
 
     <!-- Timeframe bar -->
@@ -6726,6 +6745,73 @@ function selectScanCluster(cat, el) {
   const card  = document.getElementById('scan-results-card');
   if (empty) empty.style.display = '';
   if (card)  card.style.display  = 'none';
+}
+
+function selectScanSearch(el) {
+  document.querySelectorAll('.scan-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.scan-signals').forEach(s => s.classList.remove('active'));
+  const panel = document.getElementById('signals-ricerca');
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.scan-card').forEach(c => c.classList.remove('active'));
+  _scanSignal = 'ricerca';
+  const empty = document.getElementById('scan-empty');
+  const card  = document.getElementById('scan-results-card');
+  if (empty) empty.style.display = 'none';
+  if (card)  card.style.display  = 'none';
+  setTimeout(() => { const inp = document.getElementById('scanSearchInput'); if (inp) inp.focus(); }, 80);
+}
+
+async function executeSearch() {
+  const inp = document.getElementById('scanSearchInput');
+  const query = (inp ? inp.value.trim() : '').toUpperCase();
+  if (!query) return;
+  const titleEl = document.getElementById('scanResultsTitle');
+  if (titleEl) titleEl.textContent = 'Ricerca: ' + query;
+  const empty = document.getElementById('scan-empty');
+  const card  = document.getElementById('scan-results-card');
+  if (empty) empty.style.display = 'none';
+  if (card)  card.style.display  = '';
+  const list = document.getElementById('scannerList');
+  if (list) list.innerHTML = _scanSpinnerHTML;
+  await refreshMarket();
+  const matched = mktData.filter(c => {
+    const base = c.symbol.replace('USDT','');
+    return base.includes(query) || c.symbol.includes(query);
+  });
+  const countEl = document.getElementById('scanCount');
+  if (countEl) countEl.textContent = matched.length + ' found';
+  if (!matched.length) {
+    if (list) list.innerHTML = '<div class="empty"><div class="empty-text">Nessuna coin trovata</div></div>';
+    return;
+  }
+  if (list) {
+    list.innerHTML = matched.map(c => {
+      const sym  = c.symbol;
+      const base = sym.replace('USDT','');
+      const chg  = c.change24h || 0;
+      const chgColor = chg >= 0 ? 'var(--green)' : 'var(--red)';
+      const starred = _watchlist.has(sym);
+      return `<div class="scan-row">
+        <img src="${getLogo(sym)}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;margin-right:12px;flex-shrink:0" onerror="coinImgErr(this,'${esc(base)}',38)">
+        <div class="scan-name-col"><div style="font-size:14px;font-weight:700;color:var(--text)">${esc(base)}</div></div>
+        <div style="flex:1;min-width:0;text-align:right;padding-right:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${fmtPrice(c.price)}</div>
+          <div style="font-size:11px;font-weight:600;color:${chgColor}">${chg>=0?'+':''}${chg.toFixed(2)}%</div>
+        </div>
+        <button onclick="event.stopPropagation();scanToggleStar('${esc(sym)}')" class="star-btn scan-action-btn ${starred?'starred':''}" style="color:var(--text3);margin-right:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="${starred?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </button>
+        <button onclick="openTVChart('${esc(sym)}')" class="scan-action-btn" style="color:var(--text3);margin-right:6px" onmouseover="this.style.background='var(--blue)';this.style.color='#fff'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text3)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </button>
+        <button onclick="openTradeModal('${esc(sym)}',${c.price})" class="scan-action-btn" style="color:var(--text3)" onmouseover="this.style.background='var(--green)';this.style.color='#fff'" onmouseout="this.style.background='var(--surface2)';this.style.color='var(--text3)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </button>
+      </div>`;
+    }).join('');
+  }
+  await _countScan('ricerca');
 }
 
 async function selectScanSignal(key, el) {
