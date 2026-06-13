@@ -1435,6 +1435,71 @@ def _find_high_conviction_setups(prev_signals: dict | None = None) -> list[dict]
     setups.sort(key=lambda x: x["score"], reverse=True)
     return setups[:3]
 
+async def _check_and_send_swing_alert(sym: str, trigger_tf: str, price: float):
+    """Triggerata dalla transizione segnale: controlla confluenza multi-TF e invia alert swing."""
+    if sym in _pending_swing_checks:
+        return
+    _pending_swing_checks.add(sym)
+    try:
+        if time.time() - _alert_cooldown.get(sym, 0) < _ALERT_COOLDOWN_S:
+            return
+        if not db_pool:
+            return
+
+        tf_map: dict[str, list] = {}
+        for tf in ["5m", "15m", "1h", "4h", "1d"]:
+            d = scanner_candle_data.get(tf, {}).get(sym, {})
+            active = [s for s in _ALERT_BULLISH if d.get(s)]
+            if active:
+                tf_map[tf] = active
+
+        if trigger_tf not in tf_map:
+            return  # il TF che ha scattato non ha segnali bullish
+
+        n_tfs   = len(tf_map)
+        max_sig = max(len(v) for v in tf_map.values())
+        if n_tfs >= 3 or (n_tfs >= 2 and max_sig >= 2):
+            conviction = "MASSIMA"
+        elif n_tfs >= 2 or max_sig >= 3:
+            conviction = "ALTA"
+        else:
+            return  # confluenza insufficiente
+
+        setup = {
+            "symbol": sym, "conviction": conviction,
+            "tf_signals": tf_map, "price": price,
+            "score": n_tfs * 10 + max_sig + (10 if conviction == "MASSIMA" else 0),
+            "new_signals": {trigger_tf: tf_map[trigger_tf]},
+        }
+        analysis = await _generate_alert(setup)
+        if not analysis:
+            return
+
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT telegram_chat_id FROM users "
+                "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
+            )
+        if not rows:
+            return
+
+        _alert_cooldown[sym] = time.time()
+        db_id = await _log_alert_to_db(sym, "swing", price, None, None, 0.0)
+        _monitored_swing[sym] = {
+            "entry_price": price, "tf_signals": tf_map,
+            "sent_at": time.time(), "db_id": db_id,
+        }
+        for row in rows:
+            try:
+                await send_telegram_to(row["telegram_chat_id"], analysis)
+            except Exception as e:
+                print(f"[swing_alert] {sym} → {row['telegram_chat_id']}: {e}")
+    except Exception as e:
+        print(f"[swing_alert] {sym}: {e}")
+    finally:
+        _pending_swing_checks.discard(sym)
+
+
 async def _generate_alert(setup: dict) -> str | None:
     """Chiede a Claude Haiku un alert conciso (<180 parole) per il setup dato."""
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -1502,8 +1567,9 @@ async def _generate_alert(setup: dict) -> str | None:
         return None
 
 async def proactive_alert_loop():
-    """Ogni 15 min: controlla swing monitorati per invalidazione, poi cerca nuovi setup."""
-    await asyncio.sleep(300)   # attesa iniziale 5 min
+    """Ogni 15 min: controlla swing monitorati per invalidazione.
+    La ricerca di nuovi setup è event-driven in _check_and_send_swing_alert."""
+    await asyncio.sleep(300)
     while True:
         try:
             await asyncio.sleep(15 * 60)
@@ -1513,17 +1579,6 @@ async def proactive_alert_loop():
             now = time.time()
             tg_rows: list | None = None
 
-            async def _get_tg_rows():
-                nonlocal tg_rows
-                if tg_rows is None:
-                    async with db_pool.acquire() as conn:
-                        tg_rows = await conn.fetch(
-                            "SELECT telegram_chat_id FROM users "
-                            "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
-                        )
-                return tg_rows
-
-            # ── Controlla swing attivi per invalidazione ──────────────────────
             for sym in list(_monitored_swing.keys()):
                 mon = _monitored_swing[sym]
                 current_price = market_data.get(sym, {}).get("price", 0)
@@ -1539,7 +1594,6 @@ async def proactive_alert_loop():
                     invalidated = True
                     reason = f"prezzo sceso del 3%+ (${current_price:,.4f})"
                 else:
-                    # Segnali chiave spenti su tutti i TF
                     still_active = any(
                         scanner_candle_data.get(tf, {}).get(sym, {}).get(s)
                         for tf, sigs in mon["tf_signals"].items()
@@ -1550,13 +1604,18 @@ async def proactive_alert_loop():
                         reason = "segnali tecnici spenti"
 
                 if invalidated:
-                    rows = await _get_tg_rows()
+                    if tg_rows is None:
+                        async with db_pool.acquire() as conn:
+                            tg_rows = await conn.fetch(
+                                "SELECT telegram_chat_id FROM users "
+                                "WHERE telegram_chat_id IS NOT NULL AND telegram_chat_id != ''"
+                            )
                     text = (
                         f"Setup {sym} INVALIDATO\n\n"
                         f"Motivo: {reason}\n"
                         f"Entrata era: ${mon['entry_price']:,.4f}"
                     )
-                    for row in rows:
+                    for row in (tg_rows or []):
                         try:
                             await send_telegram_to(row["telegram_chat_id"], text)
                         except Exception:
@@ -1564,47 +1623,6 @@ async def proactive_alert_loop():
                     await _resolve_alert_in_db(mon["db_id"], "invalidated", current_price or 0)
                     del _monitored_swing[sym]
                     await asyncio.sleep(2)
-
-            # ── Snapshot segnali attuali (aggiorna prima di cercare nuovi setup) ─
-            current_snapshot: dict[str, dict[str, list]] = {}
-            for tf in ["5m", "15m", "1h", "4h", "1d"]:
-                for sym, d in scanner_candle_data.get(tf, {}).items():
-                    active = [s for s in _ALERT_BULLISH if d.get(s)]
-                    if active:
-                        current_snapshot.setdefault(sym, {})[tf] = active
-
-            setups = _find_high_conviction_setups(_swing_prev_signals if _swing_prev_signals else None)
-            _swing_prev_signals.clear()
-            _swing_prev_signals.update(current_snapshot)
-
-            if not setups:
-                continue
-
-            rows = await _get_tg_rows()
-            if not rows:
-                continue
-
-            for setup in setups:
-                analysis = await _generate_alert(setup)
-                if not analysis:
-                    continue
-                sym = setup["symbol"]
-                _alert_cooldown[sym] = time.time()
-
-                db_id = await _log_alert_to_db(sym, "swing", setup["price"], None, None, 0.0)
-                _monitored_swing[sym] = {
-                    "entry_price": setup["price"],
-                    "tf_signals":  setup["tf_signals"],
-                    "sent_at":     time.time(),
-                    "db_id":       db_id,
-                }
-
-                for row in rows:
-                    try:
-                        await send_telegram_to(row["telegram_chat_id"], analysis)
-                    except Exception as e:
-                        print(f"[alert] {sym} → {row['telegram_chat_id']}: {e}")
-                await asyncio.sleep(3)
         except Exception as e:
             print(f"[proactive_alert_loop] {e}")
 
@@ -1617,9 +1635,10 @@ _SCALP_GLOBAL_MAX          = 2    # max 2 alert ogni 10 min
 _SCALP_GLOBAL_WINDOW       = 10 * 60
 _scalp_prev_prices: dict   = {}   # sym -> prezzo al ciclo precedente
 _btc_price_history: list   = []   # [(timestamp, price), ...]
-_swing_prev_signals: dict  = {}   # sym -> {tf: [sigs]} snapshot ciclo precedente
+_swing_prev_signals: dict  = {}   # sym -> {tf: [sigs]} snapshot ciclo precedente — mantenuto per compatibilità
 _monitored_scalp: dict     = {}   # sym -> {level,stop,target,entry,rr,sent_at,db_id}
 _monitored_swing: dict     = {}   # sym -> {entry_price,tf_signals,sent_at,db_id}
+_pending_swing_checks: set = set()  # sym già in elaborazione — evita task duplicati per lo stesso coin
 _MONITORED_SCALP_TTL       = 2 * 3600    # scade dopo 2h
 _MONITORED_SWING_TTL       = 48 * 3600   # scade dopo 48h
 
@@ -1982,6 +2001,8 @@ async def fetch_all_scanner_candles(timeframe: str = "1h"):
                 for sig_name in _TRACKED_SIGNALS:
                     if res.get(sig_name) and not old.get(sig_name):
                         asyncio.create_task(log_signal_event(sym, sig_name, timeframe, price))
+                        if sig_name in _ALERT_BULLISH:
+                            asyncio.create_task(_check_and_send_swing_alert(sym, timeframe, price))
         _scanner_candles_ts[timeframe] = time.time()
         print(f"Scanner [{timeframe}] aggiornate: {updated}/{len(syms)}")
     finally:
