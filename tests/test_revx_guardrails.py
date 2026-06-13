@@ -350,6 +350,20 @@ class RevxGuardrailTests(unittest.TestCase):
         async def fake_persist():
             return None
 
+        class _MockConn:
+            async def fetchrow(self, query, *args):
+                if "sim_mode" in query:
+                    return {"sim_mode": False, "revx_key_id": None, "revx_private_key": None, "telegram_chat_id": None}
+                return {"plan": "pro", "subscription_expires_at": None}
+
+        class _MockPool:
+            def acquire(self):
+                return self
+            async def __aenter__(self):
+                return _MockConn()
+            async def __aexit__(self, *args):
+                pass
+
         original_sessions = main.user_sessions
         original_market = main.market_data
         original_load = main.load_coinbase_keys_for_user
@@ -359,6 +373,7 @@ class RevxGuardrailTests(unittest.TestCase):
         original_notify = main.notify
         original_persist = main.persist_sessions
         original_rate_limit = main.check_rate_limit
+        original_db_pool = main.db_pool
         main.user_sessions = {123: state}
         main.market_data = {"BTC": {"price": 50000.0, "icon": "B"}}
         main.load_coinbase_keys_for_user = fake_load_keys
@@ -368,6 +383,7 @@ class RevxGuardrailTests(unittest.TestCase):
         main.notify = fake_notify
         main.persist_sessions = fake_persist
         main.check_rate_limit = lambda *args, **kwargs: None
+        main.db_pool = _MockPool()
         try:
             req = types.SimpleNamespace(symbol="BTCUSDT", amount_usdt=10.0, sl_pct=2.0, tp_pct=4.0, exchange="coinbase")
             result = asyncio.run(main.manual_trade(req, request=object(), user_id=123))
@@ -381,6 +397,7 @@ class RevxGuardrailTests(unittest.TestCase):
             main.notify = original_notify
             main.persist_sessions = original_persist
             main.check_rate_limit = original_rate_limit
+            main.db_pool = original_db_pool
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["exchange"], "coinbase")

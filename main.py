@@ -6991,7 +6991,7 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
     session_ctx += f"  Modalità: {'REALE' if cfg.get('realMode') else 'SIM'} | Exchange: {cfg.get('agentExchange','sim')}\n"
     session_ctx += f"  Trade: {tc} | Win rate: {int(wins/max(tc,1)*100)}%\n"
 
-    # Last 5 trades from DB
+    # Last 5 trades + aggregate stats from DB
     trades_ctx = ""
     if db_pool:
         try:
@@ -7001,11 +7001,57 @@ async def chat(body: ChatRequest, request: Request, user_id: int = Depends(get_c
                     "FROM trades_history WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5",
                     user_id
                 )
+                # Aggregate stats: overall + per-symbol top performers (last 90 days)
+                agg = await conn.fetchrow(
+                    """SELECT
+                         COUNT(*)                                          AS total,
+                         COUNT(*) FILTER (WHERE pnl > 0)                  AS wins,
+                         COALESCE(SUM(pnl), 0)                            AS total_pnl,
+                         COALESCE(AVG(pct) FILTER (WHERE pnl > 0), 0)    AS avg_win_pct,
+                         COALESCE(AVG(pct) FILTER (WHERE pnl <= 0), 0)   AS avg_loss_pct,
+                         COALESCE(MIN(pct), 0)                            AS worst_pct,
+                         COALESCE(MAX(pct), 0)                            AS best_pct,
+                         COALESCE(AVG(duration_min), 0)                  AS avg_dur_min
+                       FROM trades_history
+                       WHERE user_id = $1
+                         AND created_at >= NOW() - INTERVAL '90 days'""",
+                    user_id
+                )
+                # Top 3 coins by win rate (min 3 trades)
+                sym_rows = await conn.fetch(
+                    """SELECT symbol,
+                              COUNT(*)                           AS n,
+                              COUNT(*) FILTER (WHERE pnl > 0)   AS w,
+                              COALESCE(SUM(pnl), 0)             AS tot_pnl
+                       FROM trades_history
+                       WHERE user_id = $1
+                         AND created_at >= NOW() - INTERVAL '90 days'
+                       GROUP BY symbol
+                       HAVING COUNT(*) >= 3
+                       ORDER BY (COUNT(*) FILTER (WHERE pnl > 0))::float / COUNT(*) DESC
+                       LIMIT 3""",
+                    user_id
+                )
             if rows:
                 trades_ctx = "\n[Ultimi 5 trade]\n"
                 for r in rows:
                     trades_ctx += (f"  {r['symbol']}: {r['entry_price']:.4f}→{r['exit_price']:.4f}"
                                    f" | {r['pct']:+.2f}% (${r['pnl']:+.2f}) | {r['reason']} | {str(r['entry_time'])[:10]}\n")
+            if agg and agg["total"]:
+                n, w = int(agg["total"]), int(agg["wins"])
+                wr = w / n * 100 if n else 0
+                trades_ctx += (
+                    f"\n[Performance ultimi 90gg]\n"
+                    f"  Trade: {n} | Win rate: {wr:.0f}% | P&L totale: ${agg['total_pnl']:+.2f}\n"
+                    f"  Vincita media: +{agg['avg_win_pct']:.2f}% | Perdita media: {agg['avg_loss_pct']:.2f}%\n"
+                    f"  Miglior trade: +{agg['best_pct']:.2f}% | Peggior trade: {agg['worst_pct']:.2f}%\n"
+                    f"  Durata media: {agg['avg_dur_min']:.0f} min\n"
+                )
+            if sym_rows:
+                trades_ctx += "  Coin migliori (≥3 trade): " + ", ".join(
+                    f"{r['symbol']} {int(r['w'])}/{int(r['n'])} win (${r['tot_pnl']:+.2f})"
+                    for r in sym_rows
+                ) + "\n"
         except Exception:
             pass
 
